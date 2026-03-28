@@ -13,8 +13,9 @@ const firebaseConfig={
 };
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
-let _fbOnline=true;
-db.collection('wilmer').doc('ping').get().catch(()=>{_fbOnline=false;});
+let _fbOnline=false;
+let _lastLocalSave=0;
+const _deviceId='dev-'+Math.random().toString(36).slice(2,10);
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1469,6 +1470,11 @@ function hideExcelRestorePrompt(){}
 </script>
 
 <!-- MULTI-TAB WARNING BANNER -->
+<!-- OFFLINE WARNING BANNER -->
+<div id="offline-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:999998;background:#B85C5C;color:#fff;font-family:'DM Sans',system-ui,sans-serif;font-size:12px;font-weight:600;padding:8px 16px;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,0.2);">
+  <span>⚠ Offline — changes are saved locally only. <span id="offline-reason" style="font-weight:400;opacity:0.9;"></span></span>
+  <button onclick="retryFirestoreConnection()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);border-radius:4px;color:#fff;font-size:11px;padding:3px 10px;cursor:pointer;font-family:inherit;">Retry</button>
+</div>
 <div id="multitab-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:999999;background:#B85C5C;color:#fff;font-family:'DM Sans',system-ui,sans-serif;font-size:12px;font-weight:600;padding:8px 16px;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 8px rgba(184,92,92,0.35);">
   <span>&#9888; This app is already open in another window. <span style="font-weight:400;opacity:0.9;">Editing in two windows at once can cause data loss &#8212; last save wins.</span></span>
   <div style="display:flex;gap:8px;flex-shrink:0;">
@@ -1517,6 +1523,8 @@ function hideExcelRestorePrompt(){}
   <!-- Row 2: action buttons right-aligned -->
   <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;padding-bottom:6px;">
     <button onclick="saveFileWithTimestamp()" id="btn-save-file" style="font-size:12px;padding:6px 14px;border:1px solid #B4CCAD;border-radius:20px;background:#EBF1EB;color:#4A6B4E;cursor:pointer;font-weight:600;letter-spacing:0.01em;display:flex;align-items:center;gap:5px;transition:all .14s;" onmouseenter="this.style.background='#6A8C6E';this.style.color='#fff';this.style.borderColor='#6A8C6E'" onmouseleave="this.style.background='#EBF1EB';this.style.color='#4A6B4E';this.style.borderColor='#B4CCAD'"><span id="save-file-label">💾 Save</span></button>
+    <button onclick="saveToCloud()" id="btn-save-cloud" style="font-size:12px;padding:6px 14px;border:1px solid #6A8C6E;border-radius:20px;background:#6A8C6E;color:#fff;cursor:pointer;font-weight:600;letter-spacing:0.01em;display:flex;align-items:center;gap:5px;transition:all .14s;" onmouseenter="this.style.background='#4A6B4E';this.style.borderColor='#4A6B4E'" onmouseleave="this.style.background='#6A8C6E';this.style.borderColor='#6A8C6E'"><span id="save-cloud-label">☁ Save</span></button>
+    <button onclick="forcePullFromCloud()" id="btn-pull-cloud" title="Force-download latest data from cloud" style="font-size:12px;padding:6px 14px;border:1px solid #6B7FA3;border-radius:20px;background:#EEF1F7;color:#4A5A7A;cursor:pointer;font-weight:600;letter-spacing:0.01em;display:flex;align-items:center;gap:5px;transition:all .14s;" onmouseenter="this.style.background='#6B7FA3';this.style.color='#fff';this.style.borderColor='#6B7FA3'" onmouseleave="this.style.background='#EEF1F7';this.style.color='#4A5A7A';this.style.borderColor='#6B7FA3'"><span id="pull-cloud-label">↓ Pull</span></button>
     <button onclick="openScheduleTodayModal()" id="btn-schedule-today" style="font-size:12px;padding:6px 14px;border:1px solid #B4CCAD;border-radius:20px;background:#EBF1EB;color:#4A6B4E;cursor:pointer;font-weight:600;letter-spacing:0.01em;display:flex;align-items:center;gap:5px;transition:all .14s;" onmouseenter="this.style.background='#6A8C6E';this.style.color='#fff';this.style.borderColor='#6A8C6E'" onmouseleave="this.style.background='#EBF1EB';this.style.color='#4A6B4E';this.style.borderColor='#B4CCAD'"><span style="font-size:13px;">✉</span> Send to Loly</button>
 
   </div>
@@ -6753,10 +6761,10 @@ async function _writeAutoBackup(){
   _showAutoBackupButton();
 })();
 
-function saveAllData(){const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore
-try{db.collection('wilmer').doc('data').set(payload).then(()=>{_fbOnline=true;updateCloudIndicator();}).catch(()=>{_fbOnline=false;updateCloudIndicator();});}catch(e){}// Also write to auto-backup file if connected
+function saveAllData(){const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
+_syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();}catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records)records=p.records;if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records)records=p.records;if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}return true;}catch(e){return false;}}
 window.markUnsaved=function(){document.getElementById('unsaved-dot').style.display='inline-block';document.getElementById('btn-save').classList.add('unsaved');clearTimeout(window._autoSaveTimer);window._autoSaveTimer=setTimeout(()=>{saveAllData();},1000);};
 function setLastBackupLabel(action){
   const n=new Date();
@@ -6789,7 +6797,7 @@ function saveFileWithTimestamp(){
 
   // Capture full state including preferences
   const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,
-    caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta};
+    caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes};
   const payloadJSON=JSON.stringify(payload);
 
   // Bootstrap block: auto-seeds localStorage on any device
@@ -6810,7 +6818,7 @@ function saveFileWithTimestamp(){
   if(btn){btn.textContent='✓ Saved '+label;setTimeout(()=>{btn.textContent='💾 Save';},4000);}
   showToast('Saved: Wilmer '+label+'.html ✓');
 }
-function backupData(){const payload={records,paralegals,eventTypes,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);const d=new Date();a.download='romero_cases_backup_'+d.toISOString().slice(0,10)+'.json';a.click();setLastBackupLabel('Backup');showToast('Backup downloaded ✓');}
+function backupData(){const payload={records,paralegals,eventTypes,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);const d=new Date();a.download='romero_cases_backup_'+d.toISOString().slice(0,10)+'.json';a.click();setLastBackupLabel('Backup');showToast('Backup downloaded ✓');}
 // ── All Events: Download Template & Import ──────────────────
 function downloadEventTemplate(){
   const baseHeaders = [
@@ -6991,8 +6999,47 @@ function restoreData(event){const file=event.target.files[0];if(!file)return;con
   } else {
     p=JSON.parse(e.target.result);
   }
-  const _orig_parse=p;if(!p.records){showToast('Invalid file — no records found');return;}if(!confirm('This will replace ALL current data. Continue?'))return;if(p.records)records=p.records;if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);// Invalidate all caches on data reload
-Object.keys(_pdCache).forEach(k=>delete _pdCache[k]);_invalidateCasesCache();dirtyFilterOpts();saveAllData();try{localStorage.setItem('wilmer_save_epoch',String(Date.now()));}catch(e){}renderAll();setLastBackupLabel('Restored');showToast('Data restored ✓');}catch(err){showToast('Could not read backup file');}event.target.value='';};reader.readAsText(file);}
+  if(!p.records){showToast('Invalid file — no records found');return;}
+  const mode=confirm('Click OK to MERGE (add new records, keep existing).\nClick Cancel to REPLACE all current data.');
+  if(mode===null)return;// cancelled prompt — actually confirm returns bool, so Cancel = false
+  if(mode){
+    // MERGE mode: add records from file that don't exist by ID
+    const existingIds=new Set(records.map(r=>r.id));
+    const newRecs=p.records.filter(r=>!existingIds.has(r.id));
+    records=[...records,...newRecs];
+    // Merge arrays (union, no duplicates)
+    if(p.paralegals)paralegals=[...new Set([...paralegals,...p.paralegals])];
+    if(p.eventTypes)eventTypes=[...new Set([...eventTypes,...p.eventTypes])];
+    if(p.caseTypes)caseTypes=[...new Set([...caseTypes,...p.caseTypes])];
+    if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);
+    if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);
+    if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);
+    if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);
+    if(p.customColumns){const existKeys=new Set(customColumns.map(c=>c.key));p.customColumns.forEach(c=>{if(!existKeys.has(c.key))customColumns.push(c);});}
+    showToast('Merged '+newRecs.length+' new records ✓');
+  } else {
+    // REPLACE mode
+    if(!confirm('This will replace ALL current data. Are you sure?'))return;
+    if(p.records)records=p.records;
+    if(p.paralegals)paralegals=p.paralegals;
+    if(p.eventTypes)eventTypes=p.eventTypes;
+    if(p.caseTypes)caseTypes=p.caseTypes;
+    if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);
+    if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);
+    if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);
+    if(p.customColumns)customColumns=p.customColumns;
+    if(p.colVis)Object.assign(colVis,p.colVis);
+    if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);
+    showToast('Data replaced ✓');
+  }
+  // Invalidate all caches on data reload
+  Object.keys(_pdCache).forEach(k=>delete _pdCache[k]);_invalidateCasesCache();dirtyFilterOpts();
+  saveAllData();
+  try{localStorage.setItem('wilmer_save_epoch',String(Date.now()));}catch(e){}
+  renderAll();setLastBackupLabel('Restored');
+  // Re-ping Firebase to recover cloud sync after import
+  setTimeout(()=>_syncToFirestore(Date.now()),1500);
+  }catch(err){showToast('Could not read backup file');}event.target.value='';};reader.readAsText(file);}
 function importFromExcel(event){const file=event.target.files[0];if(!file){hideExcelRestorePrompt();return;}const reader=new FileReader();reader.onload=function(e){try{const data=new Uint8Array(e.target.result);const wb=XLSX.read(data,{type:'array'});const colMap={'Client ID':'clid','Client Name':'client','A-Number':'anum','Case Type':'type','Paralegal':'atty','Event Type':'event','Deadline':'date','Time Start':'timeStart','Time End':'timeEnd','Assigned':'assigned','Notes':'notes','Status':'deletedStatus','Finished Status':'finishedStatus','Deleted Date':'deletedDate'};function sheetToRecs(sn){const ws=wb.Sheets[sn];if(!ws)return[];const rows=XLSX.utils.sheet_to_json(ws,{defval:''});return rows.map(function(row){const rec={id:'r'+Math.random().toString(36).slice(2,10)};Object.keys(row).forEach(function(col){const field=colMap[col];if(field)rec[field]=String(row[col]||'');else rec[col]=String(row[col]||'');});return rec;}).filter(function(r){return r.client||r.clid||r.event;});}const allRecs=[...sheetToRecs('Active'),...sheetToRecs('Finished'),...sheetToRecs('Deleted')];if(!allRecs.length){showToast('No records found');hideExcelRestorePrompt();event.target.value='';return;}if(!confirm('Import '+allRecs.length+' records? This replaces all current records.')){hideExcelRestorePrompt();event.target.value='';return;}records=allRecs;saveAllData();renderAll();hideExcelRestorePrompt();showToast('Imported '+allRecs.length+' records ✓');}catch(err){console.error(err);showToast('Could not read Excel file');hideExcelRestorePrompt();}event.target.value=''};reader.readAsArrayBuffer(file);}
 </script>
 <script>
@@ -8624,6 +8671,8 @@ function saveDayNotes(){
   const key=dayNotesKey();
   const data={p1:document.getElementById('dv-priority-1').value,p2:document.getElementById('dv-priority-2').value,p3:document.getElementById('dv-priority-3').value,notes:document.getElementById('dv-day-notes').value};
   try{localStorage.setItem(key,JSON.stringify(data));}catch{}
+  // Sync to Firestore
+  try{db.collection('wilmer_daynotes').doc(key).set(data).catch(()=>{});}catch(e){}
 }
 function loadDayNotes(){
   const key=dayNotesKey();
@@ -9820,13 +9869,84 @@ function applyPayload(p){
   if(p.customColumns)customColumns=p.customColumns;
   if(p.colVis)Object.assign(colVis,p.colVis);
   if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);
+  if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}
+  if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}
+  if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}
 }
+// ══════════════════════════════════════════════════
+// CLOUD SYNC — localStorage is always source of truth
+// Firestore is used only for cross-device sync
+// ══════════════════════════════════════════════════
+let _offlineReason='';
+let _syncTimer=null;
+
+function _syncToFirestore(savedAt){
+  // Debounce — wait 1s after last call before sending
+  clearTimeout(_syncTimer);
+  _syncTimer=setTimeout(()=>{
+    // Strip fileData from caseMeta so base64 PDFs never go to Firestore
+    const caseMetaClean=JSON.parse(JSON.stringify(caseMeta||{}));
+    Object.values(caseMetaClean).forEach(meta=>{
+      if(!meta)return;
+      (meta.docSections||[]).forEach(sec=>{
+        (sec.docs||[]).forEach(d=>{delete d.fileData;delete d.mimeType;});
+      });
+    });
+    const payload=JSON.parse(JSON.stringify({
+      records,paralegals,eventTypes,eventTypeMeta,
+      caseTypes,caseTypeDocLists,caseTypeStages,
+      customColumns,colVis,caseMeta:caseMetaClean,callUpTypes,judges,caseIssueTypes,
+      _savedAt:savedAt||Date.now(),_deviceId:_deviceId
+    }));
+    db.collection('wilmer').doc('data').set(payload)
+      .then(()=>{ _fbOnline=true; _offlineReason=''; updateCloudIndicator(); })
+      .catch(err=>{ _fbOnline=false; _offlineReason=err.message||err.code||''; updateCloudIndicator(); });
+  },1000);
+}
+
 function updateCloudIndicator(){
   const el=document.getElementById('cloud-status');
-  if(!el)return;
-  el.textContent=_fbOnline?'☁ Cloud sync on':'⚠ Offline — local only';
-  el.style.color=_fbOnline?'#6A8C6E':'#C9823A';
+  if(el){ el.textContent=_fbOnline?'☁ Cloud sync on':'⚠ Offline — local only'; el.style.color=_fbOnline?'#6A8C6E':'#C9823A'; }
+  const banner=document.getElementById('offline-banner');
+  if(banner){ banner.style.display=_fbOnline?'none':'flex'; const r=document.getElementById('offline-reason'); if(r)r.textContent=_offlineReason||''; }
 }
+
+function saveToCloud(){
+  const btn=document.getElementById('save-cloud-label');
+  if(btn)btn.textContent='☁ Saving…';
+  _syncToFirestore(Date.now());
+  setTimeout(()=>{ if(btn)btn.textContent=_fbOnline?'☁ Saved ✓':'☁ Failed'; setTimeout(()=>{if(btn)btn.textContent='☁ Save to Cloud';},2000); },1500);
+}
+
+function retryFirestoreConnection(){
+  showToast('Retrying…');
+  _syncToFirestore(Date.now());
+}
+
+function forcePullFromCloud(){
+  const btn=document.getElementById('pull-cloud-label');
+  if(btn)btn.textContent='↓ Pulling…';
+  db.collection('wilmer').doc('data').get()
+    .then((doc)=>{
+      if(!doc.exists){ showToast('No cloud data found'); if(btn)btn.textContent='↓ Pull'; return; }
+      const cloudData=doc.data();
+      applyPayload(cloudData);
+      try{
+        const _now=Date.now();
+        const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,_savedAt:_now};
+        localStorage.setItem('casetracker_v1',JSON.stringify(payload));
+        localStorage.setItem('wilmer_save_epoch',String(cloudData._savedAt||_now));
+      }catch(e){}
+      renderAll();
+      showToast('☁ Pulled from cloud ✓');
+      if(btn){ btn.textContent='↓ Done ✓'; setTimeout(()=>{ btn.textContent='↓ Pull'; },2000); }
+    })
+    .catch((err)=>{
+      showToast('Pull failed: '+(err.message||err.code||'unknown'));
+      if(btn)btn.textContent='↓ Pull';
+    });
+}
+
 const loaded=loadSavedData();
 // Always re-apply SIJ workflow so changes are reflected regardless of localStorage
 (function(){
@@ -9974,24 +10094,84 @@ const savedDefaultView = localStorage.getItem('defaultView') || 'today';
 const validViews = ['today','week','month','paralegals','me','all','queue','so','deadlines'];
 const bootView = validViews.includes(savedDefaultView) ? savedDefaultView : 'today';
 markDefaultViewButton(bootView);
-// Try loading from Firestore first; fallback to localStorage
-(async function(){
-  let usedCloud=false;
-  try{
-    const doc=await db.collection('wilmer').doc('data').get();
-    if(doc.exists){
-      applyPayload(doc.data());
-      _fbOnline=true;
-      usedCloud=true;
+// ══════════════════════════════════════════════════
+// BOOT — Always load localStorage first, then listen
+// for updates from other devices via Firestore
+// ══════════════════════════════════════════════════
+
+// Step 1: Boot from localStorage immediately
+switchView(bootView);
+updateQueueBadge();
+updateDeadlinesBadge();
+showToast(loaded?'Loaded from local storage':'Ready');
+
+// Step 2: Listen to Firestore for updates from OTHER devices
+let _booted=false;
+db.collection('wilmer').doc('data').onSnapshot(
+  {includeMetadataChanges:false},
+  (doc)=>{
+    _fbOnline=true;
+    updateCloudIndicator();
+    if(!doc.exists)return;
+    const cloudData=doc.data();
+    const cloudEpoch=cloudData._savedAt||0;
+    const localEpoch=parseInt(localStorage.getItem('wilmer_save_epoch')||'0');
+    const fromThisDevice=cloudData._deviceId&&cloudData._deviceId===_deviceId;
+    if(!_booted){
+      _booted=true;
+      // On first snapshot: only use cloud if it's newer than local
+      if(!fromThisDevice&&cloudEpoch>localEpoch){
+        applyPayload(cloudData);
+        try{
+          const _now=Date.now();
+          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,_savedAt:_now};
+          localStorage.setItem('casetracker_v1',JSON.stringify(payload));
+          localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
+          _lastLocalSave=_now;
+        }catch(e){}
+        renderAll();
+        showToast('☁ Updated from cloud ✓');
+      }
+    } else {
+      // Subsequent snapshots: apply if from a different device
+      if(!fromThisDevice){
+        applyPayload(cloudData);
+        // Save to localStorage only — do NOT call saveAllData() which would
+        // re-push to Firestore and cause an infinite ping-pong loop
+        try{
+          const _now=Date.now();
+          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,_savedAt:_now};
+          localStorage.setItem('casetracker_v1',JSON.stringify(payload));
+          localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
+          _lastLocalSave=_now;
+        }catch(e){}
+        renderAll();
+        showToast('☁ Synced from another device ✓');
+      }
     }
-  }catch(e){_fbOnline=false;}
-  switchView(bootView);
-  updateQueueBadge();
-  updateDeadlinesBadge();
-  updateCloudIndicator();
-  if(usedCloud)showToast('☁ Loaded from cloud ✓');
-  else if(loaded)showToast('Loaded from local storage');
-})();
+  },
+  (err)=>{
+    _fbOnline=false;
+    _offlineReason=err.message||err.code||'';
+    if(!_booted){ _booted=true; }
+    updateCloudIndicator();
+  }
+);
+
+// Step 3: Listen to day notes from other devices
+const dnKey=dayNotesKey();
+db.collection('wilmer_daynotes').doc(dnKey).onSnapshot(
+  {includeMetadataChanges:false},
+  (doc)=>{
+    if(!doc.exists)return;
+    const d=doc.data();
+    try{localStorage.setItem(dnKey,JSON.stringify(d));}catch{}
+    const active=document.activeElement?document.activeElement.id:'';
+    ['dv-priority-1','dv-priority-2','dv-priority-3'].forEach((id,i)=>{ if(active!==id){const el=document.getElementById(id);if(el)el.value=d['p'+(i+1)]||'';} });
+    if(active!=='dv-day-notes'){const el=document.getElementById('dv-day-notes');if(el)el.value=d.notes||'';}
+  },
+  ()=>{}
+);
 // ── Perf: debounce filter inputs ──
 ['f-search','f-atty','f-event','f-type'].forEach(id=>{
   const el=document.getElementById(id);
@@ -10728,28 +10908,14 @@ function skipBackupConnect(){
 
 // Show on load if backup not already connected and API is supported
 (function(){
-  if(_autoBackupSupported() && !_autoBackupHandle){
-    setTimeout(()=> openBackupConnectModal(), 300);
-  }
+  // Auto-backup prompt disabled — cloud sync handles persistence
+  // if(_autoBackupSupported() && !_autoBackupHandle){
+  //   setTimeout(()=> openBackupConnectModal(), 300);
+  // }
 })();
 
-// ── Block closing when backup not connected or is writing ──
-window.addEventListener('beforeunload', function(e){
-  // Block if backup is actively writing
-  if(_autoBackupWriting){
-    e.preventDefault();
-    e.returnValue = 'Backup is saving — please wait a moment before closing.';
-    return;
-  }
-  // Block if backup was never connected and user didn't explicitly skip
-  if(_autoBackupSupported() && !_autoBackupHandle && !_backupSkipped){
-    e.preventDefault();
-    e.returnValue = 'Auto-backup is not connected. Connect a backup file before closing, or use the skip option.';
-    // Re-show the modal so they can connect
-    openBackupConnectModal();
-    return;
-  }
-  // Otherwise allow — auto-save silently
+// Auto-save on close
+window.addEventListener('beforeunload', function(){
   saveAllData();
 });
 
