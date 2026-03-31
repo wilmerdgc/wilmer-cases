@@ -498,7 +498,27 @@ tbody td { padding: 9px 12px; vertical-align: middle; font-size: 12px; }
   margin-left: 5px;
   vertical-align: middle;
 }
-.respondent-consolidated-badge {
+.respondent-rider-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  background: #F0EDE8;
+  color: #9E9186;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: 5px;
+  vertical-align: middle;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.respondent-rider-badge:hover {
+  background: var(--sage-light);
+  color: var(--sage);
+  border-color: var(--sage-mid);
+}
   display: inline-block;
   font-size: 9px;
   font-weight: 700;
@@ -2261,7 +2281,15 @@ function hideExcelRestorePrompt(){}
       <div style="font-size:10px;color:#C4BAB0;">PDF, PNG, JPG accepted · Saved to Documents + Case Notes</div>
       <div id="so-existing-list" style="display:none;margin-top:10px;padding-top:8px;border-top:1px solid #F0D9BB;"></div>
     </div>
-    <div class="form-row"><label class="form-label">Deadline</label><input id="fc-date" type="date" oninput="updateDateCalc();renderReminderChips();checkWeekendDate(this.value)"/></div>
+    <!-- INDIVIDUAL call-up generator panel -->
+    <div id="individual-callup-panel" style="display:none;margin:-4px 0 10px;padding:9px 12px;background:#EEF1F7;border:1px solid #CBD5E8;border-radius:8px;">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6B7FA3;white-space:nowrap;">&#128197; Call-Up Generator &mdash; Individual:</span>
+        <input id="icp-ref-input" type="date" oninput="refreshIndividualCallupPanel(true)" title="Reference date for call-up calculations" style="font-size:11px;padding:2px 6px;border:1px solid #CBD5E8;border-radius:5px;background:#fff;color:#2C2620;font-weight:600;width:140px;flex-shrink:0;"/>
+      </div>
+      <div id="icp-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
+    </div>
+    <div class="form-row"><label class="form-label">Deadline</label><input id="fc-date" type="date" oninput="updateDateCalc();renderReminderChips();checkWeekendDate(this.value);(function(){const ri=document.getElementById('icp-ref-input');if(ri&&document.getElementById('individual-callup-panel').style.display!=='none')ri.value=this.value;}).call(this);refreshIndividualCallupPanel(false)"/></div>
     <!-- Date calculator -->
     <div style="display:flex;align-items:center;gap:6px;margin:-6px 0 10px 0;padding:0 2px;">
       <input id="dc-start" type="date" title="Start date" oninput="updateDateCalc()" style="font-size:11px;padding:3px 6px;border:1px solid #EDE8E0;border-radius:5px;color:#9E9186;background:#FDFAF7;width:130px;"/>
@@ -6040,6 +6068,84 @@ function onEventTypeChange(val){
   if(val==='SCHEDULING ORDER') renderSoExistingAttachments();
   const hms=document.getElementById('modal-hearing-mode-section');
   if(hms)hms.style.display=isHearingEventType(val)?'block':'none';
+  const icp=document.getElementById('individual-callup-panel');
+  if(icp){icp.style.display=(val==='INDIVIDUAL')?'':'none';if(val==='INDIVIDUAL'){const fcD=document.getElementById('fc-date').value;const ri=document.getElementById('icp-ref-input');if(ri){ri.value=fcD||'';}refreshIndividualCallupPanel(false);}}
+}
+
+function refreshIndividualCallupPanel(fromInput){
+  const panel=document.getElementById('individual-callup-panel');
+  if(!panel||panel.style.display==='none')return;
+  const refInput=document.getElementById('icp-ref-input');
+  const container=document.getElementById('icp-rows');
+  // Sync from fc-date only when NOT triggered by the ref input itself
+  if(!fromInput){
+    const fcDate=document.getElementById('fc-date').value;
+    if(fcDate&&refInput&&!refInput.value) refInput.value=fcDate;
+    else if(fcDate&&refInput&&refInput.value===''  ) refInput.value=fcDate;
+  }
+  const dateVal=refInput?refInput.value:'';
+  if(!dateVal){container.innerHTML='<div style="font-size:11px;color:#9E9186;padding:2px 0;">Set a date above to calculate call-up deadlines.</div>';return;}
+  const _WDAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  function fmt(s){if(!s)return'—';const d=parseDate(s);return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});}
+  const callups=[
+    {label:'90-Day Call-Up Deadline',offset:-90,eventType:'90-DAY DEADLINE'},
+    {label:'60-Day Call-Up Deadline',offset:-60,eventType:'60-DAY DEADLINE'},
+    {label:'30-Day Call-Up Deadline',offset:-30,eventType:'30-DAY DEADLINE'},
+    {label:'Individual Prep',offset:-14,eventType:'INDIVIDUAL PREP'},
+    {label:'Call-Up Deadline',offset:-10,eventType:'CALL UP DEADLINE'},
+  ];
+  container.innerHTML='';
+  callups.forEach(cu=>{
+    const defaultD=addDateDays(dateVal,cu.offset);
+    function wkndCheck(val,warnEl,dateInp){
+      if(!val){warnEl.textContent='';return;}
+      const p=parseDate(val);const w=_WDAYS[p.getDay()];const isW=(w==='Saturday'||w==='Sunday');
+      warnEl.textContent=isW?'⚠️':'';
+      dateInp.style.color=isW?'#B85C5C':'#2C2620';
+    }
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:6px;padding:4px 6px;background:#fff;border:1px solid #CBD5E8;border-radius:6px;';
+    const lbl=document.createElement('span');
+    lbl.style.cssText='font-size:11px;color:#5C5148;flex:1;font-weight:500;white-space:nowrap;';
+    lbl.textContent=cu.label;
+    const dateInp=document.createElement('input');
+    dateInp.type='date';
+    dateInp.value=defaultD;
+    dateInp.style.cssText='font-size:11px;padding:2px 5px;border:1px solid #CBD5E8;border-radius:5px;background:#F7F9FD;color:#2C2620;font-weight:600;width:136px;flex-shrink:0;';
+    const warnEl=document.createElement('span');
+    warnEl.style.cssText='font-size:13px;flex-shrink:0;width:16px;text-align:center;';
+    wkndCheck(defaultD,warnEl,dateInp);
+    dateInp.oninput=()=>wkndCheck(dateInp.value,warnEl,dateInp);
+    const addBtn=document.createElement('button');
+    addBtn.type='button';
+    addBtn.textContent='+ Add';
+    addBtn.title='Create this event';
+    addBtn.style.cssText='font-size:10px;padding:2px 8px;border:1px solid #CBD5E8;border-radius:5px;background:#EEF1F7;color:#6B7FA3;cursor:pointer;font-weight:600;font-family:inherit;flex-shrink:0;transition:all .12s;';
+    addBtn.onmouseenter=()=>{if(!addBtn.disabled){addBtn.style.background='#6B7FA3';addBtn.style.color='#fff';}};
+    addBtn.onmouseleave=()=>{if(!addBtn.disabled){addBtn.style.background='#EEF1F7';addBtn.style.color='#6B7FA3';}};
+    addBtn.onclick=()=>{
+      const client=document.getElementById('fc-client').value.trim();
+      const clid=document.getElementById('fc-clid').value.trim();
+      const anum=document.getElementById('fc-anum').value.trim();
+      const ctype=document.getElementById('fc-casetype').value;
+      const para=document.getElementById('fc-paralegal').value;
+      const assigned=document.getElementById('fc-assigned').value;
+      if(!client){alert('Fill in the Client name first.');return;}
+      if(!ctype){alert('Fill in the Case type first.');return;}
+      const chosenDate=dateInp.value;
+      if(!chosenDate){alert('Set a date for this row first.');return;}
+      const nid=uid();
+      records.push({id:nid,clid,client,type:ctype,anum,atty:para,event:cu.eventType,date:chosenDate,timeStart:'',timeEnd:'',assigned,notes:'',hearingMode:'',checklist:[],docs:[],soIssueDate:'',history:[]});
+      _invalidateCasesCache();dirtyCaseFilterOpts();markUnsaved();
+      showToast(cu.label+' added');
+      addBtn.textContent='✓ Added';addBtn.style.background='#6A8C6E';addBtn.style.color='#fff';addBtn.style.borderColor='#6A8C6E';addBtn.disabled=true;
+    };
+    row.appendChild(lbl);
+    row.appendChild(dateInp);
+    row.appendChild(warnEl);
+    row.appendChild(addBtn);
+    container.appendChild(row);
+  });
 }
 
 function renderSoExistingAttachments(){
@@ -6233,7 +6339,7 @@ function openCaseFromModal(){
   closeModal();
   goToCase(clid);
 }
-function openAdd(){editingId=null;pendingStatus=null;document.getElementById('modal-title').textContent='Add event';const ocb=document.getElementById('modal-open-case-btn');if(ocb)ocb.style.display='none';document.getElementById('modal-status-section').style.display='none';document.getElementById('modal-reminder-section').style.display='block';['fc-clid','fc-client','fc-anum','fc-date','fc-notes'].forEach(id=>document.getElementById(id).value='');const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=false;document.getElementById('time-range-panel').classList.remove('open');document.getElementById('fc-time-start').value='';document.getElementById('fc-time-end').value='';document.getElementById('fc-time-display').textContent='';pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();populateModalDropdowns();resetDateCalc();setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';document.getElementById('modal').style.display='flex';}
+function openAdd(){editingId=null;pendingStatus=null;document.getElementById('modal-title').textContent='Add event';const ocb=document.getElementById('modal-open-case-btn');if(ocb)ocb.style.display='none';document.getElementById('modal-status-section').style.display='none';document.getElementById('modal-reminder-section').style.display='block';['fc-clid','fc-client','fc-anum','fc-date','fc-notes'].forEach(id=>document.getElementById(id).value='');const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=false;document.getElementById('time-range-panel').classList.remove('open');document.getElementById('fc-time-start').value='';document.getElementById('fc-time-end').value='';document.getElementById('fc-time-display').textContent='';pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();const _icp0=document.getElementById('individual-callup-panel');if(_icp0)_icp0.style.display='none';populateModalDropdowns();resetDateCalc();setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';document.getElementById('modal').style.display='flex';}
 function openEdit(id){const r=records.find(x=>x.id===id);if(!r)return;editingId=id;pendingStatus=null;document.getElementById('modal-title').textContent='Edit event';const _ocb=document.getElementById('modal-open-case-btn');if(_ocb){_ocb.style.display=(r.clid||r.client)?'inline':'none';}document.getElementById('modal-status-section').style.display='block';document.getElementById('modal-reminder-section').style.display='block';pendingReminders=[];if(r){records.forEach(rx=>{if(rx.id===id)return;const isLinked=rx._parentId===id||(!rx._parentId&&(rx.clid||rx.client)===(r.clid||r.client));if(isLinked&&rx.notes&&rx.notes.startsWith('⏰ REMINDER')&&rx.date&&r.date){const diff=Math.round((new Date(r.date.replace(/-/g,'/'))-new Date(rx.date.replace(/-/g,'/')))/(1000*60*60*24));if(diff>0&&!pendingReminders.includes(diff))pendingReminders.push(diff);}});}renderReminderChips();document.getElementById('fc-clid').value=r.clid||'';document.getElementById('fc-client').value=r.client||'';document.getElementById('fc-anum').value=r.anum||'';document.getElementById('fc-date').value=r.date||'';document.getElementById('fc-notes').value=r.notes||'';const hasTime=!!(r.timeStart||r.timeEnd);const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=hasTime;document.getElementById('fc-time-start').value=r.timeStart||'';document.getElementById('fc-time-end').value=r.timeEnd||'';if(hasTime)document.getElementById('time-range-panel').classList.add('open');else document.getElementById('time-range-panel').classList.remove('open');updateTimeDisplay();document.getElementById('fc-history-note').value='';document.getElementById('fc-reschedule-date').value='';document.getElementById('reschedule-panel').classList.remove('open');document.getElementById('reschedule-extras').style.display='none';if(document.getElementById('rs-time-toggle'))document.getElementById('rs-time-toggle').checked=false;document.getElementById('rs-time-range-panel').classList.remove('open');if(document.getElementById('rs-time-start'))document.getElementById('rs-time-start').value='';if(document.getElementById('rs-time-end'))document.getElementById('rs-time-end').value='';document.getElementById('rs-time-display').textContent='';rsReminders=[];renderRsReminderChips();['attended','completed','cancelled','rescheduled','deleted'].forEach(k=>{const el=document.getElementById('sbtn-'+k);if(el)el.classList.remove('sel');});if(r.attendedStatus){const ab=document.getElementById('sbtn-attended');if(ab)ab.classList.add('sel');}resetSoAttachmentPanel();populateModalDropdowns();document.getElementById('fc-casetype').value=r.type||'';document.getElementById('fc-paralegal').value=r.atty||'';document.getElementById('fc-eventtype').value=r.event||'';onEventTypeChange(r.event||'');setHearingMode(r.hearingMode||'');const sid=document.getElementById('so-issue-date');if(sid)sid.value=r.soIssueDate||'';document.getElementById('fc-assigned').value=r.assigned||'';customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);if(el)el.value=r[c.key]||'';});renderHistoryLog(r.history||[]);loadModalChecklistDocs(r);resetDateCalc(r.date||'');document.getElementById('modal').style.display='flex';}
 function copyEventText(){
   const r=editingId?records.find(x=>x.id===editingId):null;
@@ -6255,6 +6361,8 @@ function copyEventText(){
   if(paralegal) lines.push('Paralegal: '+paralegal);
   if(event) lines.push('Event: '+event);
   if(date) lines.push('Date: '+fmtDate(date));
+  const tOn2=document.getElementById('fc-time-toggle')&&document.getElementById('fc-time-toggle').checked;
+  if(tOn2){const tS2=(document.getElementById('fc-time-start')||{}).value||'';const tE2=(document.getElementById('fc-time-end')||{}).value||'';if(tS2&&tE2)lines.push('Time: '+fmtTime(tS2)+' \u2013 '+fmtTime(tE2));else if(tS2)lines.push('Time: '+fmtTime(tS2));}
   if(assigned) lines.push('Assigned: '+assigned);
   if(notes) lines.push('Notes: '+notes);
   if(pendingReminders&&pendingReminders.length){
@@ -6478,7 +6586,7 @@ function applyDateCalc(){
     setTimeout(()=>res.style.color='#6A8C6E',800);
   }
 }
-function closeModal(){document.getElementById('modal').style.display='none';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';}
+function closeModal(){document.getElementById('modal').style.display='none';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';}
 function handleBackdropClick(e){if(e.target===document.getElementById('modal'))closeModal();}
 
 // ── saveEvent ──
@@ -7414,9 +7522,10 @@ function openCaseDetail(clid){
     const isSJC=(base.type||'').includes('Special Juvenile');
 
     // Build unified client list: lead first, then respondents
+    const _leadIdx=(caseMeta[clid].leadIdx!==undefined)?caseMeta[clid].leadIdx:-1;
     const allClients=[
-      {_isBase:true,name:base.client,anum:base.anum,type:base.type,atty:base.atty,isLead:true,idx:-1},
-      ...(caseMeta[clid].respondents||[]).map((r,i)=>({...r,idx:i}))
+      {_isBase:true,name:base.client,anum:base.anum,type:base.type,atty:base.atty,isLead:(_leadIdx===-1),idx:-1},
+      ...(caseMeta[clid].respondents||[]).map((r,i)=>({...r,idx:i,isLead:(_leadIdx===i)}))
     ];
     infoBody._allClients=allClients;
     infoBody._isConsolidated=isConsolidated;
@@ -7481,7 +7590,7 @@ function openCaseDetail(clid){
           if(cl.anum){const an2=document.createElement('span');an2.style.cssText='font-size:11px;color:#9E9186;';an2.textContent='A# '+cl.anum;row.appendChild(an2);}
         }
         if(cl.relationship){const rb=document.createElement('span');rb.style.cssText='font-size:10px;color:#C4BAB0;font-style:italic;';rb.textContent=cl.relationship;row.appendChild(rb);}
-        if(cl.isLead&&allClients.length>1){const lb=document.createElement('span');lb.className='respondent-lead-badge';lb.textContent='Lead';row.appendChild(lb);}
+        if(allClients.length>1){if(cl.isLead){const lb=document.createElement('span');lb.className='respondent-lead-badge';lb.textContent='Lead';lb.title='This is the lead client';row.appendChild(lb);}else{const rb2=document.createElement('span');rb2.className='respondent-rider-badge';rb2.textContent='Rider';rb2.title='Click to set as Lead';rb2.onclick=()=>{caseMeta[clid].leadIdx=cl.idx;markUnsaved();renderAll2();};row.appendChild(rb2);}}
         content.appendChild(row);
       } else {
         // Inline fields on one row (or two if SJC with two judges)
@@ -7504,7 +7613,7 @@ function openCaseDetail(clid){
 
         // Relationship
         if(cl.relationship){const rb=document.createElement('span');rb.style.cssText='font-size:10px;color:#C4BAB0;font-style:italic;white-space:nowrap;';rb.textContent=cl.relationship;row.appendChild(rb);}
-        if(cl.isLead&&allClients.length>1){const lb=document.createElement('span');lb.className='respondent-lead-badge';lb.textContent='Lead';row.appendChild(lb);}
+        if(allClients.length>1){if(cl.isLead){const lb=document.createElement('span');lb.className='respondent-lead-badge';lb.textContent='Lead';lb.title='This is the lead client';row.appendChild(lb);}else{const rb2=document.createElement('span');rb2.className='respondent-rider-badge';rb2.textContent='Rider';rb2.title='Click to set as Lead';rb2.onclick=()=>{caseMeta[clid].leadIdx=cl.idx;markUnsaved();renderAll2();};row.appendChild(rb2);}}
 
         content.appendChild(row);
 
