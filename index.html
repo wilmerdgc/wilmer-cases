@@ -7590,7 +7590,7 @@ function openCaseDetail(clid){
           if(cl.anum){const an2=document.createElement('span');an2.style.cssText='font-size:11px;color:#9E9186;';an2.textContent='A# '+cl.anum;row.appendChild(an2);}
         }
         if(cl.relationship){const rb=document.createElement('span');rb.style.cssText='font-size:10px;color:#C4BAB0;font-style:italic;';rb.textContent=cl.relationship;row.appendChild(rb);}
-        if(allClients.length>1){if(cl.isLead){const lb=document.createElement('span');lb.className='respondent-lead-badge';lb.textContent='Lead';lb.title='This is the lead client';row.appendChild(lb);}else{const rb2=document.createElement('span');rb2.className='respondent-rider-badge';rb2.textContent='Rider';rb2.title='Click to set as Lead';rb2.onclick=()=>{caseMeta[clid].leadIdx=cl.idx;markUnsaved();renderAll2();};row.appendChild(rb2);}}
+        if(allClients.length>1){if(cl.isLead){const lb=document.createElement('span');lb.className='respondent-lead-badge';lb.textContent='Lead';lb.title='This is the lead client';row.appendChild(lb);}else{const rb2=document.createElement('span');rb2.className='respondent-rider-badge';rb2.textContent='Rider';rb2.title='Click to set as Lead';rb2.onclick=()=>{if(!caseMeta[clid])caseMeta[clid]={};caseMeta[clid].leadIdx=cl.idx;markUnsaved();saveAllData();renderAll2();showToast('Lead updated ✓');};row.appendChild(rb2);}}
         content.appendChild(row);
       } else {
         // Inline fields on one row (or two if SJC with two judges)
@@ -7613,7 +7613,7 @@ function openCaseDetail(clid){
 
         // Relationship
         if(cl.relationship){const rb=document.createElement('span');rb.style.cssText='font-size:10px;color:#C4BAB0;font-style:italic;white-space:nowrap;';rb.textContent=cl.relationship;row.appendChild(rb);}
-        if(allClients.length>1){if(cl.isLead){const lb=document.createElement('span');lb.className='respondent-lead-badge';lb.textContent='Lead';lb.title='This is the lead client';row.appendChild(lb);}else{const rb2=document.createElement('span');rb2.className='respondent-rider-badge';rb2.textContent='Rider';rb2.title='Click to set as Lead';rb2.onclick=()=>{caseMeta[clid].leadIdx=cl.idx;markUnsaved();renderAll2();};row.appendChild(rb2);}}
+        if(allClients.length>1){if(cl.isLead){const lb=document.createElement('span');lb.className='respondent-lead-badge';lb.textContent='Lead';lb.title='This is the lead client';row.appendChild(lb);}else{const rb2=document.createElement('span');rb2.className='respondent-rider-badge';rb2.textContent='Rider';rb2.title='Click to set as Lead';rb2.onclick=()=>{if(!caseMeta[clid])caseMeta[clid]={};caseMeta[clid].leadIdx=cl.idx;markUnsaved();saveAllData();renderAll2();showToast('Lead updated ✓');};row.appendChild(rb2);}}
 
         content.appendChild(row);
 
