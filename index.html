@@ -466,6 +466,210 @@ tbody td { padding: 9px 12px; vertical-align: middle; font-size: 12px; }
 .finished-row .client-cell { text-decoration: line-through; }
 .finished-status-badge { display: inline-block; font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight: 500; white-space: nowrap; }
 
+/* ── Cases subtab nav ──────────────────────────── */
+.cases-sub-nav {
+  display: flex;
+  gap: 0;
+  border-bottom: 1.5px solid var(--border);
+  margin-bottom: 18px;
+}
+.cases-sub-btn {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  border: none;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  padding: 7px 18px;
+  background: transparent;
+  color: var(--ink-muted);
+  margin-bottom: -1.5px;
+  transition: color .14s;
+  cursor: pointer;
+}
+.cases-sub-btn:hover { background: transparent; color: var(--ink); border-color: var(--ink-faint); }
+.cases-sub-btn.active {
+  color: var(--ink);
+  border-bottom: 2px solid var(--ink);
+  font-weight: 600;
+}
+
+/* ── General subtab — type stats ──────────────── */
+.case-type-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.ct-stat {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  min-width: 110px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: box-shadow .15s, border-color .15s;
+  position: relative;
+  overflow: hidden;
+}
+.ct-stat:hover { box-shadow: var(--shadow-md); border-color: var(--sage-mid); }
+.ct-stat.ct-active { border-color: var(--ink); box-shadow: var(--shadow-md); }
+.ct-stat-bar {
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 3px;
+  background: var(--sage-mid);
+  transition: width .3s ease;
+}
+.ct-stat.ct-active .ct-stat-bar { background: var(--ink); }
+.ct-stat-num { font-size: 24px; font-weight: 700; font-family: var(--font-display); line-height: 1; color: var(--ink); }
+.ct-stat-label { font-size: 10px; color: var(--ink-muted); margin-top: 5px; text-transform: uppercase; letter-spacing: .05em; line-height: 1.3; }
+
+/* ── SIJ board — 3-column Kanban ───────────────── */
+.sij-kanban {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.sij-kanban-wrap {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.sij-kanban-wrap .sij-kanban {
+  min-width: 600px;
+}
+
+.sij-col-wrap {
+  display: flex;
+  flex-direction: column;
+  background: var(--cream-dark);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  min-height: 160px;
+}
+
+.sij-col-header {
+  padding: 12px 14px 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.sij-col-icon {
+  font-size: 15px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.sij-col-title {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  flex: 1;
+}
+.sij-col-subtitle {
+  font-size: 10px;
+  color: var(--ink-muted);
+  margin-top: 1px;
+  letter-spacing: .02em;
+}
+.sij-col-count {
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(44,38,32,.08);
+  color: var(--ink-soft);
+  border-radius: 20px;
+  padding: 2px 8px;
+  flex-shrink: 0;
+}
+
+.sij-col-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sij-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 11px 13px;
+  cursor: pointer;
+  transition: box-shadow .13s, border-color .13s;
+  box-shadow: var(--shadow-sm);
+}
+.sij-card:hover { box-shadow: var(--shadow-md); border-color: var(--sage-mid); }
+.sij-card-name { font-size: 13px; font-weight: 600; font-family: var(--font-display); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sij-card-meta { font-size: 11px; color: var(--ink-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sij-card-event { margin-top: 7px; }
+.sij-col-empty {
+  padding: 20px 14px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.sij-fc-stage-divider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 6px;
+  padding: 0 2px;
+}
+.sij-fc-stage-divider:first-child { margin-top: 2px; }
+.sij-fc-stage-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.sij-fc-stage-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.sij-fc-stage-count {
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--parchment);
+  color: var(--ink-muted);
+  border-radius: 20px;
+  padding: 1px 6px;
+}
+.sij-fc-stage-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--parchment);
+  color: var(--ink-soft);
+  border-radius: 20px;
+  padding: 1px 8px;
+  letter-spacing: .03em;
+}
+.sij-stage-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+
 /* ── Case cards ────────────────────────────────── */
 .case-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px 18px; margin-bottom: 10px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 14px; background: #fff; box-shadow: var(--shadow-sm); transition: box-shadow 0.15s, border-color 0.15s; }
 .case-card:hover { box-shadow: var(--shadow-md); border-color: var(--sage-mid); }
@@ -1778,14 +1982,32 @@ function hideExcelRestorePrompt(){}
 </div>
 <!-- CASES -->
 <div id="pane-cases" style="display:none">
-  <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap">
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
     <input id="cases-search" type="text" placeholder="Search by client name, A-number or Client ID…" style="max-width:340px"/>
     <select id="cases-filter-type" style="width:auto"><option value="">All case types</option></select>
     <select id="cases-filter-atty" style="width:auto"><option value="">All paralegals</option></select>
     <span style="flex:1"></span>
     <button class="btn-primary" onclick="openAddCasePage()" style="border-radius:20px;padding:6px 18px;">+ New Case</button>
   </div>
-  <div id="cases-list-view"><div id="cases-list"></div><div id="cases-empty" style="display:none;text-align:center;padding:4rem;color:#9E9186;font-size:13px">No cases match your search.</div></div>
+
+  <!-- Cases subtab nav (hidden when in detail/add view) -->
+  <div class="cases-sub-nav" id="cases-sub-nav">
+    <button class="cases-sub-btn active" id="cstab-general" onclick="switchCasesSubtab('general')">General</button>
+    <button class="cases-sub-btn" id="cstab-sij" onclick="switchCasesSubtab('sij')">SIJ</button>
+  </div>
+
+  <!-- General subtab -->
+  <div id="cases-subtab-general">
+    <div id="cases-type-stats" class="case-type-stats"></div>
+    <div id="cases-list-view"><div id="cases-list"></div><div id="cases-empty" style="display:none;text-align:center;padding:4rem;color:#9E9186;font-size:13px">No cases match your search.</div></div>
+  </div><!-- /cases-subtab-general -->
+
+  <!-- SIJ subtab -->
+  <div id="cases-subtab-sij" style="display:none">
+    <div id="sij-board"></div>
+  </div>
+
+  <!-- Detail view (shared by General + SIJ subtabs) -->
   <div id="cases-detail-view" style="display:none">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap">
       <button onclick="closeCaseDetail()" style="font-size:12px;padding:5px 14px;border-radius:20px">&#8592; Back</button>
@@ -2705,7 +2927,7 @@ function _makeDashedLine(){
 }
 function debounce(fn,ms){let t;return function(...a){clearTimeout(t);t=setTimeout(()=>fn.apply(this,a),ms);};}
 const _debouncedRenderAll=debounce(()=>renderAll(),200);
-const _debouncedRenderCases=debounce(()=>renderCases(),200);
+const _debouncedRenderCases=debounce(()=>{renderCasesTypeStats();renderCases();},200);
 const cardBg={overdue:'#F9EDED',urgent:'#FAF0E6',thisweek:'#FAF0E6',nextweek:'#FAF0E6',['15days']:'#EBF1EB',ok:'#EBF1EB','no-date':'#EDE8E0'};
 const cardColor={overdue:'#B85C5C',urgent:'#C9823A',thisweek:'#C9823A',nextweek:'#C9823A',['15days']:'#6A8C6E',ok:'#6A8C6E','no-date':'#9E9186'};
 function initials(name){return name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);}
@@ -2738,7 +2960,7 @@ function switchTab(t){currentTab=t;
   if(bkBtn){bkBtn.style.background=t==='backup'?'#2C2620':'transparent';bkBtn.style.color=t==='backup'?'#F7F3ED':'#9E9186';bkBtn.style.borderColor=t==='backup'?'#2C2620':'#DDD5CA';}
   if(t==='settings'){snapshotSettings();renderSettings();}
   else if(t==='workflows'){renderCaseTypesSection();}
-  else if(t==='cases'){renderCases();}
+  else if(t==='cases'){renderCasesTypeStats();renderCases();}
   else if(t==='backup'){renderBackupPage();}
   else if(t==='inbox'){ /* iframe loads automatically */ }
   else{renderAll();}
@@ -7225,7 +7447,310 @@ function renderCases(){
   });
   list.appendChild(frag);
 }
-function closeCaseDetail(){activeCaseClid=null;document.getElementById('cases-detail-view').style.display='none';document.getElementById('cases-add-view').style.display='none';document.getElementById('cases-list-view').style.display='';}
+function closeCaseDetail(){
+  activeCaseClid=null;
+  document.getElementById('cases-detail-view').style.display='none';
+  document.getElementById('cases-add-view').style.display='none';
+  // Restore whichever subtab is active
+  const activeTab=_activeCasesSubtab||'general';
+  document.getElementById('cases-subtab-general').style.display=activeTab==='general'?'':'none';
+  document.getElementById('cases-subtab-sij').style.display=activeTab==='sij'?'':'none';
+  document.getElementById('cases-sub-nav').style.display='';
+  if(activeTab==='general')document.getElementById('cases-list-view').style.display='';
+}
+
+let _activeCasesSubtab = 'general';
+
+function switchCasesSubtab(tab){
+  _activeCasesSubtab=tab;
+  document.getElementById('cstab-general').classList.toggle('active',tab==='general');
+  document.getElementById('cstab-sij').classList.toggle('active',tab==='sij');
+  document.getElementById('cases-subtab-general').style.display=tab==='general'?'':'none';
+  document.getElementById('cases-subtab-sij').style.display=tab==='sij'?'':'none';
+  // Make sure filter bar inputs are relevant
+  const filterVis = tab==='general';
+  document.getElementById('cases-filter-type').style.display=filterVis?'':'none';
+  document.getElementById('cases-filter-atty').style.display=filterVis?'':'none';
+  document.getElementById('cases-search').style.display=filterVis?'':'none';
+  if(tab==='general'){ renderCasesTypeStats(); renderCases(); }
+  else if(tab==='sij'){ renderSIJBoard(); }
+}
+
+function renderCasesTypeStats(){
+  const el=document.getElementById('cases-type-stats');
+  if(!el)return;
+  const all=getCases();
+  const typeCounts={};
+  all.forEach(c=>{ const t=c.type||'Other'; typeCounts[t]=(typeCounts[t]||0)+1; });
+  const sorted=Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]);
+  const total=all.length;
+  const max=sorted.length?sorted[0][1]:1;
+  // Colors per type
+  const typeColors={
+    'Defensive Asylum':'#6B7FA3',
+    'Affirmative Asylum':'#6A8C6E',
+    'Special Juvenile in Court':'#C9823A',
+    'Withholding of Removal':'#B85C5C',
+    'Cancellation of Removal':'#9B6B9B',
+    'Voluntary Departure':'#5C9E8A',
+  };
+  const shortLabels={
+    'Defensive Asylum':'Def. Asylum',
+    'Affirmative Asylum':'Aff. Asylum',
+    'Special Juvenile in Court':'SIJ / Court',
+    'Withholding of Removal':'Withholding',
+    'Cancellation of Removal':'Cancellation',
+    'Voluntary Departure':'Vol. Departure',
+  };
+  const currentFilter=document.getElementById('cases-filter-type').value;
+  el.innerHTML='';
+  // Total card
+  const totalCard=document.createElement('div');
+  totalCard.className='ct-stat'+(currentFilter===''?' ct-active':'');
+  totalCard.title='Show all case types';
+  totalCard.innerHTML=`<div class="ct-stat-num">${total}</div><div class="ct-stat-label">All Cases</div><div class="ct-stat-bar" style="width:100%;background:var(--parchment)"></div>`;
+  totalCard.onclick=()=>{ document.getElementById('cases-filter-type').value=''; renderCasesTypeStats(); renderCases(); };
+  el.appendChild(totalCard);
+  sorted.forEach(([t,n])=>{
+    const card=document.createElement('div');
+    card.className='ct-stat'+(currentFilter===t?' ct-active':'');
+    card.title='Filter by '+t;
+    const color=typeColors[t]||'#9E9186';
+    const pct=Math.round(n/max*100);
+    const label=shortLabels[t]||t;
+    card.innerHTML=`<div class="ct-stat-num" style="color:${color}">${n}</div><div class="ct-stat-label">${label}</div><div class="ct-stat-bar" style="width:${pct}%;background:${color}40"></div>`;
+    card.onclick=()=>{ document.getElementById('cases-filter-type').value=t; renderCasesTypeStats(); renderCases(); };
+    el.appendChild(card);
+  });
+}
+
+function renderSIJBoard(){
+  const board=document.getElementById('sij-board');
+  if(!board)return;
+
+  const all=getCases().filter(c=>(c.type||'').includes('Special Juvenile'));
+
+  if(!all.length){
+    board.innerHTML='<div style="text-align:center;padding:4rem;color:#9E9186;font-size:13px;">No SIJ cases found.</div>';
+    return;
+  }
+
+  // ── FC stages (manual, stored in caseMeta[clid].fcStage) ──
+  const FC_STAGES = [
+    { key:'initial',      label:'Initial Petition',           color:'#9E9186', bg:'#F0ECE8' },
+    { key:'pending-date', label:'Pending for a Court Date',   color:'#6B7FA3', bg:'#EEF1F7' },
+    { key:'service',      label:'Service of Process',         color:'#C9823A', bg:'#FAF0E6' },
+    { key:'trial',        label:'Trial',                      color:'#B85C5C', bg:'#F9EDED' },
+    { key:'pending-order',label:'Pending Order',              color:'#9B6B9B', bg:'#F3EEF8' },
+    { key:'sij-issued',   label:'SIJ Orders Issued',          color:'#6A8C6E', bg:'#EBF1EB' },
+  ];
+  const FC_STAGE_MAP = Object.fromEntries(FC_STAGES.map(s=>[s.key,s]));
+
+  function _getFcStage(c){
+    const clid=c.clid||c.client;
+    const key=(caseMeta[clid]||{}).fcStage||'initial';
+    return FC_STAGE_MAP[key]||FC_STAGES[0];
+  }
+
+  function _setFcStage(c, key){
+    const clid=c.clid||c.client;
+    if(!caseMeta[clid])caseMeta[clid]={};
+    caseMeta[clid].fcStage=key;
+    markUnsaved();
+    saveAllData();
+    renderSIJBoard();
+  }
+
+  // ── Column definitions ──────────────────────────
+  const COLS = [
+    {
+      key: 'ic',
+      title: 'Immigration Court',
+      subtitle: 'Masters · Merits · Bond',
+      icon: '⚖️',
+      accentColor: '#6B7FA3',
+      accentBg: '#EEF1F7',
+      matchFn: r => {
+        const ev=(r.event||'').toUpperCase();
+        return ['MASTER','SCHEDULING ORDER','INDIVIDUAL','MERITS','BOND','WEBEX','PREP MASTER','TASK FOR IC'].some(k=>ev.includes(k));
+      },
+      isFc: false
+    },
+    {
+      key: 'fc',
+      title: 'Family Court',
+      subtitle: 'SIJ Findings · Orders',
+      icon: '🏛',
+      accentColor: '#C9823A',
+      accentBg: '#FAF0E6',
+      matchFn: r => {
+        const ev=(r.event||'').toUpperCase();
+        return ev.includes('FC') || ev.includes('FAMILY COURT') || ev.includes('TASK FOR FC')
+          || ev.includes('PETITION FC') || ev.includes('SIJ FINDINGS') || ev.includes('PROPOSED ORDER')
+          || ev.includes('TRIAL') || ev.includes('SERVICE') || ev.includes('MOTION TO DISPENSE')
+          || ev.includes('PENDING ORDER') || ev.includes('INITIAL PETITION') || ev.includes('CERTIFIED');
+      },
+      isFc: true
+    },
+    {
+      key: 'uscis',
+      title: '360 USCIS',
+      subtitle: 'I-360 · Receipt · Approval',
+      icon: '📋',
+      accentColor: '#6A8C6E',
+      accentBg: '#EBF1EB',
+      matchFn: r => {
+        const ev=(r.event||'').toUpperCase();
+        return ev.includes('360') || ev.includes('USCIS') || ev.includes('I-360')
+          || ev.includes('TASK FOR 360') || ev.includes('EAD') || ev.includes('WORK PERMIT');
+      },
+      isFc: false
+    }
+  ];
+
+  // ── Build card ──────────────────────────────────
+  function _buildCard(c, col){
+    const activeRecs=c.records.filter(r=>!r.deletedStatus&&!r.finishedStatus);
+    const colRecs=activeRecs.filter(r=>col.matchFn(r)&&r.date).sort((a,b)=>a.date.localeCompare(b.date));
+    const nextRec=colRecs[0]||activeRecs.filter(r=>r.date).sort((a,b)=>a.date.localeCompare(b.date))[0];
+
+    let eventBadge='<span class="badge no-date" style="font-size:10px;">No upcoming</span>';
+    if(nextRec){
+      const s=status(parseDate(nextRec.date));
+      const cls=badgeClass(s);
+      eventBadge=`<span class="badge ${cls}" style="font-size:10px;">${fmtShort(nextRec.date)}</span>`
+        +`<span style="font-size:11px;color:var(--ink-soft);font-weight:500;margin-left:4px;">${nextRec.event||''}</span>`;
+    }
+
+    const div=document.createElement('div');
+    div.className='sij-card';
+    div.style.borderLeft=`3px solid ${col.accentColor}40`;
+
+    let fcStageHtml='';
+    if(col.isFc){
+      const stage=_getFcStage(c);
+      const clid=c.clid||c.client;
+      const opts=FC_STAGES.map(s=>`<option value="${s.key}"${s.key===stage.key?' selected':''}>${s.label}</option>`).join('');
+      fcStageHtml=`<div style="margin-top:8px;">
+        <select class="sij-fc-stage-select" data-clid="${clid}"
+          style="font-size:10px;padding:3px 6px;border-radius:6px;border:1px solid ${stage.color}40;background:${stage.bg};color:${stage.color};font-weight:600;font-family:inherit;cursor:pointer;width:100%;outline:none;"
+          onclick="event.stopPropagation()"
+          onchange="event.stopPropagation();_sijSetFcStage(this)">
+          ${opts}
+        </select>
+      </div>`;
+    }
+
+    div.innerHTML=`
+      <div class="sij-card-name">${c.client||'—'}</div>
+      <div class="sij-card-meta">${c.atty||'—'}${c.anum?' &middot; A# '+c.anum:''}${c.clid?' &middot; <span style="color:var(--ink-faint)">ID '+c.clid+'</span>':''}</div>
+      <div class="sij-card-event" style="margin-top:6px;">${eventBadge}</div>
+      ${fcStageHtml}`;
+    div.onclick=()=>openCaseDetail(c.clid||c.client);
+    return div;
+  }
+
+  // ── Build FC body grouped by stage ─────────────
+  function _buildFcBody(cases, col, body){
+    if(!cases.length){
+      const empty=document.createElement('div');
+      empty.className='sij-col-empty';
+      empty.textContent='No cases in this stage';
+      body.appendChild(empty);
+      return;
+    }
+    const byStage={};
+    cases.forEach(c=>{ const k=_getFcStage(c).key; (byStage[k]||(byStage[k]=[])).push(c); });
+
+    FC_STAGES.forEach(stage=>{
+      const stageCases=byStage[stage.key];
+      if(!stageCases||!stageCases.length) return;
+
+      const divider=document.createElement('div');
+      divider.className='sij-fc-stage-divider';
+      divider.innerHTML=`
+        <span class="sij-fc-stage-dot" style="background:${stage.color};"></span>
+        <span class="sij-fc-stage-label" style="color:${stage.color};">${stage.label}</span>
+        <span class="sij-fc-stage-line"></span>
+        <span class="sij-fc-stage-count">${stageCases.length}</span>`;
+      body.appendChild(divider);
+
+      stageCases.sort((a,b)=>{
+        const ad=a.records.filter(r=>!r.deletedStatus&&!r.finishedStatus&&r.date).sort((x,y)=>x.date.localeCompare(y.date))[0];
+        const bd=b.records.filter(r=>!r.deletedStatus&&!r.finishedStatus&&r.date).sort((x,y)=>x.date.localeCompare(y.date))[0];
+        if(!ad&&!bd)return 0; if(!ad)return 1; if(!bd)return -1;
+        return ad.date.localeCompare(bd.date);
+      }).forEach(c=>body.appendChild(_buildCard(c,col)));
+    });
+  }
+
+  // ── Build board ─────────────────────────────────
+  board.innerHTML='';
+  const outerWrap=document.createElement('div');
+  outerWrap.className='sij-kanban-wrap';
+  const kanban=document.createElement('div');
+  kanban.className='sij-kanban';
+  outerWrap.appendChild(kanban);
+
+  COLS.forEach(col=>{
+    const cases=all.filter(c=>c.records.filter(r=>!r.deletedStatus&&!r.finishedStatus).some(r=>col.matchFn(r)));
+    // For FC: show ALL SIJ cases (every case needs a FC stage)
+    const colCases = col.isFc ? all : cases;
+
+    const colWrap=document.createElement('div');
+    colWrap.className='sij-col-wrap';
+    colWrap.style.borderTop=`3px solid ${col.accentColor}`;
+
+    const hdr=document.createElement('div');
+    hdr.className='sij-col-header';
+    hdr.style.background=col.accentBg;
+    hdr.innerHTML=`
+      <span class="sij-col-icon">${col.icon}</span>
+      <div style="flex:1;min-width:0;">
+        <div class="sij-col-title">${col.title}</div>
+        <div class="sij-col-subtitle">${col.subtitle}</div>
+      </div>
+      <span class="sij-col-count" style="background:${col.accentColor}18;color:${col.accentColor};">${colCases.length}</span>`;
+    colWrap.appendChild(hdr);
+
+    const body=document.createElement('div');
+    body.className='sij-col-body';
+
+    if(col.isFc){
+      _buildFcBody(colCases, col, body);
+    } else if(!colCases.length){
+      const empty=document.createElement('div');
+      empty.className='sij-col-empty';
+      empty.textContent='No cases in this stage';
+      body.appendChild(empty);
+    } else {
+      [...colCases].sort((a,b)=>{
+        const ar=a.records.filter(r=>!r.deletedStatus&&!r.finishedStatus&&col.matchFn(r)&&r.date).sort((x,y)=>x.date.localeCompare(y.date))[0];
+        const br=b.records.filter(r=>!r.deletedStatus&&!r.finishedStatus&&col.matchFn(r)&&r.date).sort((x,y)=>x.date.localeCompare(y.date))[0];
+        if(!ar&&!br)return 0; if(!ar)return 1; if(!br)return -1;
+        return ar.date.localeCompare(br.date);
+      }).forEach(c=>body.appendChild(_buildCard(c,col)));
+    }
+
+    colWrap.appendChild(body);
+    kanban.appendChild(colWrap);
+  });
+
+  board.appendChild(outerWrap);
+}
+
+// Called by the stage <select> inside FC cards
+window._sijSetFcStage = function(sel){
+  const clid=sel.dataset.clid;
+  const key=sel.value;
+  if(!clid)return;
+  if(!caseMeta[clid])caseMeta[clid]={};
+  caseMeta[clid].fcStage=key;
+  markUnsaved();
+  saveAllData();
+  renderSIJBoard();
+};
+
 function switchCaseTab(tab){const isO=tab==='overview';document.getElementById('cd-pane-overview').style.display=isO?'':'none';document.getElementById('cd-pane-checklists').style.display=isO?'none':'';document.getElementById('cdtab-overview').classList.toggle('active',isO);document.getElementById('cdtab-checklists').classList.toggle('active',!isO);if(!isO&&activeCaseClid)renderCaseChecklists(activeCaseClid);}
 function openAddFromCase(){if(!activeCaseClid)return;const caseRecs=records.filter(r=>(r.clid||r.client)===activeCaseClid);if(!caseRecs.length){openAdd();return;}const base=caseRecs.reduce((best,r)=>{const s=(r.client?1:0)+(r.anum?1:0)+(r.atty?1:0)+(r.type?1:0);const bs=(best.client?1:0)+(best.anum?1:0)+(best.atty?1:0)+(best.type?1:0);return s>bs?r:best;},caseRecs[0]);openAdd();setTimeout(()=>{document.getElementById('fc-clid').value=base.clid||'';document.getElementById('fc-client').value=base.client||'';document.getElementById('fc-anum').value=base.anum||'';const ce=document.getElementById('fc-casetype');if(ce)ce.value=base.type||'';const pe=document.getElementById('fc-paralegal');if(pe)pe.value=base.atty||'';customColumns.forEach(c=>{const val=caseRecs.map(r=>r[c.key]).filter(Boolean)[0]||'';const el=document.getElementById('fc-'+c.key);if(el)el.value=val;});},0);}
 function openAddFromStage(clid,eventType,notes){const caseRecs=records.filter(r=>(r.clid||r.client)===clid);const base=caseRecs.length?caseRecs.reduce((best,r)=>{const s=(r.client?1:0)+(r.anum?1:0)+(r.atty?1:0)+(r.type?1:0);const bs=(best.client?1:0)+(best.anum?1:0)+(best.atty?1:0)+(best.type?1:0);return s>bs?r:best;},caseRecs[0]):null;openAdd();setTimeout(()=>{if(base){document.getElementById('fc-clid').value=base.clid||'';document.getElementById('fc-client').value=base.client||'';document.getElementById('fc-anum').value=base.anum||'';const ce=document.getElementById('fc-casetype');if(ce)ce.value=base.type||'';const pe=document.getElementById('fc-paralegal');if(pe)pe.value=base.atty||'';}if(eventType){const ee=document.getElementById('fc-eventtype');if(ee)ee.value=eventType;}if(notes)document.getElementById('fc-notes').value=notes;},0);}
@@ -7382,6 +7907,9 @@ function openCaseDetail(clid){
   activeCaseClid=clid;
   document.getElementById('cases-list-view').style.display='none';
   document.getElementById('cases-add-view').style.display='none';
+  document.getElementById('cases-subtab-general').style.display='none';
+  document.getElementById('cases-subtab-sij').style.display='none';
+  document.getElementById('cases-sub-nav').style.display='none';
   document.getElementById('cases-detail-view').style.display='';
   document.getElementById('cd-pane-overview').style.display='';
   document.getElementById('cd-pane-checklists').style.display='none';
@@ -9811,6 +10339,9 @@ function openAddCasePage(){
   // Hide other views
   document.getElementById('cases-list-view').style.display='none';
   document.getElementById('cases-detail-view').style.display='none';
+  document.getElementById('cases-subtab-general').style.display='none';
+  document.getElementById('cases-subtab-sij').style.display='none';
+  document.getElementById('cases-sub-nav').style.display='none';
   document.getElementById('cases-add-view').style.display='';
 
   // Populate case type
@@ -9860,7 +10391,11 @@ function openAddCasePage(){
 
 function closeAddCasePage(){
   document.getElementById('cases-add-view').style.display='none';
-  document.getElementById('cases-list-view').style.display='';
+  document.getElementById('cases-sub-nav').style.display='';
+  const activeTab=_activeCasesSubtab||'general';
+  document.getElementById('cases-subtab-general').style.display=activeTab==='general'?'':'none';
+  document.getElementById('cases-subtab-sij').style.display=activeTab==='sij'?'':'none';
+  if(activeTab==='general')document.getElementById('cases-list-view').style.display='';
 }
 
 function saveAddCasePage(){
