@@ -3011,18 +3011,24 @@ function inboxNoteSearchCase(q){
 
 // Check if Gmail iframe was blocked (CSP/X-Frame-Options)
 function inboxCheckGmailLoad(iframe){
-  try{
-    const doc = iframe.contentDocument || iframe.contentWindow && iframe.contentWindow.document;
-    if(!doc || doc.URL === 'about:blank'){
-      // iframe blocked — show Gmail API UI
+  // Always show Gmail API UI — Gmail blocks iframes on all external sites
+  setTimeout(()=>{
+    try{
+      // If we can access contentDocument, it means Gmail didn't load (showed error page)
+      const doc = iframe.contentDocument;
+      if(doc){
+        iframe.style.display='none';
+        const apiUi = document.getElementById('gmail-api-ui');
+        if(apiUi){ apiUi.style.display='flex'; gmailInit(); gmailRenderSignIn(); }
+      }
+    } catch(e){
+      // Cross-origin error = Gmail actually loaded (rare, only if same domain)
+      // Still show API UI as fallback since iframe Gmail is limited
       iframe.style.display='none';
       const apiUi = document.getElementById('gmail-api-ui');
       if(apiUi){ apiUi.style.display='flex'; gmailInit(); gmailRenderSignIn(); }
     }
-  } catch(e){
-    // Cross-origin = iframe loaded (Gmail is working)
-    document.getElementById('gmail-api-ui').style.display='none';
-  }
+  }, 1500);
 }
 
 function inboxMainNoteSearch(q){
