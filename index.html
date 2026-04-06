@@ -3421,7 +3421,7 @@ async function gmailFetchMessage(id){
   const data = await gmailApi('messages/' + id + '?format=full');
   if(!data) return;
   const headers = {};
-  (data.payload && data.payload.headers || []).forEach(h => headers[h.name.toLowerCase()] = h.value);
+  (data.payload && data.payload.headers || []).forEach(h => { if(!headers[h.name.toLowerCase()]) headers[h.name.toLowerCase()] = h.value; });
   let body = '';
   const attachments = [];
   function extractParts(part){
@@ -3453,6 +3453,7 @@ async function gmailFetchMessage(id){
     subject: headers.subject || '(no subject)',
     date: headers.date || '',
     body: body,
+    cc: headers.cc || '',
     messageId: headers['message-id'] || '',
     labelIds: data.labelIds || [],
     attachments: attachments
@@ -3471,11 +3472,12 @@ async function gmailFetchMessage(id){
   gmailRenderMessage();
 }
 
-async function gmailSendMessage(to, subject, body, threadId, inReplyTo){
+async function gmailSendMessage(to, subject, body, threadId, inReplyTo, cc){
   let mime = 'Content-Type: text/html; charset=utf-8\r\n';
   mime += 'MIME-Version: 1.0\r\n';
   mime += 'From: ' + _gmailUserEmail + '\r\n';
   mime += 'To: ' + to + '\r\n';
+  if(cc) mime += 'Cc: ' + cc + '\r\n';
   mime += 'Subject: ' + subject + '\r\n';
   if(inReplyTo){
     mime += 'In-Reply-To: ' + inReplyTo + '\r\n';
@@ -3616,7 +3618,8 @@ function gmailRenderMessage(){
       </div>
       <div style="font-size:11px;color:var(--ink-muted);margin-top:4px;">To: ${escHtml(m.to)}</div>
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
-        <button onclick="gmailOpenReply()" style="font-size:11px;font-weight:600;padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--cream);color:var(--ink);cursor:pointer;font-family:inherit;">↩ Reply</button>
+        <button onclick="gmailOpenReply(false)" style="font-size:11px;font-weight:600;padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--cream);color:var(--ink);cursor:pointer;font-family:inherit;">↩ Reply</button>
+        <button onclick="gmailOpenReply(true)" style="font-size:11px;font-weight:600;padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--cream);color:var(--ink);cursor:pointer;font-family:inherit;">↩↩ Reply All</button>
         <button onclick="gmailOpenForward()" style="font-size:11px;padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--cream);color:var(--ink-muted);cursor:pointer;font-family:inherit;">→ Forward</button>
         <button onclick="gmailOpenSaveToCase()" style="font-size:11px;font-weight:600;padding:6px 14px;border:1px solid var(--sage-mid);border-radius:var(--radius-sm);background:var(--sage-light);color:var(--sage);cursor:pointer;font-family:inherit;">📁 Save to Case</button>
       </div>
@@ -3658,18 +3661,47 @@ function gmailRenderMessage(){
     <div id="gmail-reply-area"></div>`;
 }
 
-function gmailOpenReply(){
+function gmailOpenReply(replyAll){
   if(!_gmailCurrentMsg) return;
   const m = _gmailCurrentMsg;
   const fromEmail = (m.from.match(/<(.+?)>/)||[])[1] || m.from;
+  // Build recipient list
+  let toList = fromEmail;
+  let ccList = '';
+  if(replyAll){
+    // Collect all To and CC recipients, exclude self
+    const allTo = (m.to||'').split(',').map(s=>s.trim()).filter(Boolean);
+    const allCc = (m.cc||'').split(',').map(s=>s.trim()).filter(Boolean);
+    const me = _gmailUserEmail.toLowerCase();
+    const toEmails = [fromEmail];
+    allTo.forEach(addr => {
+      const email = (addr.match(/<(.+?)>/)||[])[1] || addr;
+      if(email.toLowerCase() !== me && email.toLowerCase() !== fromEmail.toLowerCase()) toEmails.push(email);
+    });
+    toList = toEmails.join(', ');
+    ccList = allCc.filter(addr => {
+      const email = (addr.match(/<(.+?)>/)||[])[1] || addr;
+      return email.toLowerCase() !== me;
+    }).map(addr => (addr.match(/<(.+?)>/)||[])[1] || addr).join(', ');
+  }
   const area = document.getElementById('gmail-reply-area');
   if(!area) return;
   area.innerHTML = `
     <div style="padding:16px 24px;border-top:2px solid var(--sage-mid);background:#fff;">
-      <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:8px;">Reply to ${escHtml(fromEmail)}</div>
+      <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:10px;">${replyAll ? 'Reply All' : 'Reply'}</div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <label style="font-size:11px;color:var(--ink-muted);width:28px;flex-shrink:0;">To:</label>
+          <input id="gmail-reply-to" type="text" value="${escHtml(toList)}" style="flex:1;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;"/>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <label style="font-size:11px;color:var(--ink-muted);width:28px;flex-shrink:0;">Cc:</label>
+          <input id="gmail-reply-cc" type="text" value="${escHtml(ccList)}" placeholder="Add Cc..." style="flex:1;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;"/>
+        </div>
+      </div>
       <textarea id="gmail-reply-body" placeholder="Write your reply..." style="width:100%;min-height:120px;font-size:13px;line-height:1.6;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;resize:vertical;box-sizing:border-box;"></textarea>
       <div style="display:flex;gap:8px;margin-top:10px;">
-        <button onclick="gmailDoReply()" style="font-size:12px;font-weight:600;padding:8px 20px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Send Reply</button>
+        <button onclick="gmailDoReply()" style="font-size:12px;font-weight:600;padding:8px 20px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Send</button>
         <button onclick="document.getElementById('gmail-reply-area').innerHTML=''" style="font-size:12px;padding:8px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Cancel</button>
       </div>
     </div>`;
@@ -3697,10 +3729,12 @@ function gmailOpenForward(){
 async function gmailDoReply(){
   const body = (document.getElementById('gmail-reply-body')||{}).value||'';
   if(!body.trim()){ showToast('Write a reply first'); return; }
+  const to = (document.getElementById('gmail-reply-to')||{}).value||'';
+  const cc = (document.getElementById('gmail-reply-cc')||{}).value||'';
+  if(!to.trim()){ showToast('Enter at least one recipient'); return; }
   const m = _gmailCurrentMsg;
-  const fromEmail = (m.from.match(/<(.+?)>/)||[])[1] || m.from;
   const subj = m.subject.startsWith('Re:') ? m.subject : 'Re: ' + m.subject;
-  const ok = await gmailSendMessage(fromEmail, subj, body.replace(/\n/g,'<br>'), m.threadId, m.messageId);
+  const ok = await gmailSendMessage(to.trim(), subj, body.replace(/\n/g,'<br>'), m.threadId, m.messageId, cc.trim());
   if(ok) document.getElementById('gmail-reply-area').innerHTML = '<div style="padding:16px 24px;color:var(--sage);font-size:13px;font-weight:600;">Reply sent ✓</div>';
 }
 
