@@ -3080,6 +3080,143 @@ function gmailSaveAttachToCase(idx){
 // Update gmailDoSaveToCase to handle both email and attachment saving
 const _origGmailDoSaveToCase = typeof gmailDoSaveToCase === 'function' ? null : null;
 
+// ── Gmail: Move to / Labels / Archive / Trash ──
+let _gmailLabels = null;
+
+async function gmailFetchLabels(){
+  if(_gmailLabels) return _gmailLabels;
+  const data = await gmailApi('labels');
+  if(!data || !data.labels) return [];
+  // Sort: system folders first, then user labels alphabetically
+  const system = ['INBOX','STARRED','IMPORTANT','SENT','DRAFTS','SPAM','TRASH'];
+  const systemLabels = data.labels.filter(l => system.includes(l.id)).sort((a,b) => system.indexOf(a.id) - system.indexOf(b.id));
+  const userLabels = data.labels.filter(l => l.type === 'user').sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  _gmailLabels = [...systemLabels, ...userLabels];
+  return _gmailLabels;
+}
+
+async function gmailToggleMoveTo(){
+  const drop = document.getElementById('gmail-moveto-dropdown');
+  if(!drop) return;
+  if(drop.style.display === 'block'){ drop.style.display = 'none'; return; }
+  drop.innerHTML = '<div style="padding:12px;text-align:center;color:var(--ink-muted);font-size:11px;">Loading labels...</div>';
+  drop.style.display = 'block';
+  const labels = await gmailFetchLabels();
+  if(!labels.length){ drop.innerHTML = '<div style="padding:12px;color:var(--ink-muted);font-size:11px;">No labels found</div>'; return; }
+  drop.innerHTML = '';
+  // Current labels on this message
+  const currentIds = (_gmailCurrentMsg && _gmailCurrentMsg.labelIds) || [];
+  // System labels section
+  const sysNames = {INBOX:'Inbox',STARRED:'Starred',IMPORTANT:'Important',SENT:'Sent',DRAFTS:'Drafts',SPAM:'Spam',TRASH:'Trash'};
+  const sysIcons = {INBOX:'📥',STARRED:'⭐',IMPORTANT:'❗',SENT:'📤',DRAFTS:'📝',SPAM:'⚠',TRASH:'🗑'};
+  const systemIds = ['INBOX','STARRED','IMPORTANT','SPAM','TRASH'];
+  const sysLabels = labels.filter(l => systemIds.includes(l.id));
+  const userLabels = labels.filter(l => l.type === 'user');
+
+  if(sysLabels.length){
+    const header = document.createElement('div');
+    header.style.cssText = 'padding:6px 12px;font-size:10px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--cream-dark);';
+    header.textContent = 'Move to';
+    drop.appendChild(header);
+    sysLabels.forEach(l => {
+      const isCurrent = currentIds.includes(l.id);
+      const item = document.createElement('div');
+      item.style.cssText = 'padding:8px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;' + (isCurrent ? 'background:var(--slate-light);font-weight:600;' : '');
+      item.innerHTML = '<span style="font-size:14px;">'+(sysIcons[l.id]||'📁')+'</span><span>'+(sysNames[l.id]||l.name)+'</span>' + (isCurrent ? '<span style="margin-left:auto;font-size:10px;color:var(--sage);">current</span>' : '');
+      item.onmouseenter = () => { if(!isCurrent) item.style.background = 'var(--cream)'; };
+      item.onmouseleave = () => { item.style.background = isCurrent ? 'var(--slate-light)' : ''; };
+      item.onclick = () => { drop.style.display = 'none'; gmailMoveToLabel(l.id, l.name || sysNames[l.id]); };
+      drop.appendChild(item);
+    });
+  }
+
+  if(userLabels.length){
+    const header = document.createElement('div');
+    header.style.cssText = 'padding:6px 12px;font-size:10px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.04em;border-top:1px solid var(--cream-dark);border-bottom:1px solid var(--cream-dark);margin-top:2px;';
+    header.textContent = 'Labels';
+    drop.appendChild(header);
+    userLabels.forEach(l => {
+      const isCurrent = currentIds.includes(l.id);
+      const item = document.createElement('div');
+      item.style.cssText = 'padding:8px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;' + (isCurrent ? 'background:var(--slate-light);font-weight:600;' : '');
+      item.innerHTML = '<span style="font-size:14px;">🏷</span><span>'+escHtml(l.name)+'</span>' + (isCurrent ? '<span style="margin-left:auto;font-size:10px;color:var(--sage);">applied</span>' : '');
+      item.onmouseenter = () => { if(!isCurrent) item.style.background = 'var(--cream)'; };
+      item.onmouseleave = () => { item.style.background = isCurrent ? 'var(--slate-light)' : ''; };
+      item.onclick = () => { drop.style.display = 'none'; gmailMoveToLabel(l.id, l.name); };
+      drop.appendChild(item);
+    });
+  }
+
+  // Close on outside click
+  setTimeout(() => {
+    const close = e => { if(!drop.contains(e.target) && e.target.closest && !e.target.closest('[onclick*="gmailToggleMoveTo"]')){ drop.style.display='none'; document.removeEventListener('mousedown',close); }};
+    document.addEventListener('mousedown', close);
+  }, 0);
+}
+
+async function gmailMoveToLabel(labelId, labelName){
+  if(!_gmailCurrentMsg) return;
+  const msgId = _gmailCurrentMsg.id;
+  const currentLabels = _gmailCurrentMsg.labelIds || [];
+  // For system folders (INBOX, SPAM, TRASH): remove from current folder, add to new one
+  const folderIds = ['INBOX','SPAM','TRASH'];
+  const removeLabels = currentLabels.filter(id => folderIds.includes(id) && id !== labelId);
+  const addLabels = [labelId];
+  const result = await gmailApi('messages/' + msgId + '/modify', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ addLabelIds: addLabels, removeLabelIds: removeLabels })
+  });
+  if(result){
+    showToast('Moved to ' + (labelName||labelId) + ' ✓');
+    // Update local state
+    _gmailCurrentMsg.labelIds = _gmailCurrentMsg.labelIds.filter(id => !removeLabels.includes(id));
+    if(!_gmailCurrentMsg.labelIds.includes(labelId)) _gmailCurrentMsg.labelIds.push(labelId);
+    // Remove from list if moved out of inbox view
+    if(removeLabels.includes('INBOX')){
+      _gmailMessages = _gmailMessages.filter(m => m.id !== msgId);
+      gmailRenderEmailList();
+      document.getElementById('gmail-email-reader').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ink-faint);font-size:13px;">Select an email to read</div>';
+    }
+  } else {
+    showToast('Failed to move email');
+  }
+}
+
+async function gmailArchiveMessage(){
+  if(!_gmailCurrentMsg) return;
+  const msgId = _gmailCurrentMsg.id;
+  const result = await gmailApi('messages/' + msgId + '/modify', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ removeLabelIds: ['INBOX'] })
+  });
+  if(result){
+    showToast('Archived ✓');
+    _gmailMessages = _gmailMessages.filter(m => m.id !== msgId);
+    gmailRenderEmailList();
+    document.getElementById('gmail-email-reader').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ink-faint);font-size:13px;">Select an email to read</div>';
+  } else {
+    showToast('Failed to archive');
+  }
+}
+
+async function gmailTrashMessage(){
+  if(!_gmailCurrentMsg) return;
+  const msgId = _gmailCurrentMsg.id;
+  const result = await gmailApi('messages/' + msgId + '/trash', {
+    method: 'POST'
+  });
+  if(result){
+    showToast('Moved to Trash ✓');
+    _gmailMessages = _gmailMessages.filter(m => m.id !== msgId);
+    gmailRenderEmailList();
+    document.getElementById('gmail-email-reader').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ink-faint);font-size:13px;">Select an email to read</div>';
+  } else {
+    showToast('Failed to trash');
+  }
+}
+
 // Gmail iframe removed — using Gmail API directly
 
 function inboxMainNoteSearch(q){
@@ -3622,6 +3759,12 @@ function gmailRenderMessage(){
         <button onclick="gmailOpenReply(true)" style="font-size:11px;font-weight:600;padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--cream);color:var(--ink);cursor:pointer;font-family:inherit;">↩↩ Reply All</button>
         <button onclick="gmailOpenForward()" style="font-size:11px;padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--cream);color:var(--ink-muted);cursor:pointer;font-family:inherit;">→ Forward</button>
         <button onclick="gmailOpenSaveToCase()" style="font-size:11px;font-weight:600;padding:6px 14px;border:1px solid var(--sage-mid);border-radius:var(--radius-sm);background:var(--sage-light);color:var(--sage);cursor:pointer;font-family:inherit;">📁 Save to Case</button>
+        <div style="position:relative;display:inline-block;">
+          <button onclick="gmailToggleMoveTo()" style="font-size:11px;padding:6px 14px;border:1px solid var(--slate);border-radius:var(--radius-sm);background:var(--slate-light);color:var(--slate);cursor:pointer;font-family:inherit;font-weight:600;">📂 Move to</button>
+          <div id="gmail-moveto-dropdown" style="display:none;position:absolute;left:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:300;min-width:220px;max-height:320px;overflow-y:auto;"></div>
+        </div>
+        <button onclick="gmailArchiveMessage()" style="font-size:11px;padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--cream);color:var(--ink-muted);cursor:pointer;font-family:inherit;">Archive</button>
+        <button onclick="gmailTrashMessage()" style="font-size:11px;padding:6px 14px;border:1px solid var(--rose);border-radius:var(--radius-sm);background:var(--rose-light);color:var(--rose);cursor:pointer;font-family:inherit;">🗑 Trash</button>
       </div>
       <div id="gmail-save-to-case-panel" style="display:none;margin-top:10px;padding:12px;background:var(--sage-light);border:1px solid var(--sage-mid);border-radius:var(--radius-sm);">
         <div style="font-size:11px;font-weight:600;color:var(--sage);margin-bottom:8px;">Save this email to a case</div>
