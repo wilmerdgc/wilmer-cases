@@ -3203,11 +3203,9 @@ async function gmailMoveToLabel(labelId, labelName){
     // Update local state
     _gmailCurrentMsg.labelIds = _gmailCurrentMsg.labelIds.filter(id => !removeLabels.includes(id));
     if(!_gmailCurrentMsg.labelIds.includes(labelId)) _gmailCurrentMsg.labelIds.push(labelId);
-    // Remove from list if moved out of inbox view
+    // Remove from list and open next email
     if(removeLabels.includes('INBOX')){
-      _gmailMessages = _gmailMessages.filter(m => m.id !== msgId);
-      gmailRenderEmailList();
-      document.getElementById('gmail-email-reader').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ink-faint);font-size:13px;">Select an email to read</div>';
+      gmailAfterRemoveFromList(msgId);
     }
   } else {
     showToast('Failed to move email');
@@ -3224,9 +3222,7 @@ async function gmailArchiveMessage(){
   });
   if(result){
     showToast('Archived ✓');
-    _gmailMessages = _gmailMessages.filter(m => m.id !== msgId);
-    gmailRenderEmailList();
-    document.getElementById('gmail-email-reader').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ink-faint);font-size:13px;">Select an email to read</div>';
+    gmailAfterRemoveFromList(msgId);
   } else {
     showToast('Failed to archive');
   }
@@ -3240,11 +3236,24 @@ async function gmailTrashMessage(){
   });
   if(result){
     showToast('Moved to Trash ✓');
-    _gmailMessages = _gmailMessages.filter(m => m.id !== msgId);
-    gmailRenderEmailList();
-    document.getElementById('gmail-email-reader').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ink-faint);font-size:13px;">Select an email to read</div>';
+    gmailAfterRemoveFromList(msgId);
   } else {
     showToast('Failed to trash');
+  }
+}
+
+function gmailAfterRemoveFromList(msgId){
+  // Find index of removed message, then open the next one
+  const idx = _gmailMessages.findIndex(m => m.id === msgId);
+  _gmailMessages = _gmailMessages.filter(m => m.id !== msgId);
+  gmailRenderEmailList();
+  if(_gmailMessages.length > 0){
+    // Open next email (same index, or last if we were at the end)
+    const nextIdx = Math.min(idx, _gmailMessages.length - 1);
+    gmailFetchMessage(_gmailMessages[nextIdx].id);
+  } else {
+    _gmailCurrentMsg = null;
+    document.getElementById('gmail-email-reader').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ink-faint);font-size:13px;">No more emails</div>';
   }
 }
 
