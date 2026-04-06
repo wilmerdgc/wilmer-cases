@@ -3601,27 +3601,57 @@ async function gmailFetchMessage(id){
   (data.payload && data.payload.headers || []).forEach(h => { if(!headers[h.name.toLowerCase()]) headers[h.name.toLowerCase()] = h.value; });
   let body = '';
   const attachments = [];
+  const inlineImages = {}; // cid -> {attachmentId, mimeType}
+  function b64urlDecode(b64url){
+    const b64 = b64url.replace(/-/g,'+').replace(/_/g,'/');
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+  }
   function extractParts(part){
     if(part.mimeType === 'text/html' && part.body && part.body.data){
-      body = atob(part.body.data.replace(/-/g,'+').replace(/_/g,'/'));
+      body = b64urlDecode(part.body.data);
     } else if(!body && part.mimeType === 'text/plain' && part.body && part.body.data){
-      const txt = atob(part.body.data.replace(/-/g,'+').replace(/_/g,'/'));
+      const txt = b64urlDecode(part.body.data);
       body = '<pre style="white-space:pre-wrap;font-family:inherit;">' + txt.replace(/</g,'&lt;') + '</pre>';
     }
-    // Collect attachments
+    // Collect inline images (Content-ID referenced in HTML via cid:)
+    if(part.mimeType && part.mimeType.startsWith('image/') && part.headers){
+      const cidHeader = part.headers.find(h => h.name.toLowerCase() === 'content-id');
+      if(cidHeader && part.body){
+        const cid = cidHeader.value.replace(/^<|>$/g,'');
+        inlineImages[cid] = { attachmentId: part.body.attachmentId, mimeType: part.mimeType, data: part.body.data };
+      }
+    }
+    // Collect attachments (files with names, excluding inline images that are only cid-referenced)
     if(part.filename && part.filename.length > 0 && part.body){
       attachments.push({
         filename: part.filename,
         mimeType: part.mimeType,
         size: part.body.size || 0,
         attachmentId: part.body.attachmentId || null,
-        // Small inline attachments may have data directly
         data: part.body.data || null
       });
     }
     if(part.parts) part.parts.forEach(extractParts);
   }
   extractParts(data.payload);
+  // Replace cid: references with actual image data
+  const cidKeys = Object.keys(inlineImages);
+  if(cidKeys.length && body){
+    for(const cid of cidKeys){
+      const img = inlineImages[cid];
+      if(img.data){
+        const b64std = img.data.replace(/-/g,'+').replace(/_/g,'/');
+        body = body.replace(new RegExp('cid:'+cid.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'), 'data:'+img.mimeType+';base64,'+b64std);
+      } else if(img.attachmentId){
+        // Replace src="cid:xxx" with a placeholder + data attributes for async fetch
+        const cidEsc = cid.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+        body = body.replace(new RegExp('src\\s*=\\s*["\']cid:'+cidEsc+'["\']','gi'), 'data-cid-pending="'+img.attachmentId+'" data-cid-mime="'+img.mimeType+'" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"');
+      }
+    }
+  }
   _gmailCurrentMsg = {
     id: data.id,
     threadId: data.threadId,
@@ -3647,6 +3677,29 @@ async function gmailFetchMessage(id){
     gmailRenderEmailList();
   }
   gmailRenderMessage();
+  // Async-load any pending CID inline images
+  gmailLoadPendingImages();
+}
+
+async function gmailLoadPendingImages(){
+  if(!_gmailCurrentMsg) return;
+  const msgBody = document.getElementById('gmail-msg-body');
+  if(!msgBody) return;
+  const pending = msgBody.querySelectorAll('img[data-cid-pending]');
+  for(const img of pending){
+    const attId = img.getAttribute('data-cid-pending');
+    const mime = img.getAttribute('data-cid-mime') || 'image/png';
+    if(!attId) continue;
+    try{
+      const attData = await gmailApi('messages/' + _gmailCurrentMsg.id + '/attachments/' + attId);
+      if(attData && attData.data){
+        const b64std = attData.data.replace(/-/g,'+').replace(/_/g,'/');
+        img.src = 'data:'+mime+';base64,'+b64std;
+        img.removeAttribute('data-cid-pending');
+        img.removeAttribute('data-cid-mime');
+      }
+    } catch(e){ /* skip failed images */ }
+  }
 }
 
 async function gmailSendMessage(to, subject, body, threadId, inReplyTo, cc){
@@ -3839,7 +3892,8 @@ function gmailRenderMessage(){
       </div>
     </div>` : ''}
     <div style="padding:20px 24px;">
-      <div id="gmail-msg-body" style="font-size:13px;line-height:1.7;color:var(--ink);max-width:100%;overflow-x:auto;">${m.body}</div>
+      <style>#gmail-msg-body img{max-width:100%;height:auto;}</style>
+      <div id="gmail-msg-body" style="font-size:13px;line-height:1.7;color:var(--ink);max-width:100%;overflow-x:auto;word-wrap:break-word;">${m.body}</div>
     </div>
     <div id="gmail-reply-area"></div>`;
 }
