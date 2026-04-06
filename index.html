@@ -3002,6 +3002,84 @@ function inboxNoteSearchCase(q){
   },0);
 }
 
+// ── Gmail Attachment helpers ──
+
+function gmailAttachIcon(mime){
+  if(!mime) return '📄';
+  if(mime.includes('pdf')) return '📕';
+  if(mime.includes('image')) return '🖼';
+  if(mime.includes('word') || mime.includes('document')) return '📘';
+  if(mime.includes('sheet') || mime.includes('excel') || mime.includes('csv')) return '📊';
+  if(mime.includes('presentation') || mime.includes('powerpoint')) return '📙';
+  if(mime.includes('zip') || mime.includes('rar') || mime.includes('compressed')) return '📦';
+  if(mime.includes('text')) return '📝';
+  return '📄';
+}
+
+function gmailFormatSize(bytes){
+  if(!bytes || bytes===0) return '';
+  if(bytes < 1024) return bytes + ' B';
+  if(bytes < 1024*1024) return Math.round(bytes/1024) + ' KB';
+  return (bytes/(1024*1024)).toFixed(1) + ' MB';
+}
+
+async function gmailGetAttachmentData(att){
+  if(att.data) return att.data;
+  if(!att.attachmentId || !_gmailCurrentMsg) return null;
+  const data = await gmailApi('messages/' + _gmailCurrentMsg.id + '/attachments/' + att.attachmentId);
+  if(!data || !data.data) return null;
+  return data.data;
+}
+
+async function gmailDownloadAttachment(idx){
+  const m = _gmailCurrentMsg;
+  if(!m || !m.attachments || !m.attachments[idx]) return;
+  const att = m.attachments[idx];
+  showToast('Downloading ' + att.filename + '...');
+  const b64 = await gmailGetAttachmentData(att);
+  if(!b64){ showToast('Failed to download attachment'); return; }
+  // Convert base64url to regular base64
+  const b64std = b64.replace(/-/g,'+').replace(/_/g,'/');
+  const byteChars = atob(b64std);
+  const byteArr = new Uint8Array(byteChars.length);
+  for(let i=0;i<byteChars.length;i++) byteArr[i]=byteChars.charCodeAt(i);
+  const blob = new Blob([byteArr], {type: att.mimeType || 'application/octet-stream'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = att.filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Downloaded ✓');
+}
+
+let _gmailAttachSaveIdx = null;
+
+function gmailSaveAttachToCase(idx){
+  _gmailAttachSaveIdx = idx;
+  // Reuse the save-to-case panel but for attachment
+  const panel = document.getElementById('gmail-save-to-case-panel');
+  if(!panel) return;
+  _gmailSaveCaseClid = null;
+  const search = document.getElementById('gmail-save-case-search');
+  const sel = document.getElementById('gmail-save-case-selected');
+  if(search) search.value = '';
+  if(sel) sel.textContent = '';
+  panel.style.display = 'block';
+  // Update panel title
+  const att = _gmailCurrentMsg.attachments[idx];
+  const titleEl = panel.querySelector('div');
+  if(titleEl) titleEl.textContent = 'Save "' + att.filename + '" to a case';
+  // Override save button to save attachment instead of email
+  panel._saveMode = 'attachment';
+  if(search) setTimeout(()=>search.focus(), 50);
+}
+
+// Update gmailDoSaveToCase to handle both email and attachment saving
+const _origGmailDoSaveToCase = typeof gmailDoSaveToCase === 'function' ? null : null;
+
 // Gmail iframe removed — using Gmail API directly
 
 function inboxMainNoteSearch(q){
@@ -3345,16 +3423,28 @@ async function gmailFetchMessage(id){
   const headers = {};
   (data.payload && data.payload.headers || []).forEach(h => headers[h.name.toLowerCase()] = h.value);
   let body = '';
-  function extractBody(part){
+  const attachments = [];
+  function extractParts(part){
     if(part.mimeType === 'text/html' && part.body && part.body.data){
       body = atob(part.body.data.replace(/-/g,'+').replace(/_/g,'/'));
     } else if(!body && part.mimeType === 'text/plain' && part.body && part.body.data){
       const txt = atob(part.body.data.replace(/-/g,'+').replace(/_/g,'/'));
       body = '<pre style="white-space:pre-wrap;font-family:inherit;">' + txt.replace(/</g,'&lt;') + '</pre>';
     }
-    if(part.parts) part.parts.forEach(extractBody);
+    // Collect attachments
+    if(part.filename && part.filename.length > 0 && part.body){
+      attachments.push({
+        filename: part.filename,
+        mimeType: part.mimeType,
+        size: part.body.size || 0,
+        attachmentId: part.body.attachmentId || null,
+        // Small inline attachments may have data directly
+        data: part.body.data || null
+      });
+    }
+    if(part.parts) part.parts.forEach(extractParts);
   }
-  extractBody(data.payload);
+  extractParts(data.payload);
   _gmailCurrentMsg = {
     id: data.id,
     threadId: data.threadId,
@@ -3364,7 +3454,8 @@ async function gmailFetchMessage(id){
     date: headers.date || '',
     body: body,
     messageId: headers['message-id'] || '',
-    labelIds: data.labelIds || []
+    labelIds: data.labelIds || [],
+    attachments: attachments
   };
   // Mark as read if unread
   if((data.labelIds||[]).includes('UNREAD')){
@@ -3544,6 +3635,23 @@ function gmailRenderMessage(){
         </div>
       </div>
     </div>
+    ${m.attachments && m.attachments.length ? `
+    <div style="padding:14px 24px;border-bottom:1px solid var(--border);background:#FDFAF7;">
+      <div style="font-size:11px;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">📎 Attachments (${m.attachments.length})</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        ${m.attachments.map((a,i) => `
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;">
+            <span style="font-size:16px;">${gmailAttachIcon(a.mimeType)}</span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:500;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;" title="${escHtml(a.filename)}">${escHtml(a.filename)}</div>
+              <div style="font-size:10px;color:var(--ink-faint);">${gmailFormatSize(a.size)}</div>
+            </div>
+            <button onclick="gmailDownloadAttachment(${i})" title="Download" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--ink-muted);cursor:pointer;font-size:11px;font-family:inherit;">↓</button>
+            <button onclick="gmailSaveAttachToCase(${i})" title="Save to case" style="padding:4px 8px;border:1px solid var(--sage-mid);border-radius:4px;background:var(--sage-light);color:var(--sage);cursor:pointer;font-size:11px;font-family:inherit;">📁</button>
+          </div>
+        `).join('')}
+      </div>
+    </div>` : ''}
     <div style="padding:20px 24px;">
       <div id="gmail-msg-body" style="font-size:13px;line-height:1.7;color:var(--ink);max-width:100%;overflow-x:auto;">${m.body}</div>
     </div>
@@ -3702,7 +3810,7 @@ function gmailSaveCaseSearch(q){
   }, 0);
 }
 
-function gmailDoSaveToCase(){
+async function gmailDoSaveToCase(){
   if(!_gmailSaveCaseClid){
     const el = document.getElementById('gmail-save-case-search');
     if(el){ el.style.borderColor='#B85C5C'; setTimeout(()=>el.style.borderColor='',1500); }
@@ -3710,23 +3818,48 @@ function gmailDoSaveToCase(){
     return;
   }
   if(!_gmailCurrentMsg){ showToast('No email selected'); return; }
-  const m = _gmailCurrentMsg;
-  const fromName = m.from.replace(/<.*>/,'').trim() || m.from;
-  const fromEmail = (m.from.match(/<(.+?)>/)||[])[1] || m.from;
-  // Build note text with email details
-  const noteText = '[Email] From: ' + fromName + ' <' + fromEmail + '>\n'
-    + 'Subject: ' + m.subject + '\n'
-    + 'Date: ' + m.date + '\n'
-    + (m.to ? 'To: ' + m.to + '\n' : '')
-    + '---\n'
-    + (m.body ? m.body.replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/\s+/g,' ').trim().slice(0,2000) : '(no body)');
-  if(!caseMeta[_gmailSaveCaseClid]) caseMeta[_gmailSaveCaseClid] = {};
-  if(!caseMeta[_gmailSaveCaseClid].caseNotesList) caseMeta[_gmailSaveCaseClid].caseNotesList = [];
-  caseMeta[_gmailSaveCaseClid].caseNotesList.push({ date: todayStr(), text: noteText });
-  markUnsaved();
-  showToast('Email saved to case ✓');
-  document.getElementById('gmail-save-to-case-panel').style.display = 'none';
+  const panel = document.getElementById('gmail-save-to-case-panel');
+  const clid = _gmailSaveCaseClid;
+
+  // Check if saving an attachment
+  if(_gmailAttachSaveIdx !== null && _gmailCurrentMsg.attachments && _gmailCurrentMsg.attachments[_gmailAttachSaveIdx]){
+    const att = _gmailCurrentMsg.attachments[_gmailAttachSaveIdx];
+    showToast('Saving ' + att.filename + '...');
+    const b64 = await gmailGetAttachmentData(att);
+    if(!b64){ showToast('Failed to fetch attachment'); return; }
+    const b64std = b64.replace(/-/g,'+').replace(/_/g,'/');
+    const dataUrl = 'data:' + (att.mimeType||'application/octet-stream') + ';base64,' + b64std;
+    if(!caseMeta[clid]) caseMeta[clid] = {};
+    if(!caseMeta[clid].docSections) caseMeta[clid].docSections = [];
+    let sec = caseMeta[clid].docSections.find(s => s.sectionName === 'Emails');
+    if(!sec){ sec = { sectionName: 'Emails', docs: [] }; caseMeta[clid].docSections.push(sec); }
+    sec.docs.push({ name: att.filename + ' (' + todayStr() + ')', fileData: dataUrl, mimeType: att.mimeType, uploadedAt: todayStr() });
+    // Also add a note
+    if(!caseMeta[clid].caseNotesList) caseMeta[clid].caseNotesList = [];
+    caseMeta[clid].caseNotesList.push({ date: todayStr(), text: '📎 Attachment saved from email: ' + att.filename + ' (From: ' + _gmailCurrentMsg.from.replace(/<.*>/,'').trim() + ', Subject: ' + _gmailCurrentMsg.subject + ')' });
+    markUnsaved();
+    showToast('Attachment saved to case ✓');
+    _gmailAttachSaveIdx = null;
+  } else {
+    // Save email text to case notes
+    const m = _gmailCurrentMsg;
+    const fromName = m.from.replace(/<.*>/,'').trim() || m.from;
+    const fromEmail = (m.from.match(/<(.+?)>/)||[])[1] || m.from;
+    const noteText = '[Email] From: ' + fromName + ' <' + fromEmail + '>\n'
+      + 'Subject: ' + m.subject + '\n'
+      + 'Date: ' + m.date + '\n'
+      + (m.to ? 'To: ' + m.to + '\n' : '')
+      + '---\n'
+      + (m.body ? m.body.replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/\s+/g,' ').trim().slice(0,2000) : '(no body)');
+    if(!caseMeta[clid]) caseMeta[clid] = {};
+    if(!caseMeta[clid].caseNotesList) caseMeta[clid].caseNotesList = [];
+    caseMeta[clid].caseNotesList.push({ date: todayStr(), text: noteText });
+    markUnsaved();
+    showToast('Email saved to case ✓');
+  }
+  if(panel) panel.style.display = 'none';
   _gmailSaveCaseClid = null;
+  _gmailAttachSaveIdx = null;
 }
 
 // ── Migrate doc lists ──
