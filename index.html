@@ -3106,46 +3106,77 @@ async function gmailToggleMoveTo(){
   drop.innerHTML = '';
   // Current labels on this message
   const currentIds = (_gmailCurrentMsg && _gmailCurrentMsg.labelIds) || [];
-  // System labels section
   const sysNames = {INBOX:'Inbox',STARRED:'Starred',IMPORTANT:'Important',SENT:'Sent',DRAFTS:'Drafts',SPAM:'Spam',TRASH:'Trash'};
   const sysIcons = {INBOX:'📥',STARRED:'⭐',IMPORTANT:'❗',SENT:'📤',DRAFTS:'📝',SPAM:'⚠',TRASH:'🗑'};
   const systemIds = ['INBOX','STARRED','IMPORTANT','SPAM','TRASH'];
   const sysLabels = labels.filter(l => systemIds.includes(l.id));
   const userLabels = labels.filter(l => l.type === 'user');
 
-  if(sysLabels.length){
-    const header = document.createElement('div');
-    header.style.cssText = 'padding:6px 12px;font-size:10px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--cream-dark);';
-    header.textContent = 'Move to';
-    drop.appendChild(header);
-    sysLabels.forEach(l => {
-      const isCurrent = currentIds.includes(l.id);
-      const item = document.createElement('div');
-      item.style.cssText = 'padding:8px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;' + (isCurrent ? 'background:var(--slate-light);font-weight:600;' : '');
-      item.innerHTML = '<span style="font-size:14px;">'+(sysIcons[l.id]||'📁')+'</span><span>'+(sysNames[l.id]||l.name)+'</span>' + (isCurrent ? '<span style="margin-left:auto;font-size:10px;color:var(--sage);">current</span>' : '');
-      item.onmouseenter = () => { if(!isCurrent) item.style.background = 'var(--cream)'; };
-      item.onmouseleave = () => { item.style.background = isCurrent ? 'var(--slate-light)' : ''; };
-      item.onclick = () => { drop.style.display = 'none'; gmailMoveToLabel(l.id, l.name || sysNames[l.id]); };
-      drop.appendChild(item);
-    });
+  // Search input
+  const searchWrap = document.createElement('div');
+  searchWrap.style.cssText = 'padding:8px;border-bottom:1px solid var(--cream-dark);position:sticky;top:0;background:#fff;z-index:1;';
+  searchWrap.innerHTML = '<input id="gmail-moveto-search" type="text" placeholder="Search labels..." style="width:100%;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;background:#fff;" autocomplete="off"/>';
+  drop.appendChild(searchWrap);
+
+  // Container for filtered results
+  const listContainer = document.createElement('div');
+  listContainer.id = 'gmail-moveto-list';
+  drop.appendChild(listContainer);
+
+  function renderMoveToList(query){
+    listContainer.innerHTML = '';
+    const q = (query||'').toLowerCase();
+    const filteredSys = sysLabels.filter(l => !q || (sysNames[l.id]||l.name||'').toLowerCase().includes(q));
+    const filteredUser = userLabels.filter(l => !q || (l.name||'').toLowerCase().includes(q));
+
+    if(filteredSys.length){
+      const header = document.createElement('div');
+      header.style.cssText = 'padding:6px 12px;font-size:10px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--cream-dark);';
+      header.textContent = 'Folders';
+      listContainer.appendChild(header);
+      filteredSys.forEach(l => {
+        const isCurrent = currentIds.includes(l.id);
+        const item = document.createElement('div');
+        item.style.cssText = 'padding:8px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;' + (isCurrent ? 'background:var(--slate-light);font-weight:600;' : '');
+        item.innerHTML = '<span style="font-size:14px;">'+(sysIcons[l.id]||'📁')+'</span><span>'+(sysNames[l.id]||l.name)+'</span>' + (isCurrent ? '<span style="margin-left:auto;font-size:10px;color:var(--sage);">current</span>' : '');
+        item.onmouseenter = () => { if(!isCurrent) item.style.background = 'var(--cream)'; };
+        item.onmouseleave = () => { item.style.background = isCurrent ? 'var(--slate-light)' : ''; };
+        item.onclick = () => { drop.style.display = 'none'; gmailMoveToLabel(l.id, l.name || sysNames[l.id]); };
+        listContainer.appendChild(item);
+      });
+    }
+
+    if(filteredUser.length){
+      const header = document.createElement('div');
+      header.style.cssText = 'padding:6px 12px;font-size:10px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.04em;border-top:1px solid var(--cream-dark);border-bottom:1px solid var(--cream-dark);margin-top:2px;';
+      header.textContent = 'Labels';
+      listContainer.appendChild(header);
+      filteredUser.forEach(l => {
+        const isCurrent = currentIds.includes(l.id);
+        const item = document.createElement('div');
+        item.style.cssText = 'padding:8px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;' + (isCurrent ? 'background:var(--slate-light);font-weight:600;' : '');
+        item.innerHTML = '<span style="font-size:14px;">🏷</span><span>'+escHtml(l.name)+'</span>' + (isCurrent ? '<span style="margin-left:auto;font-size:10px;color:var(--sage);">applied</span>' : '');
+        item.onmouseenter = () => { if(!isCurrent) item.style.background = 'var(--cream)'; };
+        item.onmouseleave = () => { item.style.background = isCurrent ? 'var(--slate-light)' : ''; };
+        item.onclick = () => { drop.style.display = 'none'; gmailMoveToLabel(l.id, l.name); };
+        listContainer.appendChild(item);
+      });
+    }
+
+    if(!filteredSys.length && !filteredUser.length){
+      const empty = document.createElement('div');
+      empty.style.cssText = 'padding:12px;text-align:center;color:var(--ink-faint);font-size:11px;';
+      empty.textContent = 'No labels match "' + (query||'') + '"';
+      listContainer.appendChild(empty);
+    }
   }
 
-  if(userLabels.length){
-    const header = document.createElement('div');
-    header.style.cssText = 'padding:6px 12px;font-size:10px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.04em;border-top:1px solid var(--cream-dark);border-bottom:1px solid var(--cream-dark);margin-top:2px;';
-    header.textContent = 'Labels';
-    drop.appendChild(header);
-    userLabels.forEach(l => {
-      const isCurrent = currentIds.includes(l.id);
-      const item = document.createElement('div');
-      item.style.cssText = 'padding:8px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;' + (isCurrent ? 'background:var(--slate-light);font-weight:600;' : '');
-      item.innerHTML = '<span style="font-size:14px;">🏷</span><span>'+escHtml(l.name)+'</span>' + (isCurrent ? '<span style="margin-left:auto;font-size:10px;color:var(--sage);">applied</span>' : '');
-      item.onmouseenter = () => { if(!isCurrent) item.style.background = 'var(--cream)'; };
-      item.onmouseleave = () => { item.style.background = isCurrent ? 'var(--slate-light)' : ''; };
-      item.onclick = () => { drop.style.display = 'none'; gmailMoveToLabel(l.id, l.name); };
-      drop.appendChild(item);
-    });
-  }
+  renderMoveToList('');
+  // Focus search and wire up filtering
+  setTimeout(() => {
+    const input = document.getElementById('gmail-moveto-search');
+    if(input){ input.focus(); input.oninput = () => renderMoveToList(input.value); }
+  }, 30);
 
   // Close on outside click
   setTimeout(() => {
