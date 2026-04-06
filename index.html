@@ -2198,16 +2198,9 @@ function hideExcelRestorePrompt(){}
 <div id="pane-inbox" style="display:none">
   <div style="display:flex;height:calc(100vh - 120px);gap:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);">
 
-    <!-- Gmail iframe (tried first, falls back to API if blocked) -->
-    <div style="flex:1;min-width:0;position:relative;overflow:hidden;border-radius:var(--radius-lg) 0 0 var(--radius-lg);">
-      <iframe id="gmail-frame" src="https://mail.google.com/mail/u/0/#inbox"
-        style="width:100%;height:100%;border:none;display:block;"
-        allow="clipboard-read; clipboard-write; camera; microphone"
-        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation allow-top-navigation-by-user-activation allow-modals allow-downloads"
-        onload="inboxCheckGmailLoad(this)">
-      </iframe>
-      <!-- Gmail API fallback UI (shown when iframe is blocked) -->
-      <div id="gmail-api-ui" style="display:none;position:absolute;inset:0;background:#fff;flex-direction:column;overflow:hidden;"></div>
+    <!-- Gmail API UI -->
+    <div style="flex:1;min-width:0;position:relative;overflow:hidden;border-radius:var(--radius-lg) 0 0 var(--radius-lg);background:#fff;">
+      <div id="gmail-api-ui" style="display:flex;flex-direction:column;width:100%;height:100%;overflow:hidden;"></div>
     </div>
 
     <!-- Right action panel -->
@@ -2337,7 +2330,7 @@ function hideExcelRestorePrompt(){}
 
       <!-- Footer -->
       <div style="padding:14px 18px;margin-top:auto;border-top:1px solid var(--cream-dark);">
-        <button onclick="document.getElementById('gmail-frame').src='https://mail.google.com/mail/u/0/#inbox'" style="font-size:11px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;width:100%;transition:all .14s;" onmouseenter="this.style.background='var(--cream)'" onmouseleave="this.style.background='transparent'">⟳ Reload Gmail</button>
+        <button onclick="if(_gmailAccessToken){gmailFetchInbox();}else{gmailSignIn();}" style="font-size:11px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;width:100%;transition:all .14s;" onmouseenter="this.style.background='var(--cream)'" onmouseleave="this.style.background='transparent'">⟳ Refresh Inbox</button>
       </div>
     </div>
   </div>
@@ -2947,7 +2940,7 @@ function switchTab(t){currentTab=t;
   else if(t==='workflows'){renderCaseTypesSection();}
   else if(t==='cases'){renderCasesTypeStats();renderCases();}
   else if(t==='backup'){renderBackupPage();}
-  else if(t==='inbox'){ gmailInit(); }
+  else if(t==='inbox'){ gmailInit(); if(!_gmailAccessToken) gmailRenderSignIn(); }
   else{renderAll();}
 }
 
@@ -3009,27 +3002,7 @@ function inboxNoteSearchCase(q){
   },0);
 }
 
-// Check if Gmail iframe was blocked (CSP/X-Frame-Options)
-function inboxCheckGmailLoad(iframe){
-  // Always show Gmail API UI — Gmail blocks iframes on all external sites
-  setTimeout(()=>{
-    try{
-      // If we can access contentDocument, it means Gmail didn't load (showed error page)
-      const doc = iframe.contentDocument;
-      if(doc){
-        iframe.style.display='none';
-        const apiUi = document.getElementById('gmail-api-ui');
-        if(apiUi){ apiUi.style.display='flex'; gmailInit(); gmailRenderSignIn(); }
-      }
-    } catch(e){
-      // Cross-origin error = Gmail actually loaded (rare, only if same domain)
-      // Still show API UI as fallback since iframe Gmail is limited
-      iframe.style.display='none';
-      const apiUi = document.getElementById('gmail-api-ui');
-      if(apiUi){ apiUi.style.display='flex'; gmailInit(); gmailRenderSignIn(); }
-    }
-  }, 1500);
-}
+// Gmail iframe removed — using Gmail API directly
 
 function inboxMainNoteSearch(q){
   const drop=document.getElementById('inbox-main-note-drop');
