@@ -3169,6 +3169,15 @@ async function gmailToggleMoveTo(){
       empty.textContent = 'No labels match "' + (query||'') + '"';
       listContainer.appendChild(empty);
     }
+
+    // "Create new label" button
+    const createBtn = document.createElement('div');
+    createBtn.style.cssText = 'padding:10px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-top:1px solid var(--cream-dark);color:var(--sage);font-weight:600;';
+    createBtn.innerHTML = '<span style="font-size:14px;">+</span><span>Create new label' + (q ? ' "'+escHtml(q)+'"' : '') + '</span>';
+    createBtn.onmouseenter = () => createBtn.style.background = 'var(--sage-light)';
+    createBtn.onmouseleave = () => createBtn.style.background = '';
+    createBtn.onclick = () => { gmailShowCreateLabel(q); };
+    listContainer.appendChild(createBtn);
   }
 
   renderMoveToList('');
@@ -3183,6 +3192,54 @@ async function gmailToggleMoveTo(){
     const close = e => { if(!drop.contains(e.target) && e.target.closest && !e.target.closest('[onclick*="gmailToggleMoveTo"]')){ drop.style.display='none'; document.removeEventListener('mousedown',close); }};
     document.addEventListener('mousedown', close);
   }, 0);
+}
+
+function gmailShowCreateLabel(prefill){
+  const listContainer = document.getElementById('gmail-moveto-list');
+  if(!listContainer) return;
+  listContainer.innerHTML = '';
+  const panel = document.createElement('div');
+  panel.style.cssText = 'padding:12px;';
+  panel.innerHTML = `
+    <div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:8px;">Create new label</div>
+    <input id="gmail-new-label-name" type="text" placeholder="Label name..." value="${escHtml(prefill||'')}"
+      style="width:100%;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;margin-bottom:8px;"/>
+    <div style="display:flex;gap:8px;">
+      <button onclick="gmailDoCreateLabel()" style="font-size:11px;font-weight:600;padding:6px 16px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Create</button>
+      <button onclick="gmailDoCreateLabelAndMove()" style="font-size:11px;font-weight:600;padding:6px 16px;border:none;border-radius:var(--radius-sm);background:var(--slate);color:#fff;cursor:pointer;font-family:inherit;">Create & Move</button>
+      <button onclick="document.getElementById('gmail-moveto-dropdown').style.display='none'" style="font-size:11px;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Cancel</button>
+    </div>`;
+  listContainer.appendChild(panel);
+  setTimeout(() => {
+    const inp = document.getElementById('gmail-new-label-name');
+    if(inp){ inp.focus(); inp.onkeydown = e => { if(e.key==='Enter') gmailDoCreateLabelAndMove(); }; }
+  }, 30);
+}
+
+async function gmailDoCreateLabel(){
+  const name = (document.getElementById('gmail-new-label-name')||{}).value||'';
+  if(!name.trim()){ showToast('Enter a label name'); return; }
+  const result = await gmailApi('labels', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name: name.trim(), labelListVisibility: 'labelShow', messageListVisibility: 'show' })
+  });
+  if(result && result.id){
+    showToast('Label "' + name.trim() + '" created ✓');
+    _gmailLabels = null; // Clear cache so it reloads
+    document.getElementById('gmail-moveto-dropdown').style.display = 'none';
+    return result;
+  } else {
+    showToast('Failed to create label');
+    return null;
+  }
+}
+
+async function gmailDoCreateLabelAndMove(){
+  const label = await gmailDoCreateLabel();
+  if(label && label.id){
+    await gmailMoveToLabel(label.id, label.name);
+  }
 }
 
 async function gmailMoveToLabel(labelId, labelName){
