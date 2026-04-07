@@ -3564,7 +3564,7 @@ async function gmailGetProfile(){
 async function gmailFetchInbox(pageToken, query){
   const el = document.getElementById('gmail-email-list');
   if(!pageToken){ _gmailMessages = []; _gmailNextPageToken = null; if(el) el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--ink-muted);font-size:12px;">Loading...</div>'; }
-  let url = 'messages?maxResults=20';
+  let url = 'messages?maxResults=20&labelIds=INBOX';
   if(pageToken) url += '&pageToken=' + pageToken;
   if(query) url += '&q=' + encodeURIComponent(query);
   const data = await gmailApi(url);
