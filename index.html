@@ -7874,6 +7874,35 @@ function offerCalendarEmailDraft(savedData){
   setTimeout(()=>{const el=document.getElementById('calendar-email-toast');if(el)el.remove();},15000);
 }
 
+function formatEventForEmail(ev, clid, defaultParalegal){
+  let txt='';
+  const isHearing=['MASTER','INDIVIDUAL','MERITS','BOND'].some(h=>(ev.event||'').toUpperCase().includes(h));
+  txt+='Paralegal: '+(ev.atty||defaultParalegal)+'\n';
+  txt+='Event Type: '+(ev.event||'—')+'\n';
+  txt+='Due Date: '+fmtDate(ev.date);
+  // Time
+  if(ev.timeStart){
+    txt+=' AT '+fmtTime(ev.timeStart);
+    if(ev.timeEnd) txt+=' – '+fmtTime(ev.timeEnd);
+  }
+  txt+='\n';
+  // Format / Hearing mode
+  if(ev.hearingMode) txt+='Format: '+ev.hearingMode.charAt(0).toUpperCase()+ev.hearingMode.slice(1)+'\n';
+  // Notes
+  if(ev.notes) txt+='Notes: '+ev.notes+'\n';
+  // Reminders — find linked reminder records for this event
+  const reminders=records.filter(r=>r._parentId===ev.id&&r.notes&&r.notes.startsWith('⏰ REMINDER')&&r.date&&!r.finishedStatus&&!r.deletedStatus);
+  if(reminders.length){
+    reminders.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    txt+='Reminders: '+reminders.map(r=>{
+      const diff=Math.round((new Date(ev.date.replace(/-/g,'/'))-new Date(r.date.replace(/-/g,'/')))/(1000*60*60*24));
+      return diff+' days before ('+fmtDate(r.date)+')';
+    }).join(', ')+'\n';
+  }
+  txt+='\n';
+  return txt;
+}
+
 function buildCalendarEmailDraft(clid, clientName){
   const clientEvents=records.filter(r=>{
     return (r.clid||r.client)===clid && !r.finishedStatus && !r.deletedStatus && r.date
@@ -7889,17 +7918,7 @@ function buildCalendarEmailDraft(clid, clientName){
   bodyText+=clientName+' Client ID: '+(base.clid||clid);
   if(base.anum) bodyText+=' A#: '+base.anum;
   bodyText+='\n';
-  clientEvents.forEach(ev=>{
-    const isHearing=['MASTER','INDIVIDUAL','MERITS','BOND'].some(h=>(ev.event||'').toUpperCase().includes(h));
-    bodyText+='Paralegal: '+(ev.atty||paralegal)+'\n';
-    bodyText+='Event Type: '+(ev.event||'—')+'\n';
-    bodyText+='Due Date: '+fmtDate(ev.date);
-    if(isHearing&&ev.timeStart) bodyText+=' AT '+fmtTime(ev.timeStart);
-    if(isHearing&&ev.hearingMode) bodyText+=' ('+ev.hearingMode.toUpperCase()+')';
-    bodyText+='\n';
-    if(ev.notes) bodyText+='Notes: '+ev.notes+'\n';
-    bodyText+='\n';
-  });
+  clientEvents.forEach(ev=>{ bodyText+=formatEventForEmail(ev,clid,paralegal); });
   bodyText+='Thank you.';
   const subject='Calendar — '+clientName+(base.clid?' ('+base.clid+')':'');
   openEmailComposeModal({
@@ -9537,16 +9556,8 @@ function openCaseDetail(clid){
     emailBody+=(base.client||clid)+' Client ID: '+(base.clid||clid);
     if(base.anum) emailBody+=' A#: '+base.anum;
     emailBody+='\n';
-    active.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(ev=>{
-      const isH=['MASTER','INDIVIDUAL','MERITS','BOND'].some(h=>(ev.event||'').toUpperCase().includes(h));
-      emailBody+='Paralegal: '+(ev.atty||paralegal)+'\n';
-      emailBody+='Event Type: '+(ev.event||'—')+'\n';
-      emailBody+='Due Date: '+fmtDate(ev.date);
-      if(isH&&ev.timeStart) emailBody+=' AT '+fmtTime(ev.timeStart);
-      if(isH&&ev.hearingMode) emailBody+=' ('+ev.hearingMode.toUpperCase()+')';
-      emailBody+='\n';
-      if(ev.notes) emailBody+='Notes: '+ev.notes+'\n';
-      emailBody+='\n';
+    [...active].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(ev=>{
+      emailBody+=formatEventForEmail(ev,clid,paralegal);
     });
     emailBody+='Thank you.';
     openEmailComposeModal({
