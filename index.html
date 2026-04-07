@@ -1721,7 +1721,7 @@ function hideExcelRestorePrompt(){}
     <div style="display:flex;align-items:center;gap:16px;">
       <span style="font-family:'Lora',Georgia,serif;font-size:16px;font-weight:600;color:#2C2620;">⚖️ Wilmer Gonzalez</span>
       <div class="tab-nav">
-        <button class="active" id="tab-dashboard" onclick="switchTab('dashboard')">Dashboard</button>
+        <button class="active" id="tab-dashboard" onclick="switchTab('dashboard')">Calendar</button>
         <button id="tab-cases" onclick="switchTab('cases')" ondblclick="closeCaseDetail()">Cases</button>
         <button id="tab-workflows" onclick="switchTab('workflows')">Workflows</button>
         <button id="tab-settings" onclick="switchTab('settings')">Settings</button>
@@ -2116,7 +2116,7 @@ function hideExcelRestorePrompt(){}
       </div>
     </div>
   </div>
-  <div class="settings-section"><div class="settings-section-title">Paralegals</div><div class="tag-list" id="paralegal-tags"></div><div class="tag-add-row"><input id="new-paralegal" type="text" placeholder="Add paralegal..."/><button onclick="addTag('paralegal')">Add</button></div></div>
+  <div class="settings-section"><div class="settings-section-title">Paralegals</div><div id="paralegal-tags"></div><div class="tag-add-row"><input id="new-paralegal" type="text" placeholder="Add paralegal..."/><button onclick="addTag('paralegal')">Add</button></div></div>
   <div class="settings-section">
     <div class="settings-section-title">Event types</div>
     <div id="eventtype-tags"></div>
@@ -2861,6 +2861,9 @@ let caseTypeStages={};
     ];
 })();
 let customColumns=[],caseMeta={};
+let paralegalEmails={}; // {paralegalName: email}
+function saveParalegalEmails(){ try{ localStorage.setItem('casetracker_paralegal_emails', JSON.stringify(paralegalEmails)); }catch(e){} }
+function loadParalegalEmails(){ try{ const d=localStorage.getItem('casetracker_paralegal_emails'); if(d) paralegalEmails=JSON.parse(d); }catch(e){} }
 let eventTypeMeta={
   'SCHEDULING ORDER': {color:'#C9823A'},
   '90-DAY DEADLINE':  {color:'#6B7FA3'},
@@ -4250,7 +4253,24 @@ function migrateDocLists(){Object.keys(caseTypeDocLists).forEach(ct=>{const arr=
 function addCaseType(){const inp=document.getElementById('new-casetype');const val=inp.value.trim();if(!val){alert('Case type name required.');return;}if(caseTypes.includes(val)){alert('Case type already exists.');return;}caseTypes.push(val);inp.value='';renderCaseTypesSection();updateSettingsSaveBar();dirtyFilterOpts();}
 
 // ── Settings rendering ──
-function renderSettings(){renderColVis();renderTags('paralegal',paralegals);renderEventTypeTags();renderTags('casetype',caseTypes);renderSettingsTable();}
+function renderSettings(){renderColVis();renderParalegalTags();renderEventTypeTags();renderTags('casetype',caseTypes);renderSettingsTable();}
+function renderParalegalTags(){
+  const el=document.getElementById('paralegal-tags');if(!el)return;el.innerHTML='';
+  el.style.cssText='display:flex;flex-direction:column;gap:6px;margin-bottom:10px;';
+  paralegals.forEach((v,i)=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 10px;background:#FDFAF7;border:1px solid #EDE8E0;border-radius:8px;';
+    const nameEl=document.createElement('span');nameEl.style.cssText='font-size:12px;font-weight:600;color:#2C2620;min-width:120px;cursor:pointer;';nameEl.textContent=v;nameEl.title='Click to edit name';
+    nameEl.onclick=()=>{const newName=prompt('Edit paralegal name:',v);if(newName&&newName.trim()&&newName.trim()!==v){const old=v;paralegals[i]=newName.trim();if(paralegalEmails[old]){paralegalEmails[newName.trim()]=paralegalEmails[old];delete paralegalEmails[old];}updateSettingsSaveBar();renderParalegalTags();}};
+    const emailIn=document.createElement('input');emailIn.type='email';emailIn.placeholder='email@example.com';emailIn.value=paralegalEmails[v]||'';
+    emailIn.style.cssText='flex:1;font-size:11px;padding:4px 8px;border:1px solid #EDE8E0;border-radius:5px;color:#5C5148;background:#fff;outline:none;font-family:inherit;min-width:160px;';
+    emailIn.onfocus=()=>emailIn.style.borderColor='#6A8C6E';
+    emailIn.onblur=()=>{emailIn.style.borderColor='#EDE8E0';const em=emailIn.value.trim();if(em)paralegalEmails[v]=em;else delete paralegalEmails[v];updateSettingsSaveBar();};
+    const removeBtn=document.createElement('button');removeBtn.innerHTML='×';removeBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0;';
+    removeBtn.onclick=()=>{delete paralegalEmails[v];paralegals.splice(i,1);updateSettingsSaveBar();renderParalegalTags();};
+    row.appendChild(nameEl);row.appendChild(emailIn);row.appendChild(removeBtn);el.appendChild(row);
+  });
+}
 function renderTags(kind,arr){const el=document.getElementById(kind+'-tags');if(!el)return;el.innerHTML='';arr.forEach((v,i)=>{const tag=document.createElement('span');tag.className='tag';tag.title='Click to edit';tag.style.cursor='pointer';const label=document.createElement('span');label.textContent=v;label.style.cursor='pointer';label.onclick=()=>startEditTag(tag,label,kind,i,arr);const removeBtn=document.createElement('button');removeBtn.className='tag-remove';removeBtn.innerHTML='&#215;';removeBtn.onclick=(e)=>{e.stopPropagation();removeTag(kind,i);};tag.appendChild(label);tag.appendChild(removeBtn);el.appendChild(tag);});}
 
 const PRESET_COLORS=['#6A8C6E','#6B7FA3','#C9823A','#B85C5C','#7A6EA0','#3D7A6B','#C4924A','#4A7FA0','#8C6A6A','#5A8A9F','#2C7A5E','#9E6B3A'];
@@ -7832,7 +7852,114 @@ window.saveEvent=function(){
   closeModal();_miniCalLastKey='';_invalidateCasesCache();dirtyCaseFilterOpts();markUnsaved();showToast('Changes saved');
   if(currentTab==='settings')renderSettings();else renderAll();
   if(activeCaseClid&&document.getElementById('cases-detail-view').style.display!=='none'){openCaseDetail(activeCaseClid);}
+  // Offer to draft calendar email
+  offerCalendarEmailDraft(data);
 };
+
+function offerCalendarEmailDraft(savedData){
+  const clid=savedData.clid||savedData.client;
+  if(!clid) return;
+  // Ask user if they want to draft an email
+  const draftBtn=document.createElement('div');
+  draftBtn.id='calendar-email-toast';
+  draftBtn.style.cssText='position:fixed;bottom:20px;right:20px;background:#fff;border:1px solid var(--sage-mid);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);padding:14px 18px;z-index:9999;display:flex;align-items:center;gap:12px;max-width:400px;animation:fadeIn .2s;';
+  draftBtn.innerHTML=`
+    <div style="flex:1;">
+      <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:2px;">Draft calendar email?</div>
+      <div style="font-size:11px;color:var(--ink-muted);">Send all planned events for ${savedData.client} to Loly</div>
+    </div>
+    <button onclick="buildCalendarEmailDraft('${clid.replace(/'/g,"\\'")}','${(savedData.client||'').replace(/'/g,"\\'")}');this.parentElement.remove();" style="font-size:11px;font-weight:600;padding:7px 14px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;">Draft Email</button>
+    <button onclick="this.parentElement.remove();" style="font-size:11px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Skip</button>`;
+  document.body.appendChild(draftBtn);
+  setTimeout(()=>{const el=document.getElementById('calendar-email-toast');if(el)el.remove();},15000);
+}
+
+function buildCalendarEmailDraft(clid, clientName){
+  // Gather all active (planned) events for this client
+  const clientEvents=records.filter(r=>{
+    return (r.clid||r.client)===clid && !r.finishedStatus && !r.deletedStatus && r.date
+      && !(r.notes&&r.notes.startsWith('⏰ REMINDER'));
+  }).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  if(!clientEvents.length){showToast('No planned events to include');return;}
+  const base=clientEvents[0];
+  const paralegal=base.atty||'';
+  const paralegalEmail=paralegalEmails[paralegal]||'';
+  const clientEmail=(caseMeta[clid]||{}).clientEmail||'';
+  const lolyEmail='mvintimilla@theromerofirm.com';
+  // Build TO list
+  let toList=[lolyEmail];
+  if(paralegalEmail && !toList.includes(paralegalEmail)) toList.push(paralegalEmail);
+  // Build email body
+  let body='Dear Loly, Please calendar:\\n\\n';
+  body+=clientName+' Client ID: '+(base.clid||clid);
+  if(base.anum) body+=' A#: '+base.anum;
+  body+='\\n';
+  clientEvents.forEach(ev=>{
+    const isHearing=['MASTER','INDIVIDUAL','MERITS','BOND'].some(h=>(ev.event||'').toUpperCase().includes(h));
+    body+='Paralegal: '+(ev.atty||paralegal)+'\\n';
+    body+='Event Type: '+(ev.event||'—')+'\\n';
+    body+='Due Date: '+fmtDate(ev.date);
+    if(isHearing&&ev.timeStart) body+=' AT '+fmtTime(ev.timeStart);
+    if(isHearing&&ev.hearingMode) body+=' ('+ev.hearingMode.toUpperCase()+')';
+    body+='\\n';
+    if(ev.notes) body+='Notes: '+ev.notes+'\\n';
+    body+='\\n';
+  });
+  body+='Thank you.';
+  // Build subject
+  const subject='Calendar — '+clientName+(base.clid?' ('+base.clid+')':'');
+  // Open compose in Gmail if connected, otherwise open mailto
+  if(_gmailAccessToken){
+    // Use Gmail compose
+    const reader=document.getElementById('gmail-email-reader');
+    if(reader){
+      switchTab('inbox');
+      setTimeout(()=>{
+        const realBody=body.replace(/\\\\n/g,'\\n');
+        const reader2=document.getElementById('gmail-email-reader');
+        if(!reader2)return;
+        reader2.innerHTML=`
+          <div style="padding:24px;max-width:640px;">
+            <div style="font-family:var(--font-display);font-size:16px;font-weight:600;color:var(--ink);margin-bottom:16px;">Calendar Email Draft</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <input id="gmail-compose-to" type="text" value="${toList.join(', ')}" style="font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <label style="font-size:11px;color:var(--ink-muted);flex-shrink:0;">Cc:</label>
+                <input id="gmail-compose-cc" type="text" value="${clientEmail}" placeholder="Client email (optional)" style="flex:1;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/>
+              </div>
+              <input id="gmail-compose-subject" type="text" value="${subject.replace(/"/g,'&quot;')}" style="font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/>
+              <textarea id="gmail-compose-body" style="min-height:300px;font-size:13px;line-height:1.7;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;resize:vertical;">${realBody}</textarea>
+              <div style="display:flex;gap:8px;">
+                <button onclick="gmailDoComposeCal()" style="font-size:13px;font-weight:600;padding:9px 24px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Send</button>
+                <button onclick="document.getElementById('gmail-email-reader').innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;color:var(--ink-faint);font-size:13px;\\'>Select an email to read</div>'" style="font-size:13px;padding:9px 18px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Discard</button>
+              </div>
+            </div>
+          </div>`;
+      },200);
+    }
+  } else {
+    // Fallback: open mailto link
+    const realBody=body.replace(/\\\\n/g,'%0A').replace(/\\n/g,'%0A');
+    const mailTo='mailto:'+toList.join(',')+
+      (clientEmail?'?cc='+encodeURIComponent(clientEmail)+'&':'?')+
+      'subject='+encodeURIComponent(subject)+
+      '&body='+realBody;
+    window.open(mailTo,'_blank');
+  }
+}
+
+async function gmailDoComposeCal(){
+  const to=(document.getElementById('gmail-compose-to')||{}).value||'';
+  const cc=(document.getElementById('gmail-compose-cc')||{}).value||'';
+  const subject=(document.getElementById('gmail-compose-subject')||{}).value||'';
+  const body=(document.getElementById('gmail-compose-body')||{}).value||'';
+  if(!to.trim()){showToast('Enter a recipient');return;}
+  const ok=await gmailSendMessage(to.trim(),subject,body.replace(/\n/g,'<br>'),null,null,cc.trim());
+  if(ok){
+    document.getElementById('gmail-email-reader').innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--sage);font-size:15px;font-weight:600;">Calendar email sent ✓</div>';
+    gmailFetchInbox();
+  }
+}
 
 // ── Finished & All Events ──
 function renderFinished(){rebuildFilterOptions();const q=(document.getElementById('f-search').value||'').toLowerCase();const atty=document.getElementById('f-atty').value,evt=document.getElementById('f-event').value;const rows=records.filter(r=>{if(!r.finishedStatus&&!r.deletedStatus)return false;if(atty&&r.atty!==atty)return false;if(evt&&r.event!==evt)return false;if(q&&!r.client.toLowerCase().includes(q)&&!(r.anum||'').toLowerCase().includes(q)&&!(r.clid||'').toLowerCase().includes(q))return false;return true;});rows.sort((a,b)=>{const ha=a.history&&a.history.length?a.history[a.history.length-1].date:'';const hb=b.history&&b.history.length?b.history[b.history.length-1].date:'';return hb.localeCompare(ha);});const tr=document.getElementById('thead-finished');tr.innerHTML='';allColumns().forEach(col=>{if(colVis[col.key]!==false||col.always){const th=document.createElement('th');th.textContent=col.label;tr.appendChild(th);}});const ts=document.createElement('th');ts.textContent='Status';tr.appendChild(ts);const te2=document.createElement('th');tr.appendChild(te2);const tbody=document.getElementById('tbody-finished');tbody.innerHTML='';const sm={completed:{label:'Completed',bg:'#EBF1EB',color:'#6A8C6E'},attended:{label:'Attended',bg:'#EEF1F7',color:'#6B7FA3'},cancelled:{label:'Cancelled',bg:'#F9EDED',color:'#B85C5C'},rescheduled:{label:'Rescheduled',bg:'#EEF1F7',color:'#6B7FA3'},deleted:{label:'Deleted',bg:'#EDE8E0',color:'#9E9186'}};const frag=document.createDocumentFragment();rows.forEach(r=>{const isDel=!!r.deletedStatus;const smk=isDel?'deleted':r.finishedStatus;const s2=sm[smk]||{label:smk,bg:'#f5f5f5',color:'#888'};const re=(r.history||[]).slice().reverse().find(h=>['completed','attended','cancelled','deleted'].includes(h.type)&&h.note);const tr2=document.createElement('tr');tr2.className='finished-row';let c='';if(colVis.clid!==false)c+=`<td class="muted">${r.clid||'—'}</td>`;c+=`<td style="font-weight:500;text-decoration:line-through;color:#C4BAB0">${r.client}</td>`;if(colVis.anum!==false)c+=`<td class="muted">${r.anum||'—'}</td>`;if(colVis.type!==false)c+=`<td class="muted">${r.type}</td>`;if(colVis.atty!==false)c+=`<td class="muted">${r.atty||'—'}</td>`;if(colVis.event!==false)c+=`<td class="muted">${r.event||'—'}</td>`;if(colVis.date!==false)c+=`<td class="muted">${fmtDate(r.date)}</td>`;if(colVis.assigned!==false)c+=`<td class="muted">${r.assigned||'—'}</td>`;customColumns.forEach(col=>{if(colVis[col.key]!==false)c+=`<td class="muted">${r[col.key]||'—'}</td>`;});if(colVis.notes!==false)c+=`<td class="muted">${r.notes||'—'}</td>`;c+=`<td><span class="finished-status-badge" style="background:${s2.bg};color:${s2.color}">${s2.label}</span>${re?`<div style="font-size:11px;color:#9E9186;margin-top:4px;font-style:italic">"${re.note}"</div>`:''}</td>`;c+=isDel?`<td><button class="edit-btn" onclick="restoreRecord('${r.id}')" style="color:#6B7FA3;border-color:#CBD5E8">&#8635; Restore</button></td>`:`<td><button class="edit-btn" onclick="openEdit('${r.id}')">Edit</button></td>`;tr2.innerHTML=c;frag.appendChild(tr2);});tbody.appendChild(frag);document.getElementById('empty-finished').style.display=rows.length?'none':'block';document.getElementById('tbl-finished').style.display=rows.length?'':'none';}
@@ -8080,10 +8207,10 @@ async function _writeAutoBackup(){
   _showAutoBackupButton();
 })();
 
-function saveAllData(){const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
+function saveAllData(){const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();}catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records)records=p.records;if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records)records=p.records;if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);return true;}catch(e){return false;}}
 window.markUnsaved=function(){document.getElementById('unsaved-dot').style.display='inline-block';document.getElementById('btn-save').classList.add('unsaved');clearTimeout(window._autoSaveTimer);window._autoSaveTimer=setTimeout(()=>{saveAllData();},1000);};
 function setLastBackupLabel(action){
   const n=new Date();
@@ -8462,7 +8589,7 @@ function switchCasesSubtab(tab){
   document.getElementById('cases-filter-atty').style.display=filterVis?'':'none';
   document.getElementById('cases-search').style.display=filterVis?'':'none';
   if(tab==='general'){ renderCasesTypeStats(); renderCases(); }
-  else if(tab==='sij'){ renderSIJBoard(); }
+  else if(tab==='sij'){ renderSIJTable(); }
 }
 
 function renderCasesTypeStats(){
@@ -8511,6 +8638,88 @@ function renderCasesTypeStats(){
     card.onclick=()=>{ document.getElementById('cases-filter-type').value=t; renderCasesTypeStats(); renderCases(); };
     el.appendChild(card);
   });
+}
+
+function renderSIJTable(){
+  const board=document.getElementById('sij-board');
+  if(!board)return;
+  const all=getCases().filter(c=>(c.type||'').includes('Special Juvenile'));
+  if(!all.length){
+    board.innerHTML='<div style="text-align:center;padding:4rem;color:#9E9186;font-size:13px;">No SIJ cases found.</div>';
+    return;
+  }
+  const FC_STAGES=[
+    {key:'initial',label:'Initial Petition',color:'#9E9186',bg:'#F0ECE8'},
+    {key:'pending-date',label:'Pending Court Date',color:'#6B7FA3',bg:'#EEF1F7'},
+    {key:'service',label:'Service of Process',color:'#C9823A',bg:'#FAF0E6'},
+    {key:'trial',label:'Trial',color:'#B85C5C',bg:'#F9EDED'},
+    {key:'pending-order',label:'Pending Order',color:'#9B6B9B',bg:'#F3EEF8'},
+    {key:'sij-issued',label:'SIJ Orders Issued',color:'#6A8C6E',bg:'#EBF1EB'},
+  ];
+  const FC_MAP=Object.fromEntries(FC_STAGES.map(s=>[s.key,s]));
+  // Gather next event date for each case
+  const caseData=all.map(c=>{
+    const clid=c.clid||c.client;
+    const caseRecs=records.filter(r=>(r.clid||r.client)===clid&&!r.finishedStatus&&!r.deletedStatus&&r.date&&!(r.notes&&r.notes.startsWith('⏰ REMINDER')));
+    caseRecs.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    const nextEvent=caseRecs.find(r=>r.date>=TODAY.toISOString().slice(0,10))||caseRecs[0]||null;
+    const fcKey=(caseMeta[clid]||{}).fcStage||'initial';
+    const fcStage=FC_MAP[fcKey]||FC_STAGES[0];
+    return{...c,clid,nextEvent,fcStage,fcKey,eventCount:caseRecs.length,allEvents:caseRecs};
+  });
+  // Sort by next event date (soonest first, no-date at bottom)
+  caseData.sort((a,b)=>{
+    const da=a.nextEvent?a.nextEvent.date:'9999';
+    const db=b.nextEvent?b.nextEvent.date:'9999';
+    return da.localeCompare(db);
+  });
+  board.innerHTML='';
+  board.style.cssText='overflow-x:auto;';
+  // Build table
+  const tbl=document.createElement('table');
+  tbl.style.cssText='width:100%;border-collapse:collapse;font-size:12px;';
+  const thead=document.createElement('thead');
+  thead.innerHTML=`<tr style="background:var(--cream-dark);position:sticky;top:0;z-index:2;">
+    <th style="text-align:left;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">Client</th>
+    <th style="text-align:left;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">A#</th>
+    <th style="text-align:left;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">Paralegal</th>
+    <th style="text-align:left;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">FC Stage</th>
+    <th style="text-align:left;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">Next Event</th>
+    <th style="text-align:left;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">Due Date</th>
+    <th style="text-align:left;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">Notes</th>
+    <th style="text-align:center;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">Events</th>
+  </tr>`;
+  tbl.appendChild(thead);
+  const tbody=document.createElement('tbody');
+  caseData.forEach(c=>{
+    const ne=c.nextEvent;
+    const dateStatus=ne?status(parseDate(ne.date)):'no-date';
+    const dateBg={overdue:'#F9EDED',thisweek:'#FAF0E6',nextweek:'#EEF1F7','15days':'#EBF1EB',ok:'',['no-date']:''}[dateStatus]||'';
+    const dateColor={overdue:'#B85C5C',thisweek:'#C9823A',nextweek:'#6B7FA3','15days':'#6A8C6E',ok:'var(--ink)',['no-date']:'var(--ink-faint)'}[dateStatus]||'var(--ink)';
+    const tr=document.createElement('tr');
+    tr.style.cssText='border-bottom:1px solid var(--cream-dark);cursor:pointer;transition:background .1s;'+(dateBg?'background:'+dateBg+';':'');
+    tr.onmouseenter=()=>tr.style.background=dateBg||'var(--cream)';
+    tr.onmouseleave=()=>tr.style.background=dateBg||'';
+    tr.onclick=()=>{ openCaseDetail(c.clid); };
+    // FC stage dropdown
+    const fcOpts=FC_STAGES.map(s=>`<option value="${s.key}"${s.key===c.fcKey?' selected':''}>${s.label}</option>`).join('');
+    tr.innerHTML=`
+      <td style="padding:10px 12px;font-weight:600;color:var(--ink);white-space:nowrap;">${c.client||c.clid}</td>
+      <td style="padding:10px 12px;color:var(--ink-soft);font-size:11px;">${c.anum||'—'}</td>
+      <td style="padding:10px 12px;color:var(--ink-soft);font-size:11px;">${c.atty||'—'}</td>
+      <td style="padding:10px 12px;">
+        <select onchange="event.stopPropagation();if(!caseMeta['${c.clid}'])caseMeta['${c.clid}']={};caseMeta['${c.clid}'].fcStage=this.value;markUnsaved();renderSIJTable();" style="font-size:11px;padding:3px 6px;border:1px solid ${c.fcStage.color}40;border-radius:4px;background:${c.fcStage.bg};color:${c.fcStage.color};font-weight:600;cursor:pointer;font-family:inherit;outline:none;">
+          ${fcOpts}
+        </select>
+      </td>
+      <td style="padding:10px 12px;font-size:11px;font-weight:500;color:var(--ink);">${ne?ne.event||'—':'—'}</td>
+      <td style="padding:10px 12px;font-weight:600;color:${dateColor};font-size:12px;">${ne?fmtDate(ne.date):'—'}</td>
+      <td style="padding:10px 12px;font-size:11px;color:var(--ink-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${ne?(ne.notes||'').replace(/"/g,'&quot;'):''}">${ne?ne.notes||'':'—'}</td>
+      <td style="padding:10px 12px;text-align:center;"><span style="font-size:11px;font-weight:600;color:var(--ink-muted);background:var(--cream-dark);padding:2px 8px;border-radius:10px;">${c.eventCount}</span></td>`;
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+  board.appendChild(tbl);
 }
 
 function renderSIJBoard(){
@@ -9056,6 +9265,10 @@ function openCaseDetail(clid){
     // Paralegal
     const paraI=mkSel2(paralegals,base.atty);infoBody._paraInput=paraI;
     mkInfoCell(L1,'Paralegal',base.atty,()=>paraI);
+    // Client Email
+    const clientEmailI=document.createElement('input');clientEmailI.type='email';clientEmailI.value=(caseMeta[clid]||{}).clientEmail||'';clientEmailI.placeholder='client@email.com';clientEmailI.style.cssText='width:100%;font-size:13px;font-weight:500;color:#2C2620;border:none;outline:none;background:transparent;padding:0;font-family:inherit;';
+    infoBody._clientEmailInput=clientEmailI;
+    mkInfoCell(L1,'Client Email',(caseMeta[clid]||{}).clientEmail||'',()=>clientEmailI);
     // Consolidated
     if(isEditing){
       const consItem=document.createElement('div');consItem.className='case-info-item';consItem.style.cssText='background:#fff;border:1px solid #DDD5CA;';
@@ -9217,6 +9430,7 @@ function openCaseDetail(clid){
     const clients=infoBody._allClients||[];
     if(infoBody._clidInput){const nv=infoBody._clidInput.value.trim();allRecs.forEach(r=>r.clid=nv);base.clid=nv;}
     if(infoBody._paraInput){const nv=infoBody._paraInput.value;allRecs.forEach(r=>r.atty=nv);base.atty=nv;}
+    if(infoBody._clientEmailInput){if(!caseMeta[clid])caseMeta[clid]={};caseMeta[clid].clientEmail=infoBody._clientEmailInput.value.trim();}
     if(infoBody._typeInputShared){const nv=infoBody._typeInputShared.value;allRecs.forEach(r=>r.type=nv);base.type=nv;}
     if(infoBody._paraInputShared){const nv=infoBody._paraInputShared.value;allRecs.forEach(r=>r.atty=nv);base.atty=nv;}
     clients.forEach(cl=>{
@@ -11541,6 +11755,7 @@ function applyPayload(p){
   if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}
   if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}
   if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}
+  if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);
 }
 // ══════════════════════════════════════════════════
 // CLOUD SYNC — localStorage is always source of truth
@@ -11602,7 +11817,7 @@ function forcePullFromCloud(){
       applyPayload(cloudData);
       try{
         const _now=Date.now();
-        const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,_savedAt:_now};
+        const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,_savedAt:_now};
         localStorage.setItem('casetracker_v1',JSON.stringify(payload));
         localStorage.setItem('wilmer_save_epoch',String(cloudData._savedAt||_now));
       }catch(e){}
@@ -11793,7 +12008,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         applyPayload(cloudData);
         try{
           const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,_savedAt:_now};
+          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,_savedAt:_now};
           localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
@@ -11809,7 +12024,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         // re-push to Firestore and cause an infinite ping-pong loop
         try{
           const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,_savedAt:_now};
+          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,_savedAt:_now};
           localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
