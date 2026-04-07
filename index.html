@@ -2122,6 +2122,7 @@ function hideExcelRestorePrompt(){}
     <div id="eventtype-tags"></div>
     <div class="tag-add-row"><input id="new-eventtype" type="text" placeholder="Add event type..."/><button onclick="addTag('eventtype')">Add</button></div>
   </div>
+  <div class="settings-section"><div class="settings-section-title">Venues</div><div class="tag-list" id="venue-tags"></div><div class="tag-add-row"><input id="new-venue" type="text" placeholder="Add venue..."/><button onclick="addVenue()">Add</button></div></div>
   <div class="settings-section"><div class="settings-section-title">All records</div><div style="overflow-x:auto"><table class="settings-table"><thead><tr id="settings-thead"></tr></thead><tbody id="settings-tbody"></tbody></table></div><div style="margin-top:14px"><button class="btn-primary btn-sm" onclick="openAdd()">+ Add event</button></div></div>
 
   <!-- Data & Tools section -->
@@ -2401,14 +2402,8 @@ function hideExcelRestorePrompt(){}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;">
       <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:600;color:#9E9186;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;">Full Name *</label><input id="jm-name" type="text" placeholder="e.g. Carrie Johnson-Papillo"/></div>
       <div><label style="font-size:11px;font-weight:600;color:#9E9186;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;">Venue</label>
-        <select id="jm-venue">
-          <option value="">—</option>
-          <option>26 FEDERAL PLAZA</option>
-          <option>290 BROADWAY</option>
-          <option>201 VARICK ST</option>
-          <option>KINGS Family Court</option>
-          <option>OTHER</option>
-        </select>
+        <input id="jm-venue" type="text" list="jm-venue-list" placeholder="Type or select venue..."/>
+        <datalist id="jm-venue-list"></datalist>
       </div>
       <div><label style="font-size:11px;font-weight:600;color:#9E9186;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;">Role</label><input id="jm-role" type="text" placeholder="Judge / Referee / Clerk…"/></div>
       <div><label style="font-size:11px;font-weight:600;color:#9E9186;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;">Email</label><input id="jm-email" type="text" placeholder="name@usdoj.gov"/></div>
@@ -2862,6 +2857,9 @@ let caseTypeStages={};
 })();
 let customColumns=[],caseMeta={};
 let paralegalEmails={}; // {paralegalName: email}
+let venues=['26 FEDERAL PLAZA','290 BROADWAY','201 VARICK ST','KINGS Family Court','QUEENS Family Court','BRONX Family Court','NASSAU Family Court','SUFFOLK Family Court'];
+function saveVenues(){ try{ localStorage.setItem('casetracker_venues', JSON.stringify(venues)); }catch(e){} }
+function loadVenues(){ try{ const d=localStorage.getItem('casetracker_venues'); if(d) venues=JSON.parse(d); }catch(e){} }
 function saveParalegalEmails(){ try{ localStorage.setItem('casetracker_paralegal_emails', JSON.stringify(paralegalEmails)); }catch(e){} }
 function loadParalegalEmails(){ try{ const d=localStorage.getItem('casetracker_paralegal_emails'); if(d) paralegalEmails=JSON.parse(d); }catch(e){} }
 let eventTypeMeta={
@@ -4253,7 +4251,17 @@ function migrateDocLists(){Object.keys(caseTypeDocLists).forEach(ct=>{const arr=
 function addCaseType(){const inp=document.getElementById('new-casetype');const val=inp.value.trim();if(!val){alert('Case type name required.');return;}if(caseTypes.includes(val)){alert('Case type already exists.');return;}caseTypes.push(val);inp.value='';renderCaseTypesSection();updateSettingsSaveBar();dirtyFilterOpts();}
 
 // ── Settings rendering ──
-function renderSettings(){renderColVis();renderParalegalTags();renderEventTypeTags();renderTags('casetype',caseTypes);renderSettingsTable();}
+function renderSettings(){renderColVis();renderParalegalTags();renderEventTypeTags();renderTags('casetype',caseTypes);renderVenueTags();renderSettingsTable();}
+function renderVenueTags(){
+  const el=document.getElementById('venue-tags');if(!el)return;el.innerHTML='';
+  venues.forEach((v,i)=>{const tag=document.createElement('span');tag.className='tag';tag.title='Click to edit';tag.style.cursor='pointer';
+    const label=document.createElement('span');label.textContent=v;label.style.cursor='pointer';
+    label.onclick=()=>{const nv=prompt('Edit venue:',v);if(nv&&nv.trim()){venues[i]=nv.trim();updateSettingsSaveBar();renderVenueTags();}};
+    const removeBtn=document.createElement('button');removeBtn.className='tag-remove';removeBtn.innerHTML='×';
+    removeBtn.onclick=(e)=>{e.stopPropagation();venues.splice(i,1);updateSettingsSaveBar();renderVenueTags();};
+    tag.appendChild(label);tag.appendChild(removeBtn);el.appendChild(tag);});
+}
+function addVenue(){const inp=document.getElementById('new-venue');const val=inp.value.trim();if(!val)return;if(venues.includes(val)){showToast('Venue already exists');return;}venues.push(val);inp.value='';updateSettingsSaveBar();renderVenueTags();}
 function renderParalegalTags(){
   const el=document.getElementById('paralegal-tags');if(!el)return;el.innerHTML='';
   el.style.cssText='display:flex;flex-direction:column;gap:6px;margin-bottom:10px;';
@@ -7754,6 +7762,9 @@ function openJudgeModal(id){
   const j=id?judges.find(x=>x.id===id):null;
   document.getElementById('judge-modal-title').textContent=j?'Edit Judge':'Add Judge';
   document.getElementById('jm-name').value=j?j.name:'';
+  // Populate venue datalist
+  const vdl=document.getElementById('jm-venue-list');
+  if(vdl){vdl.innerHTML='';venues.forEach(v=>{const o=document.createElement('option');o.value=v;vdl.appendChild(o);});}
   document.getElementById('jm-venue').value=j?j.venue:'';
   document.getElementById('jm-role').value=j?j.role:'';
   document.getElementById('jm-email').value=j?j.email:'';
@@ -7774,7 +7785,7 @@ function saveJudge(){
   const data={
     id:editingJudgeId||('j'+Date.now()),
     name,
-    venue:document.getElementById('jm-venue').value,
+    venue:document.getElementById('jm-venue').value.trim(),
     role:document.getElementById('jm-role').value.trim(),
     email:document.getElementById('jm-email').value.trim(),
     clerk:document.getElementById('jm-clerk').value.trim(),
@@ -7786,6 +7797,8 @@ function saveJudge(){
     motion:document.getElementById('jm-motion').value.trim(),
     notes:document.getElementById('jm-notes').value.trim(),
   };
+  // Auto-add new venue to the list
+  if(data.venue && !venues.includes(data.venue)){venues.push(data.venue);markUnsaved();}
   if(editingJudgeId){const i=judges.findIndex(x=>x.id===editingJudgeId);if(i>-1)judges[i]=data;}
   else judges.push(data);
   saveJudgesData();closeJudgeModal();renderJudges();
@@ -8289,10 +8302,10 @@ async function _writeAutoBackup(){
   _showAutoBackupButton();
 })();
 
-function saveAllData(){const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
+function saveAllData(){const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,venues,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();}catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records)records=p.records;if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records)records=p.records;if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.venues&&Array.isArray(p.venues))venues=p.venues;return true;}catch(e){return false;}}
 window.markUnsaved=function(){document.getElementById('unsaved-dot').style.display='inline-block';document.getElementById('btn-save').classList.add('unsaved');clearTimeout(window._autoSaveTimer);window._autoSaveTimer=setTimeout(()=>{saveAllData();},1000);};
 function setLastBackupLabel(action){
   const n=new Date();
@@ -9066,6 +9079,7 @@ function showJudgeInfoPop(j, anchorEl){
   `;
 
   const rows = [
+    {label:'Venue',    val:j.venue},
     {label:'Clerk',    val:j.clerk},
     {label:'Email',    val:j.email},
     {label:'Master',   val:j.master},
@@ -11862,6 +11876,7 @@ function applyPayload(p){
   if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}
   if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}
   if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);
+  if(p.venues&&Array.isArray(p.venues))venues=p.venues;
 }
 // ══════════════════════════════════════════════════
 // CLOUD SYNC — localStorage is always source of truth
@@ -11923,7 +11938,7 @@ function forcePullFromCloud(){
       applyPayload(cloudData);
       try{
         const _now=Date.now();
-        const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,_savedAt:_now};
+        const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,venues,_savedAt:_now};
         localStorage.setItem('casetracker_v1',JSON.stringify(payload));
         localStorage.setItem('wilmer_save_epoch',String(cloudData._savedAt||_now));
       }catch(e){}
@@ -12114,7 +12129,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         applyPayload(cloudData);
         try{
           const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,_savedAt:_now};
+          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,venues,_savedAt:_now};
           localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
@@ -12130,7 +12145,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         // re-push to Firestore and cause an infinite ping-pong loop
         try{
           const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,_savedAt:_now};
+          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,venues,_savedAt:_now};
           localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
