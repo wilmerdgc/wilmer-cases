@@ -9450,11 +9450,33 @@ function openCaseDetail(clid){
         row.onmouseenter=()=>del.style.opacity='1';
         row.onmouseleave=()=>del.style.opacity='0';
         const dateEl=document.createElement('span');
-        dateEl.style.cssText='font-size:11px;color:#9E9186;white-space:nowrap;min-width:80px;flex-shrink:0;';
+        dateEl.style.cssText='font-size:11px;color:#9E9186;white-space:nowrap;min-width:80px;flex-shrink:0;cursor:pointer;';
+        dateEl.title='Click to edit date';
         dateEl.textContent=n.date?fmtDate(n.date):'—';
+        dateEl.onclick=(e)=>{
+          e.stopPropagation();
+          const inp=document.createElement('input');inp.type='date';inp.value=n.date||'';
+          inp.style.cssText='font-size:11px;padding:2px 4px;border:1px solid #B4CCAD;border-radius:4px;color:#2C2620;background:#fff;width:130px;outline:none;';
+          dateEl.replaceWith(inp);inp.focus();
+          const save=()=>{n.date=inp.value;markUnsaved();renderCaseNotesList();};
+          inp.onchange=save;inp.onblur=save;inp.onkeydown=(ev)=>{if(ev.key==='Enter')save();if(ev.key==='Escape')renderCaseNotesList();};
+        };
         const textEl=document.createElement('span');
-        textEl.style.cssText='font-size:12px;color:#2C2620;flex:1;line-height:1.4;';
+        textEl.style.cssText='font-size:12px;color:#2C2620;flex:1;line-height:1.4;cursor:pointer;padding:2px 4px;border-radius:4px;transition:background .12s;';
+        textEl.title='Click to edit';
         textEl.textContent=n.text;
+        textEl.onmouseenter=()=>textEl.style.background='#F7F3ED';
+        textEl.onmouseleave=()=>textEl.style.background='';
+        textEl.onclick=(e)=>{
+          e.stopPropagation();
+          const inp=document.createElement('textarea');
+          inp.value=n.text;
+          inp.style.cssText='flex:1;font-size:12px;line-height:1.4;padding:4px 6px;border:1px solid #B4CCAD;border-radius:4px;color:#2C2620;background:#fff;outline:none;font-family:inherit;resize:vertical;min-height:28px;width:100%;box-sizing:border-box;';
+          inp.rows=Math.min(6,Math.max(1,Math.ceil(n.text.length/80)));
+          textEl.replaceWith(inp);inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);
+          const save=()=>{const v=inp.value.trim();if(v){n.text=v;markUnsaved();}renderCaseNotesList();};
+          inp.onblur=save;inp.onkeydown=(ev)=>{if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();save();}if(ev.key==='Escape')renderCaseNotesList();};
+        };
         const del=document.createElement('button');
         del.textContent='×';
         del.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:13px;opacity:0;transition:opacity .15s;padding:0 2px;flex-shrink:0;';
