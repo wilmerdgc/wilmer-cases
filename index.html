@@ -7875,7 +7875,6 @@ function offerCalendarEmailDraft(savedData){
 }
 
 function buildCalendarEmailDraft(clid, clientName){
-  // Gather all active (planned) events for this client
   const clientEvents=records.filter(r=>{
     return (r.clid||r.client)===clid && !r.finishedStatus && !r.deletedStatus && r.date
       && !(r.notes&&r.notes.startsWith('⏰ REMINDER'));
@@ -7886,78 +7885,142 @@ function buildCalendarEmailDraft(clid, clientName){
   const paralegalEmail=paralegalEmails[paralegal]||'';
   const clientEmail=(caseMeta[clid]||{}).clientEmail||'';
   const lolyEmail='mvintimilla@theromerofirm.com';
-  // Build TO list
-  let toList=[lolyEmail];
-  if(paralegalEmail && !toList.includes(paralegalEmail)) toList.push(paralegalEmail);
-  // Build email body
-  let body='Dear Loly, Please calendar:\\n\\n';
-  body+=clientName+' Client ID: '+(base.clid||clid);
-  if(base.anum) body+=' A#: '+base.anum;
-  body+='\\n';
+  let bodyText='Dear Loly, Please calendar:\n\n';
+  bodyText+=clientName+' Client ID: '+(base.clid||clid);
+  if(base.anum) bodyText+=' A#: '+base.anum;
+  bodyText+='\n';
   clientEvents.forEach(ev=>{
     const isHearing=['MASTER','INDIVIDUAL','MERITS','BOND'].some(h=>(ev.event||'').toUpperCase().includes(h));
-    body+='Paralegal: '+(ev.atty||paralegal)+'\\n';
-    body+='Event Type: '+(ev.event||'—')+'\\n';
-    body+='Due Date: '+fmtDate(ev.date);
-    if(isHearing&&ev.timeStart) body+=' AT '+fmtTime(ev.timeStart);
-    if(isHearing&&ev.hearingMode) body+=' ('+ev.hearingMode.toUpperCase()+')';
-    body+='\\n';
-    if(ev.notes) body+='Notes: '+ev.notes+'\\n';
-    body+='\\n';
+    bodyText+='Paralegal: '+(ev.atty||paralegal)+'\n';
+    bodyText+='Event Type: '+(ev.event||'—')+'\n';
+    bodyText+='Due Date: '+fmtDate(ev.date);
+    if(isHearing&&ev.timeStart) bodyText+=' AT '+fmtTime(ev.timeStart);
+    if(isHearing&&ev.hearingMode) bodyText+=' ('+ev.hearingMode.toUpperCase()+')';
+    bodyText+='\n';
+    if(ev.notes) bodyText+='Notes: '+ev.notes+'\n';
+    bodyText+='\n';
   });
-  body+='Thank you.';
-  // Build subject
+  bodyText+='Thank you.';
   const subject='Calendar — '+clientName+(base.clid?' ('+base.clid+')':'');
-  // Open compose in Gmail if connected, otherwise open mailto
-  if(_gmailAccessToken){
-    // Use Gmail compose
-    const reader=document.getElementById('gmail-email-reader');
-    if(reader){
-      switchTab('inbox');
-      setTimeout(()=>{
-        const realBody=body.replace(/\\\\n/g,'\\n');
-        const reader2=document.getElementById('gmail-email-reader');
-        if(!reader2)return;
-        reader2.innerHTML=`
-          <div style="padding:24px;max-width:640px;">
-            <div style="font-family:var(--font-display);font-size:16px;font-weight:600;color:var(--ink);margin-bottom:16px;">Calendar Email Draft</div>
-            <div style="display:flex;flex-direction:column;gap:10px;">
-              <input id="gmail-compose-to" type="text" value="${toList.join(', ')}" style="font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/>
-              <div style="display:flex;align-items:center;gap:6px;">
-                <label style="font-size:11px;color:var(--ink-muted);flex-shrink:0;">Cc:</label>
-                <input id="gmail-compose-cc" type="text" value="${clientEmail}" placeholder="Client email (optional)" style="flex:1;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/>
-              </div>
-              <input id="gmail-compose-subject" type="text" value="${subject.replace(/"/g,'&quot;')}" style="font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/>
-              <textarea id="gmail-compose-body" style="min-height:300px;font-size:13px;line-height:1.7;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;resize:vertical;">${realBody}</textarea>
-              <div style="display:flex;gap:8px;">
-                <button onclick="gmailDoComposeCal()" style="font-size:13px;font-weight:600;padding:9px 24px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Send</button>
-                <button onclick="document.getElementById('gmail-email-reader').innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;color:var(--ink-faint);font-size:13px;\\'>Select an email to read</div>'" style="font-size:13px;padding:9px 18px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Discard</button>
-              </div>
-            </div>
-          </div>`;
-      },200);
-    }
-  } else {
-    // Fallback: open mailto link
-    const realBody=body.replace(/\\\\n/g,'%0A').replace(/\\n/g,'%0A');
-    const mailTo='mailto:'+toList.join(',')+
-      (clientEmail?'?cc='+encodeURIComponent(clientEmail)+'&':'?')+
-      'subject='+encodeURIComponent(subject)+
-      '&body='+realBody;
-    window.open(mailTo,'_blank');
-  }
+  openEmailComposeModal({
+    to: lolyEmail,
+    cc: [paralegalEmail, clientEmail].filter(Boolean).join(', '),
+    subject: subject,
+    body: bodyText,
+    _clid: clid
+  });
 }
 
-async function gmailDoComposeCal(){
-  const to=(document.getElementById('gmail-compose-to')||{}).value||'';
-  const cc=(document.getElementById('gmail-compose-cc')||{}).value||'';
-  const subject=(document.getElementById('gmail-compose-subject')||{}).value||'';
-  const body=(document.getElementById('gmail-compose-body')||{}).value||'';
+// ── Universal in-app email compose modal ──
+function openEmailComposeModal(opts){
+  opts=opts||{};
+  // Ensure Gmail is initialized
+  gmailInit();
+  // Remove any existing compose modal
+  const existing=document.getElementById('email-compose-overlay');
+  if(existing) existing.remove();
+  const ov=document.createElement('div');
+  ov.id='email-compose-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(44,38,32,0.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  ov.ondblclick=e=>{if(e.target===ov)ov.remove();};
+  const box=document.createElement('div');
+  box.style.cssText='background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);width:580px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;';
+  box.innerHTML=`
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-family:var(--font-display);font-size:15px;font-weight:600;color:var(--ink);">✉ Compose Email</div>
+      <button onclick="document.getElementById('email-compose-overlay').remove()" style="border:none;background:transparent;font-size:18px;color:var(--ink-muted);cursor:pointer;padding:0 4px;">×</button>
+    </div>
+    <div style="padding:16px 20px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <label style="font-size:11px;color:var(--ink-muted);width:28px;flex-shrink:0;">To:</label>
+        <input id="emc-to" type="text" value="${(opts.to||'').replace(/"/g,'&quot;')}" style="flex:1;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;"/>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <label style="font-size:11px;color:var(--ink-muted);width:28px;flex-shrink:0;">Cc:</label>
+        <input id="emc-cc" type="text" value="${(opts.cc||'').replace(/"/g,'&quot;')}" placeholder="Optional..." style="flex:1;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;"/>
+      </div>
+      <div id="emc-quick-add" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      <input id="emc-subject" type="text" value="${(opts.subject||'').replace(/"/g,'&quot;')}" placeholder="Subject..." style="font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/>
+      <textarea id="emc-body" placeholder="Write your message..." style="min-height:220px;font-size:13px;line-height:1.7;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;resize:vertical;">${(opts.body||'').replace(/</g,'&lt;')}</textarea>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;">
+      <button onclick="document.getElementById('email-compose-overlay').remove()" style="font-size:12px;padding:8px 18px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Cancel</button>
+      <button onclick="doSendComposeEmail()" style="font-size:12px;font-weight:600;padding:8px 22px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Send</button>
+    </div>`;
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  // Render quick-add recipient buttons
+  renderQuickAddRecipients(opts._clid||null);
+  setTimeout(()=>{const el=document.getElementById('emc-to');if(el)el.focus();},50);
+}
+
+function renderQuickAddRecipients(clid){
+  const el=document.getElementById('emc-quick-add');
+  if(!el) return;
+  el.innerHTML='';
+  const lolyEmail='mvintimilla@theromerofirm.com';
+  const recipients=[];
+  // Loly
+  recipients.push({label:'+ Loly',email:lolyEmail,color:'var(--amber)'});
+  // Paralegal (from case or all)
+  if(clid){
+    const base=records.find(r=>(r.clid||r.client)===clid);
+    if(base&&base.atty&&paralegalEmails[base.atty]){
+      recipients.push({label:'+ '+base.atty,email:paralegalEmails[base.atty],color:'var(--slate)'});
+    }
+    // Client email
+    const ce=(caseMeta[clid]||{}).clientEmail;
+    if(ce) recipients.push({label:'+ Client',email:ce,color:'var(--sage)'});
+  }
+  // All paralegals with emails
+  Object.entries(paralegalEmails).forEach(([name,email])=>{
+    if(!recipients.find(r=>r.email===email)){
+      recipients.push({label:'+ '+name,email:email,color:'var(--ink-muted)'});
+    }
+  });
+  recipients.forEach(r=>{
+    const btn=document.createElement('button');
+    btn.style.cssText=`font-size:10px;padding:3px 8px;border:1px solid ${r.color};border-radius:12px;background:transparent;color:${r.color};cursor:pointer;font-family:inherit;transition:all .12s;`;
+    btn.textContent=r.label;
+    btn.title='Add '+r.email;
+    btn.onmouseenter=()=>{btn.style.background=r.color;btn.style.color='#fff';};
+    btn.onmouseleave=()=>{btn.style.background='transparent';btn.style.color=r.color;};
+    btn.onclick=()=>{
+      const toField=document.getElementById('emc-to');
+      const ccField=document.getElementById('emc-cc');
+      const allEmails=((toField.value||'')+','+(ccField.value||'')).toLowerCase();
+      if(allEmails.includes(r.email.toLowerCase())){showToast('Already added');return;}
+      // Add to To field
+      if(toField.value.trim()) toField.value+=', '+r.email;
+      else toField.value=r.email;
+      btn.style.opacity='0.4';
+      btn.style.pointerEvents='none';
+    };
+    // Grey out if already in To/Cc
+    const toVal=(document.getElementById('emc-to')||{}).value||'';
+    const ccVal=(document.getElementById('emc-cc')||{}).value||'';
+    if((toVal+','+ccVal).toLowerCase().includes(r.email.toLowerCase())){
+      btn.style.opacity='0.4';btn.style.pointerEvents='none';
+    }
+    el.appendChild(btn);
+  });
+}
+
+async function doSendComposeEmail(){
+  const to=(document.getElementById('emc-to')||{}).value||'';
+  const cc=(document.getElementById('emc-cc')||{}).value||'';
+  const subject=(document.getElementById('emc-subject')||{}).value||'';
+  const body=(document.getElementById('emc-body')||{}).value||'';
   if(!to.trim()){showToast('Enter a recipient');return;}
+  if(!_gmailAccessToken){
+    showToast('Please connect Gmail first (go to Inbox tab)');
+    return;
+  }
   const ok=await gmailSendMessage(to.trim(),subject,body.replace(/\n/g,'<br>'),null,null,cc.trim());
   if(ok){
-    document.getElementById('gmail-email-reader').innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--sage);font-size:15px;font-weight:600;">Calendar email sent ✓</div>';
-    gmailFetchInbox();
+    const ov=document.getElementById('email-compose-overlay');
+    if(ov) ov.remove();
+    showToast('Email sent ✓');
   }
 }
 
@@ -9462,7 +9525,39 @@ function openCaseDetail(clid){
   const atRow=document.createElement('div');atRow.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:6px;border-bottom:0.5px solid #DDD5CA';
   atRow.innerHTML=`<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#6B7FA3">Next Steps <span style="font-weight:400;font-size:10px;color:#C4BAB0">(${active.length})</span></div>`;
   const addEvtBtn=document.createElement('button');addEvtBtn.className='btn-sm btn-primary';addEvtBtn.style.cssText='font-size:11px;padding:3px 11px;border-radius:20px';addEvtBtn.textContent='+ Add Event';addEvtBtn.onclick=openAddFromCase;atRow.appendChild(addEvtBtn);
-  const addCUBtn=document.createElement('button');addCUBtn.className='btn-sm';addCUBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#E8C49A;color:#C9823A;margin-left:4px;';addCUBtn.textContent='⏰ Call-Up';addCUBtn.onclick=()=>openAddDeadline(base);atRow.appendChild(addCUBtn);activeSecEl.appendChild(atRow);
+  const addCUBtn=document.createElement('button');addCUBtn.className='btn-sm';addCUBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#E8C49A;color:#C9823A;margin-left:4px;';addCUBtn.textContent='⏰ Call-Up';addCUBtn.onclick=()=>openAddDeadline(base);atRow.appendChild(addCUBtn);
+  const sendEmailBtn=document.createElement('button');sendEmailBtn.className='btn-sm';sendEmailBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#B4CCAD;color:#6A8C6E;margin-left:4px;font-weight:600;';sendEmailBtn.textContent='✉ Send Email';
+  sendEmailBtn.onclick=()=>{
+    const paralegal=base.atty||'';
+    const paralegalEmail2=paralegalEmails[paralegal]||'';
+    const clientEmail2=(caseMeta[clid]||{}).clientEmail||'';
+    const lolyEmail2='mvintimilla@theromerofirm.com';
+    // Build body with all planned events
+    let emailBody='Dear Loly, Please calendar:\n\n';
+    emailBody+=(base.client||clid)+' Client ID: '+(base.clid||clid);
+    if(base.anum) emailBody+=' A#: '+base.anum;
+    emailBody+='\n';
+    active.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(ev=>{
+      const isH=['MASTER','INDIVIDUAL','MERITS','BOND'].some(h=>(ev.event||'').toUpperCase().includes(h));
+      emailBody+='Paralegal: '+(ev.atty||paralegal)+'\n';
+      emailBody+='Event Type: '+(ev.event||'—')+'\n';
+      emailBody+='Due Date: '+fmtDate(ev.date);
+      if(isH&&ev.timeStart) emailBody+=' AT '+fmtTime(ev.timeStart);
+      if(isH&&ev.hearingMode) emailBody+=' ('+ev.hearingMode.toUpperCase()+')';
+      emailBody+='\n';
+      if(ev.notes) emailBody+='Notes: '+ev.notes+'\n';
+      emailBody+='\n';
+    });
+    emailBody+='Thank you.';
+    openEmailComposeModal({
+      to: lolyEmail2,
+      cc: [paralegalEmail2,clientEmail2].filter(Boolean).join(', '),
+      subject: 'Calendar — '+(base.client||clid)+(base.clid?' ('+base.clid+')':''),
+      body: emailBody,
+      _clid: clid
+    });
+  };
+  atRow.appendChild(sendEmailBtn);activeSecEl.appendChild(atRow);
   if(!active.length){const emp=document.createElement('div');emp.style.cssText='font-size:12px;color:#C4BAB0;padding:6px 0';emp.textContent='No next steps.';activeSecEl.appendChild(emp);}
   else{[...active].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
     const row=document.createElement('div');row.className='case-event-row';row.onclick=()=>openEdit(r.id);
