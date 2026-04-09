@@ -7935,22 +7935,50 @@ function buildCalendarEmailDraft(clid, clientName){
   const base=clientEvents[0];
   const paralegal=base.atty||'';
   const paralegalEmail=paralegalEmails[paralegal]||'';
-  const clientEmail=(caseMeta[clid]||{}).clientEmail||'';
   const lolyEmail='mvintimilla@theromerofirm.com';
   let bodyText='Dear Loly, Please calendar:\n\n';
   bodyText+=clientName+' Client ID: '+(base.clid||clid);
   if(base.anum) bodyText+=' A#: '+base.anum;
-  bodyText+='\n';
+  bodyText+='\n\n';
   clientEvents.forEach(ev=>{ bodyText+=formatEventForEmail(ev,clid,paralegal); });
   bodyText+='Thank you.';
-  const subject='Calendar — '+clientName+(base.clid?' ('+base.clid+')':'');
+  const subject='Calendar - '+clientName+(base.clid?' ('+base.clid+')':'');
+  // To: Loly + paralegal
+  const toList=[lolyEmail];
+  if(paralegalEmail && !toList.includes(paralegalEmail)) toList.push(paralegalEmail);
   openEmailComposeModal({
-    to: lolyEmail,
-    cc: [paralegalEmail, clientEmail].filter(Boolean).join(', '),
+    to: toList.join(', '),
+    cc: '',
     subject: subject,
     body: bodyText,
     _clid: clid
   });
+}
+
+// ── Gmail signature cache ──
+let _gmailSignature=null;
+let _gmailSignatureFetched=false;
+async function gmailFetchSignature(){
+  if(_gmailSignatureFetched) return _gmailSignature;
+  if(!_gmailAccessToken) return null;
+  try{
+    const data=await gmailApi('settings/sendAs');
+    if(data&&data.sendAs){
+      const primary=data.sendAs.find(s=>s.isPrimary)||data.sendAs[0];
+      if(primary&&primary.signature){
+        _gmailSignature=primary.signature;
+      }
+    }
+  }catch(e){}
+  _gmailSignatureFetched=true;
+  return _gmailSignature;
+}
+
+function signatureToPlainText(html){
+  if(!html) return '';
+  const div=document.createElement('div');
+  div.innerHTML=html;
+  return div.textContent||div.innerText||'';
 }
 
 // ── Universal in-app email compose modal ──
@@ -7993,7 +8021,22 @@ function openEmailComposeModal(opts){
   document.body.appendChild(ov);
   // Render quick-add recipient buttons
   renderQuickAddRecipients(opts._clid||null);
-  setTimeout(()=>{const el=document.getElementById('emc-to');if(el)el.focus();},50);
+  // Append Gmail signature if requested or always
+  gmailFetchSignature().then(sig=>{
+    if(sig){
+      const bodyEl=document.getElementById('emc-body');
+      if(bodyEl){
+        const plainSig=signatureToPlainText(sig);
+        const current=bodyEl.value;
+        if(!current.includes(plainSig.slice(0,30))){
+          bodyEl.value=current+(current?'\n\n':'')+'\n--\n'+plainSig;
+        }
+      }
+      // Also store HTML signature for sending
+      window._emcSignatureHtml=sig;
+    }
+  });
+  setTimeout(()=>{const el=document.getElementById('emc-body');if(el){el.focus();el.setSelectionRange(0,0);}},80);
 }
 
 function renderQuickAddRecipients(clid){
@@ -8052,16 +8095,23 @@ async function doSendComposeEmail(){
   const to=(document.getElementById('emc-to')||{}).value||'';
   const cc=(document.getElementById('emc-cc')||{}).value||'';
   const subject=(document.getElementById('emc-subject')||{}).value||'';
-  const body=(document.getElementById('emc-body')||{}).value||'';
+  const bodyRaw=(document.getElementById('emc-body')||{}).value||'';
   if(!to.trim()){showToast('Enter a recipient');return;}
   if(!_gmailAccessToken){
     showToast('Please connect Gmail first (go to Inbox tab)');
     return;
   }
-  const ok=await gmailSendMessage(to.trim(),subject,body.replace(/\n/g,'<br>'),null,null,cc.trim());
+  // Split body from signature area and build HTML
+  // The plain text body gets <br> for newlines; if there's an HTML signature, append it
+  let htmlBody=bodyRaw.replace(/\n--\n[\s\S]*$/,'').trim().replace(/\n/g,'<br>');
+  if(window._emcSignatureHtml){
+    htmlBody+='<br><br>--<br>'+window._emcSignatureHtml;
+  }
+  const ok=await gmailSendMessage(to.trim(),subject,htmlBody,null,null,cc.trim());
   if(ok){
     const ov=document.getElementById('email-compose-overlay');
     if(ov) ov.remove();
+    window._emcSignatureHtml=null;
     showToast('Email sent ✓');
   }
 }
@@ -9647,30 +9697,46 @@ function openCaseDetail(clid){
   atRow.innerHTML=`<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#6B7FA3">Next Steps <span style="font-weight:400;font-size:10px;color:#C4BAB0">(${active.length})</span></div>`;
   const addEvtBtn=document.createElement('button');addEvtBtn.className='btn-sm btn-primary';addEvtBtn.style.cssText='font-size:11px;padding:3px 11px;border-radius:20px';addEvtBtn.textContent='+ Add Event';addEvtBtn.onclick=openAddFromCase;atRow.appendChild(addEvtBtn);
   const addCUBtn=document.createElement('button');addCUBtn.className='btn-sm';addCUBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#E8C49A;color:#C9823A;margin-left:4px;';addCUBtn.textContent='⏰ Call-Up';addCUBtn.onclick=()=>openAddDeadline(base);atRow.appendChild(addCUBtn);
-  const sendEmailBtn=document.createElement('button');sendEmailBtn.className='btn-sm';sendEmailBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#B4CCAD;color:#6A8C6E;margin-left:4px;font-weight:600;';sendEmailBtn.textContent='✉ Send Email';
-  sendEmailBtn.onclick=()=>{
-    const paralegal=base.atty||'';
-    const paralegalEmail2=paralegalEmails[paralegal]||'';
+  // Email Client button
+  const emailClientBtn=document.createElement('button');emailClientBtn.className='btn-sm';emailClientBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#6B7FA3;color:#6B7FA3;margin-left:4px;font-weight:600;';emailClientBtn.textContent='✉ Email Client';
+  emailClientBtn.onclick=()=>{
     const clientEmail2=(caseMeta[clid]||{}).clientEmail||'';
-    const lolyEmail2='mvintimilla@theromerofirm.com';
-    // Build body with all planned events
-    let emailBody='Dear Loly, Please calendar:\n\n';
-    emailBody+=(base.client||clid)+' Client ID: '+(base.clid||clid);
-    if(base.anum) emailBody+=' A#: '+base.anum;
-    emailBody+='\n';
-    [...active].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(ev=>{
-      emailBody+=formatEventForEmail(ev,clid,paralegal);
-    });
-    emailBody+='Thank you.';
+    if(!clientEmail2){showToast('No client email set - add it in Case Information');return;}
+    const clientName=base.client||clid;
+    const subj=clientName+(base.clid?' ('+base.clid+')':'');
     openEmailComposeModal({
-      to: lolyEmail2,
-      cc: [paralegalEmail2,clientEmail2].filter(Boolean).join(', '),
-      subject: 'Calendar — '+(base.client||clid)+(base.clid?' ('+base.clid+')':''),
-      body: emailBody,
-      _clid: clid
+      to: clientEmail2,
+      cc: '',
+      subject: subj,
+      body: '',
+      _clid: clid,
+      _addSignature: true
     });
   };
-  atRow.appendChild(sendEmailBtn);activeSecEl.appendChild(atRow);
+  atRow.appendChild(emailClientBtn);
+
+  // Email Case button (general case email, default to paralegal)
+  const emailCaseBtn=document.createElement('button');emailCaseBtn.className='btn-sm';emailCaseBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#B4CCAD;color:#6A8C6E;margin-left:4px;font-weight:600;';emailCaseBtn.textContent='✉ Email Case';
+  emailCaseBtn.onclick=()=>{
+    const paralegal=base.atty||'';
+    const paralegalEmail2=paralegalEmails[paralegal]||'';
+    const clientName=base.client||clid;
+    const subj=clientName+(base.clid?' ('+base.clid+')':'');
+    // Pre-fill body with case summary
+    let emailBody='Re: '+clientName+' - Client ID: '+(base.clid||clid);
+    if(base.anum) emailBody+=' A#: '+base.anum;
+    emailBody+='\n\n';
+    openEmailComposeModal({
+      to: paralegalEmail2||'',
+      cc: '',
+      subject: subj,
+      body: emailBody,
+      _clid: clid,
+      _addSignature: true
+    });
+  };
+  atRow.appendChild(emailCaseBtn);
+  activeSecEl.appendChild(atRow);
   if(!active.length){const emp=document.createElement('div');emp.style.cssText='font-size:12px;color:#C4BAB0;padding:6px 0';emp.textContent='No next steps.';activeSecEl.appendChild(emp);}
   else{[...active].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
     const row=document.createElement('div');row.className='case-event-row';row.onclick=()=>openEdit(r.id);
