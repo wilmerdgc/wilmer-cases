@@ -8753,6 +8753,8 @@ function renderSIJTable(){
     board.innerHTML='<div style="text-align:center;padding:4rem;color:#9E9186;font-size:13px;">No SIJ cases found.</div>';
     return;
   }
+
+  // ── Stage definitions ──
   const FC_STAGES=[
     {key:'initial',label:'Initial Petition',color:'#9E9186',bg:'#F0ECE8'},
     {key:'pending-date',label:'Pending Court Date',color:'#6B7FA3',bg:'#EEF1F7'},
@@ -8761,66 +8763,139 @@ function renderSIJTable(){
     {key:'pending-order',label:'Pending Order',color:'#9B6B9B',bg:'#F3EEF8'},
     {key:'sij-issued',label:'SIJ Orders Issued',color:'#6A8C6E',bg:'#EBF1EB'},
   ];
+  const IC_STAGES=[
+    {key:'not-filed',label:'Not Yet Filed',color:'#9E9186',bg:'#F0ECE8'},
+    {key:'master',label:'Master Hearing',color:'#6B7FA3',bg:'#EEF1F7'},
+    {key:'individual',label:'Individual Hearing',color:'#C9823A',bg:'#FAF0E6'},
+    {key:'pending-decision',label:'Pending Decision',color:'#9B6B9B',bg:'#F3EEF8'},
+    {key:'decision-issued',label:'Decision Issued',color:'#6A8C6E',bg:'#EBF1EB'},
+  ];
+  const USCIS_STAGES=[
+    {key:'preparing',label:'Preparing Petition',color:'#9E9186',bg:'#F0ECE8'},
+    {key:'filed',label:'Petition Filed',color:'#6B7FA3',bg:'#EEF1F7'},
+    {key:'receipt',label:'Receipt Received',color:'#C9823A',bg:'#FAF0E6'},
+    {key:'pending',label:'Pending Adjudication',color:'#9B6B9B',bg:'#F3EEF8'},
+    {key:'approved',label:'Approved',color:'#6A8C6E',bg:'#EBF1EB'},
+  ];
   const FC_MAP=Object.fromEntries(FC_STAGES.map(s=>[s.key,s]));
-  // Gather next event date for each case
+  const IC_MAP=Object.fromEntries(IC_STAGES.map(s=>[s.key,s]));
+  const USCIS_MAP=Object.fromEntries(USCIS_STAGES.map(s=>[s.key,s]));
+
+  // ── Event matchers (same logic as kanban) ──
+  const isFC=r=>{const ev=(r.event||'').toUpperCase();return ev.includes('FC')||ev.includes('FAMILY COURT')||ev.includes('TASK FOR FC')||ev.includes('PETITION FC')||ev.includes('SIJ FINDINGS')||ev.includes('PROPOSED ORDER')||ev.includes('TRIAL')||ev.includes('SERVICE')||ev.includes('MOTION TO DISPENSE')||ev.includes('PENDING ORDER')||ev.includes('INITIAL PETITION')||ev.includes('CERTIFIED');};
+  const isIC=r=>{const ev=(r.event||'').toUpperCase();return['MASTER','SCHEDULING ORDER','INDIVIDUAL','MERITS','BOND','WEBEX','PREP MASTER','TASK FOR IC'].some(k=>ev.includes(k));};
+  const isUSCIS=r=>{const ev=(r.event||'').toUpperCase();return ev.includes('360')||ev.includes('USCIS')||ev.includes('I-360')||ev.includes('TASK FOR 360')||ev.includes('EAD')||ev.includes('WORK PERMIT');};
+
+  const todayStr=TODAY.toISOString().slice(0,10);
+
+  // Gather data for each case
   const caseData=all.map(c=>{
     const clid=c.clid||c.client;
     const caseRecs=records.filter(r=>(r.clid||r.client)===clid&&!r.finishedStatus&&!r.deletedStatus&&r.date&&!(r.notes&&r.notes.startsWith('⏰ REMINDER')));
     caseRecs.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-    const nextEvent=caseRecs.find(r=>r.date>=TODAY.toISOString().slice(0,10))||caseRecs[0]||null;
-    const fcKey=(caseMeta[clid]||{}).fcStage||'initial';
+
+    // Next event per category
+    const fcRecs=caseRecs.filter(isFC);
+    const icRecs=caseRecs.filter(isIC);
+    const uscisRecs=caseRecs.filter(isUSCIS);
+    const nextFC=fcRecs.find(r=>r.date>=todayStr)||fcRecs[0]||null;
+    const nextIC=icRecs.find(r=>r.date>=todayStr)||icRecs[0]||null;
+    const nextUSCIS=uscisRecs.find(r=>r.date>=todayStr)||uscisRecs[0]||null;
+
+    // Stage keys
+    const meta=caseMeta[clid]||{};
+    const fcKey=meta.fcStage||'initial';
+    const icKey=meta.icStage||'not-filed';
+    const uscisKey=meta.uscisStage||'preparing';
     const fcStage=FC_MAP[fcKey]||FC_STAGES[0];
-    return{...c,clid,nextEvent,fcStage,fcKey,eventCount:caseRecs.length,allEvents:caseRecs};
+    const icStage=IC_MAP[icKey]||IC_STAGES[0];
+    const uscisStage=USCIS_MAP[uscisKey]||USCIS_STAGES[0];
+
+    return{...c,clid,nextFC,nextIC,nextUSCIS,fcStage,fcKey,icStage,icKey,uscisStage,uscisKey,eventCount:caseRecs.length,allEvents:caseRecs};
   });
-  // Sort by next event date (soonest first, no-date at bottom)
+
+  // Sort by earliest event across all three categories
   caseData.sort((a,b)=>{
-    const da=a.nextEvent?a.nextEvent.date:'9999';
-    const db=b.nextEvent?b.nextEvent.date:'9999';
-    return da.localeCompare(db);
+    const aDate=[a.nextFC,a.nextIC,a.nextUSCIS].filter(Boolean).map(r=>r.date).sort()[0]||'9999';
+    const bDate=[b.nextFC,b.nextIC,b.nextUSCIS].filter(Boolean).map(r=>r.date).sort()[0]||'9999';
+    return aDate.localeCompare(bDate);
   });
+
   board.innerHTML='';
   board.style.cssText='overflow-x:auto;';
-  // Build table
+
+  // ── Helper: build event + date cell HTML ──
+  function evCellHtml(ne){
+    if(!ne) return{evHtml:'—',dateHtml:'—',dateColor:'var(--ink-faint)',dateBg:''};
+    const ds=status(parseDate(ne.date));
+    const dateColor={overdue:'#B85C5C',thisweek:'#C9823A',nextweek:'#6B7FA3','15days':'#6A8C6E',ok:'var(--ink)',['no-date']:'var(--ink-faint)'}[ds]||'var(--ink)';
+    const dateBg={overdue:'#F9EDED',thisweek:'#FAF0E6',nextweek:'#EEF1F7','15days':'#EBF1EB',ok:'',['no-date']:''}[ds]||'';
+    return{evHtml:ne.event||'—',dateHtml:fmtDate(ne.date),dateColor,dateBg};
+  }
+
+  // ── Helper: stage select HTML ──
+  function stageSelectHtml(clid, stageArr, currentKey, currentStage, metaField){
+    const opts=stageArr.map(s=>`<option value="${s.key}"${s.key===currentKey?' selected':''}>${s.label}</option>`).join('');
+    return `<select onchange="event.stopPropagation();if(!caseMeta['${clid}'])caseMeta['${clid}']={};caseMeta['${clid}'].${metaField}=this.value;markUnsaved();renderSIJTable();" style="font-size:10px;padding:3px 5px;border:1px solid ${currentStage.color}40;border-radius:4px;background:${currentStage.bg};color:${currentStage.color};font-weight:600;cursor:pointer;font-family:inherit;outline:none;max-width:130px;">${opts}</select>`;
+  }
+
+  // ── Build table ──
+  const thStyle='text-align:left;padding:10px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);';
+  const thStyleC=thStyle+'text-align:center;';
+
   const tbl=document.createElement('table');
   tbl.style.cssText='width:100%;border-collapse:collapse;font-size:12px;';
   const thead=document.createElement('thead');
   thead.innerHTML=`<tr style="background:var(--cream-dark);position:sticky;top:0;z-index:2;">
-    <th style="text-align:left;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">Client</th>
-    <th style="text-align:left;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">A#</th>
-    <th style="text-align:left;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">Paralegal</th>
-    <th style="text-align:left;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">FC Stage</th>
-    <th style="text-align:left;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">Next Event</th>
-    <th style="text-align:left;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">Due Date</th>
-    <th style="text-align:left;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">Notes</th>
-    <th style="text-align:center;padding:10px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);">Events</th>
+    <th style="${thStyle}">Client</th>
+    <th style="${thStyle}">A#</th>
+    <th style="${thStyle}">Paralegal</th>
+    <th style="${thStyle}border-left:3px solid #C9823A40;">FC Stage</th>
+    <th style="${thStyle}">FC Event</th>
+    <th style="${thStyle}">FC Date</th>
+    <th style="${thStyle}border-left:3px solid #6B7FA340;">IC Stage</th>
+    <th style="${thStyle}">IC Event</th>
+    <th style="${thStyle}">IC Date</th>
+    <th style="${thStyle}border-left:3px solid #6A8C6E40;">USCIS Stage</th>
+    <th style="${thStyle}">USCIS Event</th>
+    <th style="${thStyle}">USCIS Date</th>
+    <th style="${thStyleC}">Events</th>
   </tr>`;
   tbl.appendChild(thead);
+
   const tbody=document.createElement('tbody');
   caseData.forEach(c=>{
-    const ne=c.nextEvent;
-    const dateStatus=ne?status(parseDate(ne.date)):'no-date';
-    const dateBg={overdue:'#F9EDED',thisweek:'#FAF0E6',nextweek:'#EEF1F7','15days':'#EBF1EB',ok:'',['no-date']:''}[dateStatus]||'';
-    const dateColor={overdue:'#B85C5C',thisweek:'#C9823A',nextweek:'#6B7FA3','15days':'#6A8C6E',ok:'var(--ink)',['no-date']:'var(--ink-faint)'}[dateStatus]||'var(--ink)';
+    const fc=evCellHtml(c.nextFC);
+    const ic=evCellHtml(c.nextIC);
+    const us=evCellHtml(c.nextUSCIS);
+
+    // Row background based on earliest urgent event
+    const earliest=[c.nextFC,c.nextIC,c.nextUSCIS].filter(Boolean).sort((a,b)=>(a.date||'').localeCompare(b.date||''))[0];
+    const rowStatus=earliest?status(parseDate(earliest.date)):'no-date';
+    const rowBg={overdue:'#F9EDED',thisweek:'#FAF0E6',nextweek:'',['15days']:'',ok:'',['no-date']:''}[rowStatus]||'';
+
     const tr=document.createElement('tr');
-    tr.style.cssText='border-bottom:1px solid var(--cream-dark);cursor:pointer;transition:background .1s;'+(dateBg?'background:'+dateBg+';':'');
-    tr.onmouseenter=()=>tr.style.background=dateBg||'var(--cream)';
-    tr.onmouseleave=()=>tr.style.background=dateBg||'';
+    tr.style.cssText='border-bottom:1px solid var(--cream-dark);cursor:pointer;transition:background .1s;'+(rowBg?'background:'+rowBg+';':'');
+    tr.onmouseenter=()=>tr.style.background=rowBg||'var(--cream)';
+    tr.onmouseleave=()=>tr.style.background=rowBg||'';
     tr.onclick=()=>{ openCaseDetail(c.clid); };
-    // FC stage dropdown
-    const fcOpts=FC_STAGES.map(s=>`<option value="${s.key}"${s.key===c.fcKey?' selected':''}>${s.label}</option>`).join('');
+
+    const tdS='padding:8px 8px;font-size:11px;';
+
     tr.innerHTML=`
-      <td style="padding:10px 12px;font-weight:600;color:var(--ink);white-space:nowrap;">${c.client||c.clid}</td>
-      <td style="padding:10px 12px;color:var(--ink-soft);font-size:11px;">${c.anum||'—'}</td>
-      <td style="padding:10px 12px;color:var(--ink-soft);font-size:11px;">${c.atty||'—'}</td>
-      <td style="padding:10px 12px;">
-        <select onchange="event.stopPropagation();if(!caseMeta['${c.clid}'])caseMeta['${c.clid}']={};caseMeta['${c.clid}'].fcStage=this.value;markUnsaved();renderSIJTable();" style="font-size:11px;padding:3px 6px;border:1px solid ${c.fcStage.color}40;border-radius:4px;background:${c.fcStage.bg};color:${c.fcStage.color};font-weight:600;cursor:pointer;font-family:inherit;outline:none;">
-          ${fcOpts}
-        </select>
-      </td>
-      <td style="padding:10px 12px;font-size:11px;font-weight:500;color:var(--ink);">${ne?ne.event||'—':'—'}</td>
-      <td style="padding:10px 12px;font-weight:600;color:${dateColor};font-size:12px;">${ne?fmtDate(ne.date):'—'}</td>
-      <td style="padding:10px 12px;font-size:11px;color:var(--ink-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${ne?(ne.notes||'').replace(/"/g,'&quot;'):''}">${ne?ne.notes||'':'—'}</td>
-      <td style="padding:10px 12px;text-align:center;"><span style="font-size:11px;font-weight:600;color:var(--ink-muted);background:var(--cream-dark);padding:2px 8px;border-radius:10px;">${c.eventCount}</span></td>`;
+      <td style="${tdS}font-weight:600;color:var(--ink);white-space:nowrap;">${c.client||c.clid}</td>
+      <td style="${tdS}color:var(--ink-soft);">${c.anum||'—'}</td>
+      <td style="${tdS}color:var(--ink-soft);">${c.atty||'—'}</td>
+      <td style="${tdS}border-left:3px solid #C9823A40;">${stageSelectHtml(c.clid,FC_STAGES,c.fcKey,c.fcStage,'fcStage')}</td>
+      <td style="${tdS}font-weight:500;color:var(--ink);">${fc.evHtml}</td>
+      <td style="${tdS}font-weight:600;color:${fc.dateColor};">${fc.dateHtml}</td>
+      <td style="${tdS}border-left:3px solid #6B7FA340;">${stageSelectHtml(c.clid,IC_STAGES,c.icKey,c.icStage,'icStage')}</td>
+      <td style="${tdS}font-weight:500;color:var(--ink);">${ic.evHtml}</td>
+      <td style="${tdS}font-weight:600;color:${ic.dateColor};">${ic.dateHtml}</td>
+      <td style="${tdS}border-left:3px solid #6A8C6E40;">${stageSelectHtml(c.clid,USCIS_STAGES,c.uscisKey,c.uscisStage,'uscisStage')}</td>
+      <td style="${tdS}font-weight:500;color:var(--ink);">${us.evHtml}</td>
+      <td style="${tdS}font-weight:600;color:${us.dateColor};">${us.dateHtml}</td>
+      <td style="${tdS}text-align:center;"><span style="font-size:11px;font-weight:600;color:var(--ink-muted);background:var(--cream-dark);padding:2px 8px;border-radius:10px;">${c.eventCount}</span></td>`;
     tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);
