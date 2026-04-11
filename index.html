@@ -8948,6 +8948,7 @@ function renderSIJTable(){
     <th style="${thStyle}border-left:3px solid #6A8C6E40;">I-360 stage</th>
     <th style="${thStyle}">USCIS Event</th>
     <th style="${thStyle}">Priority date</th>
+    <th style="${thStyle}">DF</th>
   </tr>`;
   tbl.appendChild(thead);
 
@@ -9028,6 +9029,43 @@ function renderSIJTable(){
       ? `<div style="display:flex;align-items:center;gap:6px;"><input type="date" value="${priorityDate}" readonly title="Double-click to edit" onclick="event.stopPropagation();" ondblclick="event.stopPropagation();this.removeAttribute('readonly');this.style.background='#FFF';this.style.borderColor='var(--ink)';this.focus();this.showPicker&&this.showPicker();" onblur="this.setAttribute('readonly','');this.style.background='#F5F1EB';this.style.borderColor='var(--border)';" onchange="event.stopPropagation();if(!caseMeta['${c.clid}'])caseMeta['${c.clid}']={};caseMeta['${c.clid}'].priorityDate=this.value;markUnsaved();" style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:#F5F1EB;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;"/>${noticeBtn}</div>`
       : `<span style="color:var(--ink-faint);">—</span>`;
 
+    // DF (Deferred Action) cell — only when I-360 is Approved
+    let dfCellHtml='<span style="color:var(--ink-faint);">—</span>';
+    if(i360Unlocked && c.uscisKey==='approved'){
+      const meta=caseMeta[c.clid]||{};
+      const dfChoice=meta.df||'';
+      const dfYears=meta.dfYears||'';
+      const dfComment=meta.dfComment||'';
+      const selectHtml=`<select onclick="event.stopPropagation();" onchange="event.stopPropagation();setDfChoice('${c.clid}',this.value);" style="font-size:10px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;">
+        <option value=""${dfChoice===''?' selected':''}>—</option>
+        <option value="Y"${dfChoice==='Y'?' selected':''}>Y</option>
+        <option value="N"${dfChoice==='N'?' selected':''}>N</option>
+      </select>`;
+      let detailHtml='';
+      if(dfChoice==='Y'){
+        // Compute status based on priority date + dfYears
+        let statusBadge='';
+        if(dfYears && priorityDate){
+          const start=new Date(priorityDate);
+          if(!isNaN(start.getTime())){
+            const end=new Date(start.getFullYear()+parseInt(dfYears,10), start.getMonth(), start.getDate());
+            const todayD=new Date(); todayD.setHours(0,0,0,0);
+            const inEffect=end>=todayD;
+            const endStr=end.toISOString().slice(0,10);
+            statusBadge=inEffect
+              ? `<span title="Expires ${fmtDate(endStr)}" style="font-size:10px;font-weight:600;color:#6A8C6E;background:#EBF1EB;padding:2px 7px;border-radius:10px;">In effect</span>`
+              : `<span title="Expired ${fmtDate(endStr)}" style="font-size:10px;font-weight:600;color:#B85C5C;background:#F9EDED;padding:2px 7px;border-radius:10px;">Not in effect</span>`;
+          }
+        }else if(!priorityDate){
+          statusBadge=`<span title="Set a Priority date to compute status" style="font-size:10px;color:var(--ink-faint);">need priority date</span>`;
+        }
+        detailHtml=`<input type="number" min="0" step="1" value="${dfYears}" placeholder="# yrs" onclick="event.stopPropagation();" onchange="event.stopPropagation();setDfYears('${c.clid}',this.value);" style="font-size:11px;width:54px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--ink);font-family:inherit;outline:none;"/>${statusBadge}`;
+      }else if(dfChoice==='N'){
+        detailHtml=`<input type="text" value="${dfComment.replace(/"/g,'&quot;')}" placeholder="Comment…" onclick="event.stopPropagation();" onchange="event.stopPropagation();setDfComment('${c.clid}',this.value);" style="font-size:11px;width:140px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--ink);font-family:inherit;outline:none;"/>`;
+      }
+      dfCellHtml=`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${selectHtml}${detailHtml}</div>`;
+    }
+
     tr.innerHTML=`
       <td style="${tdS}font-weight:600;color:var(--ink);white-space:nowrap;"><span onclick="event.stopPropagation();openCaseDetail('${c.clid}');" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;" onmouseenter="this.style.textDecorationColor='var(--ink)'" onmouseleave="this.style.textDecorationColor='transparent'">${c.client||c.clid}</span></td>
       <td style="${tdS}color:var(--ink-soft);">${c.atty||'—'}</td>
@@ -9039,7 +9077,8 @@ function renderSIJTable(){
       <td style="${tdS}font-weight:600;">${icDateCellHtml}</td>
       <td style="${tdS}border-left:3px solid #6A8C6E40;">${stageSelectHtml(c.clid,USCIS_STAGES,effectiveUscisKey,effectiveUscisStage,'uscisStage',{disabled:!i360Unlocked})}</td>
       <td style="${tdS}font-weight:500;color:var(--ink);">${i360Unlocked?us.evHtml:'<span style="color:var(--ink-faint);">—</span>'}</td>
-      <td style="${tdS}">${priorityDateCell}</td>`;
+      <td style="${tdS}">${priorityDateCell}</td>
+      <td style="${tdS}">${dfCellHtml}</td>`;
     tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);
@@ -9089,6 +9128,28 @@ function viewI360Notice(clid){
     const w=window.open();
     if(w) w.document.write('<iframe src="'+n.dataUrl+'" style="border:0;width:100%;height:100vh;"></iframe>');
   }
+}
+
+// ── DF (Deferred Action) helpers ──
+function setDfChoice(clid,val){
+  if(!caseMeta[clid]) caseMeta[clid]={};
+  caseMeta[clid].df=val||'';
+  // Clear the unrelated detail when switching
+  if(val!=='Y') caseMeta[clid].dfYears='';
+  if(val!=='N') caseMeta[clid].dfComment='';
+  markUnsaved();
+  if(typeof renderSIJTable==='function') renderSIJTable();
+}
+function setDfYears(clid,val){
+  if(!caseMeta[clid]) caseMeta[clid]={};
+  caseMeta[clid].dfYears=val||'';
+  markUnsaved();
+  if(typeof renderSIJTable==='function') renderSIJTable();
+}
+function setDfComment(clid,val){
+  if(!caseMeta[clid]) caseMeta[clid]={};
+  caseMeta[clid].dfComment=val||'';
+  markUnsaved();
 }
 
 function renderSIJBoard(){
