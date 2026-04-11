@@ -8838,12 +8838,20 @@ function renderSIJTable(){
     {key:'pending-order',label:'Pending Order',color:'#9B6B9B',bg:'#F3EEF8'},
     {key:'sij-issued',label:'SIJ Orders Issued',color:'#6A8C6E',bg:'#EBF1EB'},
   ];
+  // IC stage options.
+  // kind: 'event'  → date comes from the next calendar IC event of that type
+  //       'stage'  → user-set status; the date stored is the date of issuance
+  //       'check'  → user-set status; the date stored is the date of last check
   const IC_STAGES=[
-    {key:'not-filed',label:'Not Yet Filed',color:'#9E9186',bg:'#F0ECE8'},
-    {key:'master',label:'Master Hearing',color:'#6B7FA3',bg:'#EEF1F7'},
-    {key:'individual',label:'Individual Hearing',color:'#C9823A',bg:'#FAF0E6'},
-    {key:'pending-decision',label:'Pending Decision',color:'#9B6B9B',bg:'#F3EEF8'},
-    {key:'decision-issued',label:'Decision Issued',color:'#6A8C6E',bg:'#EBF1EB'},
+    {key:'individual',       label:'INDIVIDUAL',         kind:'event', color:'#B85C5C', bg:'#F9EDED'}, // red
+    {key:'master',           label:'MASTER',             kind:'event', color:'#C9823A', bg:'#FAF0E6'}, // yellow
+    {key:'removal-order',    label:'REMOVAL ORDER',      kind:'stage', color:'#B85C5C', bg:'#F9EDED'}, // red
+    {key:'none',             label:'NONE',               kind:'check', color:'#6A8C6E', bg:'#EBF1EB'}, // green
+    {key:'withdraw',         label:'WITHDRAW',           kind:'stage', color:'#6A8C6E', bg:'#EBF1EB'}, // green
+    {key:'no-future',        label:'NO FUTURE HEARINGS', kind:'check', color:'#6A8C6E', bg:'#EBF1EB'}, // green
+    {key:'no-info',          label:'NO INFO',            kind:'check', color:'#6A8C6E', bg:'#EBF1EB'}, // green
+    {key:'dismissed',        label:'DISMISSED',          kind:'stage', color:'#6A8C6E', bg:'#EBF1EB'}, // green
+    {key:'terminated',       label:'TERMINATED',         kind:'stage', color:'#6A8C6E', bg:'#EBF1EB'}, // green
   ];
   const USCIS_STAGES=[
     {key:'preparing',label:'Preparing Petition',color:'#9E9186',bg:'#F0ECE8'},
@@ -8880,7 +8888,7 @@ function renderSIJTable(){
     // Stage keys
     const meta=caseMeta[clid]||{};
     const fcKey=meta.fcStage||'initial';
-    const icKey=meta.icStage||'not-filed';
+    const icKey=meta.icStage||'no-info';
     const uscisKey=meta.uscisStage||'preparing';
     const fcStage=FC_MAP[fcKey]||FC_STAGES[0];
     const icStage=IC_MAP[icKey]||IC_STAGES[0];
@@ -8968,8 +8976,28 @@ function renderSIJTable(){
 
     // IC column is disabled for "Special Juvenile Not in Immigration Court" cases
     const icDisabled=(c.type||'').includes('Not in Immigration Court');
-    const effectiveIcKey=icDisabled?'not-filed':c.icKey;
-    const effectiveIcStage=icDisabled?(IC_MAP['not-filed']||c.icStage):c.icStage;
+    const effectiveIcKey=icDisabled?'no-info':c.icKey;
+    const effectiveIcStage=icDisabled?(IC_MAP['no-info']||c.icStage):c.icStage;
+
+    // IC date/event behaviour depends on the stage kind:
+    //   event → next calendar IC event of that type (icEvHtml/icDateHtml from `ic`)
+    //   stage → user-set status, date stored in caseMeta[clid].icStageDate (issuance date)
+    //   check → user-set status, date stored in caseMeta[clid].icStageDate (last check date)
+    const icKind=(effectiveIcStage&&effectiveIcStage.kind)||'event';
+    const icStageDate=(caseMeta[c.clid]||{}).icStageDate||'';
+    let icEventCellHtml, icDateCellHtml;
+    if(icDisabled){
+      icEventCellHtml='<span style="color:var(--ink-faint);">—</span>';
+      icDateCellHtml='<span style="color:var(--ink-faint);">—</span>';
+    }else if(icKind==='event'){
+      icEventCellHtml=ic.evHtml;
+      icDateCellHtml=`<span style="color:${ic.dateColor};">${ic.dateHtml}</span>`;
+    }else{
+      // stage or check — show a small date input (read-only until double-clicked) for the stored date
+      const dateLabel=icKind==='check'?'Last check':'Issued';
+      icEventCellHtml=`<span style="font-size:10px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.04em;">${dateLabel}</span>`;
+      icDateCellHtml=`<input type="date" value="${icStageDate}" readonly title="Double-click to edit (${dateLabel.toLowerCase()} date)" onclick="event.stopPropagation();" ondblclick="event.stopPropagation();this.removeAttribute('readonly');this.style.background='#FFF';this.style.borderColor='var(--ink)';this.focus();this.showPicker&&this.showPicker();" onblur="this.setAttribute('readonly','');this.style.background='#F5F1EB';this.style.borderColor='var(--border)';" onchange="event.stopPropagation();if(!caseMeta['${c.clid}'])caseMeta['${c.clid}']={};caseMeta['${c.clid}'].icStageDate=this.value;markUnsaved();" style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:#F5F1EB;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;"/>`;
+    }
 
     // I-360 column is locked until FC stage is 'SIJ Orders Issued'
     const i360Unlocked=c.fcKey==='sij-issued';
@@ -8985,14 +9013,14 @@ function renderSIJTable(){
 
     tr.innerHTML=`
       <td style="${tdS}font-weight:600;color:var(--ink);white-space:nowrap;"><span onclick="event.stopPropagation();openCaseDetail('${c.clid}');" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;" onmouseenter="this.style.textDecorationColor='var(--ink)'" onmouseleave="this.style.textDecorationColor='transparent'">${c.client||c.clid}</span></td>
-      <td style="${tdS}color:var(--ink-soft);">${c.anum||'—'}</td>
+      <td style="${tdS}color:var(--ink-soft);">${(!c.anum||String(c.anum).trim()==='0'||String(c.anum).trim()==='')?'N/A':c.anum}</td>
       <td style="${tdS}color:var(--ink-soft);">${c.atty||'—'}</td>
       <td style="${tdS}border-left:3px solid #C9823A40;">${stageSelectHtml(c.clid,FC_STAGES,c.fcKey,c.fcStage,'fcStage')}</td>
       <td style="${tdS}font-weight:500;color:var(--ink);">${fc.evHtml}</td>
       <td style="${tdS}font-weight:600;color:${fc.dateColor};">${fc.dateHtml}</td>
       <td style="${tdS}border-left:3px solid #6B7FA340;">${stageSelectHtml(c.clid,IC_STAGES,effectiveIcKey,effectiveIcStage,'icStage',{disabled:icDisabled,lockLabel:'🔒 N/A',lockTitle:'Not applicable — case is not in Immigration Court'})}</td>
-      <td style="${tdS}font-weight:500;color:var(--ink);">${icDisabled?'<span style="color:var(--ink-faint);">—</span>':ic.evHtml}</td>
-      <td style="${tdS}font-weight:600;color:${icDisabled?'var(--ink-faint)':ic.dateColor};">${icDisabled?'—':ic.dateHtml}</td>
+      <td style="${tdS}font-weight:500;color:var(--ink);">${icEventCellHtml}</td>
+      <td style="${tdS}font-weight:600;">${icDateCellHtml}</td>
       <td style="${tdS}border-left:3px solid #6A8C6E40;">${stageSelectHtml(c.clid,USCIS_STAGES,effectiveUscisKey,effectiveUscisStage,'uscisStage',{disabled:!i360Unlocked})}</td>
       <td style="${tdS}font-weight:500;color:var(--ink);">${i360Unlocked?us.evHtml:'<span style="color:var(--ink-faint);">—</span>'}</td>
       <td style="${tdS}">${priorityDateCell}</td>`;
