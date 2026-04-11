@@ -8976,8 +8976,21 @@ function renderSIJTable(){
 
     // IC column is disabled for "Special Juvenile Not in Immigration Court" cases
     const icDisabled=(c.type||'').includes('Not in Immigration Court');
-    const effectiveIcKey=icDisabled?'no-info':c.icKey;
-    const effectiveIcStage=icDisabled?(IC_MAP['no-info']||c.icStage):c.icStage;
+
+    // Auto-detect: if there's an upcoming MASTER or INDIVIDUAL calendar event, the
+    // IC stage reflects that automatically (overriding any manual selection).
+    const todayStrIC=TODAY.toISOString().slice(0,10);
+    let autoIcKey=null;
+    if(c.nextIC && c.nextIC.date>=todayStrIC){
+      const evUpper=(c.nextIC.event||'').toUpperCase();
+      if(evUpper.includes('INDIVIDUAL')) autoIcKey='individual';
+      else if(evUpper.includes('MASTER')) autoIcKey='master';
+    }
+
+    const effectiveIcKey=icDisabled?'no-info':(autoIcKey||c.icKey);
+    const effectiveIcStage=icDisabled
+      ? (IC_MAP['no-info']||c.icStage)
+      : (autoIcKey?(IC_MAP[autoIcKey]||c.icStage):c.icStage);
 
     // IC date/event behaviour depends on the stage kind:
     //   event → next calendar IC event of that type (icEvHtml/icDateHtml from `ic`)
