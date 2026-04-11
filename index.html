@@ -8924,7 +8924,7 @@ function renderSIJTable(){
     const lockTitle=opts2.lockTitle||"Locked — FC stage must be 'SIJ Orders Issued' to activate";
     const opts=stageArr.map(s=>`<option value="${s.key}"${s.key===currentKey?' selected':''}>${s.label}</option>`).join('');
     if(disabled){
-      return `<span title="${lockTitle}" style="display:inline-block;font-size:10px;padding:3px 8px;border:1px dashed #DDD5CA;border-radius:4px;background:#F5F1EB;color:#B8AFA3;font-weight:600;font-family:inherit;cursor:not-allowed;max-width:130px;">${lockLabel}</span>`;
+      return `<span title="${lockTitle}" style="display:inline-block;font-size:14px;color:var(--ink-faint);cursor:not-allowed;line-height:1;">🔒</span>`;
     }
     return `<select onclick="event.stopPropagation();" onchange="event.stopPropagation();if(!caseMeta['${clid}'])caseMeta['${clid}']={};caseMeta['${clid}'].${metaField}=this.value;markUnsaved();renderSIJTable();" style="font-size:10px;padding:3px 5px;border:1px solid ${currentStage.color}40;border-radius:4px;background:${currentStage.bg};color:${currentStage.color};font-weight:600;cursor:pointer;font-family:inherit;outline:none;max-width:130px;">${opts}</select>`;
   }
@@ -8937,14 +8937,23 @@ function renderSIJTable(){
   // Restore any saved column widths from localStorage
   let savedWidths={};
   try{ savedWidths=JSON.parse(localStorage.getItem('sij-col-widths')||'{}')||{}; }catch(e){}
-  const colKeys=['client','paralegal','fc-stage','fc-event','fc-date','ic-stage','ic-event','ic-date','i360-stage','uscis-event','priority-date','df'];
+  // Default widths used when no saved width exists. table-layout:fixed needs explicit widths.
+  const defaultWidths={
+    'client':150,'paralegal':54,
+    'fc-stage':130,'fc-event':130,'fc-date':92,
+    'ic-stage':130,'ic-event':110,'ic-date':128,
+    'i360-stage':130,'uscis-event':110,'priority-date':156,'df':220
+  };
+  const colKeys=Object.keys(defaultWidths);
   function thFor(label,key,extra){
-    const w=savedWidths[key]?`width:${savedWidths[key]}px;`:'';
-    return `<th data-col="${key}" style="${thStyle}${extra||''}${w}">${label}<span class="col-resize" data-col="${key}" style="position:absolute;top:0;right:0;width:6px;height:100%;cursor:col-resize;user-select:none;"></span></th>`;
+    const w=savedWidths[key]||defaultWidths[key];
+    // The Client column is also sticky to the left so it stays visible while scrolling.
+    const sticky=key==='client'?'position:sticky;left:0;background:var(--cream-dark);z-index:3;box-shadow:2px 0 0 var(--border);':'';
+    return `<th data-col="${key}" style="${thStyle}${extra||''}width:${w}px;${sticky}">${label}<span class="col-resize" data-col="${key}" style="position:absolute;top:0;right:-3px;width:8px;height:100%;cursor:col-resize;user-select:none;z-index:3;"></span></th>`;
   }
 
   const tbl=document.createElement('table');
-  tbl.style.cssText='width:100%;border-collapse:collapse;font-size:12px;table-layout:auto;';
+  tbl.style.cssText='border-collapse:collapse;font-size:12px;table-layout:fixed;';
   const thead=document.createElement('thead');
   thead.innerHTML=`<tr style="background:var(--cream-dark);position:sticky;top:0;z-index:2;">
     ${thFor('Client','client')}
@@ -9019,7 +9028,7 @@ function renderSIJTable(){
       // stage or check — show a small date input (read-only until double-clicked) for the stored date
       const dateLabel=icKind==='check'?'Last check':'Issued';
       icEventCellHtml=`<span style="font-size:10px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.04em;">${dateLabel}</span>`;
-      icDateCellHtml=`<input type="date" value="${icStageDate}" readonly title="Double-click to edit (${dateLabel.toLowerCase()} date)" onclick="event.stopPropagation();" ondblclick="event.stopPropagation();this.removeAttribute('readonly');this.style.background='#FFF';this.style.borderColor='var(--ink)';this.focus();this.showPicker&&this.showPicker();" onblur="this.setAttribute('readonly','');this.style.background='#F5F1EB';this.style.borderColor='var(--border)';" onchange="event.stopPropagation();if(!caseMeta['${c.clid}'])caseMeta['${c.clid}']={};caseMeta['${c.clid}'].icStageDate=this.value;markUnsaved();" style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:#F5F1EB;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;"/>`;
+      icDateCellHtml=`<input type="date" value="${icStageDate}" readonly title="Double-click to edit (${dateLabel.toLowerCase()} date)" onclick="event.stopPropagation();" ondblclick="event.stopPropagation();this.removeAttribute('readonly');this.style.background='#FFF';this.style.borderColor='var(--ink-faint)';this.focus();this.showPicker&&this.showPicker();" onblur="this.setAttribute('readonly','');this.style.background='#F7F3ED';this.style.borderColor='#EBE5DC';" onchange="event.stopPropagation();if(!caseMeta['${c.clid}'])caseMeta['${c.clid}']={};caseMeta['${c.clid}'].icStageDate=this.value;markUnsaved();" style="font-size:11px;padding:3px 5px;border:1px solid #EBE5DC;border-radius:4px;background:#F7F3ED;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;width:100%;box-sizing:border-box;"/>`;
     }
 
     // I-360 column is locked until FC stage is 'SIJ Orders Issued'
@@ -9036,7 +9045,7 @@ function renderSIJTable(){
       ? `<button type="button" title="View I-360 approval notice (${(i360Notice.name||'').replace(/"/g,'&quot;')})" onclick="event.stopPropagation();viewI360Notice('${c.clid}');" style="font-size:11px;padding:4px 7px;border:1px solid #6A8C6E;border-radius:4px;background:#EBF1EB;color:#6A8C6E;font-weight:600;cursor:pointer;font-family:inherit;">📄</button>`
       : `<button type="button" title="Upload I-360 approval notice (PDF)" onclick="event.stopPropagation();uploadI360Notice('${c.clid}');" style="font-size:11px;padding:4px 7px;border:1px dashed #B8AFA3;border-radius:4px;background:#F5F1EB;color:#9E9186;cursor:pointer;font-family:inherit;">⬆ PDF</button>`;
     const priorityDateCell=(i360Unlocked && c.uscisKey==='approved')
-      ? `<div style="display:flex;align-items:center;gap:6px;"><input type="date" value="${priorityDate}" readonly title="Double-click to edit" onclick="event.stopPropagation();" ondblclick="event.stopPropagation();this.removeAttribute('readonly');this.style.background='#FFF';this.style.borderColor='var(--ink)';this.focus();this.showPicker&&this.showPicker();" onblur="this.setAttribute('readonly','');this.style.background='#F5F1EB';this.style.borderColor='var(--border)';" onchange="event.stopPropagation();if(!caseMeta['${c.clid}'])caseMeta['${c.clid}']={};caseMeta['${c.clid}'].priorityDate=this.value;markUnsaved();" style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:#F5F1EB;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;"/>${noticeBtn}</div>`
+      ? `<div style="display:flex;align-items:center;gap:4px;"><input type="date" value="${priorityDate}" readonly title="Double-click to edit" onclick="event.stopPropagation();" ondblclick="event.stopPropagation();this.removeAttribute('readonly');this.style.background='#FFF';this.style.borderColor='var(--ink-faint)';this.focus();this.showPicker&&this.showPicker();" onblur="this.setAttribute('readonly','');this.style.background='#F7F3ED';this.style.borderColor='#EBE5DC';" onchange="event.stopPropagation();if(!caseMeta['${c.clid}'])caseMeta['${c.clid}']={};caseMeta['${c.clid}'].priorityDate=this.value;markUnsaved();" style="font-size:11px;padding:3px 5px;border:1px solid #EBE5DC;border-radius:4px;background:#F7F3ED;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;flex:1;min-width:0;box-sizing:border-box;"/>${noticeBtn}</div>`
       : `<span style="color:var(--ink-faint);">—</span>`;
 
     // DF (Deferred Action) cell — only when I-360 is Approved
@@ -9079,8 +9088,8 @@ function renderSIJTable(){
     }
 
     tr.innerHTML=`
-      <td style="${tdS}font-weight:600;color:var(--ink);white-space:nowrap;"><span onclick="event.stopPropagation();openCaseDetail('${c.clid}');" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;" onmouseenter="this.style.textDecorationColor='var(--ink)'" onmouseleave="this.style.textDecorationColor='transparent'">${c.client||c.clid}</span></td>
-      <td style="${tdS}color:var(--ink-soft);">${c.atty||'—'}</td>
+      <td style="${tdS}font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;z-index:1;background:${rowBg||'var(--cream)'};box-shadow:2px 0 0 var(--border);"><span onclick="event.stopPropagation();openCaseDetail('${c.clid}');" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;" onmouseenter="this.style.textDecorationColor='var(--ink)'" onmouseleave="this.style.textDecorationColor='transparent'">${c.client||c.clid}</span></td>
+      <td style="${tdS}color:var(--ink-soft);text-align:center;" title="${(c.atty||'').replace(/"/g,'&quot;')}">${(function(n){if(!n)return '—';const parts=String(n).trim().split(/\s+/).filter(Boolean);if(!parts.length)return '—';if(parts.length===1)return parts[0].slice(0,2).toUpperCase();return (parts[0][0]+parts[parts.length-1][0]).toUpperCase();})(c.atty)}</td>
       <td style="${tdS}border-left:3px solid #C9823A40;">${stageSelectHtml(c.clid,FC_STAGES,c.fcKey,c.fcStage,'fcStage')}</td>
       <td style="${tdS}font-weight:500;color:var(--ink);">${fc.evHtml}</td>
       <td style="${tdS}font-weight:600;color:${fc.dateColor};">${fc.dateHtml}</td>
