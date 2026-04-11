@@ -268,6 +268,10 @@ tbody td { padding: 9px 12px; vertical-align: middle; font-size: 12px; }
   from { opacity:0; transform: translateY(-6px) scale(.97); }
   to   { opacity:1; transform: translateY(0)   scale(1); }
 }
+@keyframes slideUp {
+  from { opacity:0; transform: translateY(20px); }
+  to   { opacity:1; transform: translateY(0); }
+}
 .ev-popover-row { display:flex; align-items:baseline; gap:6px; margin-bottom:5px; }
 .ev-popover-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#C4BAB0; flex-shrink:0; min-width:62px; }
 .ev-popover-val   { font-size:12px; color:#2C2620; flex:1; line-height:1.4; }
@@ -8091,6 +8095,27 @@ function renderQuickAddRecipients(clid){
   });
 }
 
+function showGmailConnectPrompt(){
+  gmailInit();
+  let banner=document.getElementById('gmail-connect-banner');
+  if(banner) banner.remove();
+  banner=document.createElement('div');
+  banner.id='gmail-connect-banner';
+  banner.style.cssText='position:fixed;bottom:24px;right:24px;z-index:10000;background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:20px 24px;display:flex;align-items:center;gap:14px;border:1px solid var(--border);max-width:380px;animation:slideUp .25s ease;';
+  banner.innerHTML=`
+    <div style="font-size:28px;flex-shrink:0;">✉</div>
+    <div style="flex:1;">
+      <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Gmail not connected</div>
+      <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Connect your Gmail to send emails directly from PlanMore.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button onclick="gmailSignIn();document.getElementById('gmail-connect-banner').remove();" style="font-size:12px;font-weight:600;padding:7px 18px;border:none;border-radius:var(--radius-sm);background:var(--ink);color:var(--cream);cursor:pointer;font-family:inherit;transition:all .15s;"
+          onmouseenter="this.style.background='var(--sage)'" onmouseleave="this.style.background='var(--ink)'">Connect Gmail</button>
+        <button onclick="document.getElementById('gmail-connect-banner').remove();" style="font-size:12px;padding:7px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Dismiss</button>
+      </div>
+    </div>`;
+  document.body.appendChild(banner);
+}
+
 async function doSendComposeEmail(){
   const to=(document.getElementById('emc-to')||{}).value||'';
   const cc=(document.getElementById('emc-cc')||{}).value||'';
@@ -8098,7 +8123,7 @@ async function doSendComposeEmail(){
   const bodyRaw=(document.getElementById('emc-body')||{}).value||'';
   if(!to.trim()){showToast('Enter a recipient');return;}
   if(!_gmailAccessToken){
-    showToast('Please connect Gmail first (go to Inbox tab)');
+    showGmailConnectPrompt();
     return;
   }
   // Split body from signature area and build HTML
@@ -8884,9 +8909,14 @@ function renderSIJTable(){
   }
 
   // ── Helper: stage select HTML ──
-  function stageSelectHtml(clid, stageArr, currentKey, currentStage, metaField){
+  function stageSelectHtml(clid, stageArr, currentKey, currentStage, metaField, opts2){
+    opts2=opts2||{};
+    const disabled=!!opts2.disabled;
     const opts=stageArr.map(s=>`<option value="${s.key}"${s.key===currentKey?' selected':''}>${s.label}</option>`).join('');
-    return `<select onchange="event.stopPropagation();if(!caseMeta['${clid}'])caseMeta['${clid}']={};caseMeta['${clid}'].${metaField}=this.value;markUnsaved();renderSIJTable();" style="font-size:10px;padding:3px 5px;border:1px solid ${currentStage.color}40;border-radius:4px;background:${currentStage.bg};color:${currentStage.color};font-weight:600;cursor:pointer;font-family:inherit;outline:none;max-width:130px;">${opts}</select>`;
+    if(disabled){
+      return `<span title="Locked — FC stage must be 'SIJ Orders Issued' to activate" style="display:inline-block;font-size:10px;padding:3px 8px;border:1px dashed #DDD5CA;border-radius:4px;background:#F5F1EB;color:#B8AFA3;font-weight:600;font-family:inherit;cursor:not-allowed;max-width:130px;">🔒 Locked</span>`;
+    }
+    return `<select onclick="event.stopPropagation();" onchange="event.stopPropagation();if(!caseMeta['${clid}'])caseMeta['${clid}']={};caseMeta['${clid}'].${metaField}=this.value;markUnsaved();renderSIJTable();" style="font-size:10px;padding:3px 5px;border:1px solid ${currentStage.color}40;border-radius:4px;background:${currentStage.bg};color:${currentStage.color};font-weight:600;cursor:pointer;font-family:inherit;outline:none;max-width:130px;">${opts}</select>`;
   }
 
   // ── Build table ──
@@ -8906,10 +8936,9 @@ function renderSIJTable(){
     <th style="${thStyle}border-left:3px solid #6B7FA340;">IC Stage</th>
     <th style="${thStyle}">IC Event</th>
     <th style="${thStyle}">IC Date</th>
-    <th style="${thStyle}border-left:3px solid #6A8C6E40;">USCIS Stage</th>
+    <th style="${thStyle}border-left:3px solid #6A8C6E40;">I-360 stage</th>
     <th style="${thStyle}">USCIS Event</th>
-    <th style="${thStyle}">USCIS Date</th>
-    <th style="${thStyleC}">Events</th>
+    <th style="${thStyle}">Priority date</th>
   </tr>`;
   tbl.appendChild(thead);
 
@@ -8932,6 +8961,17 @@ function renderSIJTable(){
 
     const tdS='padding:8px 8px;font-size:11px;';
 
+    // I-360 column is locked until FC stage is 'SIJ Orders Issued'
+    const i360Unlocked=c.fcKey==='sij-issued';
+    const effectiveUscisKey=i360Unlocked?c.uscisKey:'preparing';
+    const effectiveUscisStage=i360Unlocked?c.uscisStage:USCIS_MAP['preparing'];
+
+    // Priority date cell — editable only when I-360 is unlocked AND stage is 'approved'
+    const priorityDate=(caseMeta[c.clid]||{}).priorityDate||'';
+    const priorityDateCell=(i360Unlocked && c.uscisKey==='approved')
+      ? `<input type="date" value="${priorityDate}" onclick="event.stopPropagation();" onchange="event.stopPropagation();if(!caseMeta['${c.clid}'])caseMeta['${c.clid}']={};caseMeta['${c.clid}'].priorityDate=this.value;markUnsaved();" style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;"/>`
+      : `<span style="color:var(--ink-faint);">—</span>`;
+
     tr.innerHTML=`
       <td style="${tdS}font-weight:600;color:var(--ink);white-space:nowrap;">${c.client||c.clid}</td>
       <td style="${tdS}color:var(--ink-soft);">${c.anum||'—'}</td>
@@ -8942,10 +8982,9 @@ function renderSIJTable(){
       <td style="${tdS}border-left:3px solid #6B7FA340;">${stageSelectHtml(c.clid,IC_STAGES,c.icKey,c.icStage,'icStage')}</td>
       <td style="${tdS}font-weight:500;color:var(--ink);">${ic.evHtml}</td>
       <td style="${tdS}font-weight:600;color:${ic.dateColor};">${ic.dateHtml}</td>
-      <td style="${tdS}border-left:3px solid #6A8C6E40;">${stageSelectHtml(c.clid,USCIS_STAGES,c.uscisKey,c.uscisStage,'uscisStage')}</td>
-      <td style="${tdS}font-weight:500;color:var(--ink);">${us.evHtml}</td>
-      <td style="${tdS}font-weight:600;color:${us.dateColor};">${us.dateHtml}</td>
-      <td style="${tdS}text-align:center;"><span style="font-size:11px;font-weight:600;color:var(--ink-muted);background:var(--cream-dark);padding:2px 8px;border-radius:10px;">${c.eventCount}</span></td>`;
+      <td style="${tdS}border-left:3px solid #6A8C6E40;">${stageSelectHtml(c.clid,USCIS_STAGES,effectiveUscisKey,effectiveUscisStage,'uscisStage',{disabled:!i360Unlocked})}</td>
+      <td style="${tdS}font-weight:500;color:var(--ink);">${i360Unlocked?us.evHtml:'<span style="color:var(--ink-faint);">—</span>'}</td>
+      <td style="${tdS}">${priorityDateCell}</td>`;
     tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);
