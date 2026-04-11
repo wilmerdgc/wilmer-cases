@@ -8930,25 +8930,35 @@ function renderSIJTable(){
   }
 
   // ── Build table ──
-  const thStyle='text-align:left;padding:10px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);';
+  // Position:relative on each th so the resize handle can be absolutely positioned.
+  const thStyle='position:relative;text-align:left;padding:10px 14px 10px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);border-bottom:2px solid var(--border);';
   const thStyleC=thStyle+'text-align:center;';
 
+  // Restore any saved column widths from localStorage
+  let savedWidths={};
+  try{ savedWidths=JSON.parse(localStorage.getItem('sij-col-widths')||'{}')||{}; }catch(e){}
+  const colKeys=['client','paralegal','fc-stage','fc-event','fc-date','ic-stage','ic-event','ic-date','i360-stage','uscis-event','priority-date','df'];
+  function thFor(label,key,extra){
+    const w=savedWidths[key]?`width:${savedWidths[key]}px;`:'';
+    return `<th data-col="${key}" style="${thStyle}${extra||''}${w}">${label}<span class="col-resize" data-col="${key}" style="position:absolute;top:0;right:0;width:6px;height:100%;cursor:col-resize;user-select:none;"></span></th>`;
+  }
+
   const tbl=document.createElement('table');
-  tbl.style.cssText='width:100%;border-collapse:collapse;font-size:12px;';
+  tbl.style.cssText='width:100%;border-collapse:collapse;font-size:12px;table-layout:auto;';
   const thead=document.createElement('thead');
   thead.innerHTML=`<tr style="background:var(--cream-dark);position:sticky;top:0;z-index:2;">
-    <th style="${thStyle}">Client</th>
-    <th style="${thStyle}">Paralegal</th>
-    <th style="${thStyle}border-left:3px solid #C9823A40;">FC Stage</th>
-    <th style="${thStyle}">FC Event</th>
-    <th style="${thStyle}">FC Date</th>
-    <th style="${thStyle}border-left:3px solid #6B7FA340;">IC Stage</th>
-    <th style="${thStyle}">IC Event</th>
-    <th style="${thStyle}">IC Date</th>
-    <th style="${thStyle}border-left:3px solid #6A8C6E40;">I-360 stage</th>
-    <th style="${thStyle}">USCIS Event</th>
-    <th style="${thStyle}">Priority date</th>
-    <th style="${thStyle}">DF</th>
+    ${thFor('Client','client')}
+    ${thFor('Paralegal','paralegal')}
+    ${thFor('FC Stage','fc-stage','border-left:3px solid #C9823A40;')}
+    ${thFor('FC Event','fc-event')}
+    ${thFor('FC Date','fc-date')}
+    ${thFor('IC Stage','ic-stage','border-left:3px solid #6B7FA340;')}
+    ${thFor('IC Event','ic-event')}
+    ${thFor('IC Date','ic-date')}
+    ${thFor('I-360 stage','i360-stage','border-left:3px solid #6A8C6E40;')}
+    ${thFor('USCIS Event','uscis-event')}
+    ${thFor('Priority date','priority-date')}
+    ${thFor('DF','df')}
   </tr>`;
   tbl.appendChild(thead);
 
@@ -9036,7 +9046,9 @@ function renderSIJTable(){
       const dfChoice=meta.df||'';
       const dfYears=meta.dfYears||'';
       const dfComment=meta.dfComment||'';
-      const selectHtml=`<select onclick="event.stopPropagation();" onchange="event.stopPropagation();setDfChoice('${c.clid}',this.value);" style="font-size:10px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;">
+      // pointer-events:none locks each control; the wrapper ondblclick re-enables them.
+      const lockStyle='pointer-events:none;background:#F5F1EB;';
+      const selectHtml=`<select onclick="event.stopPropagation();" onchange="event.stopPropagation();setDfChoice('${c.clid}',this.value);" style="font-size:10px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;${lockStyle}">
         <option value=""${dfChoice===''?' selected':''}>—</option>
         <option value="Y"${dfChoice==='Y'?' selected':''}>Y</option>
         <option value="N"${dfChoice==='N'?' selected':''}>N</option>
@@ -9059,11 +9071,11 @@ function renderSIJTable(){
         }else if(!priorityDate){
           statusBadge=`<span title="Set a Priority date to compute status" style="font-size:10px;color:var(--ink-faint);">need priority date</span>`;
         }
-        detailHtml=`<input type="number" min="0" step="1" value="${dfYears}" placeholder="# yrs" onclick="event.stopPropagation();" onchange="event.stopPropagation();setDfYears('${c.clid}',this.value);" style="font-size:11px;width:54px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--ink);font-family:inherit;outline:none;"/>${statusBadge}`;
+        detailHtml=`<input type="number" min="0" step="1" value="${dfYears}" placeholder="yrs" onclick="event.stopPropagation();" onchange="event.stopPropagation();setDfYears('${c.clid}',this.value);" style="font-size:11px;width:46px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;color:var(--ink);font-family:inherit;outline:none;flex-shrink:0;${lockStyle}"/>${statusBadge}`;
       }else if(dfChoice==='N'){
-        detailHtml=`<input type="text" value="${dfComment.replace(/"/g,'&quot;')}" placeholder="Comment…" onclick="event.stopPropagation();" onchange="event.stopPropagation();setDfComment('${c.clid}',this.value);" style="font-size:11px;width:140px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--ink);font-family:inherit;outline:none;"/>`;
+        detailHtml=`<input type="text" value="${dfComment.replace(/"/g,'&quot;')}" placeholder="Comment…" onclick="event.stopPropagation();" onchange="event.stopPropagation();setDfComment('${c.clid}',this.value);" style="font-size:11px;width:140px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;color:var(--ink);font-family:inherit;outline:none;flex-shrink:0;${lockStyle}"/>`;
       }
-      dfCellHtml=`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${selectHtml}${detailHtml}</div>`;
+      dfCellHtml=`<div title="Double-click to edit" ondblclick="event.stopPropagation();this.querySelectorAll('select,input').forEach(el=>{el.style.pointerEvents='auto';el.style.background='#fff';});const f=this.querySelector('select,input');if(f){f.focus();if(f.tagName==='SELECT'&&typeof f.showPicker==='function'){try{f.showPicker();}catch(e){}}}" style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;white-space:nowrap;cursor:pointer;">${selectHtml}${detailHtml}</div>`;
     }
 
     tr.innerHTML=`
@@ -9078,11 +9090,45 @@ function renderSIJTable(){
       <td style="${tdS}border-left:3px solid #6A8C6E40;">${stageSelectHtml(c.clid,USCIS_STAGES,effectiveUscisKey,effectiveUscisStage,'uscisStage',{disabled:!i360Unlocked})}</td>
       <td style="${tdS}font-weight:500;color:var(--ink);">${i360Unlocked?us.evHtml:'<span style="color:var(--ink-faint);">—</span>'}</td>
       <td style="${tdS}">${priorityDateCell}</td>
-      <td style="${tdS}">${dfCellHtml}</td>`;
+      <td style="${tdS}white-space:nowrap;">${dfCellHtml}</td>`;
     tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);
   board.appendChild(tbl);
+
+  // ── Wire up column resize handles ──
+  thead.querySelectorAll('span.col-resize').forEach(handle=>{
+    handle.addEventListener('mousedown',function(e){
+      e.preventDefault(); e.stopPropagation();
+      const th=handle.parentElement;
+      const key=handle.getAttribute('data-col');
+      const startX=e.clientX;
+      const startW=th.getBoundingClientRect().width;
+      document.body.style.cursor='col-resize';
+      document.body.style.userSelect='none';
+      function onMove(ev){
+        const w=Math.max(40, Math.round(startW + (ev.clientX - startX)));
+        th.style.width=w+'px';
+      }
+      function onUp(){
+        document.removeEventListener('mousemove',onMove);
+        document.removeEventListener('mouseup',onUp);
+        document.body.style.cursor='';
+        document.body.style.userSelect='';
+        // Persist the new width
+        try{
+          const cur=JSON.parse(localStorage.getItem('sij-col-widths')||'{}')||{};
+          cur[key]=Math.round(th.getBoundingClientRect().width);
+          localStorage.setItem('sij-col-widths',JSON.stringify(cur));
+        }catch(err){}
+      }
+      document.addEventListener('mousemove',onMove);
+      document.addEventListener('mouseup',onUp);
+    });
+    // Block clicks/dblclicks on the handle from bubbling to th/row
+    handle.addEventListener('click',e=>e.stopPropagation());
+    handle.addEventListener('dblclick',e=>e.stopPropagation());
+  });
 }
 
 // ── I-360 approval notice (PDF) — upload / view ──
@@ -9150,6 +9196,7 @@ function setDfComment(clid,val){
   if(!caseMeta[clid]) caseMeta[clid]={};
   caseMeta[clid].dfComment=val||'';
   markUnsaved();
+  if(typeof renderSIJTable==='function') renderSIJTable();
 }
 
 function renderSIJBoard(){
