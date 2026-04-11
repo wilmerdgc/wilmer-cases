@@ -8938,7 +8938,6 @@ function renderSIJTable(){
   const thead=document.createElement('thead');
   thead.innerHTML=`<tr style="background:var(--cream-dark);position:sticky;top:0;z-index:2;">
     <th style="${thStyle}">Client</th>
-    <th style="${thStyle}">A#</th>
     <th style="${thStyle}">Paralegal</th>
     <th style="${thStyle}border-left:3px solid #C9823A40;">FC Stage</th>
     <th style="${thStyle}">FC Event</th>
@@ -9019,14 +9018,18 @@ function renderSIJTable(){
 
     // Priority date cell — editable only when I-360 is unlocked AND stage is 'approved'.
     // The input is read-only until the user double-clicks it, to prevent accidental edits.
+    // When approved, also expose an upload/view button for the I-360 approval notice PDF.
     const priorityDate=(caseMeta[c.clid]||{}).priorityDate||'';
+    const i360Notice=(caseMeta[c.clid]||{}).i360Notice||null;
+    const noticeBtn=i360Notice
+      ? `<button type="button" title="View I-360 approval notice (${(i360Notice.name||'').replace(/"/g,'&quot;')})" onclick="event.stopPropagation();viewI360Notice('${c.clid}');" style="font-size:11px;padding:4px 7px;border:1px solid #6A8C6E;border-radius:4px;background:#EBF1EB;color:#6A8C6E;font-weight:600;cursor:pointer;font-family:inherit;">📄</button>`
+      : `<button type="button" title="Upload I-360 approval notice (PDF)" onclick="event.stopPropagation();uploadI360Notice('${c.clid}');" style="font-size:11px;padding:4px 7px;border:1px dashed #B8AFA3;border-radius:4px;background:#F5F1EB;color:#9E9186;cursor:pointer;font-family:inherit;">⬆ PDF</button>`;
     const priorityDateCell=(i360Unlocked && c.uscisKey==='approved')
-      ? `<input type="date" value="${priorityDate}" readonly title="Double-click to edit" onclick="event.stopPropagation();" ondblclick="event.stopPropagation();this.removeAttribute('readonly');this.style.background='#FFF';this.style.borderColor='var(--ink)';this.focus();this.showPicker&&this.showPicker();" onblur="this.setAttribute('readonly','');this.style.background='#F5F1EB';this.style.borderColor='var(--border)';" onchange="event.stopPropagation();if(!caseMeta['${c.clid}'])caseMeta['${c.clid}']={};caseMeta['${c.clid}'].priorityDate=this.value;markUnsaved();" style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:#F5F1EB;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;"/>`
+      ? `<div style="display:flex;align-items:center;gap:6px;"><input type="date" value="${priorityDate}" readonly title="Double-click to edit" onclick="event.stopPropagation();" ondblclick="event.stopPropagation();this.removeAttribute('readonly');this.style.background='#FFF';this.style.borderColor='var(--ink)';this.focus();this.showPicker&&this.showPicker();" onblur="this.setAttribute('readonly','');this.style.background='#F5F1EB';this.style.borderColor='var(--border)';" onchange="event.stopPropagation();if(!caseMeta['${c.clid}'])caseMeta['${c.clid}']={};caseMeta['${c.clid}'].priorityDate=this.value;markUnsaved();" style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:#F5F1EB;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;"/>${noticeBtn}</div>`
       : `<span style="color:var(--ink-faint);">—</span>`;
 
     tr.innerHTML=`
       <td style="${tdS}font-weight:600;color:var(--ink);white-space:nowrap;"><span onclick="event.stopPropagation();openCaseDetail('${c.clid}');" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;" onmouseenter="this.style.textDecorationColor='var(--ink)'" onmouseleave="this.style.textDecorationColor='transparent'">${c.client||c.clid}</span></td>
-      <td style="${tdS}color:var(--ink-soft);">${(!c.anum||String(c.anum).trim()==='0'||String(c.anum).trim()==='')?'N/A':c.anum}</td>
       <td style="${tdS}color:var(--ink-soft);">${c.atty||'—'}</td>
       <td style="${tdS}border-left:3px solid #C9823A40;">${stageSelectHtml(c.clid,FC_STAGES,c.fcKey,c.fcStage,'fcStage')}</td>
       <td style="${tdS}font-weight:500;color:var(--ink);">${fc.evHtml}</td>
@@ -9041,6 +9044,51 @@ function renderSIJTable(){
   });
   tbl.appendChild(tbody);
   board.appendChild(tbl);
+}
+
+// ── I-360 approval notice (PDF) — upload / view ──
+function uploadI360Notice(clid){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='application/pdf,.pdf';
+  input.style.display='none';
+  input.onchange=function(){
+    const file=input.files&&input.files[0];
+    if(!file) return;
+    if(file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){
+      showToast('Please choose a PDF file');
+      return;
+    }
+    if(file.size>5*1024*1024){ showToast('File too large (max 5 MB)'); return; }
+    const reader=new FileReader();
+    reader.onload=function(e){
+      if(!caseMeta[clid]) caseMeta[clid]={};
+      caseMeta[clid].i360Notice={
+        name:file.name,
+        dataUrl:e.target.result,
+        mimeType:file.type||'application/pdf',
+        uploadedAt:(new Date()).toISOString().slice(0,10)
+      };
+      markUnsaved();
+      showToast('I-360 notice attached ✓');
+      if(typeof renderSIJTable==='function') renderSIJTable();
+    };
+    reader.readAsDataURL(file);
+  };
+  document.body.appendChild(input);
+  input.click();
+  setTimeout(()=>{ try{ document.body.removeChild(input); }catch(e){} }, 1000);
+}
+
+function viewI360Notice(clid){
+  const n=(caseMeta[clid]||{}).i360Notice;
+  if(!n||!n.dataUrl){ showToast('No I-360 notice attached'); return; }
+  if(typeof openDocViewer==='function'){
+    openDocViewer(n.dataUrl, n.mimeType||'application/pdf', n.name||'I-360 Approval Notice.pdf');
+  }else{
+    const w=window.open();
+    if(w) w.document.write('<iframe src="'+n.dataUrl+'" style="border:0;width:100%;height:100vh;"></iframe>');
+  }
 }
 
 function renderSIJBoard(){
