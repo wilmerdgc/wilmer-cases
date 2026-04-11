@@ -8976,10 +8976,11 @@ function renderSIJTable(){
     const effectiveUscisKey=i360Unlocked?c.uscisKey:'preparing';
     const effectiveUscisStage=i360Unlocked?c.uscisStage:USCIS_MAP['preparing'];
 
-    // Priority date cell — editable only when I-360 is unlocked AND stage is 'approved'
+    // Priority date cell — editable only when I-360 is unlocked AND stage is 'approved'.
+    // The input is read-only until the user double-clicks it, to prevent accidental edits.
     const priorityDate=(caseMeta[c.clid]||{}).priorityDate||'';
     const priorityDateCell=(i360Unlocked && c.uscisKey==='approved')
-      ? `<input type="date" value="${priorityDate}" onclick="event.stopPropagation();" onchange="event.stopPropagation();if(!caseMeta['${c.clid}'])caseMeta['${c.clid}']={};caseMeta['${c.clid}'].priorityDate=this.value;markUnsaved();" style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;"/>`
+      ? `<input type="date" value="${priorityDate}" readonly title="Double-click to edit" onclick="event.stopPropagation();" ondblclick="event.stopPropagation();this.removeAttribute('readonly');this.style.background='#FFF';this.style.borderColor='var(--ink)';this.focus();this.showPicker&&this.showPicker();" onblur="this.setAttribute('readonly','');this.style.background='#F5F1EB';this.style.borderColor='var(--border)';" onchange="event.stopPropagation();if(!caseMeta['${c.clid}'])caseMeta['${c.clid}']={};caseMeta['${c.clid}'].priorityDate=this.value;markUnsaved();" style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:#F5F1EB;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;"/>`
       : `<span style="color:var(--ink-faint);">—</span>`;
 
     tr.innerHTML=`
