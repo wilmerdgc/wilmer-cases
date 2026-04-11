@@ -8954,10 +8954,13 @@ function renderSIJTable(){
     const rowBg={overdue:'#F9EDED',thisweek:'#FAF0E6',nextweek:'',['15days']:'',ok:'',['no-date']:''}[rowStatus]||'';
 
     const tr=document.createElement('tr');
-    tr.style.cssText='border-bottom:1px solid var(--cream-dark);cursor:pointer;transition:background .1s;'+(rowBg?'background:'+rowBg+';':'');
+    tr.style.cssText='border-bottom:1px solid var(--cream-dark);transition:background .1s;'+(rowBg?'background:'+rowBg+';':'');
     tr.onmouseenter=()=>tr.style.background=rowBg||'var(--cream)';
     tr.onmouseleave=()=>tr.style.background=rowBg||'';
-    tr.onclick=()=>{ openCaseDetail(c.clid); };
+    // Open case on triple-click anywhere on the row
+    tr.addEventListener('click',function(e){
+      if(e.detail===3){ openCaseDetail(c.clid); }
+    });
 
     const tdS='padding:8px 8px;font-size:11px;';
 
@@ -8973,7 +8976,7 @@ function renderSIJTable(){
       : `<span style="color:var(--ink-faint);">—</span>`;
 
     tr.innerHTML=`
-      <td style="${tdS}font-weight:600;color:var(--ink);white-space:nowrap;">${c.client||c.clid}</td>
+      <td style="${tdS}font-weight:600;color:var(--ink);white-space:nowrap;"><span onclick="event.stopPropagation();openCaseDetail('${c.clid}');" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;" onmouseenter="this.style.textDecorationColor='var(--ink)'" onmouseleave="this.style.textDecorationColor='transparent'">${c.client||c.clid}</span></td>
       <td style="${tdS}color:var(--ink-soft);">${c.anum||'—'}</td>
       <td style="${tdS}color:var(--ink-soft);">${c.atty||'—'}</td>
       <td style="${tdS}border-left:3px solid #C9823A40;">${stageSelectHtml(c.clid,FC_STAGES,c.fcKey,c.fcStage,'fcStage')}</td>
