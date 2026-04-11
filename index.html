@@ -8912,9 +8912,11 @@ function renderSIJTable(){
   function stageSelectHtml(clid, stageArr, currentKey, currentStage, metaField, opts2){
     opts2=opts2||{};
     const disabled=!!opts2.disabled;
+    const lockLabel=opts2.lockLabel||'🔒 Locked';
+    const lockTitle=opts2.lockTitle||"Locked — FC stage must be 'SIJ Orders Issued' to activate";
     const opts=stageArr.map(s=>`<option value="${s.key}"${s.key===currentKey?' selected':''}>${s.label}</option>`).join('');
     if(disabled){
-      return `<span title="Locked — FC stage must be 'SIJ Orders Issued' to activate" style="display:inline-block;font-size:10px;padding:3px 8px;border:1px dashed #DDD5CA;border-radius:4px;background:#F5F1EB;color:#B8AFA3;font-weight:600;font-family:inherit;cursor:not-allowed;max-width:130px;">🔒 Locked</span>`;
+      return `<span title="${lockTitle}" style="display:inline-block;font-size:10px;padding:3px 8px;border:1px dashed #DDD5CA;border-radius:4px;background:#F5F1EB;color:#B8AFA3;font-weight:600;font-family:inherit;cursor:not-allowed;max-width:130px;">${lockLabel}</span>`;
     }
     return `<select onclick="event.stopPropagation();" onchange="event.stopPropagation();if(!caseMeta['${clid}'])caseMeta['${clid}']={};caseMeta['${clid}'].${metaField}=this.value;markUnsaved();renderSIJTable();" style="font-size:10px;padding:3px 5px;border:1px solid ${currentStage.color}40;border-radius:4px;background:${currentStage.bg};color:${currentStage.color};font-weight:600;cursor:pointer;font-family:inherit;outline:none;max-width:130px;">${opts}</select>`;
   }
@@ -8964,6 +8966,11 @@ function renderSIJTable(){
 
     const tdS='padding:8px 8px;font-size:11px;';
 
+    // IC column is disabled for "Special Juvenile Not in Immigration Court" cases
+    const icDisabled=(c.type||'').includes('Not in Immigration Court');
+    const effectiveIcKey=icDisabled?'not-filed':c.icKey;
+    const effectiveIcStage=icDisabled?(IC_MAP['not-filed']||c.icStage):c.icStage;
+
     // I-360 column is locked until FC stage is 'SIJ Orders Issued'
     const i360Unlocked=c.fcKey==='sij-issued';
     const effectiveUscisKey=i360Unlocked?c.uscisKey:'preparing';
@@ -8982,9 +8989,9 @@ function renderSIJTable(){
       <td style="${tdS}border-left:3px solid #C9823A40;">${stageSelectHtml(c.clid,FC_STAGES,c.fcKey,c.fcStage,'fcStage')}</td>
       <td style="${tdS}font-weight:500;color:var(--ink);">${fc.evHtml}</td>
       <td style="${tdS}font-weight:600;color:${fc.dateColor};">${fc.dateHtml}</td>
-      <td style="${tdS}border-left:3px solid #6B7FA340;">${stageSelectHtml(c.clid,IC_STAGES,c.icKey,c.icStage,'icStage')}</td>
-      <td style="${tdS}font-weight:500;color:var(--ink);">${ic.evHtml}</td>
-      <td style="${tdS}font-weight:600;color:${ic.dateColor};">${ic.dateHtml}</td>
+      <td style="${tdS}border-left:3px solid #6B7FA340;">${stageSelectHtml(c.clid,IC_STAGES,effectiveIcKey,effectiveIcStage,'icStage',{disabled:icDisabled,lockLabel:'🔒 N/A',lockTitle:'Not applicable — case is not in Immigration Court'})}</td>
+      <td style="${tdS}font-weight:500;color:var(--ink);">${icDisabled?'<span style="color:var(--ink-faint);">—</span>':ic.evHtml}</td>
+      <td style="${tdS}font-weight:600;color:${icDisabled?'var(--ink-faint)':ic.dateColor};">${icDisabled?'—':ic.dateHtml}</td>
       <td style="${tdS}border-left:3px solid #6A8C6E40;">${stageSelectHtml(c.clid,USCIS_STAGES,effectiveUscisKey,effectiveUscisStage,'uscisStage',{disabled:!i360Unlocked})}</td>
       <td style="${tdS}font-weight:500;color:var(--ink);">${i360Unlocked?us.evHtml:'<span style="color:var(--ink-faint);">—</span>'}</td>
       <td style="${tdS}">${priorityDateCell}</td>`;
