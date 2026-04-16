@@ -134,7 +134,7 @@ button.btn-danger:hover { background: var(--rose-light); }
 button.btn-sm { font-size: 11px; padding: 4px 11px; }
 
 /* ── Layout containment for render isolation ───── */
-#pane-dashboard, #pane-cases, #pane-workflows, #pane-settings, #pane-backup, #pane-inbox {
+#pane-dashboard, #pane-cases, #pane-workflows, #pane-settings, #pane-backup, #pane-inbox, #pane-tools {
   contain: layout style;
 }
 /* Hidden panes: skip layout/paint until shown */
@@ -142,7 +142,8 @@ button.btn-sm { font-size: 11px; padding: 4px 11px; }
 #pane-workflows[style*="none"],
 #pane-settings[style*="none"],
 #pane-backup[style*="none"],
-#pane-inbox[style*="none"] {
+#pane-inbox[style*="none"],
+#pane-tools[style*="none"] {
   content-visibility: hidden;
 }
 /* Hidden SO view within dashboard */
@@ -1730,6 +1731,7 @@ function hideExcelRestorePrompt(){}
         <button id="tab-workflows" onclick="switchTab('workflows')">Workflows</button>
         <button id="tab-settings" onclick="switchTab('settings')">Settings</button>
         <button id="tab-inbox" onclick="switchTab('inbox')">✉ Inbox</button>
+        <button id="tab-tools" onclick="switchTab('tools')">📋 Tools &amp; Forms</button>
       </div>
     </div>
     <div style="display:flex;gap:6px;align-items:center;">
@@ -2129,6 +2131,29 @@ function hideExcelRestorePrompt(){}
   <div class="settings-section"><div class="settings-section-title">Venues</div><div class="tag-list" id="venue-tags"></div><div class="tag-add-row"><input id="new-venue" type="text" placeholder="Add venue..."/><button onclick="addVenue()">Add</button></div></div>
   <div class="settings-section"><div class="settings-section-title">All records</div><div style="overflow-x:auto"><table class="settings-table"><thead><tr id="settings-thead"></tr></thead><tbody id="settings-tbody"></tbody></table></div><div style="margin-top:14px"><button class="btn-primary btn-sm" onclick="openAdd()">+ Add event</button></div></div>
 
+  <!-- Firm / Attorney Info for G-28 & forms -->
+  <div class="settings-section">
+    <div class="settings-section-title">Firm / Attorney Info</div>
+    <div style="font-size:11px;color:var(--ink-muted);margin-bottom:14px;">Used to auto-fill forms like the G-28. Set this once.</div>
+    <div id="firminfo-fields" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 14px;max-width:700px;">
+      <div><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);display:block;margin-bottom:4px;">Last Name</label><input id="fi-lastName" type="text" value="" onchange="firmInfo.lastName=this.value;markUnsaved();" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/></div>
+      <div><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);display:block;margin-bottom:4px;">First Name</label><input id="fi-firstName" type="text" value="" onchange="firmInfo.firstName=this.value;markUnsaved();" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/></div>
+      <div><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);display:block;margin-bottom:4px;">Middle Name</label><input id="fi-middleName" type="text" value="" onchange="firmInfo.middleName=this.value;markUnsaved();" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/></div>
+      <div style="grid-column:span 2;"><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);display:block;margin-bottom:4px;">Firm / Organization Name</label><input id="fi-firmName" type="text" value="" onchange="firmInfo.firmName=this.value;markUnsaved();" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/></div>
+      <div><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);display:block;margin-bottom:4px;">Bar Number</label><input id="fi-barNumber" type="text" value="" onchange="firmInfo.barNumber=this.value;markUnsaved();" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/></div>
+      <div style="grid-column:span 3;"><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);display:block;margin-bottom:4px;">Licensing Authority (State(s))</label><input id="fi-licensingAuthority" type="text" value="" placeholder="e.g. New York, New Jersey" onchange="firmInfo.licensingAuthority=this.value;markUnsaved();" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/></div>
+      <div style="grid-column:span 2;"><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);display:block;margin-bottom:4px;">Street Address</label><input id="fi-street" type="text" value="" onchange="firmInfo.street=this.value;markUnsaved();" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/></div>
+      <div><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);display:block;margin-bottom:4px;">Apt / Ste / Flr</label><input id="fi-apt" type="text" value="" onchange="firmInfo.apt=this.value;markUnsaved();" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/></div>
+      <div><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);display:block;margin-bottom:4px;">City</label><input id="fi-city" type="text" value="" onchange="firmInfo.city=this.value;markUnsaved();" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/></div>
+      <div><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);display:block;margin-bottom:4px;">State</label><input id="fi-state" type="text" value="" onchange="firmInfo.state=this.value;markUnsaved();" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/></div>
+      <div><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);display:block;margin-bottom:4px;">ZIP Code</label><input id="fi-zip" type="text" value="" onchange="firmInfo.zip=this.value;markUnsaved();" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/></div>
+      <div><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);display:block;margin-bottom:4px;">Phone</label><input id="fi-phone" type="text" value="" onchange="firmInfo.phone=this.value;markUnsaved();" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/></div>
+      <div><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);display:block;margin-bottom:4px;">Mobile</label><input id="fi-mobile" type="text" value="" onchange="firmInfo.mobile=this.value;markUnsaved();" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/></div>
+      <div><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);display:block;margin-bottom:4px;">Email</label><input id="fi-email" type="text" value="" onchange="firmInfo.email=this.value;markUnsaved();" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/></div>
+      <div><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);display:block;margin-bottom:4px;">Fax</label><input id="fi-fax" type="text" value="" onchange="firmInfo.fax=this.value;markUnsaved();" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/></div>
+    </div>
+  </div>
+
   <!-- Data & Tools section -->
   <div class="settings-section">
     <div class="settings-section-title">Data &amp; Tools</div>
@@ -2339,6 +2364,11 @@ function hideExcelRestorePrompt(){}
       </div>
     </div>
   </div>
+</div>
+
+<!-- TOOLS & FORMS -->
+<div id="pane-tools" style="display:none">
+  <div id="tools-content" style="padding:24px 20px;max-width:900px;margin:0 auto;"></div>
 </div>
 
 <!-- WORKFLOWS -->
@@ -2869,6 +2899,7 @@ let caseTypeStages={};
 })();
 let customColumns=[],caseMeta={};
 let paralegalEmails={}; // {paralegalName: email}
+let firmInfo={lastName:'',firstName:'',middleName:'',firmName:'',barNumber:'',licensingAuthority:'',street:'',apt:'',city:'',state:'',zip:'',country:'United States',phone:'',mobile:'',email:'',fax:''};
 let venues=['26 FEDERAL PLAZA','290 BROADWAY','201 VARICK ST','KINGS Family Court','QUEENS Family Court','BRONX Family Court','NASSAU Family Court','SUFFOLK Family Court'];
 function saveVenues(){ try{ localStorage.setItem('casetracker_venues', JSON.stringify(venues)); }catch(e){} }
 function loadVenues(){ try{ const d=localStorage.getItem('casetracker_venues'); if(d) venues=JSON.parse(d); }catch(e){} }
@@ -2947,11 +2978,13 @@ function switchTab(t){currentTab=t;
   document.getElementById('pane-settings').style.display=t==='settings'?'':'none';
   document.getElementById('pane-backup').style.display=t==='backup'?'':'none';
   document.getElementById('pane-inbox').style.display=t==='inbox'?'':'none';
+  document.getElementById('pane-tools').style.display=t==='tools'?'':'none';
   document.getElementById('tab-dashboard').classList.toggle('active',t==='dashboard');
   document.getElementById('tab-cases').classList.toggle('active',t==='cases');
   document.getElementById('tab-workflows').classList.toggle('active',t==='workflows');
   document.getElementById('tab-settings').classList.toggle('active',t==='settings');
   document.getElementById('tab-inbox').classList.toggle('active',t==='inbox');
+  document.getElementById('tab-tools').classList.toggle('active',t==='tools');
   const bkBtn=document.getElementById('tab-backup');
   if(bkBtn){bkBtn.style.background=t==='backup'?'#2C2620':'transparent';bkBtn.style.color=t==='backup'?'#F7F3ED':'#9E9186';bkBtn.style.borderColor=t==='backup'?'#2C2620':'#DDD5CA';}
   if(t==='settings'){snapshotSettings();renderSettings();}
@@ -2959,6 +2992,7 @@ function switchTab(t){currentTab=t;
   else if(t==='cases'){renderCasesTypeStats();renderCases();}
   else if(t==='backup'){renderBackupPage();}
   else if(t==='inbox'){ gmailInit(); if(!_gmailAccessToken) gmailRenderSignIn(); }
+  else if(t==='tools'){ renderToolsPage(); }
   else{renderAll();}
 }
 
@@ -3339,7 +3373,15 @@ function gmailPrintMessage(){
   .attachments{margin-top:20px;padding-top:14px;border-top:1px solid #E8E1D6;}
   .att-title{font-size:11px;font-weight:600;color:#9E9186;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;}
   .att-item{font-size:12px;color:#5C5148;margin-bottom:3px;}
-  @media print{body{padding:20px 30px;} .no-print{display:none !important;}}
+  @media print{
+    body{padding:0 !important;margin:0 !important;}
+    .no-print, .tab-nav, .header, #pane-dashboard, #pane-cases, #pane-workflows, #pane-settings, #pane-backup, #pane-inbox, #toast{display:none !important;}
+    #pane-tools{display:block !important;padding:0 !important;}
+    #tools-content{padding:0 !important;margin:0 !important;max-width:100% !important;}
+    #g28-printable{border:none !important;box-shadow:none !important;border-radius:0 !important;padding:16px !important;}
+    #g28-printable input[type="text"], #g28-printable input[type="date"]{border:none !important;border-bottom:1px solid #999 !important;border-radius:0 !important;background:transparent !important;padding:2px 0 !important;font-size:11px !important;}
+    #g28-printable input[type="checkbox"]{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+  }
 </style></head><body>
 <div class="no-print" style="margin-bottom:20px;text-align:right;">
   <button onclick="window.print()" style="font-size:13px;font-weight:600;padding:8px 24px;border:none;border-radius:6px;background:#2C2620;color:#F7F3ED;cursor:pointer;font-family:inherit;">🖨 Print</button>
@@ -4263,7 +4305,11 @@ function migrateDocLists(){Object.keys(caseTypeDocLists).forEach(ct=>{const arr=
 function addCaseType(){const inp=document.getElementById('new-casetype');const val=inp.value.trim();if(!val){alert('Case type name required.');return;}if(caseTypes.includes(val)){alert('Case type already exists.');return;}caseTypes.push(val);inp.value='';renderCaseTypesSection();updateSettingsSaveBar();dirtyFilterOpts();}
 
 // ── Settings rendering ──
-function renderSettings(){renderColVis();renderParalegalTags();renderEventTypeTags();renderTags('casetype',caseTypes);renderVenueTags();renderSettingsTable();}
+function renderSettings(){renderColVis();renderParalegalTags();renderEventTypeTags();renderTags('casetype',caseTypes);renderVenueTags();renderSettingsTable();renderFirmInfoFields();}
+function renderFirmInfoFields(){
+  const fields=['lastName','firstName','middleName','firmName','barNumber','licensingAuthority','street','apt','city','state','zip','phone','mobile','email','fax'];
+  fields.forEach(k=>{const el=document.getElementById('fi-'+k);if(el)el.value=firmInfo[k]||'';});
+}
 function renderVenueTags(){
   const el=document.getElementById('venue-tags');if(!el)return;el.innerHTML='';
   venues.forEach((v,i)=>{const tag=document.createElement('span');tag.className='tag';tag.title='Click to edit';tag.style.cursor='pointer';
@@ -8387,10 +8433,10 @@ async function _writeAutoBackup(){
   _showAutoBackupButton();
 })();
 
-function saveAllData(){const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,venues,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
+function saveAllData(){const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,venues,firmInfo,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();}catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records)records=p.records;if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.venues&&Array.isArray(p.venues))venues=p.venues;return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records)records=p.records;if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);return true;}catch(e){return false;}}
 window.markUnsaved=function(){document.getElementById('unsaved-dot').style.display='inline-block';document.getElementById('btn-save').classList.add('unsaved');clearTimeout(window._autoSaveTimer);window._autoSaveTimer=setTimeout(()=>{saveAllData();},1000);};
 function setLastBackupLabel(action){
   const n=new Date();
@@ -9206,6 +9252,192 @@ function setDfComment(clid,val){
   caseMeta[clid].dfComment=val||'';
   markUnsaved();
   if(typeof renderSIJTable==='function') renderSIJTable();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TOOLS & FORMS
+// ══════════════════════════════════════════════════════════════════
+function renderToolsPage(){
+  const el=document.getElementById('tools-content');
+  if(!el)return;
+  el.innerHTML=`
+    <div style="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);margin-bottom:6px;">Tools &amp; Forms</div>
+    <div style="font-size:13px;color:var(--ink-muted);margin-bottom:24px;">Select a form to fill out using case data.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;">
+      <div onclick="renderG28Form()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
+        <div style="font-size:24px;margin-bottom:8px;">📝</div>
+        <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Form G-28</div>
+        <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Notice of Entry of Appearance as Attorney or Accredited Representative</div>
+      </div>
+    </div>`;
+}
+
+function _g28Clients(){
+  // Deduplicate clients: one entry per clid, with the most recent record's data
+  const seen={};
+  const recs=(typeof records!=='undefined'?records:[]);
+  recs.forEach(r=>{
+    const clid=r.clid||r.client;
+    if(!clid)return;
+    if(!seen[clid]) seen[clid]={clid,client:r.client,anum:r.anum,type:r.type,atty:r.atty};
+  });
+  return Object.values(seen).sort((a,b)=>(a.client||'').localeCompare(b.client||''));
+}
+
+function renderG28Form(selectedClid){
+  const el=document.getElementById('tools-content');
+  if(!el)return;
+  const clients=_g28Clients();
+  const fi=firmInfo||{};
+  // Case data
+  let c=null,meta={};
+  if(selectedClid){
+    c=clients.find(x=>x.clid===selectedClid)||null;
+    meta=caseMeta[selectedClid]||{};
+  }
+  const clientLast=c?(c.client||'').split(/\s+/).slice(-1)[0]:'';
+  const clientFirst=c?(c.client||'').split(/\s+/).slice(0,-1).join(' '):'';
+  const clientAnum=c?(c.anum||''):'';
+  const clientEmail=meta.clientEmail||'';
+  const todayFmt=new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'});
+
+  const optionsHtml=clients.map(cl=>`<option value="${cl.clid}"${cl.clid===selectedClid?' selected':''}>${cl.client||cl.clid}${cl.anum?' — A# '+cl.anum:''}</option>`).join('');
+
+  const labelS='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;display:block;margin-bottom:3px;';
+  const inputS='width:100%;box-sizing:border-box;font-size:12px;padding:5px 8px;border:1px solid #EBE5DC;border-radius:4px;font-family:inherit;background:#FAFAF8;outline:none;';
+  const sectionTitle='font-family:var(--font-display);font-size:13px;font-weight:700;color:var(--ink);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--border);';
+
+  el.innerHTML=`
+  <div id="g28-form-wrapper">
+    <!-- Top bar -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;" class="no-print">
+      <button onclick="renderToolsPage()" style="font-size:12px;padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">← Back</button>
+      <select id="g28-case-select" onchange="renderG28Form(this.value)" style="font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;min-width:260px;background:#fff;cursor:pointer;">
+        <option value="">— Select a client —</option>
+        ${optionsHtml}
+      </select>
+      <button onclick="window.print()" style="font-size:12px;font-weight:600;padding:6px 18px;border:none;border-radius:var(--radius-sm);background:var(--ink);color:var(--cream);cursor:pointer;font-family:inherit;">🖨 Print G-28</button>
+    </div>
+
+    <!-- Form -->
+    <div id="g28-printable" style="background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px 32px;box-shadow:var(--shadow-sm);max-width:820px;">
+      <div style="text-align:center;margin-bottom:20px;">
+        <div style="font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--ink);">Notice of Entry of Appearance<br/>as Attorney or Accredited Representative</div>
+        <div style="font-size:10px;color:var(--ink-muted);margin-top:4px;">DHS Form G-28 · OMB No. 1615-0105</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+        <!-- LEFT: Part 1 — Attorney Info -->
+        <div>
+          <div style="${sectionTitle}">Part 1. Information About Attorney</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div><label style="${labelS}">2a. Last Name</label><input type="text" value="${(fi.lastName||'').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+            <div><label style="${labelS}">2b. First Name</label><input type="text" value="${(fi.firstName||'').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+            <div style="grid-column:span 2;"><label style="${labelS}">2c. Middle Name</label><input type="text" value="${(fi.middleName||'').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+          </div>
+          <div style="margin-top:10px;font-size:10px;font-weight:700;color:var(--ink-muted);margin-bottom:6px;">Address of Attorney</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div style="grid-column:span 2;"><label style="${labelS}">3a. Street</label><input type="text" value="${(fi.street||'').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+            <div><label style="${labelS}">3b. Apt/Ste/Flr</label><input type="text" value="${(fi.apt||'').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+            <div><label style="${labelS}">3c. City</label><input type="text" value="${(fi.city||'').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+            <div><label style="${labelS}">3d. State</label><input type="text" value="${(fi.state||'').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+            <div><label style="${labelS}">3e. ZIP Code</label><input type="text" value="${(fi.zip||'').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+            <div style="grid-column:span 2;"><label style="${labelS}">3h. Country</label><input type="text" value="${(fi.country||'United States').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+          </div>
+          <div style="margin-top:10px;font-size:10px;font-weight:700;color:var(--ink-muted);margin-bottom:6px;">Contact Information</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div><label style="${labelS}">4. Daytime Phone</label><input type="text" value="${(fi.phone||'').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+            <div><label style="${labelS}">5. Mobile</label><input type="text" value="${(fi.mobile||'').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+            <div><label style="${labelS}">6. Email</label><input type="text" value="${(fi.email||'').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+            <div><label style="${labelS}">7. Fax</label><input type="text" value="${(fi.fax||'').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Part 2 — Eligibility -->
+        <div>
+          <div style="${sectionTitle}">Part 2. Eligibility Information</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <label style="display:flex;align-items:flex-start;gap:6px;font-size:12px;color:var(--ink);cursor:pointer;">
+              <input type="checkbox" checked style="margin-top:2px;"/>
+              <span>1a. I am an attorney eligible to practice law in, and a member in good standing of, the bar of the highest courts of:</span>
+            </label>
+            <div style="margin-left:22px;"><label style="${labelS}">Licensing Authority</label><input type="text" value="${(fi.licensingAuthority||'').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+            <div style="margin-left:22px;"><label style="${labelS}">1b. Bar Number</label><input type="text" value="${(fi.barNumber||'').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+            <label style="display:flex;align-items:flex-start;gap:6px;font-size:12px;color:var(--ink);cursor:pointer;">
+              <input type="checkbox" checked style="margin-top:2px;"/>
+              <span>1c. I am <strong>not</strong> subject to any order suspending, enjoining, restraining, disbarring, or otherwise restricting me in the practice of law.</span>
+            </label>
+            <div style="margin-left:22px;"><label style="${labelS}">1d. Law Firm Name</label><input type="text" value="${(fi.firmName||'').replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Part 3 — Notice of Appearance -->
+      <div style="margin-top:24px;">
+        <div style="${sectionTitle}">Part 3. Notice of Appearance</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);cursor:pointer;"><input type="checkbox" name="g28-agency" checked/> 1a. USCIS</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);cursor:pointer;"><input type="checkbox" name="g28-agency"/> 2a. ICE</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);cursor:pointer;"><input type="checkbox" name="g28-agency"/> 3a. CBP</label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+          <div><label style="${labelS}">1b. Form Numbers / Matter</label><input type="text" value="" placeholder="e.g. I-360" style="${inputS}"/></div>
+          <div><label style="${labelS}">4. Receipt Number</label><input type="text" value="" style="${inputS}"/></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ink);cursor:pointer;"><input type="checkbox" name="g28-role"/> Applicant</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ink);cursor:pointer;"><input type="checkbox" name="g28-role" checked/> Petitioner</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ink);cursor:pointer;"><input type="checkbox" name="g28-role"/> Requestor</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ink);cursor:pointer;"><input type="checkbox" name="g28-role"/> Beneficiary</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ink);cursor:pointer;"><input type="checkbox" name="g28-role"/> Respondent</label>
+        </div>
+
+        <div style="font-size:10px;font-weight:700;color:var(--ink-muted);margin:14px 0 8px;text-transform:uppercase;letter-spacing:.05em;">Information About Client</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <div><label style="${labelS}">6a. Client Last Name</label><input type="text" value="${clientLast.replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+          <div><label style="${labelS}">6b. Client First Name</label><input type="text" value="${clientFirst.replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+          <div><label style="${labelS}">6c. Middle Name</label><input type="text" value="" style="${inputS}"/></div>
+          <div style="grid-column:span 2;"><label style="${labelS}">8. USCIS Online Account #</label><input type="text" value="" style="${inputS}"/></div>
+          <div><label style="${labelS}">9. A-Number</label><input type="text" value="${clientAnum.replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+          <div><label style="${labelS}">10. Daytime Phone</label><input type="text" value="" style="${inputS}"/></div>
+          <div><label style="${labelS}">11. Mobile</label><input type="text" value="" style="${inputS}"/></div>
+          <div><label style="${labelS}">12. Email</label><input type="text" value="${clientEmail.replace(/"/g,'&quot;')}" style="${inputS}"/></div>
+        </div>
+        <div style="margin-top:10px;font-size:10px;font-weight:700;color:var(--ink-muted);margin-bottom:6px;">Client Mailing Address</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div style="grid-column:span 2;"><label style="${labelS}">13a. Street</label><input type="text" value="" style="${inputS}"/></div>
+          <div><label style="${labelS}">13b. Apt/Ste/Flr</label><input type="text" value="" style="${inputS}"/></div>
+          <div><label style="${labelS}">13c. City</label><input type="text" value="" style="${inputS}"/></div>
+          <div><label style="${labelS}">13d. State</label><input type="text" value="" style="${inputS}"/></div>
+          <div><label style="${labelS}">13e. ZIP Code</label><input type="text" value="" style="${inputS}"/></div>
+          <div style="grid-column:span 2;"><label style="${labelS}">13h. Country</label><input type="text" value="" style="${inputS}"/></div>
+        </div>
+      </div>
+
+      <!-- Part 4 — Client Consent -->
+      <div style="margin-top:24px;">
+        <div style="${sectionTitle}">Part 4. Client's Consent to Representation &amp; Signature</div>
+        <div style="font-size:11px;color:var(--ink-muted);line-height:1.6;margin-bottom:12px;">I have requested the representation of and consented to being represented by the attorney named in Part 1. I also consent to the disclosure of any records pertaining to me that appear in any system of records of USCIS, ICE, or CBP.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink);cursor:pointer;"><input type="checkbox"/> 1a. Send original notices to attorney's address</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink);cursor:pointer;"><input type="checkbox"/> 1b. Send secure identity documents to attorney's address</label>
+        </div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-top:12px;">
+          <div><label style="${labelS}">2a. Signature of Client</label><div style="border-bottom:1px solid #333;height:28px;"></div></div>
+          <div><label style="${labelS}">2b. Date of Signature</label><input type="text" value="${todayFmt}" style="${inputS}"/></div>
+        </div>
+      </div>
+
+      <!-- Part 5 — Attorney Signature -->
+      <div style="margin-top:24px;">
+        <div style="${sectionTitle}">Part 5. Signature of Attorney</div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;">
+          <div><label style="${labelS}">1a. Signature of Attorney</label><div style="border-bottom:1px solid #333;height:28px;"></div></div>
+          <div><label style="${labelS}">1b. Date of Signature</label><input type="text" value="${todayFmt}" style="${inputS}"/></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
 }
 
 function renderSIJBoard(){
@@ -12298,6 +12530,7 @@ function applyPayload(p){
   if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}
   if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);
   if(p.venues&&Array.isArray(p.venues))venues=p.venues;
+  if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);
 }
 // ══════════════════════════════════════════════════
 // CLOUD SYNC — localStorage is always source of truth
