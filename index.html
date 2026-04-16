@@ -309,14 +309,40 @@ tbody td { padding: 9px 12px; vertical-align: middle; font-size: 12px; }
 .nav-row button { font-size: 16px; padding: 4px 10px; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
 
 .week-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; }
-.week-col { border: 1px solid var(--border); border-radius: var(--radius-md); min-height: 130px; overflow: hidden; background: #fff; box-shadow: var(--shadow-sm); }
-.week-col-header { padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 600; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.05em; background: var(--cream); }
-.week-col-header.today-col { color: var(--sage); background: var(--sage-light); }
-.week-task { padding: 8px 10px; border-bottom: 1px solid var(--cream-dark); font-size: 12px; cursor: pointer; transition: background 0.12s; }
+.week-grid.with-weekend { grid-template-columns: repeat(7, minmax(0,1fr)); }
+.week-col { border: 1px solid var(--border); border-radius: var(--radius-md); min-height: 180px; overflow: hidden; background: #fff; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; }
+.week-col.weekend-col { background: #FBF7F1; border-style: dashed; }
+.week-col-header { padding: 10px 12px 8px; border-bottom: 1px solid var(--border); background: var(--cream); display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.week-col-header.today-col { background: var(--sage-light); }
+.week-col-header .wch-day { font-size: 10px; font-weight: 700; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--font-display); }
+.week-col-header.today-col .wch-day { color: var(--sage); }
+.week-col-header .wch-num { font-family: var(--font-display); font-size: 22px; font-weight: 500; color: var(--ink); line-height: 1; }
+.week-col-header.today-col .wch-num { color: var(--sage); }
+.week-col-header .wch-today-pill { font-size: 9px; font-weight: 700; color: #fff; background: var(--sage); padding: 1px 6px; border-radius: 8px; letter-spacing: 0.05em; text-transform: uppercase; }
+.week-col-body { flex: 1; display: flex; flex-direction: column; position: relative; }
+.week-col-body::before { content: ''; position: absolute; left: 38px; top: 0; bottom: 0; width: 1px; background: repeating-linear-gradient(to bottom, var(--cream-dark) 0, var(--cream-dark) 3px, transparent 3px, transparent 8px); pointer-events: none; opacity: 0.55; }
+.week-col.weekend-col .week-col-body::before { opacity: 0.35; }
+.week-empty-day { flex: 1; font-size: 10px; color: var(--ink-faint); text-align: center; padding: 22px 8px; font-style: italic; }
+.week-task { padding: 8px 10px 8px 44px; border-bottom: 1px solid var(--cream-dark); font-size: 12px; cursor: pointer; transition: background 0.12s; position: relative; }
 .week-task:hover { background: var(--cream); }
+.week-task::before { content: ''; position: absolute; left: 12px; top: 12px; width: 8px; height: 8px; border-radius: 50%; background: var(--sage); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--cream-dark); }
+.week-task.task-kind::before { background: #C4BAB0; width: 5px; height: 5px; left: 14px; top: 14px; box-shadow: none; }
 .week-event { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .week-client { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
 .week-clid { font-size: 10px; color: var(--ink-faint); margin-top: 1px; }
+.week-task.task-kind { padding: 4px 10px 4px 28px; font-size: 11px; background: transparent; }
+.week-task.task-kind::before { left: 14px; top: 9px; }
+.week-task.task-kind .week-event { font-weight: 500; color: var(--ink-muted); font-size: 11px; }
+.week-task.task-kind .week-client { font-size: 10px; margin-top: 1px; }
+.week-task.task-kind .week-clid { display: none; }
+.week-task.task-kind .wk-notes { font-size: 9px !important; }
+.weekend-toggle-bar { display: flex; align-items: center; gap: 10px; margin-left: auto; font-size: 11px; color: var(--ink-muted); }
+.weekend-toggle-bar .wt-btn { font-size: 11px; padding: 4px 12px; border: 1px solid var(--border); border-radius: 16px; background: #fff; color: var(--ink-muted); cursor: pointer; transition: all 0.12s; }
+.weekend-toggle-bar .wt-btn:hover { background: var(--cream); border-color: var(--ink-faint); color: var(--ink); }
+.weekend-toggle-bar .wt-btn.active { background: var(--sage); border-color: var(--sage); color: #fff; }
+.weekend-toggle-bar .wt-btn.auto-on { background: var(--cream); border-color: #E8B468; color: #9C6D2F; }
+.wk-summary-btn { font-size: 11px; font-weight: 600; padding: 4px 12px; border: 1px solid #B4CCAD; border-radius: 16px; background: var(--sage-light); color: #4A6B4E; cursor: pointer; transition: all 0.12s; }
+.wk-summary-btn:hover { background: var(--sage); color: #fff; border-color: var(--sage); }
 
 /* Month calendar */
 .cal-grid { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; }
@@ -1892,7 +1918,7 @@ function hideExcelRestorePrompt(){}
       </div>
     </div>
   </div>
-  <div id="view-week" style="display:none"><div class="nav-row"><button onclick="shiftWeek(-1)">&#8592;</button><span class="nav-title" id="week-title"></span><button onclick="shiftWeek(1)">&#8594;</button></div><div class="week-grid" id="week-grid"></div><div id="empty-week" style="display:none;text-align:center;padding:3rem;color:#9E9186;font-size:13px">No tasks this week.</div><div id="week-board"></div></div>
+  <div id="view-week" style="display:none"><div class="nav-row"><button onclick="shiftWeek(-1)">&#8592;</button><span class="nav-title" id="week-title"></span><button onclick="shiftWeek(1)">&#8594;</button><div class="weekend-toggle-bar"><button id="wk-summary-btn" class="wk-summary-btn" onclick="copyWeeklySummary()" title="Copy 3-week summary (this, next, and the week after)">⎘ 3-week summary</button><span id="wk-weekend-note" style="font-size:10px;color:#9C6D2F;display:none;">Weekend events present</span><button id="wk-weekend-toggle" class="wt-btn" onclick="toggleWeekendView()" title="Show or hide Saturday &amp; Sunday">+ Weekend</button></div></div><div class="week-grid" id="week-grid"></div><div id="empty-week" style="display:none;text-align:center;padding:3rem;color:#9E9186;font-size:13px">No tasks this week.</div><div id="week-board"></div></div>
   <div id="view-month" style="display:none"><div class="nav-row"><button onclick="shiftMonth(-1)">&#8592;</button><span class="nav-title" id="month-title"></span><button onclick="shiftMonth(1)">&#8594;</button></div><div class="cal-day-headers"><div class="cal-day-label">Mon</div><div class="cal-day-label">Tue</div><div class="cal-day-label">Wed</div><div class="cal-day-label">Thu</div><div class="cal-day-label">Fri</div></div><div class="cal-grid" id="cal-grid"></div><div id="month-board"></div></div>
   <div id="view-paralegals" style="display:none"><div id="para-grid"></div><div id="empty-para" style="display:none;text-align:center;padding:3rem;color:#9E9186;font-size:13px">No tasks assigned to paralegals.</div></div>
   <div id="view-me" style="display:none"><div id="me-content"></div><div id="empty-me" style="display:none;text-align:center;padding:3rem;color:#9E9186;font-size:13px">No tasks assigned to you yet.</div></div>
@@ -5778,19 +5804,43 @@ function appendSoMeta(container, r, fg){
   container.appendChild(wrap);
 }
 
+let weekendPref = (function(){ try{ return localStorage.getItem('weekShowWeekend')==='1'; }catch{ return false; } })();
+function isTaskKindEvent(ev){ return !!ev && /\bTASK\b/i.test(ev); }
+function toggleWeekendView(){
+  weekendPref = !weekendPref;
+  try{ localStorage.setItem('weekShowWeekend', weekendPref?'1':'0'); }catch{}
+  renderWeek();
+}
 function renderWeek() {
   const rows = getFiltered(); updateStats(rows);
   const mon = getWeekStart(weekOffset);
-  const days = [];
-  for (let i = 0; i < 5; i++) { const d = new Date(mon); d.setDate(mon.getDate() + i); days.push(d); }
-  const weekLabel = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' – ' + days[4].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  document.getElementById('week-title').textContent = weekLabel;
-  const grid = document.getElementById('week-grid'); grid.innerHTML = '';
   // ── Perf: pre-index rows by date string ──
   const rowsByDate={}, finByDate={};
   rows.forEach(r=>{ if(r.date){(rowsByDate[r.date]||(rowsByDate[r.date]=[])).push(r);} });
   records.forEach(r=>{ if(r.finishedStatus&&!r.deletedStatus&&r.date){(finByDate[r.date]||(finByDate[r.date]=[])).push(r);} });
-  const N = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  // Detect weekend events for this week
+  const satStr = toDateStr(new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+5));
+  const sunStr = toDateStr(new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+6));
+  const weekendHasEvents = !!(rowsByDate[satStr]&&rowsByDate[satStr].length) || !!(rowsByDate[sunStr]&&rowsByDate[sunStr].length);
+  const showWeekend = weekendPref || weekendHasEvents;
+  const dayCount = showWeekend ? 7 : 5;
+  const days = [];
+  for (let i = 0; i < dayCount; i++) { const d = new Date(mon); d.setDate(mon.getDate() + i); days.push(d); }
+  const weekLabel = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' – ' + days[days.length-1].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  document.getElementById('week-title').textContent = weekLabel;
+  const grid = document.getElementById('week-grid');
+  grid.innerHTML = '';
+  grid.classList.toggle('with-weekend', showWeekend);
+  // Update toggle button state
+  const wtBtn = document.getElementById('wk-weekend-toggle');
+  const wtNote = document.getElementById('wk-weekend-note');
+  if(wtBtn){
+    wtBtn.classList.toggle('active', weekendPref);
+    wtBtn.classList.toggle('auto-on', !weekendPref && weekendHasEvents);
+    wtBtn.textContent = showWeekend ? '− Hide weekend' : '+ Weekend';
+  }
+  if(wtNote){ wtNote.style.display = (!weekendPref && weekendHasEvents) ? 'inline' : 'none'; }
+  const N = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   let any = false;
   const weekTasks = [];
   const weekFinished = [];
@@ -5798,30 +5848,50 @@ function renderWeek() {
   days.forEach((day, i) => {
     const dayStr = toDateStr(day);
     const isToday = sameDay(day, TODAY);
+    const isWeekendDay = i >= 5;
     const tasks = rowsByDate[dayStr] || [];
     if (tasks.length) { any = true; weekTasks.push(...tasks); }
     weekFinished.push(...(finByDate[dayStr]||[]));
-    const col = document.createElement('div'); col.className = 'week-col';
+    const col = document.createElement('div');
+    col.className = 'week-col' + (isWeekendDay ? ' weekend-col' : '');
     col.style.cursor = 'default';
     const hdr = document.createElement('div'); hdr.className = 'week-col-header' + (isToday ? ' today-col' : '');
-    hdr.textContent = N[i] + ' ' + day.getDate(); col.appendChild(hdr);
-    tasks.forEach(r => {
-      const t = document.createElement('div'); t.className = 'week-task'; t.onclick = () => openEdit(r.id);
+    const monthAbbr = day.toLocaleDateString('en-US',{month:'short'});
+    hdr.innerHTML = `<div><div class="wch-day">${N[i]}</div><div style="font-size:9px;color:var(--ink-faint);font-weight:600;letter-spacing:0.05em;text-transform:uppercase;margin-top:2px;">${monthAbbr}</div></div><div class="wch-num">${day.getDate()}</div>${isToday?'<span class="wch-today-pill">Today</span>':''}`;
+    col.appendChild(hdr);
+    const body = document.createElement('div'); body.className = 'week-col-body';
+    // Sort: regular events first, TASK-kind last (so they appear smaller at bottom)
+    const sortedTasks = tasks.slice().sort((a,b)=>{
+      const ta = isTaskKindEvent(a.event)?1:0, tb = isTaskKindEvent(b.event)?1:0;
+      return ta - tb;
+    });
+    sortedTasks.forEach(r => {
+      const isTask = isTaskKindEvent(r.event);
+      const t = document.createElement('div'); t.className = 'week-task' + (isTask?' task-kind':''); t.onclick = () => openEdit(r.id);
       const es=getEventStyle(r.event||'');
       const evLabel=(es.icon?es.icon+' ':'')+( r.event||r.type);
       const evColor=es.color||'';
-      // Countdown for call-up events
+      // Countdown for call-up events (skip for task-kind to keep minimal)
       let cdHtml='';
-      if(callUpTypes.includes(r.event)&&r.date){
+      if(!isTask && callUpTypes.includes(r.event)&&r.date){
         const diffDays=Math.round((parseDate(r.date)-TODAY)/86400000);
         const cdText=diffDays===0?'Today':diffDays<0?Math.abs(diffDays)+'d ago':diffDays+'d left';
         const cdColor=diffDays<0?'#B85C5C':diffDays<=7?'#C9823A':'#6B7FA3';
         cdHtml=`<div style="font-size:9px;font-weight:700;color:${cdColor};background:${cdColor}18;padding:1px 5px;border-radius:4px;display:inline-block;margin-top:2px;">${cdText}</div>`;
       }
-      t.innerHTML = `<div class="week-event"${evColor?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div><div class="week-clid">#${r.clid || '—'}</div>${cdHtml}${r.notes ? `<div style="font-size:10px;color:var(--ink-faint);margin-top:2px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
+      if(isTask){
+        t.innerHTML = `<div class="week-event"${evColor?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div>${r.notes ? `<div class="wk-notes" style="color:var(--ink-faint);margin-top:1px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
+      } else {
+        t.innerHTML = `<div class="week-event"${evColor?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div><div class="week-clid">#${r.clid || '—'}</div>${cdHtml}${r.notes ? `<div class="wk-notes" style="font-size:10px;color:var(--ink-faint);margin-top:2px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
+      }
       appendSoMeta(t, r, 'var(--amber)');
-      col.appendChild(t);
+      body.appendChild(t);
     });
+    if(!sortedTasks.length){
+      const empty = document.createElement('div'); empty.className='week-empty-day'; empty.textContent = isWeekendDay ? '—' : 'Nothing planned';
+      body.appendChild(empty);
+    }
+    col.appendChild(body);
     col.addEventListener('dblclick', e => {
       if(e.target.closest('.week-task')) return;
       openAdd();
@@ -5837,6 +5907,59 @@ function renderWeek() {
   buildEventBoard(boardEl, weekTasks, weekFinished, weekLabel);
 }
 function shiftWeek(d) { weekOffset += d; renderWeek(); }
+function _buildWeeklySummaryText(){
+  const rows = getFiltered();
+  const _WDAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  function fmtRow(r){
+    const d = parseDate(r.date);
+    const wd = d ? _WDAYS_SHORT[d.getDay()] : '';
+    const mo = d ? String(d.getMonth()+1).padStart(2,'0') : '';
+    const dy = d ? String(d.getDate()).padStart(2,'0') : '';
+    const weekend = d && (d.getDay()===0||d.getDay()===6) ? ' ⚠' : '';
+    const head = d ? wd+' '+mo+'/'+dy+weekend : 'No date';
+    const isTask = isTaskKindEvent(r.event);
+    const prefix = isTask ? '  · ' : '  • ';
+    let line = prefix + head + ' — ' + (r.event||r.type||'—') + ' — ' + (r.client||'—');
+    if(r.clid) line += ' [#'+r.clid+']';
+    if(r.notes && !isTask) line += '\n      '+r.notes;
+    return line;
+  }
+  function bucketFor(offset){
+    const {mon,sun} = getWeekBounds(offset);
+    const inRange = rows.filter(r=>{ const d=parseDate(r.date); return d && d>=mon && d<=sun; });
+    inRange.sort((a,b)=>{
+      const da=parseDate(a.date), db=parseDate(b.date);
+      if(da-db !== 0) return da-db;
+      const ta=isTaskKindEvent(a.event)?1:0, tb=isTaskKindEvent(b.event)?1:0;
+      return ta-tb;
+    });
+    const label = mon.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + sun.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    return {inRange, label};
+  }
+  const out = [];
+  out.push('Weekly summary — generated '+TODAY.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}));
+  out.push('');
+  [['THIS WEEK',0],['NEXT WEEK',1],['WEEK AFTER NEXT',2]].forEach(([title,off])=>{
+    const {inRange,label} = bucketFor(off);
+    out.push('── '+title+' ('+label+') ──');
+    if(inRange.length){
+      inRange.forEach(r => out.push(fmtRow(r)));
+    } else {
+      out.push('  (no events scheduled)');
+    }
+    out.push('');
+  });
+  return out.join('\n');
+}
+function copyWeeklySummary(){
+  const txt = _buildWeeklySummaryText();
+  const btn = document.getElementById('wk-summary-btn');
+  const orig = btn ? btn.textContent : '';
+  navigator.clipboard.writeText(txt).then(()=>{
+    if(btn){ btn.textContent = '✓ Copied!'; setTimeout(()=>{ btn.textContent = orig; }, 1800); }
+    showToast('3-week summary copied to clipboard');
+  }).catch(()=>{ alert(txt); });
+}
 
 function getMonthDates(offset) {
   const base = new Date(TODAY.getFullYear(), TODAY.getMonth() + offset, 1);
