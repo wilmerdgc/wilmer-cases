@@ -3020,6 +3020,23 @@ function _makeDashedLine(){
 function debounce(fn,ms){let t;return function(...a){clearTimeout(t);t=setTimeout(()=>fn.apply(this,a),ms);};}
 const _debouncedRenderAll=debounce(()=>renderAll(),200);
 const _debouncedRenderCases=debounce(()=>{renderCasesTypeStats();renderCases();},200);
+// ── Reminder icon (finger with red string) ────────
+function _reminderIconSvg(size){
+  const s = size||14;
+  return '<svg viewBox="0 0 20 20" width="'+s+'" height="'+s+'" style="vertical-align:-2px;flex-shrink:0;" aria-hidden="true">'
+    + '<path d="M5.5 18.5 L5.5 13.5 Q5.5 12.5 6.5 12.5 L13.5 12.5 Q14.5 12.5 14.5 13.5 L14.5 18.5 Z" fill="#F2D5B0" stroke="#B8916A" stroke-width="0.4"/>'
+    + '<rect x="8" y="3" width="4" height="10.5" rx="2" fill="#F4D9B4" stroke="#B8916A" stroke-width="0.4"/>'
+    + '<path d="M6 8.2 Q10 6.6 14 8.2 Q10 9.8 6 8.2 Z" fill="#C94A3A" stroke="#8B2E22" stroke-width="0.25"/>'
+    + '<circle cx="13.6" cy="8.15" r="1.1" fill="#8B2E22"/>'
+    + '<circle cx="13.6" cy="8.15" r="0.45" fill="#C94A3A"/>'
+    + '</svg>';
+}
+function _getReminderParentEvent(r){
+  if(!r||!r._parentId) return '';
+  const p = records.find(x=>x.id===r._parentId);
+  if(!p) return '';
+  return p.event||p.type||'';
+}
 const cardBg={overdue:'#F9EDED',urgent:'#FAF0E6',thisweek:'#FAF0E6',nextweek:'#FAF0E6',['15days']:'#EBF1EB',ok:'#EBF1EB','no-date':'#EDE8E0'};
 const cardColor={overdue:'#B85C5C',urgent:'#C9823A',thisweek:'#C9823A',nextweek:'#C9823A',['15days']:'#6A8C6E',ok:'#6A8C6E','no-date':'#9E9186'};
 function initials(name){return name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);}
@@ -5490,9 +5507,9 @@ function renderList(){
     const att=getSoAttachment(r);
 
     const tr=document.createElement('tr');
-    if(isRem)tr.style.background='#FFF8EE';
-    tr.onmouseenter=()=>{if(!isRem)tr.style.background='rgba(255,255,255,0.85)';};
-    tr.onmouseleave=()=>{tr.style.background=isRem?'#FFF8EE':'';};
+    if(isRem){tr.style.background='#FDFAF5';tr.style.opacity='0.78';}
+    tr.onmouseenter=()=>{if(!isRem)tr.style.background='rgba(255,255,255,0.85)';else tr.style.opacity='1';};
+    tr.onmouseleave=()=>{if(isRem){tr.style.background='#FDFAF5';tr.style.opacity='0.78';}else tr.style.background='';};
 
     function td(cls){const c=document.createElement('td');if(cls)c.className=cls;return c;}
 
@@ -5526,7 +5543,14 @@ function renderList(){
     if(colVis.event!==false){
       const c=td();c.style.cssText='white-space:nowrap;';
       if(isRem){
-        c.innerHTML='<span style="font-size:12px">\u23F0</span> <span style="font-weight:700;color:#C9823A;font-size:11px;letter-spacing:.03em;">REMINDER</span>';
+        const parentEv = _getReminderParentEvent(r);
+        const parentEs = parentEv ? getEventStyle(parentEv) : {};
+        const parentIcon = parentEs.icon ? parentEs.icon+' ' : '';
+        const label = parentEv ? (parentIcon + parentEv) : '';
+        c.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;opacity:0.7;">'
+          + _reminderIconSvg(14)
+          + (label ? '<span style="font-size:11px;font-weight:500;color:#B8A695;letter-spacing:.02em;font-style:italic;">'+label.replace(/</g,'&lt;')+'</span>' : '')
+          + '</span>';
       } else {
         const wrap=document.createElement('div');
         wrap.style.cssText='display:flex;align-items:center;gap:6px;';
