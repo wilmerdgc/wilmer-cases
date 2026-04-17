@@ -326,7 +326,7 @@ tbody td { padding: 9px 12px; vertical-align: middle; font-size: 12px; }
 .week-empty-day { flex: 1; font-size: 10px; color: var(--ink-faint); text-align: center; padding: 22px 8px; font-style: italic; }
 .week-task { padding: 8px 10px 8px 44px; border-bottom: 1px solid var(--cream-dark); font-size: 12px; cursor: pointer; transition: background 0.12s; position: relative; }
 .week-task:hover { background: var(--cream); }
-.week-task::before { content: ''; position: absolute; left: 12px; top: 12px; width: 8px; height: 8px; border-radius: 50%; background: var(--sage); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--cream-dark); }
+.week-task::before { content: ''; position: absolute; left: 12px; top: 12px; width: 8px; height: 8px; border-radius: 50%; background: var(--dot-color, var(--sage)); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--cream-dark); }
 .week-task.task-kind::before { display: none; }
 .week-event { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .week-client { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
@@ -2988,9 +2988,11 @@ let currentView='list',weekOffset=0,monthOffset=0,editingId=null,currentTab='das
 let _allEventsSort={key:'date',dir:1}; // key=column key, dir=1 asc/-1 desc
 function allColumns(){return[...BUILTIN_COLUMNS,...customColumns.map(c=>({key:c.key,label:c.label,custom:true}))];}
 function uid(){return'r'+Date.now()+Math.random().toString(36).slice(2,6);}
+const _categoryColors={hearing:'#6A8C6E',callup:'#C9823A',stage:'#6B7FA3'};
 function getEventStyle(eventName){
   const m=eventTypeMeta[eventName]||{};
-  return{color:m.color||'',icon:m.icon||''};
+  const catColor=m.category?(_categoryColors[m.category]||''):'';
+  return{color:m.color||catColor||'',icon:m.icon||'',category:m.category||''};
 }
 function eventLabel(eventName){
   const{icon}=getEventStyle(eventName);
@@ -5984,6 +5986,11 @@ function renderWeek() {
       const isTask = isTaskKindEvent(r.event);
       const _isReminder=!!(r.notes&&r.notes.startsWith('⏰ REMINDER'));
       const t = document.createElement('div'); t.className = 'week-task' + (isTask?' task-kind':''); t.onclick = () => openEdit(r.id);
+      // Color the ::before dot based on event category/color
+      if(!isTask && !_isReminder){
+        const _es=getEventStyle(r.event||'');
+        if(_es.color) t.style.setProperty('--dot-color',_es.color);
+      }
       if(_isReminder){
         // Reminder: bell icon + client name + muted stripped text
         const reminderText=(r.notes||'').replace(/^⏰ REMINDER:\s*/,'');
