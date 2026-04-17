@@ -4429,15 +4429,54 @@ function renderEventTypeTags(){
   if(!el)return;
   el.innerHTML='';
   el.style.cssText='display:flex;flex-direction:column;gap:5px;margin-bottom:10px;';
+
+  // Category legend
+  const legend=document.createElement('div');
+  legend.style.cssText='display:flex;gap:14px;margin-bottom:8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);';
+  const cats=[{key:'hearing',label:'Hearings',color:'#6A8C6E'},{key:'callup',label:'Call-ups',color:'#C9823A'},{key:'stage',label:'Stages',color:'#6B7FA3'}];
+  cats.forEach(ct=>{
+    const s=document.createElement('span');
+    s.style.cssText=`display:inline-flex;align-items:center;gap:4px;`;
+    s.innerHTML=`<span style="width:8px;height:8px;border-radius:50%;background:${ct.color};display:inline-block;"></span>${ct.label}`;
+    legend.appendChild(s);
+  });
+  el.appendChild(legend);
+
+  // Group event types by category
+  const grouped={hearing:[],callup:[],stage:[],uncategorized:[]};
+  eventTypes.forEach((v,i)=>{
+    const m=eventTypeMeta[v]||{};
+    const cat=m.category||'uncategorized';
+    grouped[cat]=grouped[cat]||[];
+    grouped[cat].push({v,i,m});
+  });
+
+  const catOrder=[
+    {key:'hearing',label:'📅 Hearings',color:'#6A8C6E'},
+    {key:'callup',label:'⏰ Call-ups',color:'#C9823A'},
+    {key:'stage',label:'📌 Stages',color:'#6B7FA3'},
+    {key:'uncategorized',label:'Uncategorized',color:'#9E9186'}
+  ];
+
+  catOrder.forEach(cat=>{
+    const items=grouped[cat.key];
+    if(!items||!items.length)return;
+    const hdr=document.createElement('div');
+    hdr.style.cssText=`font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${cat.color};margin:10px 0 4px;padding-left:4px;`;
+    hdr.textContent=cat.label;
+    el.appendChild(hdr);
+    items.forEach(({v,i,m})=>{ _renderEventTypeRow(el,v,i,m); });
+  });
+
   if(!eventTypes.length){
     const emp=document.createElement('div');emp.style.cssText='font-size:12px;color:#C4BAB0;font-style:italic;padding:4px 0;';
     emp.textContent='No event types yet.';el.appendChild(emp);return;
   }
+}
 
+function _renderEventTypeRow(el,v,i,m){
   let _dragSrcIdx=null;
-
-  eventTypes.forEach((v,i)=>{
-    const m=eventTypeMeta[v]||{};
+  {
     const row=document.createElement('div');
     row.dataset.idx=i;
     row.draggable=true;
@@ -4560,9 +4599,21 @@ function renderEventTypeTags(){
     removeBtn.onmouseenter=()=>{removeBtn.style.color='#B85C5C';};removeBtn.onmouseleave=()=>{removeBtn.style.color='#C4BAB0';};
     removeBtn.onclick=()=>removeTag('eventtype',i);
 
-    row.appendChild(handle);row.appendChild(colorWrap);row.appendChild(iconIn);row.appendChild(nameWrap);row.appendChild(removeBtn);
+    // Category selector
+    const catSel=document.createElement('select');
+    catSel.title='Category';
+    catSel.style.cssText='font-size:10px;padding:3px 5px;border:1px solid #EDE8E0;border-radius:5px;background:#fff;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;flex-shrink:0;';
+    const catOpts=[{key:'',label:'—'},{key:'hearing',label:'Hearing'},{key:'callup',label:'Call-up'},{key:'stage',label:'Stage'}];
+    catOpts.forEach(o=>{
+      const opt=document.createElement('option');opt.value=o.key;opt.textContent=o.label;
+      if((m.category||'')===o.key) opt.selected=true;
+      catSel.appendChild(opt);
+    });
+    catSel.onchange=()=>{if(!eventTypeMeta[v])eventTypeMeta[v]={};eventTypeMeta[v].category=catSel.value;updateSettingsSaveBar();markUnsaved();renderEventTypeTags();};
+
+    row.appendChild(handle);row.appendChild(colorWrap);row.appendChild(iconIn);row.appendChild(nameWrap);row.appendChild(catSel);row.appendChild(removeBtn);
     el.appendChild(row);
-  });
+  }
 }
 function renderColVis(){const el=document.getElementById('col-vis-list');el.innerHTML='';allColumns().forEach(col=>{const vis=col.always?true:(colVis[col.key]!==false);const row=document.createElement('div');row.className='col-vis-row';let right=col.always?'<span style="font-size:11px;color:#9E9186">Always visible</span>':col.custom?`<div style="display:flex;align-items:center;gap:8px"><label class="toggle"><input type="checkbox"${vis?' checked':''} onchange="toggleCol('${col.key}',this.checked)"><span class="slider"></span></label><button class="btn-danger btn-sm" onclick="removeCustomColumn('${col.key}')">Remove</button></div>`:`<label class="toggle"><input type="checkbox"${vis?' checked':''} onchange="toggleCol('${col.key}',this.checked)"><span class="slider"></span></label>`;row.innerHTML=`<span style="font-size:13px">${col.label}${col.custom?'<span style="font-size:10px;color:#9E9186;margin-left:6px">custom</span>':''}</span>${right}`;el.appendChild(row);});}
 function toggleCol(key,val){colVis[key]=val;renderAll();updateSettingsSaveBar();}
