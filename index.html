@@ -10477,6 +10477,29 @@ function openCaseDetail(clid){
     const clientEmailI=document.createElement('input');clientEmailI.type='email';clientEmailI.value=(caseMeta[clid]||{}).clientEmail||'';clientEmailI.placeholder='client@email.com';clientEmailI.style.cssText='width:100%;font-size:13px;font-weight:500;color:#2C2620;border:none;outline:none;background:transparent;padding:0;font-family:inherit;';
     infoBody._clientEmailInput=clientEmailI;
     mkInfoCell(L1,'Client Email',(caseMeta[clid]||{}).clientEmail||'',()=>clientEmailI);
+    // Client Phone
+    const clPhoneI=mkText2((caseMeta[clid]||{}).clientPhone||'');clPhoneI.placeholder='Phone…';infoBody._clPhoneInput=clPhoneI;
+    mkInfoCell(L1,'Phone',(caseMeta[clid]||{}).clientPhone||'',()=>clPhoneI);
+
+    // ── Client Address ──
+    const addrSection=document.createElement('div');addrSection.style.cssText='grid-column:1/-1;';
+    const addrLabel=document.createElement('div');addrLabel.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#C4BAB0;margin:8px 0 8px;';addrLabel.textContent='Client Address';addrSection.appendChild(addrLabel);
+    const addrGrid=document.createElement('div');addrGrid.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;';
+    const _clAddr=caseMeta[clid]||{};
+    const clStreetI=mkText2(_clAddr.clientStreet||'');clStreetI.placeholder='Street…';infoBody._clStreetInput=clStreetI;
+    mkInfoCell(addrGrid,'Street',_clAddr.clientStreet||'',()=>clStreetI);
+    const clAptI=mkText2(_clAddr.clientApt||'');clAptI.placeholder='Apt/Ste/Flr…';infoBody._clAptInput=clAptI;
+    mkInfoCell(addrGrid,'Apt / Ste / Flr',_clAddr.clientApt||'',()=>clAptI);
+    const clCityI=mkText2(_clAddr.clientCity||'');clCityI.placeholder='City…';infoBody._clCityInput=clCityI;
+    mkInfoCell(addrGrid,'City',_clAddr.clientCity||'',()=>clCityI);
+    const clStateI=mkText2(_clAddr.clientState||'');clStateI.placeholder='State…';infoBody._clStateInput=clStateI;
+    mkInfoCell(addrGrid,'State',_clAddr.clientState||'',()=>clStateI);
+    const clZipI=mkText2(_clAddr.clientZip||'');clZipI.placeholder='ZIP…';infoBody._clZipInput=clZipI;
+    mkInfoCell(addrGrid,'ZIP Code',_clAddr.clientZip||'',()=>clZipI);
+    const clCountryI=mkText2(_clAddr.clientCountry||'');clCountryI.placeholder='Country…';infoBody._clCountryInput=clCountryI;
+    mkInfoCell(addrGrid,'Country',_clAddr.clientCountry||'',()=>clCountryI);
+    addrSection.appendChild(addrGrid);L1.appendChild(addrSection);
+
     // Consolidated
     if(isEditing){
       const consItem=document.createElement('div');consItem.className='case-info-item';consItem.style.cssText='background:#fff;border:1px solid #DDD5CA;';
@@ -10643,6 +10666,13 @@ function openCaseDetail(clid){
     if(infoBody._clLastInput)caseMeta[clid].clientLastName=infoBody._clLastInput.value.trim();
     if(infoBody._clFirstInput)caseMeta[clid].clientFirstName=infoBody._clFirstInput.value.trim();
     if(infoBody._clMiddleInput)caseMeta[clid].clientMiddleName=infoBody._clMiddleInput.value.trim();
+    if(infoBody._clPhoneInput)caseMeta[clid].clientPhone=infoBody._clPhoneInput.value.trim();
+    if(infoBody._clStreetInput)caseMeta[clid].clientStreet=infoBody._clStreetInput.value.trim();
+    if(infoBody._clAptInput)caseMeta[clid].clientApt=infoBody._clAptInput.value.trim();
+    if(infoBody._clCityInput)caseMeta[clid].clientCity=infoBody._clCityInput.value.trim();
+    if(infoBody._clStateInput)caseMeta[clid].clientState=infoBody._clStateInput.value.trim();
+    if(infoBody._clZipInput)caseMeta[clid].clientZip=infoBody._clZipInput.value.trim();
+    if(infoBody._clCountryInput)caseMeta[clid].clientCountry=infoBody._clCountryInput.value.trim();
     if(infoBody._typeInputShared){const nv=infoBody._typeInputShared.value;allRecs.forEach(r=>r.type=nv);base.type=nv;}
     if(infoBody._paraInputShared){const nv=infoBody._paraInputShared.value;allRecs.forEach(r=>r.atty=nv);base.atty=nv;}
     clients.forEach(cl=>{
