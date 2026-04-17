@@ -9651,6 +9651,22 @@ function _g28Clients(){
 let _g28BlobUrl=null; // current PDF blob URL for cleanup
 let _g28TemplateBytes=null; // cached template bytes
 
+// Auto-load the bundled G-28 template if not already in localStorage
+(function _autoLoadG28Template(){
+  if(localStorage.getItem('g28-template')) return; // already loaded
+  fetch('g-28-template.pdf').then(r=>{
+    if(!r.ok) return;
+    return r.blob();
+  }).then(blob=>{
+    if(!blob) return;
+    const reader=new FileReader();
+    reader.onload=function(e){
+      try{ localStorage.setItem('g28-template',e.target.result); }catch(err){}
+    };
+    reader.readAsDataURL(blob);
+  }).catch(()=>{});
+})();
+
 function renderG28Form(selectedClid){
   const el=document.getElementById('tools-content');
   if(!el)return;
@@ -9669,7 +9685,7 @@ function renderG28Form(selectedClid){
   const todayFmt=new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'});
 
   const optionsHtml=clients.map(cl=>`<option value="${cl.clid}"${cl.clid===selectedClid?' selected':''}>${cl.client||cl.clid}${cl.anum?' — A# '+cl.anum:''}</option>`).join('');
-  const hasTemplate=!!localStorage.getItem('g28-template');
+  const hasTemplate=!!localStorage.getItem('g28-template')||true; // bundled template always available
 
   const labelS='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;display:block;margin-bottom:3px;';
   const inputS='width:100%;box-sizing:border-box;font-size:12px;padding:5px 8px;border:1px solid #EBE5DC;border-radius:4px;font-family:inherit;background:#FAFAF8;outline:none;';
@@ -9736,10 +9752,7 @@ function renderG28Form(selectedClid){
 
       <!-- Bottom buttons -->
       <div style="padding:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px;">
-        <button onclick="_g28SyncToPdf('${selectedClid||''}')" style="width:100%;font-size:12px;font-weight:600;padding:8px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">↻ Sync to PDF</button>
-        <button onclick="_g28DownloadPdf('${selectedClid||''}')" style="width:100%;font-size:12px;font-weight:600;padding:8px;border:none;border-radius:var(--radius-sm);background:var(--ink);color:var(--cream);cursor:pointer;font-family:inherit;">⬇ Download Filled PDF</button>
-        <input type="file" id="g28-template-upload" accept="application/pdf,.pdf" style="display:none" onchange="_g28UploadTemplate(this)"/>
-        <button onclick="document.getElementById('g28-template-upload').click()" style="width:100%;font-size:11px;padding:6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">${hasTemplate?'✓ Template loaded — Replace':'⬆ Upload G-28 PDF Template'}</button>
+        <button onclick="window.print()" style="width:100%;font-size:12px;font-weight:600;padding:8px;border:none;border-radius:var(--radius-sm);background:var(--ink);color:var(--cream);cursor:pointer;font-family:inherit;">🖨 Print</button>
       </div>
     </div>
 
@@ -9748,14 +9761,7 @@ function renderG28Form(selectedClid){
 
     <!-- RIGHT: PDF VIEWER -->
     <div id="g28-pdf-panel" style="flex:1;overflow:hidden;background:#e8e8e8;display:flex;align-items:center;justify-content:center;">
-      ${hasTemplate
-        ?`<iframe id="g28-pdf-iframe" style="width:100%;height:100%;border:none;"></iframe>`
-        :`<div style="text-align:center;color:var(--ink-muted);padding:40px;">
-            <div style="font-size:40px;margin-bottom:12px;">📄</div>
-            <div style="font-size:14px;font-weight:600;margin-bottom:8px;">No G-28 template loaded</div>
-            <div style="font-size:12px;margin-bottom:16px;">Upload the blank G-28 PDF using the button on the left sidebar.</div>
-            <button onclick="document.getElementById('g28-template-upload').click()" style="font-size:12px;font-weight:600;padding:8px 20px;border:none;border-radius:var(--radius-sm);background:var(--ink);color:var(--cream);cursor:pointer;font-family:inherit;">⬆ Upload G-28 PDF</button>
-          </div>`}
+      <iframe id="g28-pdf-iframe" src="g-28-template.pdf" style="width:100%;height:100%;border:none;"></iframe>
     </div>
   </div>`;
 
