@@ -327,11 +327,11 @@ tbody td { padding: 9px 12px; vertical-align: middle; font-size: 12px; }
 .week-task { padding: 8px 10px 8px 44px; border-bottom: 1px solid var(--cream-dark); font-size: 12px; cursor: pointer; transition: background 0.12s; position: relative; }
 .week-task:hover { background: var(--cream); }
 .week-task::before { content: ''; position: absolute; left: 12px; top: 12px; width: 8px; height: 8px; border-radius: 50%; background: var(--sage); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--cream-dark); }
-.week-task.task-kind::before { background: #C4BAB0; width: 5px; height: 5px; left: 14px; top: 14px; box-shadow: none; }
+.week-task.task-kind::before { display: none; }
 .week-event { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .week-client { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
 .week-clid { font-size: 10px; color: var(--ink-faint); margin-top: 1px; }
-.week-task.task-kind { padding: 4px 10px 4px 28px; font-size: 11px; background: transparent; }
+.week-task.task-kind { padding: 4px 10px 4px 28px; font-size: 11px; background: transparent; position: relative; }
 .week-task.task-kind::before { left: 14px; top: 9px; }
 .week-task.task-kind .week-event { font-weight: 500; color: var(--ink-muted); font-size: 11px; }
 .week-task.task-kind .week-client { font-size: 10px; margin-top: 1px; }
@@ -6001,7 +6001,13 @@ function renderWeek() {
           cdHtml=`<div style="font-size:9px;font-weight:700;color:${cdColor};background:${cdColor}18;padding:1px 5px;border-radius:4px;display:inline-block;margin-top:2px;">${cdText}</div>`;
         }
         if(isTask){
-          t.innerHTML = `<div class="week-event"${evColor?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div>${r.notes ? `<div class="wk-notes" style="color:var(--ink-faint);margin-top:1px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
+          t.innerHTML = `<span class="task-check" data-rid="${r.id}" title="Double-click to mark complete" style="position:absolute;left:4px;top:6px;width:14px;height:14px;border:2px solid #C4BAB0;border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;transition:all .12s;background:#fff;">&check;</span><div class="week-event"${evColor?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div>${r.notes ? `<div class="wk-notes" style="color:var(--ink-faint);margin-top:1px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
+          const chk=t.querySelector('.task-check');
+          if(chk){
+            chk.onmouseenter=()=>{chk.style.borderColor='#6A8C6E';chk.style.color='#6A8C6E';};
+            chk.onmouseleave=()=>{chk.style.borderColor='#C4BAB0';chk.style.color='transparent';};
+            chk.ondblclick=(e)=>{e.stopPropagation();const rec=records.find(x=>x.id===r.id);if(!rec)return;rec.finishedStatus='completed';const hist=rec.history||(rec.history=[]);hist.push({type:'completed',date:todayStr(),note:'Marked done from week view'});_invalidateCasesCache();markUnsaved();showToast('✓ Task completed');renderWeek();};
+          }
         } else {
           t.innerHTML = `<div class="week-event"${evColor?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div><div class="week-clid">#${r.clid || '—'}</div>${cdHtml}${r.notes ? `<div class="wk-notes" style="font-size:10px;color:var(--ink-faint);margin-top:2px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
         }
@@ -7269,6 +7275,19 @@ function renderDeadlines(){
     leftPanel.appendChild(countdownNum);
     if(!isDone&&diffDays!==null) leftPanel.appendChild(countdownLabel);
     leftPanel.appendChild(typeChip);
+
+    // Checkbox for task-kind events (double-click to complete)
+    const _isTaskCard=isTaskKindEvent(r.event);
+    if(_isTaskCard && !isDone){
+      const chkBox=document.createElement('div');
+      chkBox.title='Double-click to mark complete';
+      chkBox.style.cssText='width:18px;height:18px;border:2px solid #C4BAB0;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:transparent;transition:all .12s;background:#fff;margin-top:6px;';
+      chkBox.textContent='✓';
+      chkBox.onmouseenter=()=>{chkBox.style.borderColor='#6A8C6E';chkBox.style.color='#6A8C6E';};
+      chkBox.onmouseleave=()=>{chkBox.style.borderColor='#C4BAB0';chkBox.style.color='transparent';};
+      chkBox.ondblclick=(e)=>{e.stopPropagation();const rec=records.find(x=>x.id===r.id);if(!rec)return;rec.finishedStatus='completed';const hist=rec.history||(rec.history=[]);hist.push({type:'completed',date:todayStr(),note:'Marked done from card view'});_invalidateCasesCache();markUnsaved();showToast('✓ Task completed');renderAll();};
+      leftPanel.appendChild(chkBox);
+    }
 
     // Right: content
     const right = document.createElement('div');
