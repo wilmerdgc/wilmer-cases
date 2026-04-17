@@ -7204,8 +7204,9 @@ function renderDeadlines(){
     }
 
     const typeChip = document.createElement('div');
-    typeChip.style.cssText=`font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${panelColor};margin-top:6px;padding:2px 6px;border-radius:5px;background:${panelColor}18;text-align:center;white-space:nowrap;`;
-    typeChip.textContent = m.short||m.label;
+    const _isReminderCard=!!(r.notes&&r.notes.startsWith('⏰ REMINDER'));
+    typeChip.style.cssText=`font-size:${_isReminderCard?'16':'9'}px;font-weight:700;${_isReminderCard?'':'text-transform:uppercase;letter-spacing:.06em;'}color:${panelColor};margin-top:6px;padding:2px 6px;border-radius:5px;background:${panelColor}18;text-align:center;white-space:nowrap;`;
+    typeChip.textContent = _isReminderCard?'🔔':(m.short||m.label);
 
     leftPanel.appendChild(countdownNum);
     if(!isDone&&diffDays!==null) leftPanel.appendChild(countdownLabel);
@@ -7221,7 +7222,7 @@ function renderDeadlines(){
 
     const clientEl = document.createElement('span');
     clientEl.style.cssText=`font-size:13px;font-weight:700;font-family:'Lora',Georgia,serif;color:${isDone?'#C4BAB0':'#2C2620'};${isDone?'text-decoration:line-through;':''}white-space:nowrap;overflow:hidden;text-overflow:ellipsis;`;
-    clientEl.textContent = r.client+(r.clid?' #'+r.clid:'');
+    clientEl.textContent = _isReminderCard ? ('🔔 '+r.client) : (r.client+(r.clid?' #'+r.clid:''));
 
     const dateEl = document.createElement('span');
     dateEl.style.cssText=`font-size:11px;font-weight:600;color:${panelColor};white-space:nowrap;flex-shrink:0;`;
@@ -7229,10 +7230,17 @@ function renderDeadlines(){
 
     row1.appendChild(clientEl); row1.appendChild(dateEl);
 
-    // Row 2: notes
+    // Row 2: notes (reminders get special treatment)
     const notesEl = document.createElement('div');
-    notesEl.style.cssText=`font-size:12px;color:${isDone?'#C4BAB0':'#5C5148'};line-height:1.4;${!r.notes?'opacity:.4;font-style:italic;':''}`;
-    notesEl.textContent=r.notes||'No notes';
+    if(_isReminderCard){
+      // Parse the reminder text: "⏰ REMINDER: Task due by May 15, 2026 — SO issued on..."
+      const reminderText=(r.notes||'').replace(/^⏰ REMINDER:\s*/,'');
+      notesEl.style.cssText=`font-size:11px;color:${isDone?'#C4BAB0':'#9E9186'};line-height:1.5;font-style:italic;`;
+      notesEl.textContent=reminderText;
+    } else {
+      notesEl.style.cssText=`font-size:12px;color:${isDone?'#C4BAB0':'#5C5148'};line-height:1.4;${!r.notes?'opacity:.4;font-style:italic;':''}`;
+      notesEl.textContent=r.notes||'No notes';
+    }
 
     // Row 3: meta pills
     const meta = document.createElement('div');
