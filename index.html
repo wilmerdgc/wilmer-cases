@@ -10418,21 +10418,28 @@ function openCaseDetail(clid){
   function openAddClient(idx){
     if(_respEditor2){_respEditor2.remove();_respEditor2=null;}
     const isNew3=idx===-1;
-    const rd=isNew3?{name:'',anum:'',relationship:''}:{...caseMeta[clid].respondents[idx]};
+    const rd=isNew3?{name:'',lastName:'',firstName:'',middleName:'',anum:'',relationship:''}:{...caseMeta[clid].respondents[idx]};
     const ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;background:rgba(44,38,32,0.35);z-index:9500;display:flex;align-items:center;justify-content:center;';_respEditor2=ov;
-    const bx=document.createElement('div');bx.style.cssText='background:#fff;border:1px solid #DDD5CA;border-radius:14px;padding:24px 22px;width:320px;box-shadow:0 12px 40px rgba(44,38,32,0.18);';
+    const bx=document.createElement('div');bx.style.cssText='background:#fff;border:1px solid #DDD5CA;border-radius:14px;padding:24px 22px;width:380px;box-shadow:0 12px 40px rgba(44,38,32,0.18);';
     const tt=document.createElement('div');tt.style.cssText="font-family:'Lora',Georgia,serif;font-size:15px;font-weight:600;color:#2C2620;margin-bottom:16px;";tt.textContent=isNew3?'Add Client':'Edit Client';bx.appendChild(tt);
+    const _inpS='width:100%;font-size:13px;padding:7px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;';
     function ff(lb,ii){const w=document.createElement('div');w.style.cssText='margin-bottom:12px;';const l=document.createElement('label');l.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;display:block;margin-bottom:4px;';l.textContent=lb;w.appendChild(l);w.appendChild(ii);bx.appendChild(w);}
-    const nI=document.createElement('input');nI.type='text';nI.value=rd.name;nI.style.cssText='width:100%;font-size:13px;padding:7px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;';nI.onfocus=()=>nI.style.borderColor='#6A8C6E';nI.onblur=()=>nI.style.borderColor='#DDD5CA';ff('Full name *',nI);
-    const aI=document.createElement('input');aI.type='text';aI.value=rd.anum;aI.placeholder='e.g. 246-123-456';aI.style.cssText='width:100%;font-size:13px;padding:7px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;';aI.onfocus=()=>aI.style.borderColor='#6A8C6E';aI.onblur=()=>aI.style.borderColor='#DDD5CA';ff('A-Number',aI);
-    const rS=document.createElement('select');rS.style.cssText='width:100%;font-size:13px;padding:7px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;background:#fff;cursor:pointer;';
+    function ff2(lb,ii){const w=document.createElement('div');const l=document.createElement('label');l.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;display:block;margin-bottom:4px;';l.textContent=lb;w.appendChild(l);w.appendChild(ii);return w;}
+    // Name fields row
+    const nameRow=document.createElement('div');nameRow.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;';
+    const lnI=document.createElement('input');lnI.type='text';lnI.value=rd.lastName||(rd.name||'').split(/\s+/).slice(-1)[0]||'';lnI.placeholder='Last name…';lnI.style.cssText=_inpS;lnI.onfocus=()=>lnI.style.borderColor='#6A8C6E';lnI.onblur=()=>lnI.style.borderColor='#DDD5CA';
+    const fnI=document.createElement('input');fnI.type='text';fnI.value=rd.firstName||(rd.name||'').split(/\s+/).slice(0,-1).join(' ')||'';fnI.placeholder='First name…';fnI.style.cssText=_inpS;fnI.onfocus=()=>fnI.style.borderColor='#6A8C6E';fnI.onblur=()=>fnI.style.borderColor='#DDD5CA';
+    nameRow.appendChild(ff2('Family Name (Last) *',lnI));nameRow.appendChild(ff2('Given Name (First) *',fnI));bx.appendChild(nameRow);
+    const mnI=document.createElement('input');mnI.type='text';mnI.value=rd.middleName||'';mnI.placeholder='Middle name (optional)…';mnI.style.cssText=_inpS;mnI.onfocus=()=>mnI.style.borderColor='#6A8C6E';mnI.onblur=()=>mnI.style.borderColor='#DDD5CA';ff('Middle Name',mnI);
+    const aI=document.createElement('input');aI.type='text';aI.value=rd.anum||'';aI.placeholder='e.g. 246-123-456';aI.style.cssText=_inpS;aI.onfocus=()=>aI.style.borderColor='#6A8C6E';aI.onblur=()=>aI.style.borderColor='#DDD5CA';ff('A-Number',aI);
+    const rS=document.createElement('select');rS.style.cssText=_inpS+'background:#fff;cursor:pointer;';
     const rd2=document.createElement('option');rd2.value='';rd2.textContent='— Select —';rS.appendChild(rd2);
     ['Spouse','Child','Parent','Sibling','Grandparent','Partner','Derivative','Other'].forEach(o=>{const op=document.createElement('option');op.value=o;op.textContent=o;if(o===rd.relationship)op.selected=true;rS.appendChild(op);});ff('Relationship',rS);
     const ad=document.createElement('div');ad.style.cssText='display:flex;justify-content:flex-end;gap:8px;margin-top:8px;';
     const cb4=document.createElement('button');cb4.textContent='Cancel';cb4.style.cssText='font-size:12px;padding:7px 16px;border:1px solid #DDD5CA;border-radius:8px;background:#F7F3ED;color:#5C5148;cursor:pointer;font-family:inherit;';cb4.onclick=()=>{ov.remove();_respEditor2=null;};
     const sb4=document.createElement('button');sb4.textContent=isNew3?'Add':'Save';sb4.style.cssText='font-size:12px;font-weight:600;padding:7px 18px;border:none;border-radius:8px;background:#2C2620;color:#F7F3ED;cursor:pointer;font-family:inherit;';
-    sb4.onclick=()=>{const nm=nI.value.trim();if(!nm){nI.style.borderColor='#B85C5C';nI.focus();return;}const d={name:nm,anum:aI.value.trim(),relationship:rS.value,isLead:false};if(isNew3)caseMeta[clid].respondents.push(d);else caseMeta[clid].respondents[idx]=d;markUnsaved();ov.remove();_respEditor2=null;renderAll2();};
-    ad.appendChild(cb4);ad.appendChild(sb4);bx.appendChild(ad);ov.ondblclick=(e)=>{if(e.target===ov){ov.remove();_respEditor2=null;}};ov.appendChild(bx);document.body.appendChild(ov);setTimeout(()=>nI.focus(),30);
+    sb4.onclick=()=>{const ln=lnI.value.trim();const fn=fnI.value.trim();if(!ln){lnI.style.borderColor='#B85C5C';lnI.focus();return;}if(!fn){fnI.style.borderColor='#B85C5C';fnI.focus();return;}const nm=[fn,mnI.value.trim(),ln].filter(Boolean).join(' ');const d={name:nm,lastName:ln,firstName:fn,middleName:mnI.value.trim(),anum:aI.value.trim(),relationship:rS.value,isLead:rd.isLead||false};if(isNew3)caseMeta[clid].respondents.push(d);else{d.isLead=caseMeta[clid].respondents[idx].isLead;Object.assign(caseMeta[clid].respondents[idx],d);}markUnsaved();ov.remove();_respEditor2=null;renderAll2();};
+    ad.appendChild(cb4);ad.appendChild(sb4);bx.appendChild(ad);ov.ondblclick=(e)=>{if(e.target===ov){ov.remove();_respEditor2=null;}};ov.appendChild(bx);document.body.appendChild(ov);setTimeout(()=>lnI.focus(),30);
   }
 
   // ── Main render ──
