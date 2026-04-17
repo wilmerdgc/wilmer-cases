@@ -2105,9 +2105,19 @@ function hideExcelRestorePrompt(){}
       <!-- Identity card -->
       <div style="background:#FDFAF7;border:1px solid #EDE8E0;border-radius:14px;padding:20px 22px;margin-bottom:16px;">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;margin-bottom:14px;">Client Identity</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px;">
+          <div>
+            <label class="nc-label">Family Name (Last Name) <span style="color:#B85C5C">*</span></label>
+            <input id="ncp-lastName" type="text" placeholder="Last name…" class="nc-input" oninput="this.style.borderColor='#DDD5CA'"/>
+          </div>
+          <div>
+            <label class="nc-label">Given Name (First Name) <span style="color:#B85C5C">*</span></label>
+            <input id="ncp-firstName" type="text" placeholder="First name…" class="nc-input" oninput="this.style.borderColor='#DDD5CA'"/>
+          </div>
+        </div>
         <div style="margin-bottom:13px;">
-          <label class="nc-label">Client Name <span style="color:#B85C5C">*</span></label>
-          <input id="ncp-client" type="text" placeholder="Full legal name…" class="nc-input" oninput="this.style.borderColor='#DDD5CA'"/>
+          <label class="nc-label">Middle Name</label>
+          <input id="ncp-middleName" type="text" placeholder="Middle name (optional)…" class="nc-input"/>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px;">
           <div>
@@ -12831,7 +12841,7 @@ function openAddCasePage(){
   paralegals.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;asgEl.appendChild(o);});
 
   // Clear fields
-  ['ncp-client','ncp-clid','ncp-anum','ncp-notes'].forEach(id=>document.getElementById(id).value='');
+  ['ncp-lastName','ncp-firstName','ncp-middleName','ncp-clid','ncp-anum','ncp-notes'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   typeEl.value='';attyEl.value='';asgEl.value='';
 
   // Custom columns
@@ -12857,7 +12867,7 @@ function openAddCasePage(){
     customCard.style.display='none';
   }
 
-  setTimeout(()=>document.getElementById('ncp-client').focus(),50);
+  setTimeout(()=>{const el=document.getElementById('ncp-lastName');if(el)el.focus();},50);
 }
 
 function closeAddCasePage(){
@@ -12870,11 +12880,19 @@ function closeAddCasePage(){
 }
 
 function saveAddCasePage(){
-  const client=document.getElementById('ncp-client').value.trim();
+  const lastName=document.getElementById('ncp-lastName').value.trim();
+  const firstName=document.getElementById('ncp-firstName').value.trim();
+  const middleName=(document.getElementById('ncp-middleName')||{value:''}).value.trim();
+  const client=[firstName,middleName,lastName].filter(Boolean).join(' ');
   const type=document.getElementById('ncp-type').value;
 
-  if(!client){
-    const el=document.getElementById('ncp-client');
+  if(!lastName){
+    const el=document.getElementById('ncp-lastName');
+    el.style.borderColor='#B85C5C';el.focus();
+    return;
+  }
+  if(!firstName){
+    const el=document.getElementById('ncp-firstName');
     el.style.borderColor='#B85C5C';el.focus();
     return;
   }
@@ -12907,6 +12925,12 @@ function saveAddCasePage(){
 
   records.push(rec);
 
+  // Save structured name to caseMeta
+  if(!caseMeta[caseId]) caseMeta[caseId]={};
+  caseMeta[caseId].clientLastName=lastName;
+  caseMeta[caseId].clientFirstName=firstName;
+  if(middleName) caseMeta[caseId].clientMiddleName=middleName;
+
   if(type&&!caseTypes.includes(type)) caseTypes.push(type);
   if(atty&&!paralegals.includes(atty)) paralegals.push(atty);
 
@@ -12930,11 +12954,11 @@ function openNewCaseModal(){
   paralegals.forEach(p => { const o = document.createElement('option'); o.value=p; o.textContent=p; attyEl.appendChild(o); });
 
   // Clear fields
-  ['nc-client','nc-clid','nc-anum','nc-notes'].forEach(id => document.getElementById(id).value = '');
+  ['nc-lastName','nc-firstName','nc-middleName','nc-clid','nc-anum','nc-notes'].forEach(id => {const e=document.getElementById(id);if(e)e.value='';});
   typeEl.value = ''; attyEl.value = '';
 
   document.getElementById('new-case-modal').style.display = 'flex';
-  setTimeout(() => document.getElementById('nc-client').focus(), 50);
+  setTimeout(() => {const el=document.getElementById('nc-lastName');if(el)el.focus();}, 50);
 }
 
 function closeNewCaseModal(){
@@ -12942,11 +12966,19 @@ function closeNewCaseModal(){
 }
 
 function saveNewCase(){
-  const client = document.getElementById('nc-client').value.trim();
+  const lastName = document.getElementById('nc-lastName').value.trim();
+  const firstName = document.getElementById('nc-firstName').value.trim();
+  const middleName = (document.getElementById('nc-middleName')||{value:''}).value.trim();
+  const client = [firstName, middleName, lastName].filter(Boolean).join(' ');
   const type   = document.getElementById('nc-type').value;
-  if(!client){
-    document.getElementById('nc-client').style.borderColor = '#B85C5C';
-    document.getElementById('nc-client').focus();
+  if(!lastName){
+    document.getElementById('nc-lastName').style.borderColor = '#B85C5C';
+    document.getElementById('nc-lastName').focus();
+    return;
+  }
+  if(!firstName){
+    document.getElementById('nc-firstName').style.borderColor = '#B85C5C';
+    document.getElementById('nc-firstName').focus();
     return;
   }
   if(!type){
@@ -12969,6 +13001,13 @@ function saveNewCase(){
     history: [{ type:'note', date: new Date().toLocaleDateString(), note: 'Case created' }]
   };
   records.push(rec);
+
+  // Save structured name to caseMeta
+  const _cid=clid||id;
+  if(!caseMeta[_cid]) caseMeta[_cid]={};
+  caseMeta[_cid].clientLastName=lastName;
+  caseMeta[_cid].clientFirstName=firstName;
+  if(middleName) caseMeta[_cid].clientMiddleName=middleName;
 
   // Add new case type / paralegal if not already in lists
   if(type && !caseTypes.includes(type)) caseTypes.push(type);
@@ -13325,9 +13364,19 @@ if(csEl) csEl.addEventListener('input',_debouncedRenderCases);
     </div>
 
     <!-- Client name -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Family Name (Last) <span style="color:#B85C5C">*</span></label>
+        <input id="nc-lastName" type="text" placeholder="Last name…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="this.style.borderColor='#DDD5CA'"/>
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Given Name (First) <span style="color:#B85C5C">*</span></label>
+        <input id="nc-firstName" type="text" placeholder="First name…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="this.style.borderColor='#DDD5CA'"/>
+      </div>
+    </div>
     <div style="margin-bottom:14px;">
-      <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Client Name <span style="color:#B85C5C">*</span></label>
-      <input id="nc-client" type="text" placeholder="Full name…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="document.getElementById('nc-client').style.borderColor='#DDD5CA'"/>
+      <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Middle Name</label>
+      <input id="nc-middleName" type="text" placeholder="Middle name (optional)…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
     </div>
 
     <!-- Two columns: Client ID + A-number -->
