@@ -4579,11 +4579,11 @@ function _renderEventTypeRow(el,v,i,m){
     iconIn.oninput=()=>{if(!eventTypeMeta[v])eventTypeMeta[v]={};eventTypeMeta[v].icon=iconIn.value.trim();updateSettingsSaveBar();markUnsaved();renderAll();};
 
     // Preview badge / editable name
-    const nameWrap=document.createElement('div');nameWrap.style.cssText='flex:1;min-width:0;';
+    const nameWrap=document.createElement('div');nameWrap.style.cssText='flex:1;min-width:80px;overflow:hidden;';
     const previewColor=m.color||'#9E9186';
     const preview=document.createElement('span');
-    preview.style.cssText=`display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:${previewColor};padding:3px 11px;border-radius:20px;background:${previewColor}1A;border:1px solid ${previewColor}33;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;`;
-    preview.title='Click to rename';preview.textContent=(m.icon?m.icon+' ':'')+v;
+    preview.style.cssText=`display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:${previewColor};padding:3px 11px;border-radius:20px;background:${previewColor}1A;border:1px solid ${previewColor}33;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;`;
+    preview.title='Click to rename — '+v;preview.textContent=(m.icon?m.icon+' ':'')+v;
     preview.onclick=()=>{
       const inp=document.createElement('input');inp.value=v;
       inp.style.cssText='font-size:12px;font-weight:600;border:1px solid #6A8C6E;border-radius:6px;padding:3px 9px;outline:none;width:180px;';
@@ -4602,7 +4602,7 @@ function _renderEventTypeRow(el,v,i,m){
     // Category selector
     const catSel=document.createElement('select');
     catSel.title='Category';
-    catSel.style.cssText='font-size:10px;padding:3px 5px;border:1px solid #EDE8E0;border-radius:5px;background:#fff;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;flex-shrink:0;';
+    catSel.style.cssText='font-size:10px;padding:3px 5px;border:1px solid #EDE8E0;border-radius:5px;background:#fff;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;flex-shrink:0;width:80px;';
     const catOpts=[{key:'',label:'—'},{key:'hearing',label:'Hearing'},{key:'callup',label:'Call-up'},{key:'stage',label:'Stage'}];
     catOpts.forEach(o=>{
       const opt=document.createElement('option');opt.value=o.key;opt.textContent=o.label;
