@@ -13165,6 +13165,23 @@ function forcePullFromCloud(){
 }
 
 const loaded=loadSavedData();
+// One-time migration: for each case with a client string but no clientFirstName in caseMeta,
+// copy the client value into clientFirstName so the name parts are populated.
+(function _migrateClientNames(){
+  if(localStorage.getItem('migration_clientFirstName_v1')==='done')return;
+  const seen={};
+  records.forEach(r=>{
+    const cid=r.clid||r.client;
+    if(!cid||seen[cid])return;seen[cid]=true;
+    if(!caseMeta[cid])caseMeta[cid]={};
+    const meta=caseMeta[cid];
+    if(!meta.clientFirstName && !meta.clientLastName && r.client){
+      meta.clientFirstName=r.client.trim();
+    }
+  });
+  try{localStorage.setItem('migration_clientFirstName_v1','done');}catch(e){}
+  markUnsaved();
+})();
 // Always re-apply SIJ workflow so changes are reflected regardless of localStorage
 (function(){
   const K='Special Juvenile in Court';
