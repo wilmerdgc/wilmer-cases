@@ -6000,6 +6000,16 @@ function renderWeek() {
       if(!isTask && !_isReminder){
         const _es=getEventStyle(r.event||'');
         if(_es.color) t.style.setProperty('--dot-color',_es.color);
+        // Tint the background for hearings so they stand out in the week view
+        if(_es.category==='hearing' && _es.color){
+          t.style.background=_es.color+'18';
+          t.style.borderLeft='3px solid '+_es.color;
+        }else if(_es.category==='callup' && _es.color){
+          t.style.background=_es.color+'10';
+          t.style.borderLeft='3px solid '+_es.color;
+        }else if(_es.category==='stage' && _es.color){
+          t.style.borderLeft='3px solid '+_es.color;
+        }
       }
       if(_isReminder){
         // Reminder: bell icon + client name + muted stripped text
