@@ -10316,7 +10316,7 @@ function openCaseDetail(clid){
   const allRecs=records.filter(r=>(r.clid||r.client)===clid);
   if(!allRecs.length)return;
   const base=allRecs.reduce((best,r)=>{const s=(r.client?1:0)+(r.anum?1:0)+(r.atty?1:0)+(r.type?1:0);const bs=(best.client?1:0)+(best.anum?1:0)+(best.atty?1:0)+(best.type?1:0);return s>bs?r:best;},allRecs[0]);
-  document.getElementById('case-detail-title').textContent=base.client||clid;
+  document.getElementById('case-detail-title').textContent=base.client||[(caseMeta[clid]||{}).clientFirstName,(caseMeta[clid]||{}).clientMiddleName,(caseMeta[clid]||{}).clientLastName].filter(Boolean).join(' ')||clid;
   const active=allRecs.filter(r=>!r.deletedStatus&&!r.finishedStatus);
   const finished=allRecs.filter(r=>r.finishedStatus&&!r.deletedStatus);
   const deleted=allRecs.filter(r=>r.deletedStatus);
@@ -10672,6 +10672,9 @@ function openCaseDetail(clid){
     if(infoBody._clLastInput)caseMeta[clid].clientLastName=infoBody._clLastInput.value.trim();
     if(infoBody._clFirstInput)caseMeta[clid].clientFirstName=infoBody._clFirstInput.value.trim();
     if(infoBody._clMiddleInput)caseMeta[clid].clientMiddleName=infoBody._clMiddleInput.value.trim();
+    // Rebuild display name from structured fields and sync to all records
+    const _builtName=[caseMeta[clid].clientFirstName,caseMeta[clid].clientMiddleName,caseMeta[clid].clientLastName].filter(Boolean).join(' ');
+    if(_builtName){allRecs.forEach(r=>r.client=_builtName);base.client=_builtName;}
     if(infoBody._clPhoneInput)caseMeta[clid].clientPhone=infoBody._clPhoneInput.value.trim();
     if(infoBody._clStreetInput)caseMeta[clid].clientStreet=infoBody._clStreetInput.value.trim();
     if(infoBody._clAptInput)caseMeta[clid].clientApt=infoBody._clAptInput.value.trim();
@@ -10688,7 +10691,7 @@ function openCaseDetail(clid){
       if(cl._paraInput){const nv=cl._paraInput.value;if(cl._isBase){allRecs.forEach(r=>r.atty=nv);base.atty=nv;}else if(cl.idx>=0)caseMeta[clid].respondents[cl.idx].atty=nv;}
     });
     markUnsaved();
-    document.getElementById('case-detail-title').textContent=base.client||clid;
+    document.getElementById('case-detail-title').textContent=base.client||[(caseMeta[clid]||{}).clientFirstName,(caseMeta[clid]||{}).clientMiddleName,(caseMeta[clid]||{}).clientLastName].filter(Boolean).join(' ')||clid;
   }
 
   editToggle.onclick=()=>{
