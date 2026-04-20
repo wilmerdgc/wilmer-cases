@@ -1841,6 +1841,7 @@ function hideExcelRestorePrompt(){}
     <button id="btn-queue" onclick="switchView('queue')" ondblclick="setDefaultView('queue')" style="position:relative;">Queue<span id="queue-badge" style="display:none;position:absolute;top:-5px;right:-8px;background:#B85C5C;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:10px;line-height:1.4;"></span></button>
     <button id="btn-so" onclick="switchView('so')" ondblclick="setDefaultView('so')">Sched. Orders</button>
     <button id="btn-deadlines" onclick="switchView('deadlines')" ondblclick="setDefaultView('deadlines')" style="position:relative;">Call-Ups<span id="deadlines-badge" style="display:none;position:absolute;top:-5px;right:-8px;background:#B85C5C;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:10px;line-height:1.4;"></span></button>
+    <button id="btn-sij" onclick="switchView('sij')" ondblclick="setDefaultView('sij')">SIJ</button>
     <span style="flex:1"></span>
     <button onclick="openAdd()" style="font-size:11px;padding:4px 12px;border:1px solid #DDD5CA;border-radius:20px;background:transparent;color:#9E9186;cursor:pointer;" onmouseenter="this.style.background='#F7F3ED';this.style.color='#5C5148'" onmouseleave="this.style.background='transparent';this.style.color='#9E9186'">+ Add event</button>
   </div>
@@ -1983,6 +1984,14 @@ function hideExcelRestorePrompt(){}
     <div id="queue-list" style="display:flex;flex-direction:column;gap:6px;"></div>
     <div id="queue-empty" style="display:none;text-align:center;padding:3rem;color:#C4BAB0;font-size:13px;font-style:italic;">✓ Queue is clear — all tasks are assigned and scheduled</div>
   </div>
+  <!-- SIJ VIEW (mirrored from Cases → SIJ subtab) -->
+  <div id="view-sij" style="display:none">
+    <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;">
+      <div style="font-family:'Lora',Georgia,serif;font-size:18px;font-weight:600;color:#2C2620;">SIJ Cases</div>
+      <div style="font-size:12px;color:#9E9186;">Special Juvenile cases — same board as Cases → SIJ</div>
+    </div>
+    <div id="sij-board-cal" class="sij-board"></div>
+  </div>
   <!-- SCHEDULING ORDERS VIEW -->
   <div id="view-so" style="display:none">
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap;">
@@ -2079,7 +2088,7 @@ function hideExcelRestorePrompt(){}
 
   <!-- SIJ subtab -->
   <div id="cases-subtab-sij" style="display:none">
-    <div id="sij-board"></div>
+    <div id="sij-board" class="sij-board"></div>
   </div>
 
   <!-- Detail view (shared by General + SIJ subtabs) -->
@@ -6690,13 +6699,18 @@ function markDefaultViewButton(v){
 function switchView(v){
   if(v==='finished') v='all'; // redirect finished → all
   currentView=v;
-  ['today','week','month','paralegals','me','all','queue','so','deadlines'].forEach(x=>{
+  ['today','week','month','paralegals','me','all','queue','so','deadlines','sij'].forEach(x=>{
     const el = document.getElementById('view-'+x);
     if(el) el.style.display = x===v ? 'block' : 'none';
     const btn = document.getElementById('btn-'+x);
     if(btn) btn.classList.toggle('active', x===v);
   });
-  renderAll();
+  if(v==='sij'){
+    // Ensure the primary board (in Cases subtab) has content, then mirror to Calendar view
+    if(typeof renderSIJTable==='function') renderSIJTable();
+  } else {
+    renderAll();
+  }
 }
 // ══════════════════════════════════════════════════
 // SCHEDULING ORDERS VIEW
@@ -9723,9 +9737,56 @@ function renderSIJTable(){
     handle.addEventListener('click',e=>e.stopPropagation());
     handle.addEventListener('dblclick',e=>e.stopPropagation());
   });
+
+  // Mirror to any secondary SIJ boards (e.g. Calendar → SIJ view)
+  _mirrorSijBoards();
 }
 
-// ── I-360 approval notice (PDF) — upload / view ──
+function _mirrorSijBoards(){
+  const primary=document.getElementById('sij-board');
+  if(!primary)return;
+  const mirrors=document.querySelectorAll('.sij-board');
+  mirrors.forEach(m=>{
+    if(m===primary)return;
+    m.innerHTML=primary.innerHTML;
+    m.style.cssText=primary.style.cssText||'';
+    // Re-wire column-resize handles on the mirror
+    const thead=m.querySelector('thead');
+    if(!thead)return;
+    thead.querySelectorAll('span.col-resize').forEach(handle=>{
+      handle.addEventListener('mousedown',function(e){
+        e.preventDefault(); e.stopPropagation();
+        const th=handle.parentElement;
+        const key=handle.getAttribute('data-col');
+        const startX=e.clientX;
+        const startW=th.getBoundingClientRect().width;
+        document.body.style.cursor='col-resize';
+        document.body.style.userSelect='none';
+        function onMove(ev){ th.style.width=Math.max(40,Math.round(startW+(ev.clientX-startX)))+'px'; }
+        function onUp(){
+          document.removeEventListener('mousemove',onMove);
+          document.removeEventListener('mouseup',onUp);
+          document.body.style.cursor='';
+          document.body.style.userSelect='';
+          try{ const cur=JSON.parse(localStorage.getItem('sij-col-widths')||'{}')||{}; cur[key]=Math.round(th.getBoundingClientRect().width); localStorage.setItem('sij-col-widths',JSON.stringify(cur)); }catch(err){}
+        }
+        document.addEventListener('mousemove',onMove);
+        document.addEventListener('mouseup',onUp);
+      });
+      handle.addEventListener('click',e=>e.stopPropagation());
+      handle.addEventListener('dblclick',e=>e.stopPropagation());
+    });
+    // Re-wire the triple-click-to-open-case handler on each row
+    m.querySelectorAll('tbody tr').forEach(tr=>{
+      tr.addEventListener('click',function(e){
+        if(e.detail===3){
+          const span=tr.querySelector('td:first-child span[onclick*="openCaseDetail"]');
+          if(span) span.click();
+        }
+      });
+    });
+  });
+}
 function uploadI360Notice(clid){
   const input=document.createElement('input');
   input.type='file';
