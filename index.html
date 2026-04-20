@@ -2129,6 +2129,10 @@ function hideExcelRestorePrompt(){}
             <input id="ncp-anum" type="text" placeholder="e.g. 246-601-838" class="nc-input"/>
           </div>
         </div>
+        <div style="margin-bottom:13px;">
+          <label class="nc-label">Email</label>
+          <input id="ncp-email" type="email" placeholder="client@email.com" class="nc-input"/>
+        </div>
       </div>
 
       <!-- Case details card -->
@@ -7782,6 +7786,37 @@ function onEventTypeChange(val){
   if(hms)hms.style.display=isHearingEventType(val)?'block':'none';
   const icp=document.getElementById('individual-callup-panel');
   if(icp){icp.style.display=(val==='INDIVIDUAL')?'':'none';if(val==='INDIVIDUAL'){const fcD=document.getElementById('fc-date').value;const ri=document.getElementById('icp-ref-input');if(ri){ri.value=fcD||'';}refreshIndividualCallupPanel(false);}}
+  // If the chosen event type is classified as a hearing, auto-open the time range
+  // panel so the user is prompted for the hearing time.
+  const _cat=(eventTypeMeta[val]||{}).category||'';
+  if(_cat==='hearing'){
+    const tt=document.getElementById('fc-time-toggle');
+    const panel2=document.getElementById('time-range-panel');
+    const tsLabel=document.querySelector('label[for="fc-time-toggle"]')||null;
+    if(tt){ tt.checked=true; }
+    if(panel2){
+      panel2.classList.add('open');
+      // Visual hint that time is requested for hearings
+      panel2.style.background='#FAF0E6';
+      panel2.style.borderColor='#E8C49A';
+      const hint=document.getElementById('fc-time-hearing-hint');
+      if(!hint){
+        const h=document.createElement('div');
+        h.id='fc-time-hearing-hint';
+        h.style.cssText='font-size:11px;font-weight:600;color:#C9823A;margin-bottom:6px;';
+        h.textContent='⏰ Please set the hearing time';
+        panel2.prepend(h);
+      }
+      const ts=document.getElementById('fc-time-start');
+      if(ts) setTimeout(()=>{try{ts.focus();}catch(e){}},30);
+    }
+  }else{
+    // Reset hint when switching away from hearings
+    const hint=document.getElementById('fc-time-hearing-hint');
+    if(hint) hint.remove();
+    const panel2=document.getElementById('time-range-panel');
+    if(panel2){ panel2.style.background=''; panel2.style.borderColor=''; }
+  }
 }
 
 function refreshIndividualCallupPanel(fromInput){
@@ -13026,7 +13061,7 @@ function openAddCasePage(){
   paralegals.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;asgEl.appendChild(o);});
 
   // Clear fields
-  ['ncp-lastName','ncp-firstName','ncp-middleName','ncp-clid','ncp-anum','ncp-notes'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['ncp-lastName','ncp-firstName','ncp-middleName','ncp-clid','ncp-anum','ncp-email','ncp-notes'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   typeEl.value='';attyEl.value='';asgEl.value='';
 
   // Custom columns
@@ -13089,6 +13124,7 @@ function saveAddCasePage(){
 
   const clid=document.getElementById('ncp-clid').value.trim();
   const anum=document.getElementById('ncp-anum').value.trim();
+  const email=(document.getElementById('ncp-email')||{value:''}).value.trim();
   const atty=document.getElementById('ncp-atty').value;
   const assigned=document.getElementById('ncp-assigned').value;
   const notes=document.getElementById('ncp-notes').value.trim();
@@ -13115,6 +13151,7 @@ function saveAddCasePage(){
   caseMeta[caseId].clientLastName=lastName;
   caseMeta[caseId].clientFirstName=firstName;
   if(middleName) caseMeta[caseId].clientMiddleName=middleName;
+  if(email) caseMeta[caseId].clientEmail=email;
 
   if(type&&!caseTypes.includes(type)) caseTypes.push(type);
   if(atty&&!paralegals.includes(atty)) paralegals.push(atty);
@@ -13139,7 +13176,7 @@ function openNewCaseModal(){
   paralegals.forEach(p => { const o = document.createElement('option'); o.value=p; o.textContent=p; attyEl.appendChild(o); });
 
   // Clear fields
-  ['nc-lastName','nc-firstName','nc-middleName','nc-clid','nc-anum','nc-notes'].forEach(id => {const e=document.getElementById(id);if(e)e.value='';});
+  ['nc-lastName','nc-firstName','nc-middleName','nc-clid','nc-anum','nc-email','nc-notes'].forEach(id => {const e=document.getElementById(id);if(e)e.value='';});
   typeEl.value = ''; attyEl.value = '';
 
   document.getElementById('new-case-modal').style.display = 'flex';
@@ -13173,6 +13210,7 @@ function saveNewCase(){
   }
   const clid  = document.getElementById('nc-clid').value.trim();
   const anum  = document.getElementById('nc-anum').value.trim();
+  const email = (document.getElementById('nc-email')||{value:''}).value.trim();
   const atty  = document.getElementById('nc-atty').value;
   const notes = document.getElementById('nc-notes').value.trim();
 
@@ -13193,6 +13231,7 @@ function saveNewCase(){
   caseMeta[_cid].clientLastName=lastName;
   caseMeta[_cid].clientFirstName=firstName;
   if(middleName) caseMeta[_cid].clientMiddleName=middleName;
+  if(email) caseMeta[_cid].clientEmail=email;
 
   // Add new case type / paralegal if not already in lists
   if(type && !caseTypes.includes(type)) caseTypes.push(type);
@@ -13591,6 +13630,12 @@ if(csEl) csEl.addEventListener('input',_debouncedRenderCases);
         <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">A-Number</label>
         <input id="nc-anum" type="text" placeholder="e.g. 246-601-838" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
       </div>
+    </div>
+
+    <!-- Email -->
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Email</label>
+      <input id="nc-email" type="email" placeholder="client@email.com" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
     </div>
 
     <!-- Case type -->
