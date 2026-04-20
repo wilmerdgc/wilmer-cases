@@ -3412,21 +3412,35 @@ function gmailShowCreateLabel(prefill){
 
 async function gmailDoCreateLabel(){
   const name = (document.getElementById('gmail-new-label-name')||{}).value||'';
-  if(!name.trim()){ showToast('Enter a label name'); return; }
+  const trimmed = name.trim();
+  if(!trimmed){ showToast('Enter a label name'); return; }
   const result = await gmailApi('labels', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ name: name.trim(), labelListVisibility: 'labelShow', messageListVisibility: 'show' })
+    body: JSON.stringify({ name: trimmed, labelListVisibility: 'labelShow', messageListVisibility: 'show' })
   });
   if(result && result.id){
-    showToast('Label "' + name.trim() + '" created ✓');
+    showToast('Label "' + trimmed + '" created ✓');
     _gmailLabels = null; // Clear cache so it reloads
-    document.getElementById('gmail-moveto-dropdown').style.display = 'none';
+    const dd=document.getElementById('gmail-moveto-dropdown'); if(dd) dd.style.display = 'none';
     return result;
-  } else {
-    showToast('Failed to create label');
-    return null;
   }
+  // Handle duplicate label: look it up and return it so move still works
+  const err = _gmailLastError;
+  if(err && (err.status === 409 || (err.message||'').toLowerCase().includes('already exists') || (err.message||'').toLowerCase().includes('duplicate'))){
+    const labels = await gmailApi('labels');
+    const existing = labels && labels.labels ? labels.labels.find(l => l.name && l.name.toLowerCase() === trimmed.toLowerCase()) : null;
+    if(existing){
+      showToast('Label "' + trimmed + '" already exists — using it');
+      _gmailLabels = null;
+      const dd=document.getElementById('gmail-moveto-dropdown'); if(dd) dd.style.display = 'none';
+      return existing;
+    }
+  }
+  const msg = err && err.message ? err.message : 'Failed to create label';
+  showToast(msg);
+  console.error('gmailDoCreateLabel failed:', err);
+  return null;
 }
 
 async function gmailDoCreateLabelAndMove(){
@@ -3845,6 +3859,7 @@ function gmailSignOut(){
   gmailRenderSignIn();
 }
 
+let _gmailLastError=null;
 async function gmailApi(endpoint, opts={}){
   const base = 'https://gmail.googleapis.com/gmail/v1/users/me/';
   const res = await fetch(base + endpoint, {
@@ -3852,7 +3867,14 @@ async function gmailApi(endpoint, opts={}){
     headers: { 'Authorization': 'Bearer ' + _gmailAccessToken, ...(opts.headers||{}) }
   });
   if(res.status === 401){ gmailSignOut(); showToast('Gmail session expired — please sign in again'); return null; }
-  if(!res.ok){ console.error('Gmail API error', res.status, await res.text()); return null; }
+  if(!res.ok){
+    const txt = await res.text();
+    console.error('Gmail API error', res.status, txt);
+    let parsed=null; try{ parsed=JSON.parse(txt); }catch(e){}
+    _gmailLastError = { status: res.status, message: (parsed&&parsed.error&&parsed.error.message)||('HTTP '+res.status), body: parsed||txt };
+    return null;
+  }
+  _gmailLastError = null;
   return res.json();
 }
 
