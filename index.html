@@ -3132,6 +3132,7 @@ function inboxNoteSearchCase(q){
   records.forEach(r=>{
     const key=r.clid||r.client;
     if(!key||seen.has(key))return;
+    if(_isCaseClosed(key))return;
     if(!q||r.client.toLowerCase().includes(q.toLowerCase())||(r.clid||'').toLowerCase().includes(q.toLowerCase())){
       seen.add(key);
       cases.push({clid:key,client:r.client||key});
@@ -3698,6 +3699,7 @@ function inboxAttachCaseSearch(q){
   records.forEach(r=>{
     const key=r.clid||r.client;
     if(!key||seen.has(key))return;
+    if(_isCaseClosed(key))return;
     if(!q||r.client.toLowerCase().includes(q.toLowerCase())||(r.clid||'').toLowerCase().includes(q.toLowerCase())){
       seen.add(key); cases.push({clid:key,client:r.client||key});
     }
@@ -3777,6 +3779,7 @@ function inboxOpenCaseSearch(q){
   records.forEach(r=>{
     const key=r.clid||r.client;
     if(!key||seen.has(key))return;
+    if(_isCaseClosed(key))return;
     if(!q||r.client.toLowerCase().includes(q.toLowerCase())||(r.clid||'').toLowerCase().includes(q.toLowerCase())||(r.anum||'').toLowerCase().includes(q.toLowerCase())){
       seen.add(key);
       cases.push({clid:key,client:r.client||key,anum:r.anum||''});
@@ -4399,6 +4402,7 @@ function gmailSaveCaseSearch(q){
   records.forEach(r => {
     const key = r.clid || r.client;
     if(!key || seen.has(key)) return;
+    if(_isCaseClosed(key)) return;
     if(!q || r.client.toLowerCase().includes(q.toLowerCase()) || (r.clid||'').toLowerCase().includes(q.toLowerCase())){
       seen.add(key); cases.push({ clid: key, client: r.client || key });
     }
@@ -8812,7 +8816,7 @@ async function doSendComposeEmail(){
 }
 
 // ── Finished & All Events ──
-function renderFinished(){rebuildFilterOptions();const q=(document.getElementById('f-search').value||'').toLowerCase();const atty=document.getElementById('f-atty').value,evt=document.getElementById('f-event').value;const rows=records.filter(r=>{if(!r.finishedStatus&&!r.deletedStatus)return false;if(atty&&r.atty!==atty)return false;if(evt&&r.event!==evt)return false;if(q&&!r.client.toLowerCase().includes(q)&&!(r.anum||'').toLowerCase().includes(q)&&!(r.clid||'').toLowerCase().includes(q))return false;return true;});rows.sort((a,b)=>{const ha=a.history&&a.history.length?a.history[a.history.length-1].date:'';const hb=b.history&&b.history.length?b.history[b.history.length-1].date:'';return hb.localeCompare(ha);});const tr=document.getElementById('thead-finished');tr.innerHTML='';allColumns().forEach(col=>{if(colVis[col.key]!==false||col.always){const th=document.createElement('th');th.textContent=col.label;tr.appendChild(th);}});const ts=document.createElement('th');ts.textContent='Status';tr.appendChild(ts);const te2=document.createElement('th');tr.appendChild(te2);const tbody=document.getElementById('tbody-finished');tbody.innerHTML='';const sm={completed:{label:'Completed',bg:'#EBF1EB',color:'#6A8C6E'},attended:{label:'Attended',bg:'#EEF1F7',color:'#6B7FA3'},cancelled:{label:'Cancelled',bg:'#F9EDED',color:'#B85C5C'},rescheduled:{label:'Rescheduled',bg:'#EEF1F7',color:'#6B7FA3'},deleted:{label:'Deleted',bg:'#EDE8E0',color:'#9E9186'}};const frag=document.createDocumentFragment();rows.forEach(r=>{const isDel=!!r.deletedStatus;const smk=isDel?'deleted':r.finishedStatus;const s2=sm[smk]||{label:smk,bg:'#f5f5f5',color:'#888'};const re=(r.history||[]).slice().reverse().find(h=>['completed','attended','cancelled','deleted'].includes(h.type)&&h.note);const tr2=document.createElement('tr');tr2.className='finished-row';let c='';if(colVis.clid!==false)c+=`<td class="muted">${r.clid||'—'}</td>`;c+=`<td style="font-weight:500;text-decoration:line-through;color:#C4BAB0">${r.client}</td>`;if(colVis.anum!==false)c+=`<td class="muted">${r.anum||'—'}</td>`;if(colVis.type!==false)c+=`<td class="muted">${r.type}</td>`;if(colVis.atty!==false)c+=`<td class="muted">${r.atty||'—'}</td>`;if(colVis.event!==false)c+=`<td class="muted">${r.event||'—'}</td>`;if(colVis.date!==false)c+=`<td class="muted">${fmtDate(r.date)}</td>`;if(colVis.assigned!==false)c+=`<td class="muted">${r.assigned||'—'}</td>`;customColumns.forEach(col=>{if(colVis[col.key]!==false)c+=`<td class="muted">${r[col.key]||'—'}</td>`;});if(colVis.notes!==false)c+=`<td class="muted">${r.notes||'—'}</td>`;c+=`<td><span class="finished-status-badge" style="background:${s2.bg};color:${s2.color}">${s2.label}</span>${re?`<div style="font-size:11px;color:#9E9186;margin-top:4px;font-style:italic">"${re.note}"</div>`:''}</td>`;c+=isDel?`<td><button class="edit-btn" onclick="restoreRecord('${r.id}')" style="color:#6B7FA3;border-color:#CBD5E8">&#8635; Restore</button></td>`:`<td><button class="edit-btn" onclick="openEdit('${r.id}')">Edit</button></td>`;tr2.innerHTML=c;frag.appendChild(tr2);});tbody.appendChild(frag);document.getElementById('empty-finished').style.display=rows.length?'none':'block';document.getElementById('tbl-finished').style.display=rows.length?'':'none';}
+function renderFinished(){rebuildFilterOptions();const q=(document.getElementById('f-search').value||'').toLowerCase();const atty=document.getElementById('f-atty').value,evt=document.getElementById('f-event').value;const rows=records.filter(r=>{if(!r.finishedStatus&&!r.deletedStatus)return false;if(_isRecordCaseClosed(r))return false;if(atty&&r.atty!==atty)return false;if(evt&&r.event!==evt)return false;if(q&&!r.client.toLowerCase().includes(q)&&!(r.anum||'').toLowerCase().includes(q)&&!(r.clid||'').toLowerCase().includes(q))return false;return true;});rows.sort((a,b)=>{const ha=a.history&&a.history.length?a.history[a.history.length-1].date:'';const hb=b.history&&b.history.length?b.history[b.history.length-1].date:'';return hb.localeCompare(ha);});const tr=document.getElementById('thead-finished');tr.innerHTML='';allColumns().forEach(col=>{if(colVis[col.key]!==false||col.always){const th=document.createElement('th');th.textContent=col.label;tr.appendChild(th);}});const ts=document.createElement('th');ts.textContent='Status';tr.appendChild(ts);const te2=document.createElement('th');tr.appendChild(te2);const tbody=document.getElementById('tbody-finished');tbody.innerHTML='';const sm={completed:{label:'Completed',bg:'#EBF1EB',color:'#6A8C6E'},attended:{label:'Attended',bg:'#EEF1F7',color:'#6B7FA3'},cancelled:{label:'Cancelled',bg:'#F9EDED',color:'#B85C5C'},rescheduled:{label:'Rescheduled',bg:'#EEF1F7',color:'#6B7FA3'},deleted:{label:'Deleted',bg:'#EDE8E0',color:'#9E9186'}};const frag=document.createDocumentFragment();rows.forEach(r=>{const isDel=!!r.deletedStatus;const smk=isDel?'deleted':r.finishedStatus;const s2=sm[smk]||{label:smk,bg:'#f5f5f5',color:'#888'};const re=(r.history||[]).slice().reverse().find(h=>['completed','attended','cancelled','deleted'].includes(h.type)&&h.note);const tr2=document.createElement('tr');tr2.className='finished-row';let c='';if(colVis.clid!==false)c+=`<td class="muted">${r.clid||'—'}</td>`;c+=`<td style="font-weight:500;text-decoration:line-through;color:#C4BAB0">${r.client}</td>`;if(colVis.anum!==false)c+=`<td class="muted">${r.anum||'—'}</td>`;if(colVis.type!==false)c+=`<td class="muted">${r.type}</td>`;if(colVis.atty!==false)c+=`<td class="muted">${r.atty||'—'}</td>`;if(colVis.event!==false)c+=`<td class="muted">${r.event||'—'}</td>`;if(colVis.date!==false)c+=`<td class="muted">${fmtDate(r.date)}</td>`;if(colVis.assigned!==false)c+=`<td class="muted">${r.assigned||'—'}</td>`;customColumns.forEach(col=>{if(colVis[col.key]!==false)c+=`<td class="muted">${r[col.key]||'—'}</td>`;});if(colVis.notes!==false)c+=`<td class="muted">${r.notes||'—'}</td>`;c+=`<td><span class="finished-status-badge" style="background:${s2.bg};color:${s2.color}">${s2.label}</span>${re?`<div style="font-size:11px;color:#9E9186;margin-top:4px;font-style:italic">"${re.note}"</div>`:''}</td>`;c+=isDel?`<td><button class="edit-btn" onclick="restoreRecord('${r.id}')" style="color:#6B7FA3;border-color:#CBD5E8">&#8635; Restore</button></td>`:`<td><button class="edit-btn" onclick="openEdit('${r.id}')">Edit</button></td>`;tr2.innerHTML=c;frag.appendChild(tr2);});tbody.appendChild(frag);document.getElementById('empty-finished').style.display=rows.length?'none':'block';document.getElementById('tbl-finished').style.display=rows.length?'':'none';}
 function _sortAllEvents(rows){
   const {key,dir} = _allEventsSort;
   return rows.slice().sort((a,b)=>{
@@ -8868,13 +8872,15 @@ function renderAllEvents(){
   const ts=document.createElement('th');ts.textContent='Status';tr.appendChild(ts);
   const te3=document.createElement('th');tr.appendChild(te3);
 
-  const sm={completed:{label:'Completed',bg:'#EBF1EB',color:'#6A8C6E'},attended:{label:'Attended',bg:'#EEF1F7',color:'#6B7FA3'},cancelled:{label:'Cancelled',bg:'#F9EDED',color:'#B85C5C'},rescheduled:{label:'Rescheduled',bg:'#EEF1F7',color:'#6B7FA3'},deleted:{label:'Deleted',bg:'#EDE8E0',color:'#9E9186'}};
+  const sm={completed:{label:'Completed',bg:'#EBF1EB',color:'#6A8C6E'},attended:{label:'Attended',bg:'#EEF1F7',color:'#6B7FA3'},cancelled:{label:'Cancelled',bg:'#F9EDED',color:'#B85C5C'},rescheduled:{label:'Rescheduled',bg:'#EEF1F7',color:'#6B7FA3'},deleted:{label:'Deleted',bg:'#EDE8E0',color:'#9E9186'},'case-closed':{label:'Case Closed',bg:'#EDE8E0',color:'#5C5148'}};
   const tbody=document.getElementById('tbody-all');tbody.innerHTML='';
   const frag=document.createDocumentFragment();
   rows.forEach(r=>{
     const d=parseDate(r.date),s=status(d),bc=badgeClass(s);
-    const isF=!!r.finishedStatus,isDel=!!r.deletedStatus,isDimmed=isF||isDel;
-    const smk=isDel?'deleted':r.finishedStatus;
+    const isF=!!r.finishedStatus,isDel=!!r.deletedStatus;
+    const isCaseClosed=_isRecordCaseClosed(r);
+    const isDimmed=isF||isDel||isCaseClosed;
+    const smk=isCaseClosed?'case-closed':(isDel?'deleted':r.finishedStatus);
     const s2=isDimmed?(sm[smk]||{label:smk,bg:'#f5f5f5',color:'#888'}):null;
     const tr2=document.createElement('tr');if(isDimmed)tr2.className='finished-row';
     let c='';
@@ -9346,13 +9352,20 @@ function goToCase(clid){switchTab('cases');setTimeout(()=>openCaseDetail(clid),3
 // whitespace-separated extras down to the first token, so each client ends
 // up with exactly one first name, one middle name, and one last name.
 function _singleName(s){ return s?String(s).trim().split(/\s+/)[0]||'':''; }
+// A case is "closed" when the user clicked Delete case in Case Information.
+// Closed cases disappear from every list except the All Events view (where
+// their records are shown with a 'Case Closed' badge).
+function _isCaseClosed(clid){ return !!(clid && caseMeta[clid] && caseMeta[clid].caseClosed); }
+function _isRecordCaseClosed(r){ return _isCaseClosed(r && (r.clid||r.client)); }
 let _casesCache=null;
 function _invalidateCasesCache(){_casesCache=null;}
 function getCases(){
   if(_casesCache)return _casesCache;
   const map={};
   records.forEach(r=>{const key=r.clid||r.client;if(!map[key]){map[key]={clid:r.clid||'',client:r.client||'',anum:r.anum||'',type:r.type||'',atty:r.atty||'',records:[]};}if(r.anum&&!map[key].anum)map[key].anum=r.anum;if(r.atty&&!map[key].atty)map[key].atty=r.atty;if(r.type&&!map[key].type)map[key].type=r.type;if(r.client&&!map[key].client)map[key].client=r.client;map[key].records.push(r);});
-  _casesCache=Object.values(map).sort((a,b)=>(a.client||'').localeCompare(b.client||''));
+  // Hide cases that have been explicitly closed (Delete case). Their records
+  // remain in the All Events view under a 'Case Closed' badge.
+  _casesCache=Object.values(map).filter(c=>!_isCaseClosed(c.clid||c.client)).sort((a,b)=>(a.client||'').localeCompare(b.client||''));
   return _casesCache;
 }
 let _caseFilterOptsDirty=true;
@@ -10980,13 +10993,15 @@ function openCaseDetail(clid){
   sharedDelete.onclick=()=>{
     const name=base.client||clid;
     const victims=records.filter(r=>(r.clid||r.client)===clid);
-    const activeCount=victims.filter(r=>!r.deletedStatus).length;
-    if(!confirm('Delete case "'+name+'"?\n\nThis will mark all '+victims.length+' record'+(victims.length===1?'':'s')+' ('+activeCount+' active) as deleted. You can restore individual events from Finished & All Events.')) return;
+    if(!confirm('Delete case "'+name+'"?\n\nThe case will be hidden from the Cases tab and all other lists. Its events stay accessible in All Events marked as Case Closed.')) return;
     const today=todayStr();
     victims.forEach(r=>{r.deletedStatus='deleted';if(!r.deletedDate)r.deletedDate=today;});
+    // Flag the case itself as closed so getCases() and other case lists hide it.
+    if(!caseMeta[clid]) caseMeta[clid]={};
+    caseMeta[clid].caseClosed={date:today,reason:'manual'};
     _invalidateCasesCache();
     markUnsaved();
-    showToast('Case deleted — '+name);
+    showToast('Case closed — '+name);
     closeCaseDetail();
   };
   const rightCluster=document.createElement('div');rightCluster.style.cssText='display:flex;gap:8px;';
