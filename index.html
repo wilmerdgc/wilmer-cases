@@ -2117,16 +2117,16 @@ function hideExcelRestorePrompt(){}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px;">
           <div>
             <label class="nc-label">Family Name (Last Name) <span style="color:#B85C5C">*</span></label>
-            <input id="ncp-lastName" type="text" placeholder="Last name…" class="nc-input" oninput="this.style.borderColor='#DDD5CA'"/>
+            <input id="ncp-lastName" type="text" placeholder="Last name (one word)…" class="nc-input" oninput="this.style.borderColor='#DDD5CA'"/>
           </div>
           <div>
             <label class="nc-label">Given Name (First Name) <span style="color:#B85C5C">*</span></label>
-            <input id="ncp-firstName" type="text" placeholder="First name…" class="nc-input" oninput="this.style.borderColor='#DDD5CA'"/>
+            <input id="ncp-firstName" type="text" placeholder="First name (one word)…" class="nc-input" oninput="this.style.borderColor='#DDD5CA'"/>
           </div>
         </div>
         <div style="margin-bottom:13px;">
           <label class="nc-label">Middle Name</label>
-          <input id="ncp-middleName" type="text" placeholder="Middle name (optional)…" class="nc-input"/>
+          <input id="ncp-middleName" type="text" placeholder="Middle name (one word, optional)…" class="nc-input"/>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px;">
           <div>
@@ -9271,6 +9271,10 @@ function importFromExcel(event){const file=event.target.files[0];if(!file){hideE
 // ── Cases Tab ──
 let activeCaseClid=null;
 function goToCase(clid){switchTab('cases');setTimeout(()=>openCaseDetail(clid),30);}
+// Enforce one-word-only for first/middle/last name fields. Collapses any
+// whitespace-separated extras down to the first token, so each client ends
+// up with exactly one first name, one middle name, and one last name.
+function _singleName(s){ return s?String(s).trim().split(/\s+/)[0]||'':''; }
 let _casesCache=null;
 function _invalidateCasesCache(){_casesCache=null;}
 function getCases(){
@@ -10863,9 +10867,11 @@ function openCaseDetail(clid){
     if(infoBody._paraInput){const nv=infoBody._paraInput.value;allRecs.forEach(r=>r.atty=nv);base.atty=nv;}
     if(infoBody._clientEmailInput){if(!caseMeta[clid])caseMeta[clid]={};caseMeta[clid].clientEmail=infoBody._clientEmailInput.value.trim();}
     if(!caseMeta[clid])caseMeta[clid]={};
-    if(infoBody._clLastInput)caseMeta[clid].clientLastName=infoBody._clLastInput.value.trim();
-    if(infoBody._clFirstInput)caseMeta[clid].clientFirstName=infoBody._clFirstInput.value.trim();
-    if(infoBody._clMiddleInput)caseMeta[clid].clientMiddleName=infoBody._clMiddleInput.value.trim();
+    let _nameTrimmed=false;
+    if(infoBody._clLastInput){const raw=infoBody._clLastInput.value.trim();const v=_singleName(raw);if(raw!==v){_nameTrimmed=true;infoBody._clLastInput.value=v;}caseMeta[clid].clientLastName=v;}
+    if(infoBody._clFirstInput){const raw=infoBody._clFirstInput.value.trim();const v=_singleName(raw);if(raw!==v){_nameTrimmed=true;infoBody._clFirstInput.value=v;}caseMeta[clid].clientFirstName=v;}
+    if(infoBody._clMiddleInput){const raw=infoBody._clMiddleInput.value.trim();const v=_singleName(raw);if(raw!==v){_nameTrimmed=true;infoBody._clMiddleInput.value=v;}caseMeta[clid].clientMiddleName=v;}
+    if(_nameTrimmed) showToast('Name fields accept one word each — extras trimmed');
     // Rebuild display name from structured fields and sync to all records
     const _builtName=[caseMeta[clid].clientFirstName,caseMeta[clid].clientMiddleName,caseMeta[clid].clientLastName].filter(Boolean).join(' ');
     if(_builtName){allRecs.forEach(r=>r.client=_builtName);base.client=_builtName;}
@@ -13120,9 +13126,19 @@ function closeAddCasePage(){
 }
 
 function saveAddCasePage(){
-  const lastName=document.getElementById('ncp-lastName').value.trim();
-  const firstName=document.getElementById('ncp-firstName').value.trim();
-  const middleName=(document.getElementById('ncp-middleName')||{value:''}).value.trim();
+  const _rawLast=document.getElementById('ncp-lastName').value.trim();
+  const _rawFirst=document.getElementById('ncp-firstName').value.trim();
+  const _rawMid=(document.getElementById('ncp-middleName')||{value:''}).value.trim();
+  const lastName=_singleName(_rawLast);
+  const firstName=_singleName(_rawFirst);
+  const middleName=_singleName(_rawMid);
+  const _nameTrimmed=(_rawLast!==lastName)||(_rawFirst!==firstName)||(_rawMid!==middleName);
+  // Reflect the cleaned value in the inputs so the user sees what was kept.
+  if(_nameTrimmed){
+    document.getElementById('ncp-lastName').value=lastName;
+    document.getElementById('ncp-firstName').value=firstName;
+    const mid=document.getElementById('ncp-middleName'); if(mid) mid.value=middleName;
+  }
   const client=[firstName,middleName,lastName].filter(Boolean).join(' ');
   const type=document.getElementById('ncp-type').value;
 
@@ -13180,6 +13196,7 @@ function saveAddCasePage(){
   dirtyCaseFilterOpts();
   dirtyFilterOpts();
   markUnsaved();
+  if(_nameTrimmed) showToast('Name fields accept one word each — extras trimmed');
   showToast('Case created: '+client+' ✓');
   document.getElementById('cases-add-view').style.display='none';
   openCaseDetail(caseId);
@@ -13208,9 +13225,18 @@ function closeNewCaseModal(){
 }
 
 function saveNewCase(){
-  const lastName = document.getElementById('nc-lastName').value.trim();
-  const firstName = document.getElementById('nc-firstName').value.trim();
-  const middleName = (document.getElementById('nc-middleName')||{value:''}).value.trim();
+  const _rawLast = document.getElementById('nc-lastName').value.trim();
+  const _rawFirst = document.getElementById('nc-firstName').value.trim();
+  const _rawMid = (document.getElementById('nc-middleName')||{value:''}).value.trim();
+  const lastName = _singleName(_rawLast);
+  const firstName = _singleName(_rawFirst);
+  const middleName = _singleName(_rawMid);
+  const _nameTrimmed = (_rawLast!==lastName)||(_rawFirst!==firstName)||(_rawMid!==middleName);
+  if(_nameTrimmed){
+    document.getElementById('nc-lastName').value = lastName;
+    document.getElementById('nc-firstName').value = firstName;
+    const mid = document.getElementById('nc-middleName'); if(mid) mid.value = middleName;
+  }
   const client = [firstName, middleName, lastName].filter(Boolean).join(' ');
   const type   = document.getElementById('nc-type').value;
   if(!lastName){
@@ -13262,6 +13288,7 @@ function saveNewCase(){
   dirtyFilterOpts();
   markUnsaved();
   closeNewCaseModal();
+  if(_nameTrimmed) showToast('Name fields accept one word each — extras trimmed');
   showToast('Case created: ' + client + ' ✓');
 
   // Navigate to the new case
@@ -13638,16 +13665,16 @@ if(csEl) csEl.addEventListener('input',function(){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
       <div>
         <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Family Name (Last) <span style="color:#B85C5C">*</span></label>
-        <input id="nc-lastName" type="text" placeholder="Last name…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="this.style.borderColor='#DDD5CA'"/>
+        <input id="nc-lastName" type="text" placeholder="Last name (one word)…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="this.style.borderColor='#DDD5CA'"/>
       </div>
       <div>
         <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Given Name (First) <span style="color:#B85C5C">*</span></label>
-        <input id="nc-firstName" type="text" placeholder="First name…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="this.style.borderColor='#DDD5CA'"/>
+        <input id="nc-firstName" type="text" placeholder="First name (one word)…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="this.style.borderColor='#DDD5CA'"/>
       </div>
     </div>
     <div style="margin-bottom:14px;">
       <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Middle Name</label>
-      <input id="nc-middleName" type="text" placeholder="Middle name (optional)…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
+      <input id="nc-middleName" type="text" placeholder="Middle name (one word, optional)…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
     </div>
 
     <!-- Two columns: Client ID + A-number -->
