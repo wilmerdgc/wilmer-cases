@@ -1843,6 +1843,7 @@ function hideExcelRestorePrompt(){}
     <button id="btn-deadlines" onclick="switchView('deadlines')" ondblclick="setDefaultView('deadlines')" style="position:relative;">Call-Ups<span id="deadlines-badge" style="display:none;position:absolute;top:-5px;right:-8px;background:#B85C5C;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:10px;line-height:1.4;"></span></button>
     <button id="btn-sij" onclick="switchView('sij')" ondblclick="setDefaultView('sij')">SIJ</button>
     <span style="flex:1"></span>
+    <button onclick="openNewTaskModal()" style="font-size:11px;padding:4px 12px;border:1px solid #B4CCAD;border-radius:20px;background:#EBF1EB;color:#4A6B4E;cursor:pointer;font-weight:600;" onmouseenter="this.style.background='#6A8C6E';this.style.color='#fff'" onmouseleave="this.style.background='#EBF1EB';this.style.color='#4A6B4E'">+ Task</button>
     <button onclick="openAdd()" style="font-size:11px;padding:4px 12px;border:1px solid #DDD5CA;border-radius:20px;background:transparent;color:#9E9186;cursor:pointer;" onmouseenter="this.style.background='#F7F3ED';this.style.color='#5C5148'" onmouseleave="this.style.background='transparent';this.style.color='#9E9186'">+ Add event</button>
   </div>
   <div class="filters">
@@ -13965,6 +13966,128 @@ if(csEl) csEl.addEventListener('input',function(){
   const el=document.getElementById(id);
   if(el) el.addEventListener('change',_debouncedRenderCases);
 });
+
+// ── Task quick-add modal ─────────────────────────────────────
+// Lightweight task creation: description + assignee (Me or paralegal) +
+// optional due date and linked case. Task stored as a record with
+// event='TASK'. Keeps the full event modal out of the way for quick capture.
+function openNewTaskModal(){
+  const existing=document.getElementById('new-task-modal');
+  if(existing) existing.remove();
+
+  const ov=document.createElement('div');
+  ov.id='new-task-modal';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(44,38,32,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
+
+  const assigneeOpts=['<option value="Me">Me</option>']
+    .concat(paralegals.slice().sort().map(p=>`<option value="${p.replace(/"/g,'&quot;')}">${p}</option>`))
+    .join('');
+
+  // datalist of existing cases for the optional case link
+  const caseOpts=getCases().map(c=>{
+    const label=(c.client||c.clid||'')+(c.clid&&c.clid!==c.client?' · '+c.clid:'')+(c.anum?' · A#'+c.anum:'');
+    return `<option value="${label.replace(/"/g,'&quot;')}" data-clid="${(c.clid||c.client||'').replace(/"/g,'&quot;')}"></option>`;
+  }).join('');
+
+  const box=document.createElement('div');
+  box.style.cssText='background:#fff;border:1px solid #DDD5CA;border-radius:18px;padding:26px 24px;width:100%;max-width:440px;box-shadow:0 12px 48px rgba(44,38,32,0.15);max-height:90vh;overflow-y:auto;';
+  box.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div style="font-family:'Lora',Georgia,serif;font-size:18px;font-weight:600;color:#2C2620;">New Task</div>
+      <button id="nt-close" style="border:none;background:transparent;font-size:20px;color:#C4BAB0;cursor:pointer;line-height:1;padding:0;">×</button>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;display:block;margin-bottom:4px;">Task <span style="color:#B85C5C">*</span></label>
+      <textarea id="nt-notes" rows="3" placeholder="What needs doing?" style="width:100%;font-size:13px;padding:9px 12px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;resize:vertical;" oninput="this.style.borderColor='#DDD5CA'"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div>
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;display:block;margin-bottom:4px;">Assign to <span style="color:#B85C5C">*</span></label>
+        <select id="nt-assigned" style="width:100%;font-size:13px;padding:9px 10px;border:1px solid #DDD5CA;border-radius:8px;background:#fff;color:#2C2620;font-family:inherit;outline:none;">${assigneeOpts}</select>
+      </div>
+      <div>
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;display:block;margin-bottom:4px;">Due date</label>
+        <input id="nt-date" type="date" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
+      </div>
+    </div>
+    <div style="margin-bottom:18px;">
+      <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;display:block;margin-bottom:4px;">Link to case <span style="font-weight:400;color:#C4BAB0;text-transform:none;letter-spacing:0;">(optional)</span></label>
+      <input id="nt-case" list="nt-case-list" type="text" placeholder="Type client name or ID…" autocomplete="off" style="width:100%;font-size:13px;padding:9px 12px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
+      <datalist id="nt-case-list">${caseOpts}</datalist>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button id="nt-cancel" style="font-size:12px;padding:8px 18px;border:1px solid #DDD5CA;border-radius:8px;background:#F7F3ED;color:#5C5148;cursor:pointer;font-family:inherit;">Cancel</button>
+      <button id="nt-save" style="font-size:12px;font-weight:600;padding:8px 22px;border:none;border-radius:8px;background:#2C2620;color:#F7F3ED;cursor:pointer;font-family:inherit;">Create</button>
+    </div>`;
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+
+  // Default due date = today (but empty is allowed)
+  const dateEl=document.getElementById('nt-date'); if(dateEl) dateEl.value=todayStr();
+
+  document.getElementById('nt-close').onclick=()=>ov.remove();
+  document.getElementById('nt-cancel').onclick=()=>ov.remove();
+  document.getElementById('nt-save').onclick=saveNewTask;
+  document.getElementById('nt-notes').addEventListener('keydown',e=>{
+    if(e.key==='Enter' && (e.metaKey||e.ctrlKey)) saveNewTask();
+    if(e.key==='Escape') ov.remove();
+  });
+  setTimeout(()=>{const el=document.getElementById('nt-notes'); if(el) el.focus();},40);
+}
+
+function saveNewTask(){
+  const notesEl=document.getElementById('nt-notes');
+  const notes=(notesEl.value||'').trim();
+  if(!notes){ notesEl.style.borderColor='#B85C5C'; notesEl.focus(); return; }
+  const assigned=(document.getElementById('nt-assigned')||{value:''}).value||'Me';
+  const date=(document.getElementById('nt-date')||{value:''}).value||'';
+
+  // Resolve optional case link — pull the clid from the matching datalist entry
+  const caseText=((document.getElementById('nt-case')||{}).value||'').trim();
+  let clid='',client='',anum='',type='',atty='';
+  if(caseText){
+    const dl=document.getElementById('nt-case-list');
+    let matched=null;
+    if(dl){ const opts=dl.querySelectorAll('option'); opts.forEach(o=>{ if(!matched && o.value===caseText) matched=o; }); }
+    if(matched){ clid=matched.getAttribute('data-clid')||''; }
+    // If the user typed a query that doesn't exactly match, try a loose match
+    if(!clid){
+      const cases=getCases();
+      const q=caseText.toLowerCase();
+      const hit=cases.find(c=>(c.client||'').toLowerCase()===q||(c.clid||'').toLowerCase()===q)
+              ||cases.find(c=>(c.client||'').toLowerCase().includes(q)||(c.clid||'').toLowerCase().includes(q));
+      if(hit) clid=hit.clid||hit.client||'';
+    }
+    if(clid){
+      const base=records.find(r=>(r.clid||r.client)===clid)||{};
+      client=base.client||''; anum=base.anum||''; type=base.type||''; atty=base.atty||(assigned==='Me'?'':assigned);
+    }
+  }
+
+  // When assignee is a paralegal and no case link, use them as atty so the
+  // task shows up in the Paralegals view.
+  if(!atty && assigned && assigned!=='Me') atty=assigned;
+
+  const rec={
+    id:'t'+Date.now()+Math.random().toString(36).slice(2,6),
+    clid, client, anum, type, atty,
+    event:'TASK',
+    date,
+    timeStart:'', timeEnd:'',
+    assigned,
+    notes,
+    history:[{type:'note',date:todayStr(),note:'Task created'}]
+  };
+  records.push(rec);
+  _invalidateCasesCache();
+  dirtyFilterOpts();
+  markUnsaved();
+  const ov=document.getElementById('new-task-modal'); if(ov) ov.remove();
+  showToast('Task created: '+notes.slice(0,40)+(notes.length>40?'…':''));
+  if(typeof renderAll==='function') renderAll();
+}
+
 </script>
 <!-- NEW CASE MODAL -->
 <div id="new-case-modal" style="display:none;position:fixed;inset:0;background:rgba(44,38,32,0.45);z-index:9999;align-items:center;justify-content:center;" ondblclick="if(event.target===this)closeNewCaseModal()">
