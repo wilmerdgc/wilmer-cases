@@ -4517,10 +4517,96 @@ function renderParalegalTags(){
     // Auto-save as the user types (markUnsaved debounces the actual write by 1s)
     emailIn.oninput=()=>{const em=emailIn.value.trim();if(em)paralegalEmails[v]=em;else delete paralegalEmails[v];updateSettingsSaveBar();markUnsaved();};
     emailIn.onblur=()=>{emailIn.style.borderColor='#EDE8E0';const em=emailIn.value.trim();if(em)paralegalEmails[v]=em;else delete paralegalEmails[v];updateSettingsSaveBar();markUnsaved();};
+    const transferBtn=document.createElement('button');transferBtn.textContent='↪ Transfer';transferBtn.title='Reassign all of '+v+'\'s cases to another paralegal';transferBtn.style.cssText='font-size:11px;padding:4px 10px;border:1px solid #D8CFC0;border-radius:14px;background:#fff;color:#5C5148;cursor:pointer;font-family:inherit;flex-shrink:0;';
+    transferBtn.onmouseenter=()=>{transferBtn.style.background='#2C2620';transferBtn.style.color='#F7F3ED';transferBtn.style.borderColor='#2C2620';};
+    transferBtn.onmouseleave=()=>{transferBtn.style.background='#fff';transferBtn.style.color='#5C5148';transferBtn.style.borderColor='#D8CFC0';};
+    transferBtn.onclick=()=>openParalegalTransferModal(v);
     const removeBtn=document.createElement('button');removeBtn.innerHTML='×';removeBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0;';
     removeBtn.onclick=()=>{delete paralegalEmails[v];paralegals.splice(i,1);updateSettingsSaveBar();markUnsaved();renderParalegalTags();};
-    row.appendChild(nameEl);row.appendChild(emailIn);row.appendChild(removeBtn);el.appendChild(row);
+    row.appendChild(nameEl);row.appendChild(emailIn);row.appendChild(transferBtn);row.appendChild(removeBtn);el.appendChild(row);
   });
+}
+
+// Transfer every case/record owned by one paralegal over to another.
+// Used when a paralegal leaves the firm — optionally deletes the source
+// paralegal after the transfer so they no longer appear in any picker.
+function openParalegalTransferModal(fromName){
+  const others=paralegals.filter(p=>p!==fromName);
+  if(!others.length){ showToast('Add another paralegal first'); return; }
+  const affectedRecs=records.filter(r=>r.atty===fromName);
+  const affectedCaseIds=new Set(affectedRecs.map(r=>r.clid||r.client));
+  const activeRecs=affectedRecs.filter(r=>!r.finishedStatus&&!r.deletedStatus);
+  // Also count respondent-level assignments so the number matches reality
+  let respondentHits=0;
+  Object.values(caseMeta||{}).forEach(m=>{
+    if(m&&Array.isArray(m.respondents)) m.respondents.forEach(rr=>{ if(rr.atty===fromName) respondentHits++; });
+  });
+
+  // Remove any existing transfer overlay
+  const existing=document.getElementById('paralegal-transfer-overlay');
+  if(existing) existing.remove();
+
+  const ov=document.createElement('div');
+  ov.id='paralegal-transfer-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(44,38,32,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
+
+  const box=document.createElement('div');
+  box.style.cssText='background:#fff;border:1px solid #DDD5CA;border-radius:18px;padding:24px 26px;width:100%;max-width:420px;box-shadow:0 12px 48px rgba(44,38,32,0.15);';
+  const toOpts=others.map(p=>`<option value="${p.replace(/"/g,'&quot;')}">${p}</option>`).join('');
+  const summary=affectedCaseIds.size
+    ? `${affectedCaseIds.size} case${affectedCaseIds.size===1?'':'s'} · ${activeRecs.length} active record${activeRecs.length===1?'':'s'}${respondentHits?` · ${respondentHits} co-client assignment${respondentHits===1?'':'s'}`:''}`
+    : 'No cases currently assigned';
+  box.innerHTML=`
+    <div style="font-family:'Lora',Georgia,serif;font-size:17px;font-weight:600;color:#2C2620;margin-bottom:6px;">Transfer ${fromName}'s cases</div>
+    <div style="font-size:12px;color:#9E9186;margin-bottom:16px;">${summary}</div>
+    <label style="display:block;font-size:11px;font-weight:600;color:#5C5148;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Transfer to</label>
+    <select id="pt-to" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid #DDD5CA;border-radius:8px;background:#fff;color:#2C2620;font-family:inherit;outline:none;margin-bottom:14px;">${toOpts}</select>
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#5C5148;margin-bottom:18px;cursor:pointer;">
+      <input id="pt-delete" type="checkbox" checked style="margin:0;"/>
+      Also remove ${fromName} from the paralegal list
+    </label>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button id="pt-cancel" style="font-size:12px;padding:7px 16px;border:1px solid #DDD5CA;border-radius:8px;background:#F7F3ED;color:#5C5148;cursor:pointer;font-family:inherit;">Cancel</button>
+      <button id="pt-confirm" style="font-size:12px;font-weight:600;padding:7px 20px;border:none;border-radius:8px;background:#2C2620;color:#F7F3ED;cursor:pointer;font-family:inherit;">Transfer</button>
+    </div>`;
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+
+  document.getElementById('pt-cancel').onclick=()=>ov.remove();
+  document.getElementById('pt-confirm').onclick=()=>{
+    const toName=(document.getElementById('pt-to')||{}).value||'';
+    const alsoDelete=!!(document.getElementById('pt-delete')||{}).checked;
+    if(!toName){showToast('Pick a destination paralegal');return;}
+    if(toName===fromName){showToast('Pick a different paralegal');return;}
+    // Reassign every record (active, finished, deleted — all of them, so history is coherent)
+    let movedRecs=0;
+    records.forEach(r=>{ if(r.atty===fromName){ r.atty=toName; movedRecs++; } });
+    // Reassign respondent-level atty too
+    let movedResp=0;
+    Object.values(caseMeta||{}).forEach(m=>{
+      if(m&&Array.isArray(m.respondents)) m.respondents.forEach(rr=>{ if(rr.atty===fromName){ rr.atty=toName; movedResp++; } });
+    });
+    // Optionally remove the source paralegal from the list (but keep their email
+    // only if the user kept them in the list — otherwise drop it too).
+    if(alsoDelete){
+      const idx=paralegals.indexOf(fromName);
+      if(idx>=0) paralegals.splice(idx,1);
+      delete paralegalEmails[fromName];
+    }
+    _invalidateCasesCache();
+    dirtyCaseFilterOpts();
+    dirtyFilterOpts();
+    updateSettingsSaveBar();
+    markUnsaved();
+    renderParalegalTags();
+    if(typeof renderAll==='function') renderAll();
+    ov.remove();
+    const parts=[movedRecs+' record'+(movedRecs===1?'':'s')];
+    if(movedResp) parts.push(movedResp+' co-client');
+    showToast('Transferred '+parts.join(' + ')+' to '+toName+(alsoDelete?' · removed '+fromName:'')+' ✓');
+  };
+  setTimeout(()=>{const el=document.getElementById('pt-to'); if(el) el.focus();},60);
 }
 function renderTags(kind,arr){const el=document.getElementById(kind+'-tags');if(!el)return;el.innerHTML='';arr.forEach((v,i)=>{const tag=document.createElement('span');tag.className='tag';tag.title='Click to edit';tag.style.cursor='pointer';const label=document.createElement('span');label.textContent=v;label.style.cursor='pointer';label.onclick=()=>startEditTag(tag,label,kind,i,arr);const removeBtn=document.createElement('button');removeBtn.className='tag-remove';removeBtn.innerHTML='&#215;';removeBtn.onclick=(e)=>{e.stopPropagation();removeTag(kind,i);};tag.appendChild(label);tag.appendChild(removeBtn);el.appendChild(tag);});}
 
