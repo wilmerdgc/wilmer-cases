@@ -8531,6 +8531,37 @@ function formatEventForEmail(ev, clid, defaultParalegal){
   return txt;
 }
 
+// Spanish-language version of formatEventForEmail. Used when the client is
+// added to a calendar email so they can read the schedule in Spanish.
+function formatEventForEmailES(ev, clid, defaultParalegal){
+  let txt='';
+  txt+='Paralegal: '+(ev.atty||defaultParalegal)+'\n';
+  txt+='Tipo de evento: '+(ev.event||'—')+'\n';
+  txt+='Fecha límite: '+fmtDate(ev.date);
+  if(ev.timeStart){
+    txt+=' A LAS '+fmtTime(ev.timeStart);
+    if(ev.timeEnd) txt+=' – '+fmtTime(ev.timeEnd);
+  }
+  txt+='\n';
+  if(ev.hearingMode){
+    const modeMap={'virtual':'Virtual','in-person':'En persona','inperson':'En persona','phone':'Teléfono','telephone':'Teléfono','webex':'Webex'};
+    const key=String(ev.hearingMode).toLowerCase();
+    const modeEs=modeMap[key]||(ev.hearingMode.charAt(0).toUpperCase()+ev.hearingMode.slice(1));
+    txt+='Formato: '+modeEs+'\n';
+  }
+  if(ev.notes) txt+='Notas: '+ev.notes+'\n';
+  const reminders=records.filter(r=>r._parentId===ev.id&&r.notes&&r.notes.startsWith('⏰ REMINDER')&&r.date&&!r.finishedStatus&&!r.deletedStatus);
+  if(reminders.length){
+    reminders.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    txt+='Recordatorios: '+reminders.map(r=>{
+      const diff=Math.round((new Date(ev.date.replace(/-/g,'/'))-new Date(r.date.replace(/-/g,'/')))/(1000*60*60*24));
+      return diff+' días antes ('+fmtDate(r.date)+')';
+    }).join(', ')+'\n';
+  }
+  txt+='\n';
+  return txt;
+}
+
 function buildCalendarEmailDraft(clid, clientName){
   const clientEvents=records.filter(r=>{
     return (r.clid||r.client)===clid && !r.finishedStatus && !r.deletedStatus && r.date
@@ -8547,6 +8578,14 @@ function buildCalendarEmailDraft(clid, clientName){
   bodyText+='\n\n';
   clientEvents.forEach(ev=>{ bodyText+=formatEventForEmail(ev,clid,paralegal); });
   bodyText+='Thank you.';
+  // Spanish client-facing version (appended when the client is added to the email)
+  const clientFirst=((caseMeta[clid]||{}).clientFirstName)||(clientName||'').split(/\s+/)[0]||'';
+  let bodyTextES='Estimado/a '+(clientFirst||clientName)+',\n\nLe escribimos para informarle las próximas fechas relacionadas con su caso:\n\n';
+  bodyTextES+=clientName+' — ID del cliente: '+(base.clid||clid);
+  if(base.anum) bodyTextES+=' A#: '+base.anum;
+  bodyTextES+='\n\n';
+  clientEvents.forEach(ev=>{ bodyTextES+=formatEventForEmailES(ev,clid,paralegal); });
+  bodyTextES+='Gracias.';
   const subject='Calendar - '+clientName+(base.clid?' ('+base.clid+')':'');
   // To: Loly + paralegal
   const toList=[lolyEmail];
@@ -8556,7 +8595,8 @@ function buildCalendarEmailDraft(clid, clientName){
     cc: '',
     subject: subject,
     body: bodyText,
-    _clid: clid
+    _clid: clid,
+    _spanishBody: bodyTextES
   });
 }
 
@@ -8624,6 +8664,9 @@ function openEmailComposeModal(opts){
     </div>`;
   ov.appendChild(box);
   document.body.appendChild(ov);
+  // Stash the pre-built Spanish version of the body so the "+ Client" quick-add
+  // button can append it when the client is added as a recipient.
+  window._emcSpanishBody = opts._spanishBody || '';
   // Render quick-add recipient buttons
   renderQuickAddRecipients(opts._clid||null);
   // Append Gmail signature if requested or always
@@ -8642,6 +8685,28 @@ function openEmailComposeModal(opts){
     }
   });
   setTimeout(()=>{const el=document.getElementById('emc-body');if(el){el.focus();el.setSelectionRange(0,0);}},80);
+}
+
+// Append the pre-built Spanish body (stored on window._emcSpanishBody by
+// openEmailComposeModal) to the compose textarea under a clear separator.
+// Inserts before the signature if one has already been appended, so the
+// signature remains at the very bottom. No-op if Spanish body missing or
+// already present.
+function _appendSpanishEmailBody(){
+  const bodyEl=document.getElementById('emc-body');
+  if(!bodyEl) return;
+  const es=window._emcSpanishBody||'';
+  if(!es) return;
+  const marker='\n\n──── ESPAÑOL ────\n\n';
+  if(bodyEl.value.includes(marker)) return;
+  const current=bodyEl.value;
+  const sigIdx=current.indexOf('\n--\n');
+  const insertion=marker+es+'\n';
+  if(sigIdx>=0){
+    bodyEl.value=current.slice(0,sigIdx)+insertion+current.slice(sigIdx);
+  }else{
+    bodyEl.value=current.replace(/\s+$/,'')+insertion;
+  }
 }
 
 function renderQuickAddRecipients(clid){
@@ -8675,6 +8740,7 @@ function renderQuickAddRecipients(clid){
     btn.title='Add '+r.email;
     btn.onmouseenter=()=>{btn.style.background=r.color;btn.style.color='#fff';};
     btn.onmouseleave=()=>{btn.style.background='transparent';btn.style.color=r.color;};
+    const isClient=r.label==='+ Client';
     btn.onclick=()=>{
       const toField=document.getElementById('emc-to');
       const ccField=document.getElementById('emc-cc');
@@ -8685,6 +8751,9 @@ function renderQuickAddRecipients(clid){
       else toField.value=r.email;
       btn.style.opacity='0.4';
       btn.style.pointerEvents='none';
+      // If this is the client, append the Spanish translation of the body so
+      // they can read the same info in Spanish under a clear separator.
+      if(isClient) _appendSpanishEmailBody();
     };
     // Grey out if already in To/Cc
     const toVal=(document.getElementById('emc-to')||{}).value||'';
