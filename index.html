@@ -9525,7 +9525,7 @@ function renderSIJTable(){
     if(disabled){
       return `<span title="${lockTitle}" style="display:inline-block;font-size:14px;color:var(--ink-faint);cursor:not-allowed;line-height:1;">🔒</span>`;
     }
-    return `<select onclick="event.stopPropagation();" onchange="event.stopPropagation();if(!caseMeta['${clid}'])caseMeta['${clid}']={};caseMeta['${clid}'].${metaField}=this.value;markUnsaved();renderSIJTable();" style="font-size:10px;padding:3px 5px;border:1px solid ${currentStage.color}40;border-radius:4px;background:${currentStage.bg};color:${currentStage.color};font-weight:600;cursor:pointer;font-family:inherit;outline:none;max-width:130px;">${opts}</select>`;
+    return `<select onclick="event.stopPropagation();" ondblclick="event.stopPropagation();" onchange="event.stopPropagation();if(!caseMeta['${clid}'])caseMeta['${clid}']={};caseMeta['${clid}'].${metaField}=this.value;markUnsaved();renderSIJTable();" style="font-size:10px;padding:3px 5px;border:1px solid ${currentStage.color}40;border-radius:4px;background:${currentStage.bg};color:${currentStage.color};font-weight:600;cursor:pointer;font-family:inherit;outline:none;max-width:130px;">${opts}</select>`;
   }
 
   // ── Build table ──
@@ -9538,7 +9538,7 @@ function renderSIJTable(){
   try{ savedWidths=JSON.parse(localStorage.getItem('sij-col-widths')||'{}')||{}; }catch(e){}
   // Default widths used when no saved width exists. table-layout:fixed needs explicit widths.
   const defaultWidths={
-    'client':150,'paralegal':54,
+    'client':150,'clid':80,'paralegal':54,
     'fc-stage':130,'fc-event':130,'fc-date':92,
     'ic-stage':130,'ic-event':110,'ic-date':128,
     'i360-stage':130,'uscis-event':110,'priority-date':156,'df':220
@@ -9556,6 +9556,7 @@ function renderSIJTable(){
   const thead=document.createElement('thead');
   thead.innerHTML=`<tr style="background:var(--cream-dark);position:sticky;top:0;z-index:2;">
     ${thFor('Client','client')}
+    ${thFor('Cl ID','clid')}
     ${thFor('Paralegal','paralegal')}
     ${thFor('FC Stage','fc-stage','border-left:3px solid #C9823A40;')}
     ${thFor('FC Event','fc-event')}
@@ -9585,9 +9586,10 @@ function renderSIJTable(){
     tr.style.cssText='border-bottom:1px solid var(--cream-dark);transition:background .1s;'+(rowBg?'background:'+rowBg+';':'');
     tr.onmouseenter=()=>tr.style.background=rowBg||'var(--cream)';
     tr.onmouseleave=()=>tr.style.background=rowBg||'';
-    // Open case on triple-click anywhere on the row
-    tr.addEventListener('click',function(e){
-      if(e.detail===3){ openCaseDetail(c.clid); }
+    // Open case on double-click anywhere on the row (skip interactive controls)
+    tr.addEventListener('dblclick',function(e){
+      if(e.target.closest('select,input,button,textarea,a')) return;
+      openCaseDetail(c.clid);
     });
 
     const tdS='padding:8px 8px;font-size:11px;';
@@ -9688,6 +9690,7 @@ function renderSIJTable(){
 
     tr.innerHTML=`
       <td style="${tdS}font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;z-index:1;background:${rowBg||'var(--cream)'};box-shadow:2px 0 0 var(--border);"><span onclick="event.stopPropagation();openCaseDetail('${c.clid}');" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;" onmouseenter="this.style.textDecorationColor='var(--ink)'" onmouseleave="this.style.textDecorationColor='transparent'">${c.client||c.clid}</span></td>
+      <td style="${tdS}color:var(--ink-muted);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.clid||'—'}</td>
       <td style="${tdS}color:var(--ink-soft);text-align:center;" title="${(c.atty||'').replace(/"/g,'&quot;')}">${(function(n){if(!n)return '—';const parts=String(n).trim().split(/\s+/).filter(Boolean);if(!parts.length)return '—';if(parts.length===1)return parts[0].slice(0,2).toUpperCase();return (parts[0][0]+parts[parts.length-1][0]).toUpperCase();})(c.atty)}</td>
       <td style="${tdS}border-left:3px solid #C9823A40;">${stageSelectHtml(c.clid,FC_STAGES,c.fcKey,c.fcStage,'fcStage')}</td>
       <td style="${tdS}font-weight:500;color:var(--ink);">${fc.evHtml}</td>
@@ -13651,7 +13654,17 @@ db.collection('wilmer_daynotes').doc(dnKey).onSnapshot(
   if(el) el.addEventListener('input',_debouncedRenderAll);
 });
 const csEl=document.getElementById('cases-search');
-if(csEl) csEl.addEventListener('input',_debouncedRenderCases);
+if(csEl) csEl.addEventListener('input',function(){
+  // If a case detail is open, close it so search results are visible and the
+  // user can navigate to whichever case they typed, regardless of what's open.
+  const detailView=document.getElementById('cases-detail-view');
+  if(detailView && detailView.style.display!=='none'){
+    _activeCasesSubtab='general';
+    closeCaseDetail();
+    switchCasesSubtab('general');
+  }
+  _debouncedRenderCases();
+});
 ['cases-filter-type','cases-filter-atty'].forEach(id=>{
   const el=document.getElementById(id);
   if(el) el.addEventListener('change',_debouncedRenderCases);
