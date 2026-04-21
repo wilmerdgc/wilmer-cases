@@ -9420,11 +9420,14 @@ function renderCasesTypeStats(){
 }
 
 function renderSIJTable(){
-  const board=document.getElementById('sij-board');
-  if(!board)return;
+  // Render the same table into every .sij-board element on the page
+  // (Cases → SIJ subtab, Calendar → SIJ view, etc.). Each mount gets its own
+  // live DOM + listeners so both subtabs behave identically.
+  const boards=document.querySelectorAll('.sij-board');
+  if(!boards.length)return;
   const all=getCases().filter(c=>(c.type||'').includes('Special Juvenile'));
   if(!all.length){
-    board.innerHTML='<div style="text-align:center;padding:4rem;color:#9E9186;font-size:13px;">No SIJ cases found.</div>';
+    boards.forEach(b=>{b.innerHTML='<div style="text-align:center;padding:4rem;color:#9E9186;font-size:13px;">No SIJ cases found.</div>';});
     return;
   }
 
@@ -9503,9 +9506,6 @@ function renderSIJTable(){
     return aDate.localeCompare(bDate);
   });
 
-  board.innerHTML='';
-  board.style.cssText='overflow-x:auto;';
-
   // ── Helper: build event + date cell HTML ──
   function evCellHtml(ne){
     if(!ne) return{evHtml:'—',dateHtml:'—',dateColor:'var(--ink-faint)',dateBg:''};
@@ -9551,6 +9551,9 @@ function renderSIJTable(){
     return `<th data-col="${key}" style="${thStyle}${extra||''}width:${w}px;${sticky}">${label}<span class="col-resize" data-col="${key}" style="position:absolute;top:0;right:-3px;width:8px;height:100%;cursor:col-resize;user-select:none;z-index:3;"></span></th>`;
   }
 
+  boards.forEach(board=>{
+  board.innerHTML='';
+  board.style.cssText='overflow-x:auto;';
   const tbl=document.createElement('table');
   tbl.style.cssText='border-collapse:collapse;font-size:12px;table-layout:fixed;';
   const thead=document.createElement('thead');
@@ -9740,56 +9743,9 @@ function renderSIJTable(){
     handle.addEventListener('click',e=>e.stopPropagation());
     handle.addEventListener('dblclick',e=>e.stopPropagation());
   });
-
-  // Mirror to any secondary SIJ boards (e.g. Calendar → SIJ view)
-  _mirrorSijBoards();
+  }); // end boards.forEach
 }
 
-function _mirrorSijBoards(){
-  const primary=document.getElementById('sij-board');
-  if(!primary)return;
-  const mirrors=document.querySelectorAll('.sij-board');
-  mirrors.forEach(m=>{
-    if(m===primary)return;
-    m.innerHTML=primary.innerHTML;
-    m.style.cssText=primary.style.cssText||'';
-    // Re-wire column-resize handles on the mirror
-    const thead=m.querySelector('thead');
-    if(!thead)return;
-    thead.querySelectorAll('span.col-resize').forEach(handle=>{
-      handle.addEventListener('mousedown',function(e){
-        e.preventDefault(); e.stopPropagation();
-        const th=handle.parentElement;
-        const key=handle.getAttribute('data-col');
-        const startX=e.clientX;
-        const startW=th.getBoundingClientRect().width;
-        document.body.style.cursor='col-resize';
-        document.body.style.userSelect='none';
-        function onMove(ev){ th.style.width=Math.max(40,Math.round(startW+(ev.clientX-startX)))+'px'; }
-        function onUp(){
-          document.removeEventListener('mousemove',onMove);
-          document.removeEventListener('mouseup',onUp);
-          document.body.style.cursor='';
-          document.body.style.userSelect='';
-          try{ const cur=JSON.parse(localStorage.getItem('sij-col-widths')||'{}')||{}; cur[key]=Math.round(th.getBoundingClientRect().width); localStorage.setItem('sij-col-widths',JSON.stringify(cur)); }catch(err){}
-        }
-        document.addEventListener('mousemove',onMove);
-        document.addEventListener('mouseup',onUp);
-      });
-      handle.addEventListener('click',e=>e.stopPropagation());
-      handle.addEventListener('dblclick',e=>e.stopPropagation());
-    });
-    // Re-wire the triple-click-to-open-case handler on each row
-    m.querySelectorAll('tbody tr').forEach(tr=>{
-      tr.addEventListener('click',function(e){
-        if(e.detail===3){
-          const span=tr.querySelector('td:first-child span[onclick*="openCaseDetail"]');
-          if(span) span.click();
-        }
-      });
-    });
-  });
-}
 function uploadI360Notice(clid){
   const input=document.createElement('input');
   input.type='file';
