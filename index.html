@@ -10617,7 +10617,7 @@ function openCaseDetail(clid){
   // Shared Cancel / Save row
   const sharedActRow = document.createElement('div');
   sharedActRow.id = 'case-info-shared-actions';
-  sharedActRow.style.cssText = 'display:none;justify-content:flex-end;gap:8px;margin-bottom:16px;';
+  sharedActRow.style.cssText = 'display:none;justify-content:space-between;align-items:center;gap:8px;margin-bottom:16px;';
 
   let isEditing = false;
 
@@ -10972,11 +10972,30 @@ function openCaseDetail(clid){
   };
   renderAll2();
 
+  // Delete case button — placed on the far left to separate it visually from
+  // the save/cancel cluster. Only shown while editing (sharedActRow visibility).
+  const sharedDelete=document.createElement('button');sharedDelete.textContent='🗑 Delete case';sharedDelete.title='Mark all events in this case as deleted';sharedDelete.style.cssText='font-size:12px;font-weight:600;padding:7px 16px;border:1px solid #E6BDBD;border-radius:8px;background:#FBF1F1;color:#B85C5C;cursor:pointer;font-family:inherit;';
+  sharedDelete.onmouseenter=()=>{sharedDelete.style.background='#B85C5C';sharedDelete.style.color='#fff';};
+  sharedDelete.onmouseleave=()=>{sharedDelete.style.background='#FBF1F1';sharedDelete.style.color='#B85C5C';};
+  sharedDelete.onclick=()=>{
+    const name=base.client||clid;
+    const victims=records.filter(r=>(r.clid||r.client)===clid);
+    const activeCount=victims.filter(r=>!r.deletedStatus).length;
+    if(!confirm('Delete case "'+name+'"?\n\nThis will mark all '+victims.length+' record'+(victims.length===1?'':'s')+' ('+activeCount+' active) as deleted. You can restore individual events from Finished & All Events.')) return;
+    const today=todayStr();
+    victims.forEach(r=>{r.deletedStatus='deleted';if(!r.deletedDate)r.deletedDate=today;});
+    _invalidateCasesCache();
+    markUnsaved();
+    showToast('Case deleted — '+name);
+    closeCaseDetail();
+  };
+  const rightCluster=document.createElement('div');rightCluster.style.cssText='display:flex;gap:8px;';
   const sharedCancel=document.createElement('button');sharedCancel.textContent='Cancel';sharedCancel.style.cssText='font-size:12px;padding:7px 18px;border:1px solid #DDD5CA;border-radius:8px;background:#F7F3ED;color:#5C5148;cursor:pointer;font-family:inherit;';
   sharedCancel.onclick=()=>{isEditing=false;editToggle.textContent='Edit';renderAll2();sharedActRow.style.display='none';};
   const sharedSave=document.createElement('button');sharedSave.textContent='Save';sharedSave.style.cssText='font-size:12px;font-weight:600;padding:7px 22px;border-radius:8px;background:#2C2620;color:#F7F3ED;border:none;cursor:pointer;font-family:inherit;';
   sharedSave.onclick=()=>{doSaveAll();isEditing=false;editToggle.textContent='Edit';renderAll2();sharedActRow.style.display='none';};
-  sharedActRow.appendChild(sharedCancel);sharedActRow.appendChild(sharedSave);
+  rightCluster.appendChild(sharedCancel);rightCluster.appendChild(sharedSave);
+  sharedActRow.appendChild(sharedDelete);sharedActRow.appendChild(rightCluster);
   body.appendChild(sharedActRow);
 
   // Active events
