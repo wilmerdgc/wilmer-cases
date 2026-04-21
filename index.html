@@ -2463,6 +2463,7 @@ function hideExcelRestorePrompt(){}
     <button id="wf-tab-casetypes" onclick="switchWfTab('casetypes')" style="font-size:12px;font-weight:600;padding:8px 18px;border:none;border-bottom:2px solid #6A8C6E;background:transparent;color:#2C2620;cursor:pointer;margin-bottom:-1px;">Case Types</button>
     <button id="wf-tab-judges" onclick="switchWfTab('judges')" style="font-size:12px;font-weight:600;padding:8px 18px;border:none;border-bottom:2px solid transparent;background:transparent;color:#9E9186;cursor:pointer;margin-bottom:-1px;">Judges</button>
     <button id="wf-tab-issues" onclick="switchWfTab('issues')" style="font-size:12px;font-weight:600;padding:8px 18px;border:none;border-bottom:2px solid transparent;background:transparent;color:#9E9186;cursor:pointer;margin-bottom:-1px;">Issues</button>
+    <button id="wf-tab-checklists" onclick="switchWfTab('checklists')" style="font-size:12px;font-weight:600;padding:8px 18px;border:none;border-bottom:2px solid transparent;background:transparent;color:#9E9186;cursor:pointer;margin-bottom:-1px;">Checklists</button>
   </div>
 
   <!-- Issues sub-pane -->
@@ -2475,6 +2476,18 @@ function hideExcelRestorePrompt(){}
       <button onclick="openIssueEditor(-1)" style="font-size:11px;padding:5px 14px;border:1px solid #B4CCAD;border-radius:20px;background:#EBF1EB;color:#4A6B4E;cursor:pointer;font-family:inherit;font-weight:600;">+ Add Issue</button>
     </div>
     <div id="issues-list-container"></div>
+  </div>
+
+  <!-- Checklists sub-pane -->
+  <div id="wf-pane-checklists" style="display:none;max-width:900px;margin:0 auto;padding:20px 32px 40px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:#2C2620;font-family:'Lora',Georgia,serif;margin-bottom:3px;">Checklists</div>
+        <div style="font-size:12px;color:#9E9186;">Name a checklist and assign it to one or more case types. Each case of those types will offer the checklist.</div>
+      </div>
+      <button onclick="openChecklistEditor(-1)" style="font-size:11px;padding:5px 14px;border:1px solid #B4CCAD;border-radius:20px;background:#EBF1EB;color:#4A6B4E;cursor:pointer;font-family:inherit;font-weight:600;">+ Add Checklist</button>
+    </div>
+    <div id="checklists-list-container"></div>
   </div>
 
   <!-- Case Types sub-pane -->
@@ -2890,6 +2903,19 @@ function loadCaseIssueTypes(){
   try{
     const d = localStorage.getItem(CASE_ISSUE_TYPES_KEY);
     if(d) caseIssueTypes = JSON.parse(d);
+  }catch(e){}
+}
+
+// ── Custom checklists ──────────────────────────────
+// A checklist has a name and a list of case types it applies to.
+// customChecklists = [ { id, name, caseTypes:[...] } ]
+let customChecklists = [];
+const CUSTOM_CHECKLISTS_KEY = 'casetracker_custom_checklists_v1';
+function saveCustomChecklists(){ try{ localStorage.setItem(CUSTOM_CHECKLISTS_KEY, JSON.stringify(customChecklists)); }catch(e){} }
+function loadCustomChecklists(){
+  try{
+    const d = localStorage.getItem(CUSTOM_CHECKLISTS_KEY);
+    if(d) customChecklists = JSON.parse(d);
   }catch(e){}
 }
 
@@ -8341,12 +8367,15 @@ function switchWfTab(t){
   document.getElementById('wf-pane-casetypes').style.display=t==='casetypes'?'':'none';
   document.getElementById('wf-pane-judges').style.display=t==='judges'?'':'none';
   document.getElementById('wf-pane-issues').style.display=t==='issues'?'':'none';
-  ['casetypes','judges','issues'].forEach(tab=>{
+  const clPane=document.getElementById('wf-pane-checklists');
+  if(clPane) clPane.style.display=t==='checklists'?'':'none';
+  ['casetypes','judges','issues','checklists'].forEach(tab=>{
     const btn=document.getElementById('wf-tab-'+tab);
     if(btn){btn.style.borderBottomColor=t===tab?'#6A8C6E':'transparent';btn.style.color=t===tab?'#2C2620':'#9E9186';}
   });
   if(t==='judges')renderJudges();
   if(t==='issues')renderIssuesList();
+  if(t==='checklists')renderChecklistsList();
 }
 
 // ── Judges data ─────────────────────────────────────
@@ -9149,10 +9178,10 @@ async function _writeAutoBackup(){
   _showAutoBackupButton();
 })();
 
-function saveAllData(){const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,venues,firmInfo,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
+function saveAllData(){const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,venues,firmInfo,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();}catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records)records=p.records;if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records)records=p.records;if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);return true;}catch(e){return false;}}
 window.markUnsaved=function(){document.getElementById('unsaved-dot').style.display='inline-block';document.getElementById('btn-save').classList.add('unsaved');clearTimeout(window._autoSaveTimer);window._autoSaveTimer=setTimeout(()=>{saveAllData();},1000);};
 function setLastBackupLabel(action){
   const n=new Date();
@@ -9206,7 +9235,7 @@ function saveFileWithTimestamp(){
   if(btn){btn.textContent='✓ Saved '+label;setTimeout(()=>{btn.textContent='💾 Save';},4000);}
   showToast('Saved: Wilmer '+label+'.html ✓');
 }
-function backupData(){const payload={records,paralegals,eventTypes,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);const d=new Date();a.download='romero_cases_backup_'+d.toISOString().slice(0,10)+'.json';a.click();setLastBackupLabel('Backup');showToast('Backup downloaded ✓');}
+function backupData(){const payload={records,paralegals,eventTypes,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);const d=new Date();a.download='romero_cases_backup_'+d.toISOString().slice(0,10)+'.json';a.click();setLastBackupLabel('Backup');showToast('Backup downloaded ✓');}
 // ── All Events: Download Template & Import ──────────────────
 function downloadEventTemplate(){
   const baseHeaders = [
@@ -11846,6 +11875,98 @@ function openIssueEditor(idx){
 }
 
 // ══════════════════════════════════════════════════
+// CHECKLISTS — Settings → Workflows
+// ══════════════════════════════════════════════════
+function renderChecklistsList(){
+  const ct=document.getElementById('checklists-list-container');
+  if(!ct) return;
+  ct.innerHTML='';
+  if(!customChecklists.length){
+    ct.innerHTML='<div style="font-size:13px;color:#C4BAB0;font-style:italic;padding:16px 0;">No checklists defined yet.</div>';
+    return;
+  }
+  customChecklists.forEach((cl,idx)=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #EDE8E0;border-radius:8px;background:#fff;margin-bottom:7px;';
+    const name=document.createElement('span');
+    name.style.cssText="font-size:13px;font-weight:600;color:#2C2620;flex:1;font-family:'Lora',Georgia,serif;";
+    name.textContent=cl.name;
+    const types=document.createElement('span');
+    types.style.cssText='font-size:11px;color:#9E9186;flex:1;';
+    types.textContent=(cl.caseTypes||[]).length?(cl.caseTypes||[]).join(' · '):'All case types';
+    const editBtn=document.createElement('button');editBtn.textContent='✎';
+    editBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:13px;padding:2px 6px;border-radius:4px;';
+    editBtn.onmouseenter=()=>editBtn.style.color='#5C5148';editBtn.onmouseleave=()=>editBtn.style.color='#C4BAB0';
+    editBtn.onclick=()=>openChecklistEditor(idx);
+    const delBtn=document.createElement('button');delBtn.textContent='×';
+    delBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:16px;padding:0 4px;border-radius:4px;';
+    delBtn.onmouseenter=()=>delBtn.style.color='#B85C5C';delBtn.onmouseleave=()=>delBtn.style.color='#C4BAB0';
+    delBtn.onclick=()=>{if(!confirm('Delete checklist "'+cl.name+'"?')) return; customChecklists.splice(idx,1); saveCustomChecklists(); markUnsaved(); renderChecklistsList();};
+    row.appendChild(name); row.appendChild(types); row.appendChild(editBtn); row.appendChild(delBtn);
+    ct.appendChild(row);
+  });
+}
+
+function openChecklistEditor(idx){
+  const isNew = idx === -1;
+  const cl = isNew
+    ? {id:'cl'+Date.now(), name:'', caseTypes:[]}
+    : {...customChecklists[idx], caseTypes:[...(customChecklists[idx].caseTypes||[])]};
+
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(44,38,32,0.35);z-index:9500;display:flex;align-items:center;justify-content:center;';
+  const bx=document.createElement('div');
+  bx.style.cssText='background:#fff;border:1px solid #DDD5CA;border-radius:14px;padding:24px 22px;width:440px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 12px 40px rgba(44,38,32,0.18);';
+
+  const title=document.createElement('div');
+  title.style.cssText="font-family:'Lora',Georgia,serif;font-size:15px;font-weight:600;color:#2C2620;margin-bottom:16px;";
+  title.textContent = isNew ? 'Add Checklist' : 'Edit Checklist';
+  bx.appendChild(title);
+
+  // Name
+  const nameLbl=document.createElement('label');nameLbl.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;display:block;margin-bottom:4px;';nameLbl.textContent='Checklist name *';bx.appendChild(nameLbl);
+  const nameIn=document.createElement('input');nameIn.type='text';nameIn.value=cl.name;nameIn.placeholder='e.g. Intake documents';
+  nameIn.style.cssText='width:100%;font-size:13px;padding:7px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;margin-bottom:14px;';
+  nameIn.onfocus=()=>nameIn.style.borderColor='#6A8C6E';nameIn.onblur=()=>nameIn.style.borderColor='#DDD5CA';
+  bx.appendChild(nameIn);
+
+  // Case type checkboxes
+  const ctLbl=document.createElement('label');ctLbl.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;display:block;margin-bottom:4px;';ctLbl.textContent='Assigned to case types';bx.appendChild(ctLbl);
+  const hint=document.createElement('div');hint.style.cssText='font-size:11px;color:#C4BAB0;margin-bottom:8px;';hint.textContent='Leave all unchecked to apply to every case type.';bx.appendChild(hint);
+  const ctWrap=document.createElement('div');ctWrap.style.cssText='display:flex;flex-direction:column;gap:7px;margin-bottom:18px;max-height:220px;overflow-y:auto;';
+  if(!caseTypes.length){
+    const none=document.createElement('div');none.style.cssText='font-size:12px;color:#C4BAB0;font-style:italic;padding:10px;';none.textContent='No case types defined yet — add one in the Case Types tab first.';ctWrap.appendChild(none);
+  }else{
+    caseTypes.forEach(ct2=>{
+      const lbl=document.createElement('label');lbl.style.cssText='display:flex;align-items:center;gap:8px;font-size:12px;color:#5C5148;cursor:pointer;padding:5px 8px;border:1px solid #EDE8E0;border-radius:6px;transition:background .1s;';
+      const cb=document.createElement('input');cb.type='checkbox';cb.checked=cl.caseTypes.includes(ct2);cb.style.cssText='width:13px;height:13px;accent-color:#6A8C6E;cursor:pointer;flex-shrink:0;';
+      cb.onchange=()=>{ if(cb.checked){if(!cl.caseTypes.includes(ct2))cl.caseTypes.push(ct2);}else{cl.caseTypes=cl.caseTypes.filter(p=>p!==ct2);}};
+      lbl.onmouseenter=()=>lbl.style.background='#F7F3ED';lbl.onmouseleave=()=>lbl.style.background='';
+      lbl.appendChild(cb);lbl.appendChild(document.createTextNode(ct2));ctWrap.appendChild(lbl);
+    });
+  }
+  bx.appendChild(ctWrap);
+
+  const actDiv=document.createElement('div');actDiv.style.cssText='display:flex;justify-content:flex-end;gap:8px;';
+  const cBtn=document.createElement('button');cBtn.textContent='Cancel';cBtn.style.cssText='font-size:12px;padding:7px 16px;border:1px solid #DDD5CA;border-radius:8px;background:#F7F3ED;color:#5C5148;cursor:pointer;font-family:inherit;';cBtn.onclick=()=>ov.remove();
+  const sBtn=document.createElement('button');sBtn.textContent=isNew?'Add':'Save';sBtn.style.cssText='font-size:12px;font-weight:600;padding:7px 18px;border:none;border-radius:8px;background:#2C2620;color:#F7F3ED;cursor:pointer;font-family:inherit;';
+  sBtn.onclick=()=>{
+    const nm=nameIn.value.trim();if(!nm){nameIn.style.borderColor='#B85C5C';nameIn.focus();return;}
+    cl.name=nm;
+    if(isNew) customChecklists.push(cl);
+    else customChecklists[idx]=cl;
+    saveCustomChecklists();
+    markUnsaved();
+    ov.remove();
+    renderChecklistsList();
+  };
+  nameIn.addEventListener('keydown',e=>{if(e.key==='Enter')sBtn.click();if(e.key==='Escape')ov.remove();});
+  actDiv.appendChild(cBtn);actDiv.appendChild(sBtn);bx.appendChild(actDiv);
+  ov.onclick=e=>{if(e.target===ov)ov.remove();};
+  ov.appendChild(bx);document.body.appendChild(ov);setTimeout(()=>nameIn.focus(),30);
+}
+
+// ══════════════════════════════════════════════════
 // ISSUES — Case detail panel
 // ══════════════════════════════════════════════════
 function buildCaseIssuesPanel(clid, base, notesSec){
@@ -13566,7 +13687,7 @@ function forcePullFromCloud(){
       applyPayload(cloudData);
       try{
         const _now=Date.now();
-        const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,venues,_savedAt:_now};
+        const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,venues,_savedAt:_now};
         localStorage.setItem('casetracker_v1',JSON.stringify(payload));
         localStorage.setItem('wilmer_save_epoch',String(cloudData._savedAt||_now));
       }catch(e){}
@@ -13737,6 +13858,7 @@ const loaded=loadSavedData();
   ];
 })();
 loadJudges();
+loadCustomChecklists();
 loadLastBackupLabel();
 dayViewDate = new Date(TODAY);
 dayMiniMonthOffset = 0;
@@ -13774,7 +13896,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         applyPayload(cloudData);
         try{
           const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,venues,_savedAt:_now};
+          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,venues,_savedAt:_now};
           localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
@@ -13790,7 +13912,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         // re-push to Firestore and cause an infinite ping-pong loop
         try{
           const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,paralegalEmails,venues,_savedAt:_now};
+          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,venues,_savedAt:_now};
           localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
