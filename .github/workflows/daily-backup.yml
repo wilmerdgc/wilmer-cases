@@ -1,0 +1,99 @@
+name: Daily Firestore backup
+
+# Runs every day at 4:00 PM America/New_York (= 20:00 UTC during EDT,
+# 21:00 UTC during EST). The schedule fires UTC only, so we list both
+# and the workflow idempotently writes the same filename for the day.
+# Also lets you trigger it manually from the Actions tab if needed.
+on:
+  schedule:
+    - cron: "0 20 * * *"  # 4 PM ET during Daylight Saving (Mar-Nov)
+    - cron: "0 21 * * *"  # 4 PM ET during Standard Time  (Nov-Mar)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write  # needed to commit the backup file
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Fetch Firestore snapshot
+        env:
+          FIRESTORE_URL: "https://firestore.googleapis.com/v1/projects/wilmer-cases/databases/(default)/documents/wilmer/data?key=AIzaSyDqJ3r-SECt-WUzd3saY5UxBYaWnEI-al4"
+        run: |
+          set -eu
+          mkdir -p backups
+          DATE=$(TZ=America/New_York date +%Y-%m-%d)
+          echo "Backup date (ET): $DATE"
+          curl -fsS "$FIRESTORE_URL" -o backups/.raw.json
+          # Decode Firestore REST fields into plain JSON so backups are
+          # directly importable via the app's Import button.
+          node -e "
+            const fs=require('fs');
+            const raw=JSON.parse(fs.readFileSync('backups/.raw.json','utf8'));
+            if(raw.error){console.error('Firestore error:',raw.error.message);process.exit(1);}
+            function dec(v){
+              if('stringValue' in v)return v.stringValue;
+              if('integerValue' in v)return parseInt(v.integerValue,10);
+              if('doubleValue' in v)return v.doubleValue;
+              if('booleanValue' in v)return v.booleanValue;
+              if('nullValue' in v)return null;
+              if('timestampValue' in v)return v.timestampValue;
+              if('arrayValue' in v)return (v.arrayValue.values||[]).map(dec);
+              if('mapValue' in v){const o={};for(const k in (v.mapValue.fields||{}))o[k]=dec(v.mapValue.fields[k]);return o;}
+              return v;
+            }
+            const obj={};
+            for(const k in (raw.fields||{})) obj[k]=dec(raw.fields[k]);
+            fs.writeFileSync('backups/${DATE}.json', JSON.stringify(obj));
+            const recs = Array.isArray(obj.records)?obj.records.length:0;
+            const clients = recs ? new Set(obj.records.map(r=>r.clid||r.id)).size : 0;
+            const savedAt = obj._savedAt ? new Date(obj._savedAt).toISOString() : 'n/a';
+            fs.writeFileSync('backups/.meta', JSON.stringify({date:'${DATE}', records:recs, clients, savedAt}));
+            console.log('records:', recs, '| clients:', clients, '| savedAt:', savedAt);
+          "
+          rm -f backups/.raw.json
+          cat backups/.meta
+
+      - name: Prune backups older than 30 days
+        run: |
+          set -eu
+          # Delete backup files whose YYYY-MM-DD is more than 30 days before today (ET)
+          CUTOFF=$(TZ=America/New_York date -d '30 days ago' +%Y-%m-%d)
+          echo "Deleting backups before $CUTOFF"
+          for f in backups/*.json; do
+            [ -e "$f" ] || continue
+            BN=$(basename "$f" .json)
+            # Skip non-date filenames
+            case "$BN" in
+              [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9])
+                if [ "$BN" \< "$CUTOFF" ]; then
+                  echo "  rm $f"
+                  rm -f "$f"
+                fi
+                ;;
+            esac
+          done
+
+      - name: Commit and push if changed
+        run: |
+          set -eu
+          git config user.name  "wilmer-cases-backup-bot"
+          git config user.email "backup-bot@users.noreply.github.com"
+          git add backups/
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          META=$(cat backups/.meta 2>/dev/null || echo '{}')
+          DATE=$(node -e "console.log(JSON.parse(process.argv[1]).date)" "$META")
+          RECS=$(node -e "console.log(JSON.parse(process.argv[1]).records)" "$META")
+          rm -f backups/.meta
+          git add backups/
+          git commit -m "backup: $DATE daily snapshot ($RECS records)"
+          git push

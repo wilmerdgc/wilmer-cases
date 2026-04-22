@@ -13900,6 +13900,7 @@ function applyPayload(p){
   if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}
   if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}
   if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}
+  if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}
   if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);
   if(p.venues&&Array.isArray(p.venues))venues=p.venues;
   if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);
@@ -13927,6 +13928,10 @@ function _syncToFirestore(savedAt){
       records,paralegals,eventTypes,eventTypeMeta,
       caseTypes,caseTypeDocLists,caseTypeStages,
       customColumns,colVis,caseMeta:caseMetaClean,callUpTypes,judges,caseIssueTypes,
+      // These three used to be local-only, so a wipe of localStorage lost
+      // them permanently and they were absent from cloud snapshots. Now they
+      // ride along so the nightly GitHub Actions backup captures 100% of state.
+      customChecklists,paralegalEmails,venues,firmInfo,
       _savedAt:savedAt||Date.now(),_deviceId:_deviceId
     }));
     db.collection('wilmer').doc('data').set(payload)
