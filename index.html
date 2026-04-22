@@ -11998,8 +11998,8 @@ function renderChecklistsList(){
 
         const line=document.createElement('div');
         line.style.cssText='display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:13px;background:#fff;border:1px solid #EDE8E0;border-radius:10px;transition:all .15s;box-shadow:0 1px 0 rgba(44,38,32,0.02);';
-        line.onmouseenter=()=>{line.style.borderColor='#D8CFC0';line.style.transform='translateX(2px)';line.style.boxShadow='0 2px 6px rgba(44,38,32,0.05)';asg.style.opacity='1';rm.style.opacity='1';numEl.style.opacity='0';};
-        line.onmouseleave=()=>{line.style.borderColor='#EDE8E0';line.style.transform='';line.style.boxShadow='0 1px 0 rgba(44,38,32,0.02)';if(!it.assignedTo)asg.style.opacity='0.4';rm.style.opacity='0';numEl.style.opacity='1';};
+        line.onmouseenter=()=>{line.style.borderColor='#D8CFC0';line.style.boxShadow='0 2px 6px rgba(44,38,32,0.05)';asg.style.opacity='1';rm.style.opacity='1';};
+        line.onmouseleave=()=>{line.style.borderColor='#EDE8E0';line.style.boxShadow='0 1px 0 rgba(44,38,32,0.02)';if(!it.assignedTo)asg.style.opacity='0.4';rm.style.opacity='0';};
 
         // School-style bubble checkbox
         const bubble=document.createElement('button');bubble.type='button';
@@ -12024,17 +12024,17 @@ function renderChecklistsList(){
         // Item number (like a school list)
         const numEl=document.createElement('span');
         numEl.textContent=(i+1)+'.';
-        numEl.style.cssText="font-family:'Lora',Georgia,serif;font-size:13px;font-weight:600;color:"+(done?'#C4BAB0':'#9E9186')+';flex-shrink:0;min-width:18px;transition:opacity .15s;';
+        numEl.style.cssText="font-family:'Lora',Georgia,serif;font-size:13px;font-weight:700;color:"+(done?'#C4BAB0':'#9E9186')+';flex-shrink:0;min-width:20px;text-align:right;";
 
-        // Icon indicator
-        const icon=document.createElement('span');
-        icon.textContent=isEv?'📅':'✓';
-        icon.style.cssText='font-size:13px;flex-shrink:0;opacity:'+(isEv?'1':'0.7')+';';
+        // Type badge (small, next to value)
+        const typeBadge=document.createElement('span');
+        typeBadge.textContent=isEv?'EVENT':'TASK';
+        typeBadge.style.cssText='font-size:9px;font-weight:700;letter-spacing:.05em;padding:2px 7px;border-radius:10px;flex-shrink:0;color:'+(isEv?'#6B7FA3':'#6A8C6E')+';background:'+(isEv?'#EEF1F7':'#EBF1EB')+';';
 
         let valEl;
         if(isEv){
           valEl=document.createElement('select');
-          valEl.style.cssText='flex:1;font-size:13px;padding:5px 8px;border:1px dashed transparent;border-radius:6px;font-family:inherit;background:transparent;outline:none;min-width:0;color:'+(done?'#C4BAB0':'#2C2620')+';cursor:pointer;transition:all .12s;';
+          valEl.style.cssText='flex:1 1 240px;min-width:180px;font-size:13px;padding:5px 8px;border:1px dashed transparent;border-radius:6px;font-family:inherit;background:transparent;outline:none;color:'+(done?'#C4BAB0':'#2C2620')+';cursor:pointer;transition:all .12s;';
           valEl.onfocus=()=>{valEl.style.borderColor='#6B7FA3';valEl.style.background='#F9FAFC';};
           valEl.onblur=()=>{valEl.style.borderColor='transparent';valEl.style.background='transparent';};
           const ph=document.createElement('option');ph.value='';ph.textContent='— select event type —';valEl.appendChild(ph);
@@ -12043,15 +12043,15 @@ function renderChecklistsList(){
           valEl.onchange=()=>{it.value=valEl.value;persist();refreshCount();};
         }else{
           valEl=document.createElement('input');valEl.type='text';valEl.placeholder='Write a task…';valEl.value=it.value||'';
-          valEl.style.cssText='flex:1;font-size:13px;padding:5px 8px;border:1px dashed transparent;border-radius:6px;font-family:inherit;outline:none;background:transparent;min-width:0;color:'+(done?'#C4BAB0':'#2C2620')+';text-decoration:'+(done?'line-through':'none')+';transition:all .12s;';
-          valEl.onfocus=()=>{valEl.style.borderColor='#6A8C6E';valEl.style.background='#FDFAF7';};
-          valEl.onblur=()=>{valEl.style.borderColor='transparent';valEl.style.background='transparent';persist();refreshCount();};
+          valEl.style.cssText='flex:1 1 240px;min-width:180px;font-size:13px;padding:5px 8px;border:1px dashed #EDE8E0;border-radius:6px;font-family:inherit;outline:none;background:#FDFAF7;color:'+(done?'#C4BAB0':'#2C2620')+';text-decoration:'+(done?'line-through':'none')+';transition:all .12s;';
+          valEl.onfocus=()=>{valEl.style.borderColor='#6A8C6E';valEl.style.background='#fff';};
+          valEl.onblur=()=>{valEl.style.borderColor='#EDE8E0';valEl.style.background='#FDFAF7';persist();refreshCount();};
           valEl.oninput=()=>{it.value=valEl.value;};
           valEl.onkeydown=(e)=>{if(e.key==='Enter'){e.preventDefault();valEl.blur();addTk.click();}};
         }
 
         const asg=document.createElement('select');
-        asg.style.cssText='font-size:11px;padding:3px 10px;border:1px solid '+(it.assignedTo?'#D8CFC0':'#EDE8E0')+';border-radius:14px;font-family:inherit;background:'+(it.assignedTo?'#FDFAF7':'#fff')+';outline:none;flex-shrink:0;color:'+(it.assignedTo?'#5C5148':'#9E9186')+';opacity:'+(it.assignedTo?'1':'0.4')+';transition:opacity .15s;cursor:pointer;font-weight:'+(it.assignedTo?'600':'400')+';';
+        asg.style.cssText='font-size:11px;padding:3px 8px;border:1px solid '+(it.assignedTo?'#D8CFC0':'#EDE8E0')+';border-radius:14px;font-family:inherit;background:'+(it.assignedTo?'#FDFAF7':'#fff')+';outline:none;flex-shrink:0;flex-grow:0;width:110px;color:'+(it.assignedTo?'#5C5148':'#9E9186')+';opacity:'+(it.assignedTo?'1':'0.55')+';transition:opacity .15s;cursor:pointer;font-weight:'+(it.assignedTo?'600':'400')+';margin-left:auto;';
         asg.title='Assigned to';
         [['','— assign —'],['Attorney','👔 Attorney'],['Paralegal','📋 Paralegal']].forEach(([v,lbl2])=>{const o=document.createElement('option');o.value=v;o.textContent=lbl2;if(v===(it.assignedTo||''))o.selected=true;asg.appendChild(o);});
         asg.onchange=()=>{
@@ -12070,7 +12070,7 @@ function renderChecklistsList(){
         rm.onmouseenter=()=>{rm.style.background='#F9EDED';}; rm.onmouseleave=()=>{rm.style.background='transparent';};
         rm.onclick=()=>{cl.items.splice(i,1);delete cl._checked[i];persist();refreshCount();renderRows();};
 
-        line.appendChild(bubble);line.appendChild(numEl);line.appendChild(icon);line.appendChild(valEl);line.appendChild(asg);line.appendChild(rm);
+        line.appendChild(bubble);line.appendChild(numEl);line.appendChild(typeBadge);line.appendChild(valEl);line.appendChild(asg);line.appendChild(rm);
         itemsWrap.appendChild(line);
       });
     }
