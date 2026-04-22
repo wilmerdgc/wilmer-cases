@@ -12590,8 +12590,10 @@ function renderChecklistsList(){
 
     const caret=document.createElement('button');
     caret.type='button';
-    caret.textContent='▸';
-    caret.style.cssText='font-size:11px;color:#9E9186;flex-shrink:0;background:transparent;border:none;cursor:pointer;padding:2px 4px;transition:transform .15s;'+(isOpen?'transform:rotate(90deg);':'');
+    caret.textContent=isOpen?'−':'+';
+    caret.style.cssText='font-size:14px;font-weight:600;color:#9E9186;flex-shrink:0;background:transparent;border:1px solid #DDD5CA;border-radius:4px;cursor:pointer;width:18px;height:18px;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;transition:all .12s;';
+    caret.onmouseenter=()=>{caret.style.background='#FDFAF7';caret.style.borderColor='#9E9186';caret.style.color='#5C5148';};
+    caret.onmouseleave=()=>{caret.style.background='transparent';caret.style.borderColor='#DDD5CA';caret.style.color='#9E9186';};
 
     const nameIn=document.createElement('input');
     nameIn.type='text';nameIn.value=cl.name;nameIn.placeholder='Checklist name…';
@@ -12749,7 +12751,7 @@ function renderChecklistsList(){
       e.stopPropagation();
       const nowOpen=body.style.display==='none';
       body.style.display=nowOpen?'block':'none';
-      caret.style.transform=nowOpen?'rotate(90deg)':'';
+      caret.textContent=nowOpen?'−':'+';
       window._checklistOpen[cl.id]=nowOpen;
     };
 
