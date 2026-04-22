@@ -12597,9 +12597,9 @@ function renderChecklistsList(){
 
     const nameIn=document.createElement('input');
     nameIn.type='text';nameIn.value=cl.name;nameIn.placeholder='Checklist name…';
-    nameIn.style.cssText="font-size:13px;font-weight:600;color:#2C2620;flex:1;font-family:'Lora',Georgia,serif;border:none;background:transparent;padding:2px 4px;outline:none;border-radius:4px;";
-    nameIn.onfocus=()=>nameIn.style.background='#FDFAF7';
-    nameIn.onblur=()=>{nameIn.style.background='transparent';const v=nameIn.value.trim();if(v&&v!==cl.name){cl.name=v;persist();}else if(!v){nameIn.value=cl.name;}};
+    nameIn.style.cssText="font-size:14px;font-weight:600;color:#2C2620;flex:1;font-family:'Lora',Georgia,serif;border:1px solid #EDE8E0;background:#fff;padding:5px 10px;outline:none;border-radius:6px;transition:border-color .12s;";
+    nameIn.onfocus=()=>nameIn.style.borderColor='#6A8C6E';
+    nameIn.onblur=()=>{nameIn.style.borderColor='#EDE8E0';const v=nameIn.value.trim();if(v&&v!==cl.name){cl.name=v;persist();}else if(!v){nameIn.value=cl.name;}};
     nameIn.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();nameIn.blur();}};
 
     // Case types summary (click to toggle inline picker)
@@ -12699,15 +12699,16 @@ function renderChecklistsList(){
         let valEl;
         if(isEv){
           valEl=document.createElement('select');
-          valEl.style.cssText='flex:1;font-size:13px;padding:3px 4px;border:none;font-family:inherit;background:transparent;outline:none;min-width:0;color:'+(done?'#C4BAB0':'#6B7FA3')+';cursor:pointer;';
+          valEl.style.cssText='flex:1;font-size:13px;padding:4px 6px;border:1px solid #EDE8E0;border-radius:4px;font-family:inherit;background:#fff;outline:none;min-width:0;color:'+(done?'#C4BAB0':'#6B7FA3')+';cursor:pointer;';
           const ph=document.createElement('option');ph.value='';ph.textContent='— event type —';valEl.appendChild(ph);
           eventTypes.forEach(ev=>{const o=document.createElement('option');o.value=ev;o.textContent=ev;if(ev===it.value)o.selected=true;valEl.appendChild(o);});
           if(it.value && !eventTypes.includes(it.value)){const o=document.createElement('option');o.value=it.value;o.textContent=it.value;o.selected=true;valEl.appendChild(o);}
           valEl.onchange=()=>{it.value=valEl.value;persist();refreshCount();};
         }else{
-          valEl=document.createElement('input');valEl.type='text';valEl.placeholder='Task…';valEl.value=it.value||'';
-          valEl.style.cssText='flex:1;font-size:13px;padding:3px 4px;border:none;font-family:inherit;outline:none;background:transparent;min-width:0;color:'+(done?'#C4BAB0':'#2C2620')+';text-decoration:'+(done?'line-through':'none')+';';
-          valEl.onblur=()=>{persist();refreshCount();};
+          valEl=document.createElement('input');valEl.type='text';valEl.placeholder='Task name…';valEl.value=it.value||'';
+          valEl.style.cssText='flex:1;font-size:13px;padding:4px 8px;border:1px solid #EDE8E0;border-radius:4px;font-family:inherit;outline:none;background:#fff;min-width:0;color:'+(done?'#C4BAB0':'#2C2620')+';text-decoration:'+(done?'line-through':'none')+';transition:border-color .12s;';
+          valEl.onfocus=()=>{valEl.style.borderColor='#6A8C6E';};
+          valEl.onblur=()=>{valEl.style.borderColor='#EDE8E0';persist();refreshCount();};
           valEl.oninput=()=>{it.value=valEl.value;};
           valEl.onkeydown=(e)=>{if(e.key==='Enter'){e.preventDefault();valEl.blur();addTk.click();}};
         }
