@@ -16,7 +16,16 @@ firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
 let _fbOnline=false;
 let _lastLocalSave=0;
-const _deviceId='dev-'+Math.random().toString(36).slice(2,10);
+// Persist _deviceId so it stays stable across reloads/tabs on the same device.
+// A fresh-per-load random ID made the cloud-snapshot listener treat every
+// post-reload snapshot as "from another device" and overwrite local edits.
+const _deviceId=(function(){
+  try{
+    let id=localStorage.getItem('wilmer_device_id');
+    if(!id){ id='dev-'+Math.random().toString(36).slice(2,10); localStorage.setItem('wilmer_device_id',id); }
+    return id;
+  }catch(e){ return 'dev-'+Math.random().toString(36).slice(2,10); }
+})();
 
 // ─── Anonymous auth ─────────────────────────────────────────────────
 // Firestore security rules now require request.auth != null. The web
@@ -14728,8 +14737,13 @@ db.collection('wilmer').doc('data').onSnapshot(
       // the gate now decides whether to prompt the user.
       try{ window._onFirstCloudSnapshot && window._onFirstCloudSnapshot(doc.exists); }catch(e){}
     } else {
-      // Subsequent snapshots: apply if from a different device
-      if(!fromThisDevice){
+      // Subsequent snapshots: only apply if from a different device AND the
+      // cloud copy is strictly newer than what we have locally. Without the
+      // epoch check, a stale snapshot (from another tab still on yesterday's
+      // data, or a slow second write echoing back) would overwrite the
+      // user's just-added case while it sat in the markUnsaved → saveAllData
+      // → _syncToFirestore debounce window.
+      if(!fromThisDevice && cloudEpoch > localEpoch && cloudEpoch > _lastLocalSave){
         applyPayload(cloudData);
         // Save to localStorage only — do NOT call saveAllData() which would
         // re-push to Firestore and cause an infinite ping-pong loop
