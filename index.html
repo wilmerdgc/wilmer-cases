@@ -751,9 +751,9 @@ tbody td { padding: 9px 12px; vertical-align: middle; font-size: 12px; }
 .case-card-meta { font-size: 12px; color: var(--ink-muted); margin-top: 4px; }
 .case-card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
 .case-info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 10px; margin-bottom: 6px; }
-.case-info-item { background: var(--cream); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 11px 13px; }
-.case-info-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); margin-bottom: 4px; }
-.case-info-value { font-size: 14px; font-weight: 500; color: var(--ink); font-family: var(--font-display); }
+.case-info-item { background: var(--cream); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 6px 9px; }
+.case-info-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint); margin-bottom: 2px; }
+.case-info-value { font-size: 12px; font-weight: 500; color: var(--ink); font-family: var(--font-display); line-height: 1.3; }
 /* ── Respondents section ─────────────────────── */
 .respondent-card {
   background: #fff;
@@ -4539,11 +4539,25 @@ function renderParalegalTags(){
     const nameEl=document.createElement('span');nameEl.style.cssText='font-size:12px;font-weight:600;color:#2C2620;min-width:120px;cursor:pointer;';nameEl.textContent=v;nameEl.title='Click to edit name';
     nameEl.onclick=()=>{const newName=prompt('Edit paralegal name:',v);if(newName&&newName.trim()&&newName.trim()!==v){const old=v;paralegals[i]=newName.trim();if(paralegalEmails[old]){paralegalEmails[newName.trim()]=paralegalEmails[old];delete paralegalEmails[old];}updateSettingsSaveBar();markUnsaved();renderParalegalTags();}};
     const emailIn=document.createElement('input');emailIn.type='email';emailIn.placeholder='email@example.com';emailIn.value=paralegalEmails[v]||'';
-    emailIn.style.cssText='flex:1;font-size:11px;padding:4px 8px;border:1px solid #EDE8E0;border-radius:5px;color:#5C5148;background:#fff;outline:none;font-family:inherit;min-width:160px;';
-    emailIn.onfocus=()=>emailIn.style.borderColor='#6A8C6E';
+    emailIn.style.cssText='flex:1;font-size:11px;padding:4px 8px;border:1px solid #EDE8E0;border-radius:5px;color:#5C5148;background:#fff;outline:none;font-family:inherit;min-width:160px;cursor:pointer;';
+    emailIn.readOnly=true;emailIn.title='Click 3 times to edit';
+    let clickCount=0,clickTimer=null;
+    const lockEmail=()=>{emailIn.readOnly=true;emailIn.style.cursor='pointer';emailIn.style.background='#fff';emailIn.title='Click 3 times to edit';clickCount=0;if(clickTimer){clearTimeout(clickTimer);clickTimer=null;}};
+    emailIn.onclick=()=>{
+      if(!emailIn.readOnly)return;
+      clickCount++;
+      if(clickTimer)clearTimeout(clickTimer);
+      if(clickCount>=3){
+        emailIn.readOnly=false;emailIn.style.cursor='text';emailIn.style.background='#FFFEF5';emailIn.title='';clickCount=0;
+        emailIn.focus();
+      }else{
+        clickTimer=setTimeout(()=>{clickCount=0;},800);
+      }
+    };
+    emailIn.onfocus=()=>{if(!emailIn.readOnly)emailIn.style.borderColor='#6A8C6E';};
     // Auto-save as the user types (markUnsaved debounces the actual write by 1s)
     emailIn.oninput=()=>{const em=emailIn.value.trim();if(em)paralegalEmails[v]=em;else delete paralegalEmails[v];updateSettingsSaveBar();markUnsaved();};
-    emailIn.onblur=()=>{emailIn.style.borderColor='#EDE8E0';const em=emailIn.value.trim();if(em)paralegalEmails[v]=em;else delete paralegalEmails[v];updateSettingsSaveBar();markUnsaved();};
+    emailIn.onblur=()=>{emailIn.style.borderColor='#EDE8E0';const em=emailIn.value.trim();if(em)paralegalEmails[v]=em;else delete paralegalEmails[v];updateSettingsSaveBar();markUnsaved();lockEmail();};
     const transferBtn=document.createElement('button');transferBtn.textContent='↪ Transfer';transferBtn.title='Reassign all of '+v+'\'s cases to another paralegal';transferBtn.style.cssText='font-size:11px;padding:4px 10px;border:1px solid #D8CFC0;border-radius:14px;background:#fff;color:#5C5148;cursor:pointer;font-family:inherit;flex-shrink:0;';
     transferBtn.onmouseenter=()=>{transferBtn.style.background='#2C2620';transferBtn.style.color='#F7F3ED';transferBtn.style.borderColor='#2C2620';};
     transferBtn.onmouseleave=()=>{transferBtn.style.background='#fff';transferBtn.style.color='#5C5148';transferBtn.style.borderColor='#D8CFC0';};
@@ -10863,7 +10877,7 @@ function openCaseDetail(clid){
     infoBody._isSJC=isSJC;
 
     // ── LEVEL 1: Client ID, Paralegal, Consolidated ──
-    const L1=document.createElement('div');L1.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px;';
+    const L1=document.createElement('div');L1.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;margin-bottom:10px;';
     // Client ID
     const clidI=mkText2(base.clid);infoBody._clidInput=clidI;
     mkInfoCell(L1,'Client ID',base.clid,()=>clidI);
@@ -10887,8 +10901,8 @@ function openCaseDetail(clid){
 
     // ── Client Address ──
     const addrSection=document.createElement('div');addrSection.style.cssText='grid-column:1/-1;';
-    const addrLabel=document.createElement('div');addrLabel.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#C4BAB0;margin:8px 0 8px;';addrLabel.textContent='Client Address';addrSection.appendChild(addrLabel);
-    const addrGrid=document.createElement('div');addrGrid.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;';
+    const addrLabel=document.createElement('div');addrLabel.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;margin:4px 0 5px;';addrLabel.textContent='Client Address';addrSection.appendChild(addrLabel);
+    const addrGrid=document.createElement('div');addrGrid.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;';
     const _clAddr=caseMeta[clid]||{};
     const clStreetI=mkText2(_clAddr.clientStreet||'');clStreetI.placeholder='Street…';infoBody._clStreetInput=clStreetI;
     mkInfoCell(addrGrid,'Street',_clAddr.clientStreet||'',()=>clStreetI);
@@ -11895,6 +11909,13 @@ function renderChecklistsList(){
     const types=document.createElement('span');
     types.style.cssText='font-size:11px;color:#9E9186;flex:1;';
     types.textContent=(cl.caseTypes||[]).length?(cl.caseTypes||[]).join(' · '):'All case types';
+    const items=cl.items||[];
+    const nEv=items.filter(it=>it.type==='event').length;
+    const nTk=items.filter(it=>it.type==='task').length;
+    const countSpan=document.createElement('span');
+    countSpan.style.cssText='font-size:10px;color:#9E9186;flex-shrink:0;';
+    const parts=[];if(nEv)parts.push(nEv+' event'+(nEv===1?'':'s'));if(nTk)parts.push(nTk+' task'+(nTk===1?'':'s'));
+    countSpan.textContent=parts.join(' · ')||'empty';
     const editBtn=document.createElement('button');editBtn.textContent='✎';
     editBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:13px;padding:2px 6px;border-radius:4px;';
     editBtn.onmouseenter=()=>editBtn.style.color='#5C5148';editBtn.onmouseleave=()=>editBtn.style.color='#C4BAB0';
@@ -11903,7 +11924,7 @@ function renderChecklistsList(){
     delBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:16px;padding:0 4px;border-radius:4px;';
     delBtn.onmouseenter=()=>delBtn.style.color='#B85C5C';delBtn.onmouseleave=()=>delBtn.style.color='#C4BAB0';
     delBtn.onclick=()=>{if(!confirm('Delete checklist "'+cl.name+'"?')) return; customChecklists.splice(idx,1); saveCustomChecklists(); markUnsaved(); renderChecklistsList();};
-    row.appendChild(name); row.appendChild(types); row.appendChild(editBtn); row.appendChild(delBtn);
+    row.appendChild(name); row.appendChild(types); row.appendChild(countSpan); row.appendChild(editBtn); row.appendChild(delBtn);
     ct.appendChild(row);
   });
 }
@@ -11911,8 +11932,8 @@ function renderChecklistsList(){
 function openChecklistEditor(idx){
   const isNew = idx === -1;
   const cl = isNew
-    ? {id:'cl'+Date.now(), name:'', caseTypes:[]}
-    : {...customChecklists[idx], caseTypes:[...(customChecklists[idx].caseTypes||[])]};
+    ? {id:'cl'+Date.now(), name:'', caseTypes:[], items:[]}
+    : {...customChecklists[idx], caseTypes:[...(customChecklists[idx].caseTypes||[])], items:[...(customChecklists[idx].items||[]).map(it=>({...it}))]};
 
   const ov=document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:rgba(44,38,32,0.35);z-index:9500;display:flex;align-items:center;justify-content:center;';
@@ -11948,12 +11969,63 @@ function openChecklistEditor(idx){
   }
   bx.appendChild(ctWrap);
 
+  // Items (events + tasks)
+  const itLbl=document.createElement('label');itLbl.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;display:block;margin-bottom:4px;';itLbl.textContent='Events & Tasks';bx.appendChild(itLbl);
+  const itHint=document.createElement('div');itHint.style.cssText='font-size:11px;color:#C4BAB0;margin-bottom:8px;';itHint.textContent='Add events or tasks that belong to this checklist.';bx.appendChild(itHint);
+  const itWrap=document.createElement('div');itWrap.style.cssText='display:flex;flex-direction:column;gap:5px;margin-bottom:10px;max-height:220px;overflow-y:auto;';
+  bx.appendChild(itWrap);
+
+  function renderItems(){
+    itWrap.innerHTML='';
+    if(!cl.items.length){
+      const none=document.createElement('div');none.style.cssText='font-size:12px;color:#C4BAB0;font-style:italic;padding:6px 2px;';none.textContent='No events or tasks yet.';itWrap.appendChild(none);
+    }
+    cl.items.forEach((it,i)=>{
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid #EDE8E0;border-radius:6px;background:#FDFAF7;';
+      const badge=document.createElement('span');
+      const isEv=it.type==='event';
+      badge.textContent=isEv?'Event':'Task';
+      badge.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 6px;border-radius:10px;flex-shrink:0;color:'+(isEv?'#6B7FA3':'#6A8C6E')+';background:'+(isEv?'#EEF1F7':'#EBF1EB')+';';
+      row.appendChild(badge);
+      if(isEv){
+        const sel=document.createElement('select');sel.style.cssText='flex:1;font-size:12px;padding:4px 6px;border:1px solid #EDE8E0;border-radius:5px;font-family:inherit;background:#fff;outline:none;';
+        const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Select event type…';sel.appendChild(placeholder);
+        eventTypes.forEach(ev=>{const o=document.createElement('option');o.value=ev;o.textContent=ev;if(ev===it.value)o.selected=true;sel.appendChild(o);});
+        if(it.value && !eventTypes.includes(it.value)){const o=document.createElement('option');o.value=it.value;o.textContent=it.value;o.selected=true;sel.appendChild(o);}
+        sel.onchange=()=>{it.value=sel.value;};
+        row.appendChild(sel);
+      }else{
+        const inp=document.createElement('input');inp.type='text';inp.placeholder='Task description…';inp.value=it.value||'';
+        inp.style.cssText='flex:1;font-size:12px;padding:4px 6px;border:1px solid #EDE8E0;border-radius:5px;font-family:inherit;outline:none;';
+        inp.oninput=()=>{it.value=inp.value;};
+        row.appendChild(inp);
+      }
+      const rm=document.createElement('button');rm.textContent='×';rm.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:15px;padding:0 4px;flex-shrink:0;';
+      rm.onmouseenter=()=>rm.style.color='#B85C5C';rm.onmouseleave=()=>rm.style.color='#C4BAB0';
+      rm.onclick=()=>{cl.items.splice(i,1);renderItems();};
+      row.appendChild(rm);
+      itWrap.appendChild(row);
+    });
+  }
+  renderItems();
+
+  const addBar=document.createElement('div');addBar.style.cssText='display:flex;gap:6px;margin-bottom:18px;';
+  const addEv=document.createElement('button');addEv.type='button';addEv.textContent='+ Event';
+  addEv.style.cssText='flex:1;font-size:11px;padding:6px 10px;border:1px solid #C7D1E2;border-radius:6px;background:#EEF1F7;color:#6B7FA3;cursor:pointer;font-family:inherit;font-weight:600;';
+  addEv.onclick=()=>{cl.items.push({type:'event',value:''});renderItems();};
+  const addTk=document.createElement('button');addTk.type='button';addTk.textContent='+ Task';
+  addTk.style.cssText='flex:1;font-size:11px;padding:6px 10px;border:1px solid #B4CCAD;border-radius:6px;background:#EBF1EB;color:#4A6B4E;cursor:pointer;font-family:inherit;font-weight:600;';
+  addTk.onclick=()=>{cl.items.push({type:'task',value:''});renderItems();};
+  addBar.appendChild(addEv);addBar.appendChild(addTk);bx.appendChild(addBar);
+
   const actDiv=document.createElement('div');actDiv.style.cssText='display:flex;justify-content:flex-end;gap:8px;';
   const cBtn=document.createElement('button');cBtn.textContent='Cancel';cBtn.style.cssText='font-size:12px;padding:7px 16px;border:1px solid #DDD5CA;border-radius:8px;background:#F7F3ED;color:#5C5148;cursor:pointer;font-family:inherit;';cBtn.onclick=()=>ov.remove();
   const sBtn=document.createElement('button');sBtn.textContent=isNew?'Add':'Save';sBtn.style.cssText='font-size:12px;font-weight:600;padding:7px 18px;border:none;border-radius:8px;background:#2C2620;color:#F7F3ED;cursor:pointer;font-family:inherit;';
   sBtn.onclick=()=>{
     const nm=nameIn.value.trim();if(!nm){nameIn.style.borderColor='#B85C5C';nameIn.focus();return;}
     cl.name=nm;
+    cl.items=(cl.items||[]).filter(it=>it && it.value && String(it.value).trim()).map(it=>({type:it.type,value:String(it.value).trim()}));
     if(isNew) customChecklists.push(cl);
     else customChecklists[idx]=cl;
     saveCustomChecklists();
