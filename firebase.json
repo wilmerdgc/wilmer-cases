@@ -1,4 +1,7 @@
 {
+  "firestore": {
+    "rules": "firestore.rules"
+  },
   "hosting": {
     "public": "cp ~/Downloads/index.html ~/Desktop/wilmer-cases/index.html",
     "ignore": [

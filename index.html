@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"/>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script>
 const firebaseConfig={
@@ -16,6 +17,29 @@ const db=firebase.firestore();
 let _fbOnline=false;
 let _lastLocalSave=0;
 const _deviceId='dev-'+Math.random().toString(36).slice(2,10);
+
+// ─── Anonymous auth ─────────────────────────────────────────────────
+// Firestore security rules now require request.auth != null. The web
+// API key is public (embedded in this file), so the only thing gating
+// cloud reads/writes is this anonymous sign-in producing a real ID
+// token signed by Firebase Auth. Each browser gets a stable anon UID
+// the first time it connects; the SDK caches it in IndexedDB so every
+// subsequent load reuses the same identity.
+//
+// Requires "Anonymous" sign-in to be enabled in:
+//   Firebase Console → Authentication → Sign-in method
+// If that switch is off, sign-in fails silently and Firestore calls
+// return permission-denied. We surface that in the offline banner so
+// it's obvious what to fix.
+// ────────────────────────────────────────────────────────────────────
+let _fbAuthReady=false;
+firebase.auth().signInAnonymously().then(()=>{
+  _fbAuthReady=true;
+}).catch(err=>{
+  _fbOnline=false;
+  _offlineReason='Auth failed: '+(err.code||err.message||'unknown')+'. Enable Anonymous sign-in in Firebase Console.';
+  if(typeof updateCloudIndicator==='function') updateCloudIndicator();
+});
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

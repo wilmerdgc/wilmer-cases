@@ -1,0 +1,40 @@
+rules_version = '2';
+
+// ──────────────────────────────────────────────────────────────────
+// Wilmer Cases — Firestore security rules
+//
+// Before these rules were in place, anyone with the public web API
+// key could read and write the entire database. These rules require
+// every request to be authenticated, which (combined with Anonymous
+// Auth in the browser + a service account in the backup workflow)
+// means only clients that have obtained a valid Firebase Auth token
+// can touch data.
+//
+// Collections in use:
+//   wilmer/data              — the main app state (records, meta, etc.)
+//   wilmer_daynotes/{dnKey}  — per-day priorities + notes
+//
+// Everything outside those two paths is denied by default.
+// ──────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Main app state. Single doc today (`data`), but allow any doc
+    // under /wilmer/ so future shards (e.g. audit logs) don't need
+    // a rules change.
+    match /wilmer/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Day notes: the doc id is a date key. Same access requirement.
+    match /wilmer_daynotes/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Everything else: deny.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

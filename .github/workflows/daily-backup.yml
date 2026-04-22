@@ -1,9 +1,9 @@
 name: Daily Firestore backup
 
-# Runs every day at 4:00 PM America/New_York (= 20:00 UTC during EDT,
-# 21:00 UTC during EST). The schedule fires UTC only, so we list both
-# and the workflow idempotently writes the same filename for the day.
-# Also lets you trigger it manually from the Actions tab if needed.
+# Runs every day at 4:00 PM America/New_York. Cron is UTC-only, so we
+# list both DST and standard offsets; only one actually matches "4 PM ET"
+# on any given day. Idempotent because both runs produce the same
+# YYYY-MM-DD.json filename.
 on:
   schedule:
     - cron: "0 20 * * *"  # 4 PM ET during Daylight Saving (Mar-Nov)
@@ -11,7 +11,7 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: write  # needed to commit the backup file
+  contents: write
 
 jobs:
   backup:
@@ -22,54 +22,57 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Fetch Firestore snapshot
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install firebase-admin
+        run: npm install --no-save firebase-admin@12
+
+      - name: Fetch Firestore via service account
         env:
-          FIRESTORE_URL: "https://firestore.googleapis.com/v1/projects/wilmer-cases/databases/(default)/documents/wilmer/data?key=AIzaSyDqJ3r-SECt-WUzd3saY5UxBYaWnEI-al4"
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           set -eu
+          if [ -z "${FIREBASE_SERVICE_ACCOUNT}" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT secret is missing. Add it in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
           mkdir -p backups
           DATE=$(TZ=America/New_York date +%Y-%m-%d)
           echo "Backup date (ET): $DATE"
-          curl -fsS "$FIRESTORE_URL" -o backups/.raw.json
-          # Decode Firestore REST fields into plain JSON so backups are
-          # directly importable via the app's Import button.
+          # Write the service account JSON to disk (temp, not committed)
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > sa.json
           node -e "
             const fs=require('fs');
-            const raw=JSON.parse(fs.readFileSync('backups/.raw.json','utf8'));
-            if(raw.error){console.error('Firestore error:',raw.error.message);process.exit(1);}
-            function dec(v){
-              if('stringValue' in v)return v.stringValue;
-              if('integerValue' in v)return parseInt(v.integerValue,10);
-              if('doubleValue' in v)return v.doubleValue;
-              if('booleanValue' in v)return v.booleanValue;
-              if('nullValue' in v)return null;
-              if('timestampValue' in v)return v.timestampValue;
-              if('arrayValue' in v)return (v.arrayValue.values||[]).map(dec);
-              if('mapValue' in v){const o={};for(const k in (v.mapValue.fields||{}))o[k]=dec(v.mapValue.fields[k]);return o;}
-              return v;
-            }
-            const obj={};
-            for(const k in (raw.fields||{})) obj[k]=dec(raw.fields[k]);
-            fs.writeFileSync('backups/${DATE}.json', JSON.stringify(obj));
-            const recs = Array.isArray(obj.records)?obj.records.length:0;
-            const clients = recs ? new Set(obj.records.map(r=>r.clid||r.id)).size : 0;
-            const savedAt = obj._savedAt ? new Date(obj._savedAt).toISOString() : 'n/a';
-            fs.writeFileSync('backups/.meta', JSON.stringify({date:'${DATE}', records:recs, clients, savedAt}));
-            console.log('records:', recs, '| clients:', clients, '| savedAt:', savedAt);
+            const admin=require('firebase-admin');
+            admin.initializeApp({credential:admin.credential.cert(require('./sa.json'))});
+            const db=admin.firestore();
+            (async()=>{
+              const snap=await db.collection('wilmer').doc('data').get();
+              if(!snap.exists){console.error('No wilmer/data document');process.exit(1);}
+              const data=snap.data();
+              const date='${DATE}';
+              fs.writeFileSync('backups/'+date+'.json', JSON.stringify(data));
+              const recs=Array.isArray(data.records)?data.records.length:0;
+              const clients=recs?new Set(data.records.map(r=>r.clid||r.id)).size:0;
+              const savedAt=data._savedAt?new Date(data._savedAt).toISOString():'n/a';
+              fs.writeFileSync('backups/.meta', JSON.stringify({date,records:recs,clients,savedAt}));
+              console.log('records:',recs,'| clients:',clients,'| savedAt:',savedAt);
+            })().catch(e=>{console.error(e);process.exit(1);});
           "
-          rm -f backups/.raw.json
-          cat backups/.meta
+          # Never keep the credential on disk longer than needed
+          shred -u sa.json 2>/dev/null || rm -f sa.json
 
       - name: Prune backups older than 30 days
         run: |
           set -eu
-          # Delete backup files whose YYYY-MM-DD is more than 30 days before today (ET)
           CUTOFF=$(TZ=America/New_York date -d '30 days ago' +%Y-%m-%d)
           echo "Deleting backups before $CUTOFF"
           for f in backups/*.json; do
             [ -e "$f" ] || continue
             BN=$(basename "$f" .json)
-            # Skip non-date filenames
             case "$BN" in
               [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9])
                 if [ "$BN" \< "$CUTOFF" ]; then
