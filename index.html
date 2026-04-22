@@ -11901,89 +11901,157 @@ function renderChecklistsList(){
     return;
   }
   if(!window._checklistOpen) window._checklistOpen={};
+  const persist=()=>{saveCustomChecklists();markUnsaved();};
+
   customChecklists.forEach((cl,idx)=>{
-    const items=cl.items||[];
+    if(!cl.items) cl.items=[];
     const isOpen=!!window._checklistOpen[cl.id];
 
     const card=document.createElement('div');
     card.style.cssText='border:1px solid #EDE8E0;border-radius:8px;background:#fff;margin-bottom:7px;overflow:hidden;';
 
-    // Header (click to toggle)
+    // Header
     const row=document.createElement('div');
-    row.style.cssText='display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;user-select:none;';
-    row.onmouseenter=()=>row.style.background='#FDFAF7';
-    row.onmouseleave=()=>row.style.background='#fff';
+    row.style.cssText='display:flex;align-items:center;gap:10px;padding:10px 14px;user-select:none;';
 
-    const caret=document.createElement('span');
+    const caret=document.createElement('button');
+    caret.type='button';
     caret.textContent='▸';
-    caret.style.cssText='font-size:10px;color:#9E9186;flex-shrink:0;transition:transform .15s;display:inline-block;'+(isOpen?'transform:rotate(90deg);':'');
+    caret.style.cssText='font-size:11px;color:#9E9186;flex-shrink:0;background:transparent;border:none;cursor:pointer;padding:2px 4px;transition:transform .15s;'+(isOpen?'transform:rotate(90deg);':'');
 
-    const name=document.createElement('span');
-    name.style.cssText="font-size:13px;font-weight:600;color:#2C2620;flex:1;font-family:'Lora',Georgia,serif;";
-    name.textContent=cl.name;
+    const nameIn=document.createElement('input');
+    nameIn.type='text';nameIn.value=cl.name;nameIn.placeholder='Checklist name…';
+    nameIn.style.cssText="font-size:13px;font-weight:600;color:#2C2620;flex:1;font-family:'Lora',Georgia,serif;border:none;background:transparent;padding:2px 4px;outline:none;border-radius:4px;";
+    nameIn.onfocus=()=>nameIn.style.background='#FDFAF7';
+    nameIn.onblur=()=>{nameIn.style.background='transparent';const v=nameIn.value.trim();if(v&&v!==cl.name){cl.name=v;persist();}else if(!v){nameIn.value=cl.name;}};
+    nameIn.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();nameIn.blur();}};
 
-    const types=document.createElement('span');
-    types.style.cssText='font-size:11px;color:#9E9186;flex:1;';
-    types.textContent=(cl.caseTypes||[]).length?(cl.caseTypes||[]).join(' · '):'All case types';
+    // Case types summary (click to toggle inline picker)
+    const typesBtn=document.createElement('button');typesBtn.type='button';
+    typesBtn.style.cssText='font-size:11px;color:#9E9186;flex:1;background:transparent;border:none;cursor:pointer;text-align:left;padding:2px 6px;border-radius:4px;';
+    const refreshTypes=()=>{typesBtn.textContent=(cl.caseTypes||[]).length?(cl.caseTypes||[]).join(' · '):'All case types';};
+    refreshTypes();
+    typesBtn.onmouseenter=()=>typesBtn.style.background='#FDFAF7';
+    typesBtn.onmouseleave=()=>typesBtn.style.background='transparent';
 
-    const nEv=items.filter(it=>it.type==='event').length;
-    const nTk=items.filter(it=>it.type==='task').length;
     const countSpan=document.createElement('span');
     countSpan.style.cssText='font-size:10px;color:#9E9186;flex-shrink:0;';
-    const parts=[];if(nEv)parts.push(nEv+' event'+(nEv===1?'':'s'));if(nTk)parts.push(nTk+' task'+(nTk===1?'':'s'));
-    countSpan.textContent=parts.join(' · ')||'empty';
+    const refreshCount=()=>{
+      const nEv=cl.items.filter(it=>it.type==='event').length;
+      const nTk=cl.items.filter(it=>it.type==='task').length;
+      const parts=[];if(nEv)parts.push(nEv+' event'+(nEv===1?'':'s'));if(nTk)parts.push(nTk+' task'+(nTk===1?'':'s'));
+      countSpan.textContent=parts.join(' · ')||'empty';
+    };
+    refreshCount();
 
-    const editBtn=document.createElement('button');editBtn.textContent='✎';
-    editBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:13px;padding:2px 6px;border-radius:4px;';
-    editBtn.onmouseenter=()=>editBtn.style.color='#5C5148';editBtn.onmouseleave=()=>editBtn.style.color='#C4BAB0';
-    editBtn.onclick=(e)=>{e.stopPropagation();openChecklistEditor(idx);};
-
-    const delBtn=document.createElement('button');delBtn.textContent='×';
+    const delBtn=document.createElement('button');delBtn.type='button';delBtn.textContent='×';
     delBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:16px;padding:0 4px;border-radius:4px;';
     delBtn.onmouseenter=()=>delBtn.style.color='#B85C5C';delBtn.onmouseleave=()=>delBtn.style.color='#C4BAB0';
-    delBtn.onclick=(e)=>{e.stopPropagation();if(!confirm('Delete checklist "'+cl.name+'"?'))return;customChecklists.splice(idx,1);delete window._checklistOpen[cl.id];saveCustomChecklists();markUnsaved();renderChecklistsList();};
+    delBtn.onclick=(e)=>{e.stopPropagation();if(!confirm('Delete checklist "'+cl.name+'"?'))return;customChecklists.splice(idx,1);delete window._checklistOpen[cl.id];persist();renderChecklistsList();};
 
-    row.appendChild(caret);row.appendChild(name);row.appendChild(types);row.appendChild(countSpan);row.appendChild(editBtn);row.appendChild(delBtn);
+    row.appendChild(caret);row.appendChild(nameIn);row.appendChild(typesBtn);row.appendChild(countSpan);row.appendChild(delBtn);
     card.appendChild(row);
 
-    // Dropdown body — checkbox list of items
+    // Inline case type picker (hidden by default)
+    const typesPicker=document.createElement('div');
+    typesPicker.style.cssText='display:none;padding:8px 14px 6px 38px;background:#FDFAF7;border-top:1px solid #EDE8E0;flex-wrap:wrap;gap:5px;';
+    if(!cl.caseTypes) cl.caseTypes=[];
+    const typesHint=document.createElement('div');typesHint.style.cssText='width:100%;font-size:10px;color:#C4BAB0;font-style:italic;margin-bottom:3px;';typesHint.textContent='None selected = applies to every case type.';typesPicker.appendChild(typesHint);
+    caseTypes.forEach(ct2=>{
+      const chip=document.createElement('button');chip.type='button';chip.textContent=ct2;
+      const on=cl.caseTypes.includes(ct2);
+      chip.style.cssText='font-size:11px;padding:3px 10px;border-radius:14px;cursor:pointer;font-family:inherit;border:1px solid '+(on?'#6A8C6E':'#DDD5CA')+';background:'+(on?'#EBF1EB':'#fff')+';color:'+(on?'#4A6B4E':'#5C5148')+';';
+      chip.onclick=()=>{
+        if(cl.caseTypes.includes(ct2)) cl.caseTypes=cl.caseTypes.filter(x=>x!==ct2);
+        else cl.caseTypes.push(ct2);
+        const onNow=cl.caseTypes.includes(ct2);
+        chip.style.border='1px solid '+(onNow?'#6A8C6E':'#DDD5CA');
+        chip.style.background=onNow?'#EBF1EB':'#fff';
+        chip.style.color=onNow?'#4A6B4E':'#5C5148';
+        refreshTypes();persist();
+      };
+      typesPicker.appendChild(chip);
+    });
+    typesBtn.onclick=(e)=>{e.stopPropagation();const showing=typesPicker.style.display!=='none';typesPicker.style.display=showing?'none':'flex';};
+    card.appendChild(typesPicker);
+
+    // Items body
     const body=document.createElement('div');
     body.style.cssText='border-top:1px solid #EDE8E0;padding:8px 14px 10px 32px;background:#FDFAF7;display:'+(isOpen?'block':'none')+';';
 
-    if(!items.length){
-      const none=document.createElement('div');
-      none.style.cssText='font-size:11px;color:#C4BAB0;font-style:italic;padding:6px 0;';
-      none.textContent='No events or tasks yet. Use ✎ to add some.';
-      body.appendChild(none);
-    }else{
+    const itemsWrap=document.createElement('div');
+    itemsWrap.style.cssText='display:flex;flex-direction:column;gap:4px;';
+    body.appendChild(itemsWrap);
+
+    function renderRows(){
+      itemsWrap.innerHTML='';
+      if(!cl.items.length){
+        const none=document.createElement('div');
+        none.style.cssText='font-size:11px;color:#C4BAB0;font-style:italic;padding:4px 0;';
+        none.textContent='No events or tasks yet. Use the buttons below to add some.';
+        itemsWrap.appendChild(none);
+      }
       if(!cl._checked) cl._checked={};
-      items.forEach((it,i)=>{
-        const line=document.createElement('label');
-        line.style.cssText='display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:12px;';
+      cl.items.forEach((it,i)=>{
+        const line=document.createElement('div');
+        line.style.cssText='display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;';
+
         const cb=document.createElement('input');cb.type='checkbox';
         cb.checked=!!cl._checked[i];
         cb.style.cssText='width:13px;height:13px;accent-color:#6A8C6E;cursor:pointer;flex-shrink:0;';
-        cb.onchange=()=>{cl._checked[i]=cb.checked;lbl.style.color=cb.checked?'#C4BAB0':'#2C2620';lbl.style.textDecoration=cb.checked?'line-through':'none';};
-        const badge=document.createElement('span');
+        cb.onchange=()=>{cl._checked[i]=cb.checked;valEl.style.color=cb.checked?'#C4BAB0':'#2C2620';valEl.style.textDecoration=cb.checked?'line-through':'none';};
+
         const isEv=it.type==='event';
-        badge.textContent=isEv?'Event':'Task';
+        const badge=document.createElement('span');badge.textContent=isEv?'Event':'Task';
         badge.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:1px 6px;border-radius:10px;flex-shrink:0;color:'+(isEv?'#6B7FA3':'#6A8C6E')+';background:'+(isEv?'#EEF1F7':'#EBF1EB')+';';
-        const lbl=document.createElement('span');
-        lbl.textContent=it.value||'(untitled)';
-        lbl.style.cssText='color:'+(cb.checked?'#C4BAB0':'#2C2620')+';text-decoration:'+(cb.checked?'line-through':'none')+';';
-        line.appendChild(cb);line.appendChild(badge);line.appendChild(lbl);
-        if(it.assignedTo){
-          const asgBadge=document.createElement('span');
-          asgBadge.textContent='→ '+it.assignedTo;
-          asgBadge.style.cssText='font-size:10px;color:#9E9186;margin-left:auto;font-style:italic;';
-          line.appendChild(asgBadge);
+
+        let valEl;
+        if(isEv){
+          valEl=document.createElement('select');
+          valEl.style.cssText='flex:1;font-size:12px;padding:3px 6px;border:1px solid #EDE8E0;border-radius:5px;font-family:inherit;background:#fff;outline:none;min-width:0;';
+          const ph=document.createElement('option');ph.value='';ph.textContent='Select event type…';valEl.appendChild(ph);
+          eventTypes.forEach(ev=>{const o=document.createElement('option');o.value=ev;o.textContent=ev;if(ev===it.value)o.selected=true;valEl.appendChild(o);});
+          if(it.value && !eventTypes.includes(it.value)){const o=document.createElement('option');o.value=it.value;o.textContent=it.value;o.selected=true;valEl.appendChild(o);}
+          valEl.onchange=()=>{it.value=valEl.value;persist();refreshCount();};
+        }else{
+          valEl=document.createElement('input');valEl.type='text';valEl.placeholder='Task description…';valEl.value=it.value||'';
+          valEl.style.cssText='flex:1;font-size:12px;padding:3px 6px;border:1px solid #EDE8E0;border-radius:5px;font-family:inherit;outline:none;background:#fff;min-width:0;color:'+(cb.checked?'#C4BAB0':'#2C2620')+';text-decoration:'+(cb.checked?'line-through':'none')+';';
+          valEl.oninput=()=>{it.value=valEl.value;};
+          valEl.onblur=()=>{persist();refreshCount();};
         }
-        body.appendChild(line);
+
+        const asg=document.createElement('select');
+        asg.style.cssText='font-size:11px;padding:3px 6px;border:1px solid #EDE8E0;border-radius:5px;font-family:inherit;background:#fff;outline:none;flex-shrink:0;color:#5C5148;';
+        asg.title='Assigned to';
+        [['','— Assign —'],['Attorney','Attorney'],['Paralegal','Paralegal']].forEach(([v,lbl2])=>{const o=document.createElement('option');o.value=v;o.textContent=lbl2;if(v===(it.assignedTo||''))o.selected=true;asg.appendChild(o);});
+        asg.onchange=()=>{it.assignedTo=asg.value;persist();};
+
+        const rm=document.createElement('button');rm.type='button';rm.textContent='×';
+        rm.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0;';
+        rm.onmouseenter=()=>rm.style.color='#B85C5C';rm.onmouseleave=()=>rm.style.color='#C4BAB0';
+        rm.onclick=()=>{cl.items.splice(i,1);delete cl._checked[i];persist();refreshCount();renderRows();};
+
+        line.appendChild(cb);line.appendChild(badge);line.appendChild(valEl);line.appendChild(asg);line.appendChild(rm);
+        itemsWrap.appendChild(line);
       });
     }
+    renderRows();
+
+    // Inline add bar
+    const addBar=document.createElement('div');addBar.style.cssText='display:flex;gap:6px;margin-top:8px;';
+    const addEv=document.createElement('button');addEv.type='button';addEv.title='Add event';addEv.innerHTML='📅 + Event';
+    addEv.style.cssText='font-size:11px;padding:5px 12px;border:1px solid #C7D1E2;border-radius:6px;background:#EEF1F7;color:#6B7FA3;cursor:pointer;font-family:inherit;font-weight:600;';
+    addEv.onclick=()=>{cl.items.push({type:'event',value:'',assignedTo:''});persist();refreshCount();renderRows();};
+    const addTk=document.createElement('button');addTk.type='button';addTk.title='Add task';addTk.innerHTML='✓ + Task';
+    addTk.style.cssText='font-size:11px;padding:5px 12px;border:1px solid #B4CCAD;border-radius:6px;background:#EBF1EB;color:#4A6B4E;cursor:pointer;font-family:inherit;font-weight:600;';
+    addTk.onclick=()=>{cl.items.push({type:'task',value:'',assignedTo:''});persist();refreshCount();renderRows();const inputs=itemsWrap.querySelectorAll('input[type=text]');if(inputs.length)inputs[inputs.length-1].focus();};
+    addBar.appendChild(addEv);addBar.appendChild(addTk);
+    body.appendChild(addBar);
+
     card.appendChild(body);
 
-    row.onclick=()=>{
+    caret.onclick=(e)=>{
+      e.stopPropagation();
       const nowOpen=body.style.display==='none';
       body.style.display=nowOpen?'block':'none';
       caret.style.transform=nowOpen?'rotate(90deg)':'';
