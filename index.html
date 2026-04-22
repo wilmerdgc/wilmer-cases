@@ -368,6 +368,13 @@ tbody td { padding: 9px 12px; vertical-align: middle; font-size: 12px; }
 .weekend-toggle-bar .wt-btn.auto-on { background: var(--cream); border-color: #E8B468; color: #9C6D2F; }
 .wk-summary-btn { font-size: 11px; font-weight: 600; padding: 4px 12px; border: 1px solid #B4CCAD; border-radius: 16px; background: var(--sage-light); color: #4A6B4E; cursor: pointer; transition: all 0.12s; }
 .wk-summary-btn:hover { background: var(--sage); color: #fff; border-color: var(--sage); }
+.week-task[draggable="true"] { cursor: grab; }
+.week-task[draggable="true"]:active { cursor: grabbing; }
+.week-task.dragging { opacity: 0.4; }
+.week-col.drop-target { background: var(--sage-light); border-color: var(--sage); box-shadow: 0 0 0 2px var(--sage) inset; }
+.week-col.drop-target.weekend-col { background: #E6EFE5; }
+body.wk-dragging .week-col { transition: background 0.1s, box-shadow 0.1s; }
+.wk-time-badge { display: inline-block; font-size: 9px; font-weight: 700; color: var(--slate); background: var(--slate-light); padding: 1px 6px; border-radius: 4px; margin-top: 3px; letter-spacing: 0.02em; }
 
 /* Month calendar */
 .cal-grid { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; }
@@ -6267,6 +6274,23 @@ function renderWeek() {
       const isTask = isTaskKindEvent(r.event);
       const _isReminder=!!(r.notes&&r.notes.startsWith('⏰ REMINDER'));
       const t = document.createElement('div'); t.className = 'week-task' + (isTask?' task-kind':''); t.onclick = () => openEdit(r.id);
+      // Drag-and-drop to reschedule (disabled for reminders — they follow their parent)
+      if(!_isReminder){
+        t.setAttribute('draggable','true');
+        t.dataset.recordId = r.id;
+        t.dataset.fromDate = r.date || '';
+        t.addEventListener('dragstart', e => {
+          try{ e.dataTransfer.setData('text/plain', r.id); }catch{}
+          e.dataTransfer.effectAllowed = 'move';
+          t.classList.add('dragging');
+          document.body.classList.add('wk-dragging');
+        });
+        t.addEventListener('dragend', () => {
+          t.classList.remove('dragging');
+          document.body.classList.remove('wk-dragging');
+          document.querySelectorAll('.week-col.drop-target').forEach(c=>c.classList.remove('drop-target'));
+        });
+      }
       // Color the ::before dot based on event category/color
       if(!isTask && !_isReminder){
         const _es=getEventStyle(r.event||'');
@@ -6282,6 +6306,7 @@ function renderWeek() {
           t.style.borderLeft='3px solid '+_es.color;
         }
       }
+      const timeBadge = (!_isReminder && (r.timeStart||r.timeEnd)) ? `<div class="wk-time-badge">${(r.timeStart||'').slice(0,5)}${r.timeEnd?('–'+r.timeEnd.slice(0,5)):''}</div>` : '';
       if(_isReminder){
         // Reminder: bell icon + client name + muted stripped text
         const reminderText=(r.notes||'').replace(/^⏰ REMINDER:\s*/,'');
@@ -6299,7 +6324,7 @@ function renderWeek() {
           cdHtml=`<div style="font-size:9px;font-weight:700;color:${cdColor};background:${cdColor}18;padding:1px 5px;border-radius:4px;display:inline-block;margin-top:2px;">${cdText}</div>`;
         }
         if(isTask){
-          t.innerHTML = `<span class="task-check" data-rid="${r.id}" title="Double-click to mark complete" style="position:absolute;left:4px;top:6px;width:14px;height:14px;border:2px solid #C4BAB0;border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;transition:all .12s;background:#fff;">&check;</span><div class="week-event"${evColor?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div>${r.notes ? `<div class="wk-notes" style="color:var(--ink-faint);margin-top:1px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
+          t.innerHTML = `<span class="task-check" data-rid="${r.id}" title="Double-click to mark complete" style="position:absolute;left:4px;top:6px;width:14px;height:14px;border:2px solid #C4BAB0;border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;transition:all .12s;background:#fff;">&check;</span><div class="week-event"${evColor?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div>${timeBadge}${r.notes ? `<div class="wk-notes" style="color:var(--ink-faint);margin-top:1px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
           const chk=t.querySelector('.task-check');
           if(chk){
             chk.onmouseenter=()=>{chk.style.borderColor='#6A8C6E';chk.style.color='#6A8C6E';};
@@ -6307,7 +6332,7 @@ function renderWeek() {
             chk.ondblclick=(e)=>{e.stopPropagation();const rec=records.find(x=>x.id===r.id);if(!rec)return;rec.finishedStatus='completed';const hist=rec.history||(rec.history=[]);hist.push({type:'completed',date:todayStr(),note:'Marked done from week view'});_invalidateCasesCache();markUnsaved();showToast('✓ Task completed');renderWeek();};
           }
         } else {
-          t.innerHTML = `<div class="week-event"${evColor?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div><div class="week-clid">#${r.clid || '—'}</div>${cdHtml}${r.notes ? `<div class="wk-notes" style="font-size:10px;color:var(--ink-faint);margin-top:2px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
+          t.innerHTML = `<div class="week-event"${evColor?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div><div class="week-clid">#${r.clid || '—'}</div>${timeBadge}${cdHtml}${r.notes ? `<div class="wk-notes" style="font-size:10px;color:var(--ink-faint);margin-top:2px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
         }
       }
       appendSoMeta(t, r, 'var(--amber)');
@@ -6318,6 +6343,21 @@ function renderWeek() {
       body.appendChild(empty);
     }
     col.appendChild(body);
+    col.dataset.dayStr = dayStr;
+    col.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      col.classList.add('drop-target');
+    });
+    col.addEventListener('dragleave', e => {
+      if(e.target === col || !col.contains(e.relatedTarget)) col.classList.remove('drop-target');
+    });
+    col.addEventListener('drop', e => {
+      e.preventDefault();
+      col.classList.remove('drop-target');
+      const rid = e.dataTransfer.getData('text/plain');
+      if(rid) rescheduleFromWeekDrop(rid, dayStr);
+    });
     col.addEventListener('dblclick', e => {
       if(e.target.closest('.week-task')) return;
       openAdd();
@@ -6333,6 +6373,41 @@ function renderWeek() {
   buildEventBoard(boardEl, weekTasks, weekFinished, weekLabel);
 }
 function shiftWeek(d) { weekOffset += d; renderWeek(); }
+function rescheduleFromWeekDrop(recordId, newDateStr){
+  if(!recordId||!newDateStr) return;
+  const idx = records.findIndex(r=>r.id===recordId);
+  if(idx<0) return;
+  const rec = records[idx];
+  const prev = rec.date||'';
+  if(prev===newDateStr) return;
+  // Don't allow dragging reminder rows themselves; they move with their parent
+  if(rec.notes && rec.notes.startsWith('⏰ REMINDER')){
+    showToast('Reminders move with their event');
+    return;
+  }
+  const history=[...(rec.history||[])];
+  history.push({type:'rescheduled',date:todayStr(),prevDate:prev,newDate:newDateStr,note:'Moved in week view'});
+  records[idx] = {...rec, date:newDateStr, finishedStatus:null, history};
+  // Shift child reminders by the same delta
+  if(prev){
+    const deltaMs = (new Date(newDateStr.replace(/-/g,'/')) - new Date(prev.replace(/-/g,'/')));
+    const deltaDays = Math.round(deltaMs/86400000);
+    if(deltaDays!==0){
+      records.forEach((rx,ri)=>{
+        if(rx._parentId===recordId && rx.notes && rx.notes.startsWith('⏰ REMINDER') && rx.date){
+          const shifted = addDateDays(rx.date, deltaDays);
+          records[ri] = {...rx, date: shifted, notes: rx.notes.replace(/due by [^—\n]+/, 'due by '+fmtDate(newDateStr))};
+        }
+      });
+    }
+  }
+  markUnsaved();
+  _invalidateCasesCache&&_invalidateCasesCache();
+  renderAll();
+  const d = parseDate(newDateStr);
+  const pretty = d ? d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : newDateStr;
+  showToast('Rescheduled to '+pretty);
+}
 function _buildWeeklySummaryText(){
   const rows = getFiltered();
   const _WDAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
