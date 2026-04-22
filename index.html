@@ -1843,13 +1843,24 @@ function hideExcelRestorePrompt(){}
       <button onclick="document.getElementById('restore-input').click()" title="Import data from JSON backup" style="font-size:11px;padding:4px 10px;border:1px solid #DDD5CA;border-radius:6px;background:#fff;color:#5C5148;cursor:pointer;font-weight:500;white-space:nowrap;transition:all .14s;" onmouseenter="this.style.background='#F7F3ED';this.style.borderColor='#C4BAB0'" onmouseleave="this.style.background='#fff';this.style.borderColor='#DDD5CA'">↑ Import</button>
     </div>
   </div>
-  <!-- Row 2: action buttons right-aligned -->
-  <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;padding-bottom:6px;">
-    <button onclick="saveFileWithTimestamp()" id="btn-save-file" style="font-size:12px;padding:6px 14px;border:1px solid #B4CCAD;border-radius:20px;background:#EBF1EB;color:#4A6B4E;cursor:pointer;font-weight:600;letter-spacing:0.01em;display:flex;align-items:center;gap:5px;transition:all .14s;" onmouseenter="this.style.background='#6A8C6E';this.style.color='#fff';this.style.borderColor='#6A8C6E'" onmouseleave="this.style.background='#EBF1EB';this.style.color='#4A6B4E';this.style.borderColor='#B4CCAD'"><span id="save-file-label">💾 Save</span></button>
-    <button onclick="saveToCloud()" id="btn-save-cloud" style="font-size:12px;padding:6px 14px;border:1px solid #6A8C6E;border-radius:20px;background:#6A8C6E;color:#fff;cursor:pointer;font-weight:600;letter-spacing:0.01em;display:flex;align-items:center;gap:5px;transition:all .14s;" onmouseenter="this.style.background='#4A6B4E';this.style.borderColor='#4A6B4E'" onmouseleave="this.style.background='#6A8C6E';this.style.borderColor='#6A8C6E'"><span id="save-cloud-label">☁ Save</span></button>
-    <button onclick="forcePullFromCloud()" id="btn-pull-cloud" title="Force-download latest data from cloud" style="font-size:12px;padding:6px 14px;border:1px solid #6B7FA3;border-radius:20px;background:#EEF1F7;color:#4A5A7A;cursor:pointer;font-weight:600;letter-spacing:0.01em;display:flex;align-items:center;gap:5px;transition:all .14s;" onmouseenter="this.style.background='#6B7FA3';this.style.color='#fff';this.style.borderColor='#6B7FA3'" onmouseleave="this.style.background='#EEF1F7';this.style.color='#4A5A7A';this.style.borderColor='#6B7FA3'"><span id="pull-cloud-label">↓ Pull</span></button>
-    <button onclick="openScheduleTodayModal()" id="btn-schedule-today" style="font-size:12px;padding:6px 14px;border:1px solid #B4CCAD;border-radius:20px;background:#EBF1EB;color:#4A6B4E;cursor:pointer;font-weight:600;letter-spacing:0.01em;display:flex;align-items:center;gap:5px;transition:all .14s;" onmouseenter="this.style.background='#6A8C6E';this.style.color='#fff';this.style.borderColor='#6A8C6E'" onmouseleave="this.style.background='#EBF1EB';this.style.color='#4A6B4E';this.style.borderColor='#B4CCAD'"><span style="font-size:13px;">✉</span> Send to Loly</button>
-
+  <!-- Row 2: compact icon-only actions, right-aligned under the cloud-sync indicator -->
+  <div style="display:flex;justify-content:flex-end;align-items:center;gap:4px;padding-bottom:4px;">
+    <button onclick="saveFileWithTimestamp()" id="btn-save-file" title="Save a timestamped HTML copy to disk"
+      style="width:28px;height:28px;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:#9E9186;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .12s;"
+      onmouseenter="this.style.background='#F7F3ED';this.style.color='#4A6B4E';this.style.borderColor='#DDD5CA'"
+      onmouseleave="this.style.background='transparent';this.style.color='#9E9186';this.style.borderColor='transparent'"><span id="save-file-label" style="font-size:14px;line-height:1;">💾</span></button>
+    <button onclick="saveToCloud()" id="btn-save-cloud" title="Save to cloud"
+      style="width:28px;height:28px;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:#9E9186;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .12s;"
+      onmouseenter="this.style.background='#F7F3ED';this.style.color='#4A6B4E';this.style.borderColor='#DDD5CA'"
+      onmouseleave="this.style.background='transparent';this.style.color='#9E9186';this.style.borderColor='transparent'"><span id="save-cloud-label" style="font-size:14px;line-height:1;">☁</span></button>
+    <button onclick="forcePullFromCloud()" id="btn-pull-cloud" title="Pull the latest from cloud"
+      style="width:28px;height:28px;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:#9E9186;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .12s;"
+      onmouseenter="this.style.background='#F7F3ED';this.style.color='#4A5A7A';this.style.borderColor='#DDD5CA'"
+      onmouseleave="this.style.background='transparent';this.style.color='#9E9186';this.style.borderColor='transparent'"><span id="pull-cloud-label" style="font-size:14px;line-height:1;">↓</span></button>
+    <button onclick="openScheduleTodayModal()" id="btn-schedule-today" title="Send today's schedule to Loly"
+      style="width:28px;height:28px;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:#9E9186;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .12s;"
+      onmouseenter="this.style.background='#F7F3ED';this.style.color='#4A6B4E';this.style.borderColor='#DDD5CA'"
+      onmouseleave="this.style.background='transparent';this.style.color='#9E9186';this.style.borderColor='transparent'"><span style="font-size:14px;line-height:1;">✉</span></button>
   </div>
 </div>
 <div class="divider"></div>
@@ -9293,8 +9304,9 @@ function saveFileWithTimestamp(){
   a.href=URL.createObjectURL(blob);
   a.download='Wilmer '+label+'.html';
   a.click();
+  // Icon flash: briefly show a check, then restore the disk icon
   const btn=document.getElementById('save-file-label');
-  if(btn){btn.textContent='✓ Saved '+label;setTimeout(()=>{btn.textContent='💾 Save';},4000);}
+  if(btn){const p=btn.textContent;btn.textContent='✓';setTimeout(()=>{btn.textContent=p||'💾';},1800);}
   showToast('Saved: Wilmer '+label+'.html ✓');
 }
 function backupData(){const payload={records,paralegals,eventTypes,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);const d=new Date();a.download='romero_cases_backup_'+d.toISOString().slice(0,10)+'.json';a.click();setLastBackupLabel('Backup');showToast('Backup downloaded ✓');}
@@ -14284,9 +14296,14 @@ function updateCloudIndicator(){
 
 function saveToCloud(){
   const btn=document.getElementById('save-cloud-label');
-  if(btn)btn.textContent='☁ Saving…';
+  if(btn)btn.textContent='⏳';
+  showToast('☁ Saving to cloud…');
   _syncToFirestore(Date.now());
-  setTimeout(()=>{ if(btn)btn.textContent=_fbOnline?'☁ Saved ✓':'☁ Failed'; setTimeout(()=>{if(btn)btn.textContent='☁ Save to Cloud';},2000); },1500);
+  setTimeout(()=>{
+    if(btn)btn.textContent=_fbOnline?'✓':'!';
+    showToast(_fbOnline?'☁ Saved to cloud ✓':'☁ Save failed');
+    setTimeout(()=>{if(btn)btn.textContent='☁';},1800);
+  },1500);
 }
 
 function retryFirestoreConnection(){
@@ -14296,10 +14313,11 @@ function retryFirestoreConnection(){
 
 function forcePullFromCloud(){
   const btn=document.getElementById('pull-cloud-label');
-  if(btn)btn.textContent='↓ Pulling…';
+  if(btn)btn.textContent='⏳';
+  showToast('↓ Pulling from cloud…');
   db.collection('wilmer').doc('data').get()
     .then((doc)=>{
-      if(!doc.exists){ showToast('No cloud data found'); if(btn)btn.textContent='↓ Pull'; return; }
+      if(!doc.exists){ showToast('No cloud data found'); if(btn)btn.textContent='↓'; return; }
       const cloudData=doc.data();
       applyPayload(cloudData);
       _dataInitialized=true; // explicit pull permits saves again
@@ -14311,11 +14329,11 @@ function forcePullFromCloud(){
       }catch(e){}
       renderAll();
       showToast('☁ Pulled from cloud ✓');
-      if(btn){ btn.textContent='↓ Done ✓'; setTimeout(()=>{ btn.textContent='↓ Pull'; },2000); }
+      if(btn){ btn.textContent='✓'; setTimeout(()=>{ btn.textContent='↓'; },1800); }
     })
     .catch((err)=>{
       showToast('Pull failed: '+(err.message||err.code||'unknown'));
-      if(btn)btn.textContent='↓ Pull';
+      if(btn)btn.textContent='↓';
     });
 }
 
