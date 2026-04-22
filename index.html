@@ -11064,7 +11064,7 @@ function openCaseDetail(clid){
   const allRecs=records.filter(r=>(r.clid||r.client)===clid);
   if(!allRecs.length)return;
   const base=allRecs.reduce((best,r)=>{const s=(r.client?1:0)+(r.anum?1:0)+(r.atty?1:0)+(r.type?1:0);const bs=(best.client?1:0)+(best.anum?1:0)+(best.atty?1:0)+(best.type?1:0);return s>bs?r:best;},allRecs[0]);
-  document.getElementById('case-detail-title').textContent=base.client||[(caseMeta[clid]||{}).clientFirstName,(caseMeta[clid]||{}).clientMiddleName,(caseMeta[clid]||{}).clientLastName].filter(Boolean).join(' ')||clid;
+  {const _m=caseMeta[clid]||{};const _c=[_m.clientFirstName,_m.clientMiddleName,_m.clientLastName].filter(Boolean).join(' ');document.getElementById('case-detail-title').textContent=_c||base.client||clid;}
   const active=allRecs.filter(r=>!r.deletedStatus&&!r.finishedStatus);
   const finished=allRecs.filter(r=>r.finishedStatus&&!r.deletedStatus);
   const deleted=allRecs.filter(r=>r.deletedStatus);
@@ -11441,7 +11441,7 @@ function openCaseDetail(clid){
       if(cl._paraInput){const nv=cl._paraInput.value;if(cl._isBase){allRecs.forEach(r=>r.atty=nv);base.atty=nv;}else if(cl.idx>=0)caseMeta[clid].respondents[cl.idx].atty=nv;}
     });
     markUnsaved();
-    document.getElementById('case-detail-title').textContent=base.client||[(caseMeta[clid]||{}).clientFirstName,(caseMeta[clid]||{}).clientMiddleName,(caseMeta[clid]||{}).clientLastName].filter(Boolean).join(' ')||clid;
+    {const _m=caseMeta[clid]||{};const _c=[_m.clientFirstName,_m.clientMiddleName,_m.clientLastName].filter(Boolean).join(' ');document.getElementById('case-detail-title').textContent=_c||base.client||clid;}
   }
 
   editToggle.onclick=()=>{
@@ -14312,6 +14312,38 @@ const loaded=loadSavedData();
   });
   try{localStorage.setItem('migration_clientFirstName_v1','done');}catch(e){}
   markUnsaved();
+})();
+
+// ── One-time resync: when a user edited structured first/middle/last name
+// fields but the old record.client string was not updated at the same time,
+// views that read record.client kept showing the stale full name. This
+// migration re-composes the structured name per clid and overwrites every
+// record.client that disagrees. Safe to run repeatedly — changes nothing
+// once all records are in sync.
+(function _resyncRecordClientFromStructured(){
+  if(localStorage.getItem('migration_resync_record_client_v1')==='done') return;
+  let changed=0;
+  const byClid={};
+  Object.entries(caseMeta||{}).forEach(([cid,meta])=>{
+    if(!meta) return;
+    const composed=[meta.clientFirstName,meta.clientMiddleName,meta.clientLastName].filter(Boolean).join(' ').trim();
+    if(!composed) return;
+    // Only overwrite if the composed structured name is richer than the
+    // record.client (i.e. has a last name or more parts) OR differs from
+    // record.client. Never clobber a non-empty client with an empty.
+    byClid[cid]=composed;
+  });
+  records.forEach(r=>{
+    const cid=r.clid||r.client;
+    if(!cid) return;
+    const composed=byClid[cid];
+    if(!composed) return;
+    if(r.client===composed) return;
+    r.client=composed;
+    changed++;
+  });
+  try{localStorage.setItem('migration_resync_record_client_v1','done');}catch(e){}
+  if(changed){ markUnsaved(); }
 })();
 // Always re-apply SIJ workflow so changes are reflected regardless of localStorage
 (function(){
