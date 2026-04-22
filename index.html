@@ -2787,7 +2787,13 @@ const TODAY=new Date();TODAY.setHours(0,0,0,0);
   }
   tick();setInterval(tick,1000);
 })();
-let records=[
+// ══════════════════════════════════════════════════
+// DEMO_RECORDS — only applied if the user explicitly picks
+// "Start with demo data" in the welcome modal. Never silently
+// used as a fallback when localStorage is empty (that's how a
+// full month of real data got overwritten once — see welcome modal).
+// ══════════════════════════════════════════════════
+const DEMO_RECORDS=[
 {id:'22738',clid:'22738',type:'Special Juvenile in Court',anum:'220-347-638',client:'Marielys',atty:'Jessica Vicuna',event:'TASK FOR FC',date:'',assigned:'',notes:'Motion to Dispense Service. Waiver and Affidavit for the mother.'},
 {id:'22807',clid:'22807',type:'Defensive Asylum',anum:'246-601-838',client:'Freddy',atty:'Carlota Lopez',event:'TASK',date:'2026-03-11',assigned:'',notes:'Check if IJ respondent motion for VD'},
 {id:'22828',clid:'22828',type:'Cancellation of Removal',anum:'205-308-142',client:'Carlos',atty:'Katya Baltodano',event:'TASK',date:'2026-03-11',assigned:'',notes:'Start working on the waiver package'},
@@ -2834,6 +2840,16 @@ let records=[
 {id:'18674',clid:'18674',type:'Defensive Asylum',anum:'249-249-009',client:'Coritza Jasmin PORTILLO ESCOBAR',atty:'Albertson Candelier',event:'MASTER',date:'2026-03-24',assigned:'',notes:''},
 {id:'18674-ind',clid:'18674',type:'Defensive Asylum',anum:'249-249-009',client:'Coritza Jasmin PORTILLO ESCOBAR',atty:'Albertson Candelier',event:'INDIVIDUAL',date:'2026-12-10',assigned:'',notes:'In Person. 290 Broadway. FL 22. RM 13. 30 DAY CALL UP: Tue, Nov 10, 2026. Webex motion will be granted if added in the call-up. DHS confirmed that they got an I-589 on 04/14/2025, but she was already 18 on 02/15/2025. Court kept jurisdiction and set an Individual Hearing.'},
 ];
+// Start EMPTY. Populated by loadSavedData() from localStorage, by the
+// Firestore snapshot, by Import, or — only if the user explicitly picks
+// "Start with demo data" in the welcome modal — from DEMO_RECORDS.
+let records=[];
+// True once real data has been confirmed present from ANY source
+// (localStorage load, Firestore first-snapshot apply, Import file,
+// or explicit "Start with demo data"). While this is false, saveAllData()
+// is a NO-OP so an empty/broken state cannot overwrite the cloud or
+// local storage.
+let _dataInitialized=false;
 let paralegals=[...new Set(records.map(r=>r.atty).filter(Boolean))].sort();
 let eventTypes=[...new Set([...records.map(r=>r.event).filter(Boolean),'90-DAY DEADLINE','60-DAY DEADLINE','30-DAY DEADLINE','CALL UP DEADLINE','PRIORITY DAY'])].sort();
 // Event types restricted to specific case types (if not listed here, available to all)
@@ -9193,10 +9209,17 @@ async function _writeAutoBackup(){
   _showAutoBackupButton();
 })();
 
-function saveAllData(){const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,venues,firmInfo,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
+function saveAllData(){
+  // GUARD: never persist while the dataset is in an uninitialized state.
+  // Without this, an empty or seed-filled `records` from a failed
+  // localStorage read would autosave over the cloud (the exact failure
+  // that wiped a month of real data). See showWelcomeGate() for the
+  // modal that sets _dataInitialized after the user picks a path.
+  if(!_dataInitialized){ return; }
+  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,venues,firmInfo,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();}catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records)records=p.records;if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);return true;}catch(e){return false;}}
 window.markUnsaved=function(){document.getElementById('unsaved-dot').style.display='inline-block';document.getElementById('btn-save').classList.add('unsaved');clearTimeout(window._autoSaveTimer);window._autoSaveTimer=setTimeout(()=>{saveAllData();},1000);};
 function setLastBackupLabel(action){
   const n=new Date();
@@ -9432,6 +9455,8 @@ function restoreData(event){const file=event.target.files[0];if(!file)return;con
     p=JSON.parse(e.target.result);
   }
   if(!p.records){showToast('Invalid file — no records found');return;}
+  // An Import unambiguously establishes real data — permit saves from now on.
+  _dataInitialized=true;
   const mode=confirm('Click OK to MERGE (add new records, keep existing).\nClick Cancel to REPLACE all current data.');
   if(mode===null)return;// cancelled prompt — actually confirm returns bool, so Cancel = false
   if(mode){
@@ -13937,6 +13962,7 @@ function forcePullFromCloud(){
       if(!doc.exists){ showToast('No cloud data found'); if(btn)btn.textContent='↓ Pull'; return; }
       const cloudData=doc.data();
       applyPayload(cloudData);
+      _dataInitialized=true; // explicit pull permits saves again
       try{
         const _now=Date.now();
         const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,venues,_savedAt:_now};
@@ -14129,6 +14155,78 @@ updateQueueBadge();
 updateDeadlinesBadge();
 showToast(loaded?'Loaded from local storage':'Ready');
 
+// ══════════════════════════════════════════════════
+// WELCOME GATE — protects against the empty-localStorage -> seed-autosave
+// catastrophe. If localStorage had no data AND the first Firestore snapshot
+// didn't apply cloud data, block all saves until the user explicitly picks:
+//   - Import a backup file
+//   - Pull from cloud (force)
+//   - Start with demo data (populate DEMO_RECORDS)
+//   - Start empty (blank slate — will overwrite cloud on next change)
+// While the modal is open, saveAllData() is a no-op because _dataInitialized
+// is still false. That's the whole point.
+// ══════════════════════════════════════════════════
+function showWelcomeGate(){
+  if(document.getElementById('welcome-gate-ov')) return; // already shown
+  const ov=document.createElement('div');
+  ov.id='welcome-gate-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(44,38,32,0.72);z-index:10000;display:flex;align-items:center;justify-content:center;';
+  const bx=document.createElement('div');
+  bx.style.cssText="background:#fff;border:1px solid #DDD5CA;border-radius:14px;padding:28px 30px;width:460px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,0.25);font-family:'DM Sans',system-ui,sans-serif;";
+  bx.innerHTML=
+    '<div style="font-family:\'Lora\',Georgia,serif;font-size:19px;font-weight:600;color:#2C2620;margin-bottom:10px;">No saved data on this device</div>'+
+    '<div style="font-size:13px;color:#5C5148;line-height:1.55;margin-bottom:18px;">Your browser storage is empty. This could mean browser data was cleared, or this is a fresh device. <b>Pick how to continue</b> — nothing will be saved (locally or to the cloud) until you do.</div>'+
+    '<div style="font-size:11px;color:#B85C5C;background:#FAEDED;border:1px solid #E9C9C9;border-radius:8px;padding:9px 11px;margin-bottom:16px;line-height:1.45;">Picking <b>Start empty</b> or <b>Start with demo</b> will, on your next edit, overwrite the cloud copy. If your real data is on another device, choose <b>Pull from cloud</b> or <b>Import</b> instead.</div>'+
+    '<div id="wg-btns" style="display:flex;flex-direction:column;gap:8px;"></div>';
+  const btns=bx.querySelector('#wg-btns');
+  const mkBtn=(label,hint,primary,fn)=>{
+    const b=document.createElement('button');b.type='button';
+    b.style.cssText='text-align:left;border:1px solid '+(primary?'#6A8C6E':'#DDD5CA')+';background:'+(primary?'#EBF1EB':'#FDFAF7')+';color:#2C2620;padding:10px 14px;border-radius:10px;cursor:pointer;font-family:inherit;';
+    b.innerHTML='<div style="font-weight:600;font-size:13px;">'+label+'</div><div style="font-size:11px;color:#5C5148;margin-top:2px;">'+hint+'</div>';
+    b.onclick=fn;btns.appendChild(b);return b;
+  };
+  mkBtn('↓ Pull from cloud','Fetch the current Firestore state — recommended if you use this app on another device.',true,()=>{
+    ov.remove();
+    if(typeof forcePullFromCloud==='function') forcePullFromCloud();
+  });
+  mkBtn('↑ Import backup file','Restore from a .html or .json file you exported previously.',false,()=>{
+    ov.remove();
+    const inp=document.getElementById('restore-input');
+    if(inp)inp.click();
+  });
+  mkBtn('Start with demo data','Populate with the built-in sample cases. Useful for a fresh demo setup.',false,()=>{
+    if(!confirm('This replaces the current (empty) state with demo data and allows saves. Continue?'))return;
+    records=JSON.parse(JSON.stringify(DEMO_RECORDS));
+    paralegals=[...new Set(records.map(r=>r.atty).filter(Boolean))].sort();
+    _dataInitialized=true;
+    ov.remove();
+    renderAll();
+    markUnsaved();
+    showToast('Demo data loaded — edits will save');
+  });
+  mkBtn('Start empty','Blank slate. No cases, no paralegals — build from scratch.',false,()=>{
+    if(!confirm('Start with a completely empty database? Any cloud data will be overwritten on your next change.'))return;
+    records=[];
+    _dataInitialized=true;
+    ov.remove();
+    renderAll();
+    showToast('Empty state — add cases to get started');
+  });
+  document.body.appendChild(ov);
+}
+
+// Decide whether to show the gate once the first cloud snapshot resolves.
+// If neither localStorage nor cloud populated real data, prompt the user.
+window._onFirstCloudSnapshot=function(cloudDocExists){
+  if(_dataInitialized) return; // data is real — no prompt
+  // If cloud exists but didn't apply (e.g. device+epoch blocked it),
+  // we still don't have confirmed real data locally — show the gate.
+  showWelcomeGate();
+};
+// Fallback: if Firestore never responds within 4s, still show the gate
+// so the user is never trapped in an autosave-blocked state forever.
+setTimeout(()=>{ if(!_dataInitialized) showWelcomeGate(); }, 4000);
+
 // Step 2: Listen to Firestore for updates from OTHER devices
 let _booted=false;
 db.collection('wilmer').doc('data').onSnapshot(
@@ -14146,6 +14244,7 @@ db.collection('wilmer').doc('data').onSnapshot(
       // On first snapshot: only use cloud if it's newer than local
       if(!fromThisDevice&&cloudEpoch>localEpoch){
         applyPayload(cloudData);
+        _dataInitialized=true; // cloud was applied — safe to autosave
         try{
           const _now=Date.now();
           const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,venues,_savedAt:_now};
@@ -14156,6 +14255,10 @@ db.collection('wilmer').doc('data').onSnapshot(
         renderAll();
         showToast('☁ Updated from cloud ✓');
       }
+      // Tell the welcome gate the first cloud snapshot has arrived
+      // (whether or not it applied). If nothing else set the flag,
+      // the gate now decides whether to prompt the user.
+      try{ window._onFirstCloudSnapshot && window._onFirstCloudSnapshot(doc.exists); }catch(e){}
     } else {
       // Subsequent snapshots: apply if from a different device
       if(!fromThisDevice){
@@ -14177,7 +14280,7 @@ db.collection('wilmer').doc('data').onSnapshot(
   (err)=>{
     _fbOnline=false;
     _offlineReason=err.message||err.code||'';
-    if(!_booted){ _booted=true; }
+    if(!_booted){ _booted=true; try{ window._onFirstCloudSnapshot && window._onFirstCloudSnapshot(false); }catch(e){} }
     updateCloudIndicator();
   }
 );
