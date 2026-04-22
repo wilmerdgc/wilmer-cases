@@ -11972,6 +11972,12 @@ function renderChecklistsList(){
         lbl.textContent=it.value||'(untitled)';
         lbl.style.cssText='color:'+(cb.checked?'#C4BAB0':'#2C2620')+';text-decoration:'+(cb.checked?'line-through':'none')+';';
         line.appendChild(cb);line.appendChild(badge);line.appendChild(lbl);
+        if(it.assignedTo){
+          const asgBadge=document.createElement('span');
+          asgBadge.textContent='→ '+it.assignedTo;
+          asgBadge.style.cssText='font-size:10px;color:#9E9186;margin-left:auto;font-style:italic;';
+          line.appendChild(asgBadge);
+        }
         body.appendChild(line);
       });
     }
@@ -12060,6 +12066,13 @@ function openChecklistEditor(idx){
         inp.oninput=()=>{it.value=inp.value;};
         row.appendChild(inp);
       }
+      // Assigned-to dropdown (Attorney / Paralegal)
+      const asg=document.createElement('select');
+      asg.style.cssText='font-size:11px;padding:4px 6px;border:1px solid #EDE8E0;border-radius:5px;font-family:inherit;background:#fff;outline:none;flex-shrink:0;color:#5C5148;';
+      asg.title='Assigned to';
+      [['','— Assign —'],['Attorney','Attorney'],['Paralegal','Paralegal']].forEach(([v,lbl2])=>{const o=document.createElement('option');o.value=v;o.textContent=lbl2;if(v===(it.assignedTo||''))o.selected=true;asg.appendChild(o);});
+      asg.onchange=()=>{it.assignedTo=asg.value;};
+      row.appendChild(asg);
       const rm=document.createElement('button');rm.textContent='×';rm.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:15px;padding:0 4px;flex-shrink:0;';
       rm.onmouseenter=()=>rm.style.color='#B85C5C';rm.onmouseleave=()=>rm.style.color='#C4BAB0';
       rm.onclick=()=>{cl.items.splice(i,1);renderItems();};
@@ -12084,7 +12097,7 @@ function openChecklistEditor(idx){
   sBtn.onclick=()=>{
     const nm=nameIn.value.trim();if(!nm){nameIn.style.borderColor='#B85C5C';nameIn.focus();return;}
     cl.name=nm;
-    cl.items=(cl.items||[]).filter(it=>it && it.value && String(it.value).trim()).map(it=>({type:it.type,value:String(it.value).trim()}));
+    cl.items=(cl.items||[]).filter(it=>it && it.value && String(it.value).trim()).map(it=>({type:it.type,value:String(it.value).trim(),assignedTo:it.assignedTo||''}));
     if(isNew) customChecklists.push(cl);
     else customChecklists[idx]=cl;
     saveCustomChecklists();
