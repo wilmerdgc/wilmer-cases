@@ -12577,189 +12577,213 @@ function renderChecklistsList(){
   if(!window._checklistOpen) window._checklistOpen={};
   const persist=()=>{saveCustomChecklists();markUnsaved();};
 
+  const ACCENT='#C9823A';
+  const ACCENT_BG=ACCENT+'18';
+  const ACCENT_LIGHT=ACCENT+'33';
+  const SAGE='#6A8C6E';
+
   customChecklists.forEach((cl,idx)=>{
     if(!cl.items) cl.items=[];
-    const isOpen=!!window._checklistOpen[cl.id];
+    if(!cl.caseTypes) cl.caseTypes=[];
+    const isOpen = window._checklistOpen[cl.id] !== false; // default open
 
     const card=document.createElement('div');
-    card.style.cssText='border:1px solid #EDE8E0;border-radius:8px;background:#fff;margin-bottom:7px;overflow:hidden;';
+    card.style.cssText='border:1px solid '+ACCENT_LIGHT+';border-radius:14px;background:#fff;margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow-sm);';
 
-    // Header
-    const row=document.createElement('div');
-    row.style.cssText='display:flex;align-items:center;gap:10px;padding:10px 14px;user-select:none;';
+    // ── Header card (amber tinted) ──
+    const hdr=document.createElement('div');
+    hdr.style.cssText='display:flex;align-items:flex-start;gap:12px;padding:16px 20px 14px;background:'+ACCENT_BG+';cursor:pointer;user-select:none;';
+    hdr.onclick=(e)=>{
+      if(e.target.closest('input,select,button')) return;
+      const nowOpen=body.style.display==='none';
+      body.style.display=nowOpen?'block':'none';
+      footer.style.display=nowOpen?'flex':'none';
+      window._checklistOpen[cl.id]=nowOpen;
+      hdrDot.style.opacity=nowOpen?'1':'0.4';
+    };
 
-    const caret=document.createElement('button');
-    caret.type='button';
-    caret.textContent=isOpen?'−':'+';
-    caret.style.cssText='font-size:14px;font-weight:600;color:#9E9186;flex-shrink:0;background:transparent;border:1px solid #DDD5CA;border-radius:4px;cursor:pointer;width:18px;height:18px;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;transition:all .12s;';
-    caret.onmouseenter=()=>{caret.style.background='#FDFAF7';caret.style.borderColor='#9E9186';caret.style.color='#5C5148';};
-    caret.onmouseleave=()=>{caret.style.background='transparent';caret.style.borderColor='#DDD5CA';caret.style.color='#9E9186';};
+    const hdrDot=document.createElement('span');
+    hdrDot.style.cssText='width:11px;height:11px;border-radius:50%;background:'+ACCENT+';flex-shrink:0;margin-top:5px;opacity:'+(isOpen?'1':'0.4')+';';
+
+    const hdrTitleWrap=document.createElement('div');
+    hdrTitleWrap.style.cssText='flex:1;min-width:0;';
 
     const nameIn=document.createElement('input');
     nameIn.type='text';nameIn.value=cl.name;nameIn.placeholder='Checklist name…';
-    nameIn.style.cssText="font-size:14px;font-weight:600;color:#2C2620;flex:1;font-family:'Lora',Georgia,serif;border:1px solid #EDE8E0;background:#fff;padding:5px 10px;outline:none;border-radius:6px;transition:border-color .12s;";
-    nameIn.onfocus=()=>nameIn.style.borderColor='#6A8C6E';
-    nameIn.onblur=()=>{nameIn.style.borderColor='#EDE8E0';const v=nameIn.value.trim();if(v&&v!==cl.name){cl.name=v;persist();}else if(!v){nameIn.value=cl.name;}};
+    nameIn.style.cssText="font-size:14px;font-weight:700;color:"+ACCENT+";font-family:inherit;text-transform:uppercase;letter-spacing:.06em;border:none;background:transparent;padding:1px 4px;outline:none;border-radius:4px;width:100%;box-sizing:border-box;display:block;";
+    nameIn.onfocus=()=>{nameIn.style.background='#fff';};
+    nameIn.onblur=()=>{nameIn.style.background='transparent';const v=nameIn.value.trim();if(v&&v!==cl.name){cl.name=v;persist();}else if(!v){nameIn.value=cl.name;}};
     nameIn.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();nameIn.blur();}};
+    nameIn.onclick=e=>e.stopPropagation();
 
-    // Case types summary (click to toggle inline picker)
-    const typesBtn=document.createElement('button');typesBtn.type='button';
-    typesBtn.style.cssText='font-size:11px;color:#9E9186;flex:1;background:transparent;border:none;cursor:pointer;text-align:left;padding:2px 6px;border-radius:4px;';
-    const refreshTypes=()=>{typesBtn.textContent=(cl.caseTypes||[]).length?(cl.caseTypes||[]).join(' · '):'All case types';};
-    refreshTypes();
-    typesBtn.onmouseenter=()=>typesBtn.style.background='#FDFAF7';
-    typesBtn.onmouseleave=()=>typesBtn.style.background='transparent';
-
-    const countSpan=document.createElement('span');
-    countSpan.style.cssText='font-size:10px;color:#9E9186;flex-shrink:0;';
-    const refreshCount=()=>{
-      const nEv=cl.items.filter(it=>it.type==='event').length;
-      const nTk=cl.items.filter(it=>it.type==='task').length;
-      const parts=[];if(nEv)parts.push(nEv+' event'+(nEv===1?'':'s'));if(nTk)parts.push(nTk+' task'+(nTk===1?'':'s'));
-      countSpan.textContent=parts.join(' · ')||'empty';
+    const subWrap=document.createElement('div');
+    subWrap.style.cssText='font-size:11px;font-weight:500;letter-spacing:.05em;color:'+ACCENT+';opacity:0.65;margin-top:3px;text-transform:uppercase;cursor:pointer;padding:1px 4px;border-radius:4px;';
+    const refreshSub=()=>{ subWrap.textContent = cl.caseTypes.length ? cl.caseTypes.join(' · ') : 'All case types'; };
+    refreshSub();
+    subWrap.title='Click to choose which case types this applies to';
+    subWrap.onmouseenter=()=>subWrap.style.background='rgba(255,255,255,0.5)';
+    subWrap.onmouseleave=()=>subWrap.style.background='transparent';
+    subWrap.onclick=(e)=>{
+      e.stopPropagation();
+      const showing = typesPicker.style.display !== 'none';
+      typesPicker.style.display = showing ? 'none' : 'flex';
     };
+
+    hdrTitleWrap.appendChild(nameIn);
+    hdrTitleWrap.appendChild(subWrap);
+
+    // Item count chip on the right
+    const countChip=document.createElement('span');
+    countChip.style.cssText='font-size:11px;font-weight:700;color:'+ACCENT+';background:#fff;padding:3px 10px;border-radius:999px;flex-shrink:0;align-self:center;border:1px solid '+ACCENT_LIGHT+';';
+    const refreshCount=()=>{ const n=cl.items.length; countChip.textContent = n+' item'+(n===1?'':'s'); };
     refreshCount();
 
-    const delBtn=document.createElement('button');delBtn.type='button';delBtn.textContent='×';
-    delBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:16px;padding:0 4px;border-radius:4px;';
-    delBtn.onmouseenter=()=>delBtn.style.color='#B85C5C';delBtn.onmouseleave=()=>delBtn.style.color='#C4BAB0';
+    const delBtn=document.createElement('button');delBtn.type='button';delBtn.textContent='✕';
+    delBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:13px;padding:4px 6px;flex-shrink:0;align-self:center;border-radius:4px;transition:all .12s;';
+    delBtn.title='Delete checklist';
+    delBtn.onmouseenter=()=>{delBtn.style.color='#B85C5C';delBtn.style.background='rgba(184,92,92,0.1)';};
+    delBtn.onmouseleave=()=>{delBtn.style.color='#C4BAB0';delBtn.style.background='transparent';};
     delBtn.onclick=(e)=>{e.stopPropagation();if(!confirm('Delete checklist "'+cl.name+'"?'))return;customChecklists.splice(idx,1);delete window._checklistOpen[cl.id];persist();renderChecklistsList();};
 
-    row.appendChild(caret);row.appendChild(nameIn);row.appendChild(typesBtn);row.appendChild(countSpan);row.appendChild(delBtn);
-    card.appendChild(row);
+    hdr.appendChild(hdrDot);
+    hdr.appendChild(hdrTitleWrap);
+    hdr.appendChild(countChip);
+    hdr.appendChild(delBtn);
+    card.appendChild(hdr);
 
-    // Inline case type picker (hidden by default)
+    // ── Inline case-type picker (hidden by default) ──
     const typesPicker=document.createElement('div');
-    typesPicker.style.cssText='display:none;padding:8px 14px 6px 38px;background:#FDFAF7;border-top:1px solid #EDE8E0;flex-wrap:wrap;gap:5px;';
-    if(!cl.caseTypes) cl.caseTypes=[];
-    const typesHint=document.createElement('div');typesHint.style.cssText='width:100%;font-size:10px;color:#C4BAB0;font-style:italic;margin-bottom:3px;';typesHint.textContent='None selected = applies to every case type.';typesPicker.appendChild(typesHint);
+    typesPicker.style.cssText='display:none;padding:10px 20px 10px 43px;background:#FDFAF7;border-top:1px solid '+ACCENT_LIGHT+';flex-wrap:wrap;gap:5px;align-items:center;';
+    const typesHint=document.createElement('div');
+    typesHint.style.cssText='width:100%;font-size:10px;color:#C4BAB0;font-style:italic;margin-bottom:4px;';
+    typesHint.textContent='None selected = applies to every case type.';
+    typesPicker.appendChild(typesHint);
     caseTypes.forEach(ct2=>{
       const chip=document.createElement('button');chip.type='button';chip.textContent=ct2;
       const on=cl.caseTypes.includes(ct2);
-      chip.style.cssText='font-size:11px;padding:3px 10px;border-radius:14px;cursor:pointer;font-family:inherit;border:1px solid '+(on?'#6A8C6E':'#DDD5CA')+';background:'+(on?'#EBF1EB':'#fff')+';color:'+(on?'#4A6B4E':'#5C5148')+';';
+      chip.style.cssText='font-size:11px;padding:3px 10px;border-radius:14px;cursor:pointer;font-family:inherit;border:1px solid '+(on?SAGE:'#DDD5CA')+';background:'+(on?'#EBF1EB':'#fff')+';color:'+(on?'#4A6B4E':'#5C5148')+';';
       chip.onclick=()=>{
         if(cl.caseTypes.includes(ct2)) cl.caseTypes=cl.caseTypes.filter(x=>x!==ct2);
         else cl.caseTypes.push(ct2);
         const onNow=cl.caseTypes.includes(ct2);
-        chip.style.border='1px solid '+(onNow?'#6A8C6E':'#DDD5CA');
+        chip.style.border='1px solid '+(onNow?SAGE:'#DDD5CA');
         chip.style.background=onNow?'#EBF1EB':'#fff';
         chip.style.color=onNow?'#4A6B4E':'#5C5148';
-        refreshTypes();persist();
+        refreshSub();persist();
       };
       typesPicker.appendChild(chip);
     });
-    typesBtn.onclick=(e)=>{e.stopPropagation();const showing=typesPicker.style.display!=='none';typesPicker.style.display=showing?'none':'flex';};
     card.appendChild(typesPicker);
 
-    // Items body
+    // ── Body: stage-style rows ──
     const body=document.createElement('div');
-    body.style.cssText='border-top:1px solid #EDE8E0;padding:8px 14px 10px 32px;background:#FDFAF7;display:'+(isOpen?'block':'none')+';';
+    body.style.cssText='padding:14px 20px 6px;display:'+(isOpen?'block':'none')+';background:#FDFAF7;';
 
     const itemsWrap=document.createElement('div');
-    itemsWrap.style.cssText='display:flex;flex-direction:column;';
     body.appendChild(itemsWrap);
 
     function renderRows(){
       itemsWrap.innerHTML='';
       if(!cl.items.length){
         const none=document.createElement('div');
-        none.style.cssText='font-size:12px;color:#C4BAB0;font-style:italic;padding:8px 2px;';
+        none.style.cssText='font-size:12px;color:#C4BAB0;font-style:italic;padding:10px 0;';
         none.textContent='Empty — add an event or task below.';
         itemsWrap.appendChild(none);
       }
-      if(!cl._checked) cl._checked={};
       cl.items.forEach((it,i)=>{
         const isEv=it.type==='event';
-        const done=!!cl._checked[i];
+        const rowColor = isEv ? ACCENT : SAGE;
 
-        const line=document.createElement('div');
-        line.style.cssText='display:flex;align-items:center;gap:10px;padding:6px 2px;font-size:13px;border-bottom:1px solid #F2EDE4;';
-        line.onmouseenter=()=>{rm.style.opacity='0.7';};
-        line.onmouseleave=()=>{rm.style.opacity='0';};
+        const row=document.createElement('div');
+        row.style.cssText='display:flex;align-items:center;padding:10px 4px;border-radius:6px;transition:background .12s;gap:0;';
+        row.onmouseenter=()=>{ row.style.background='rgba(0,0,0,0.025)'; rmBtn.style.opacity='1'; asg.style.opacity='1'; typeBtn.style.opacity='1'; };
+        row.onmouseleave=()=>{ row.style.background=''; rmBtn.style.opacity='0'; asg.style.opacity = it.assignedTo ? '1' : '0.5'; typeBtn.style.opacity='0.55'; };
 
-        // Small square checkbox
-        const bubble=document.createElement('button');bubble.type='button';
-        const drawBubble=()=>{
-          bubble.innerHTML=done?'<span style="font-size:10px;color:#fff;line-height:1;">✓</span>':'';
-          bubble.style.cssText='width:15px;height:15px;border-radius:3px;border:1.5px solid '+(done?'#6A8C6E':'#C4BAB0')+';background:'+(done?'#6A8C6E':'#fff')+';cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:0;transition:all .12s;';
-        };
-        drawBubble();
-        bubble.onmouseenter=()=>{if(!cl._checked[i])bubble.style.borderColor='#6A8C6E';};
-        bubble.onmouseleave=()=>{if(!cl._checked[i])bubble.style.borderColor='#C4BAB0';};
-        bubble.onclick=()=>{
-          cl._checked[i]=!cl._checked[i];
-          const nowDone=!!cl._checked[i];
-          bubble.innerHTML=nowDone?'<span style="font-size:10px;color:#fff;line-height:1;">✓</span>':'';
-          bubble.style.border='1.5px solid '+(nowDone?'#6A8C6E':'#C4BAB0');
-          bubble.style.background=nowDone?'#6A8C6E':'#fff';
-          valEl.style.color=nowDone?'#C4BAB0':'#2C2620';
-          valEl.style.textDecoration=nowDone?'line-through':'none';
-        };
+        // Bullet dot
+        const dot=document.createElement('span');
+        dot.style.cssText='width:9px;height:9px;border-radius:50%;background:'+rowColor+';flex-shrink:0;margin-right:14px;';
 
-        let valEl;
+        // Name (serif, big-ish)
+        let nameEl;
         if(isEv){
-          valEl=document.createElement('select');
-          valEl.style.cssText='flex:1;font-size:13px;padding:4px 6px;border:1px solid #EDE8E0;border-radius:4px;font-family:inherit;background:#fff;outline:none;min-width:0;color:'+(done?'#C4BAB0':'#6B7FA3')+';cursor:pointer;';
-          const ph=document.createElement('option');ph.value='';ph.textContent='— event type —';valEl.appendChild(ph);
-          eventTypes.forEach(ev=>{const o=document.createElement('option');o.value=ev;o.textContent=ev;if(ev===it.value)o.selected=true;valEl.appendChild(o);});
-          if(it.value && !eventTypes.includes(it.value)){const o=document.createElement('option');o.value=it.value;o.textContent=it.value;o.selected=true;valEl.appendChild(o);}
-          valEl.onchange=()=>{it.value=valEl.value;persist();refreshCount();};
-        }else{
-          valEl=document.createElement('input');valEl.type='text';valEl.placeholder='Task name…';valEl.value=it.value||'';
-          valEl.style.cssText='flex:1;font-size:13px;padding:4px 8px;border:1px solid #EDE8E0;border-radius:4px;font-family:inherit;outline:none;background:#fff;min-width:0;color:'+(done?'#C4BAB0':'#2C2620')+';text-decoration:'+(done?'line-through':'none')+';transition:border-color .12s;';
-          valEl.onfocus=()=>{valEl.style.borderColor='#6A8C6E';};
-          valEl.onblur=()=>{valEl.style.borderColor='#EDE8E0';persist();refreshCount();};
-          valEl.oninput=()=>{it.value=valEl.value;};
-          valEl.onkeydown=(e)=>{if(e.key==='Enter'){e.preventDefault();valEl.blur();addTk.click();}};
+          nameEl=document.createElement('select');
+          nameEl.style.cssText="font-family:'Lora',Georgia,serif;font-size:15px;color:#2C2620;border:none;background:transparent;outline:none;cursor:pointer;padding:2px 4px;border-radius:4px;min-width:160px;flex-shrink:0;";
+          const ph=document.createElement('option');ph.value='';ph.textContent='— event type —';nameEl.appendChild(ph);
+          eventTypes.forEach(ev=>{const o=document.createElement('option');o.value=ev;o.textContent=ev;if(ev===it.value)o.selected=true;nameEl.appendChild(o);});
+          if(it.value && !eventTypes.includes(it.value)){const o=document.createElement('option');o.value=it.value;o.textContent=it.value;o.selected=true;nameEl.appendChild(o);}
+          nameEl.onchange=()=>{it.value=nameEl.value;persist();};
+        } else {
+          nameEl=document.createElement('input');nameEl.type='text';nameEl.placeholder='Task name…';nameEl.value=it.value||'';
+          nameEl.style.cssText="font-family:'Lora',Georgia,serif;font-size:15px;color:#2C2620;border:none;background:transparent;outline:none;padding:2px 4px;border-radius:4px;min-width:160px;flex:0 1 auto;width:auto;";
+          nameEl.size = Math.max(12, (it.value||'').length+1);
+          nameEl.onfocus=()=>{nameEl.style.background='#fff';nameEl.style.boxShadow='inset 0 0 0 1px '+SAGE;};
+          nameEl.onblur=()=>{nameEl.style.background='transparent';nameEl.style.boxShadow='none';persist();};
+          nameEl.oninput=()=>{it.value=nameEl.value;nameEl.size=Math.max(12,(nameEl.value||'').length+1);};
+          nameEl.onkeydown=(e)=>{if(e.key==='Enter'){e.preventDefault();nameEl.blur();}};
         }
 
+        // Dashed leader
+        const line=_makeDashedLine();
+
+        // Type pill — click to flip task ↔ event
+        const typeBtn=document.createElement('button');typeBtn.type='button';
+        typeBtn.style.cssText='font-size:11px;font-weight:700;color:'+rowColor+';background:'+rowColor+'18;padding:3px 12px;border-radius:999px;border:1px solid '+rowColor+'33;flex-shrink:0;cursor:pointer;font-family:inherit;letter-spacing:.04em;text-transform:lowercase;opacity:0.55;transition:opacity .12s;margin-right:6px;';
+        typeBtn.textContent = isEv ? 'event' : 'task';
+        typeBtn.title = 'Click to switch to ' + (isEv ? 'task' : 'event');
+        typeBtn.onclick = () => { it.type = isEv ? 'task' : 'event'; if(isEv) it.value=''; persist(); renderRows(); refreshCount(); };
+
+        // Assignment dropdown
         const asg=document.createElement('select');
-        asg.style.cssText='font-size:11px;padding:2px 4px;border:none;font-family:inherit;background:transparent;outline:none;flex-shrink:0;color:'+(it.assignedTo?'#5C5148':'#C4BAB0')+';cursor:pointer;';
+        asg.style.cssText='font-size:10px;border:none;background:transparent;outline:none;color:'+(it.assignedTo?'#5C5148':'#C4BAB0')+';cursor:pointer;flex-shrink:0;padding:2px 4px;font-family:inherit;opacity:'+(it.assignedTo?'1':'0.5')+';transition:opacity .12s;margin-right:4px;';
         asg.title='Assigned to';
-        [['','—'],['Attorney','Attorney'],['Paralegal','Paralegal']].forEach(([v,lbl2])=>{const o=document.createElement('option');o.value=v;o.textContent=lbl2;if(v===(it.assignedTo||''))o.selected=true;asg.appendChild(o);});
-        asg.onchange=()=>{
-          it.assignedTo=asg.value;
-          asg.style.color=asg.value?'#5C5148':'#C4BAB0';
-          persist();
-        };
+        [['','— assign —'],['Attorney','Attorney'],['Paralegal','Paralegal']].forEach(([v,lbl2])=>{const o=document.createElement('option');o.value=v;o.textContent=lbl2;if(v===(it.assignedTo||''))o.selected=true;asg.appendChild(o);});
+        asg.onchange=()=>{ it.assignedTo=asg.value; asg.style.color=asg.value?'#5C5148':'#C4BAB0'; asg.style.opacity=asg.value?'1':'0.5'; persist(); };
 
-        const rm=document.createElement('button');rm.type='button';rm.textContent='×';
-        rm.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:15px;padding:0 4px;flex-shrink:0;opacity:0;transition:opacity .12s;line-height:1;';
-        rm.title='Delete';
-        rm.onmouseenter=()=>{rm.style.color='#B85C5C';rm.style.opacity='1';}; rm.onmouseleave=()=>{rm.style.color='#C4BAB0';};
-        rm.onclick=()=>{cl.items.splice(i,1);delete cl._checked[i];persist();refreshCount();renderRows();};
+        const rmBtn=document.createElement('button');rmBtn.type='button';rmBtn.textContent='✕';
+        rmBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:11px;padding:0 4px;flex-shrink:0;opacity:0;transition:opacity .12s;';
+        rmBtn.title='Delete';
+        rmBtn.onmouseenter=()=>{rmBtn.style.color='#B85C5C';};
+        rmBtn.onmouseleave=()=>{rmBtn.style.color='#C4BAB0';};
+        rmBtn.onclick=()=>{cl.items.splice(i,1);persist();refreshCount();renderRows();};
 
-        line.appendChild(bubble);line.appendChild(valEl);line.appendChild(asg);line.appendChild(rm);
-        itemsWrap.appendChild(line);
+        row.appendChild(dot);
+        row.appendChild(nameEl);
+        row.appendChild(line);
+        row.appendChild(typeBtn);
+        row.appendChild(asg);
+        row.appendChild(rmBtn);
+        itemsWrap.appendChild(row);
       });
     }
     renderRows();
 
-    // Inline add bar
-    const addBar=document.createElement('div');addBar.style.cssText='display:flex;gap:6px;margin-top:8px;';
-    const addEv=document.createElement('button');addEv.type='button';addEv.title='Add event';addEv.innerHTML='📅 + Event';
-    addEv.style.cssText='font-size:11px;padding:5px 12px;border:1px solid #C7D1E2;border-radius:6px;background:#EEF1F7;color:#6B7FA3;cursor:pointer;font-family:inherit;font-weight:600;';
-    addEv.onclick=()=>{cl.items.push({type:'event',value:'',assignedTo:''});persist();refreshCount();renderRows();};
-    const addTk=document.createElement('button');addTk.type='button';addTk.title='Add task';addTk.innerHTML='✓ + Task';
-    addTk.style.cssText='font-size:11px;padding:5px 12px;border:1px solid #B4CCAD;border-radius:6px;background:#EBF1EB;color:#4A6B4E;cursor:pointer;font-family:inherit;font-weight:600;';
-    addTk.onclick=()=>{cl.items.push({type:'task',value:'',assignedTo:''});persist();refreshCount();renderRows();const inputs=itemsWrap.querySelectorAll('input[type=text]');if(inputs.length)inputs[inputs.length-1].focus();};
-    addBar.appendChild(addEv);addBar.appendChild(addTk);
-    body.appendChild(addBar);
-
     card.appendChild(body);
 
-    caret.onclick=(e)=>{
-      e.stopPropagation();
-      const nowOpen=body.style.display==='none';
-      body.style.display=nowOpen?'block':'none';
-      caret.textContent=nowOpen?'−':'+';
-      window._checklistOpen[cl.id]=nowOpen;
-    };
+    // ── Footer add row (mirrors "+ add stage…") ──
+    const footer=document.createElement('div');
+    footer.style.cssText='display:'+(isOpen?'flex':'none')+';align-items:center;gap:14px;padding:6px 20px 16px;background:#FDFAF7;border-top:1px dashed '+ACCENT_LIGHT+';';
+
+    const fDot=document.createElement('span');
+    fDot.style.cssText='width:9px;height:9px;border-radius:50%;background:transparent;border:1px dashed '+ACCENT+';flex-shrink:0;opacity:.6;';
+
+    const addEv=document.createElement('button');addEv.type='button';addEv.textContent='+ add event';
+    addEv.style.cssText="font-size:13px;font-family:'Lora',Georgia,serif;color:"+ACCENT+";background:transparent;border:none;cursor:pointer;padding:6px 4px;font-style:italic;opacity:0.7;transition:opacity .12s;";
+    addEv.onmouseenter=()=>addEv.style.opacity='1'; addEv.onmouseleave=()=>addEv.style.opacity='0.7';
+    addEv.onclick=()=>{cl.items.push({type:'event',value:'',assignedTo:''});persist();refreshCount();renderRows();};
+
+    const addTk=document.createElement('button');addTk.type='button';addTk.textContent='+ add task';
+    addTk.style.cssText="font-size:13px;font-family:'Lora',Georgia,serif;color:"+SAGE+";background:transparent;border:none;cursor:pointer;padding:6px 4px;font-style:italic;opacity:0.7;transition:opacity .12s;";
+    addTk.onmouseenter=()=>addTk.style.opacity='1'; addTk.onmouseleave=()=>addTk.style.opacity='0.7';
+    addTk.onclick=()=>{cl.items.push({type:'task',value:'',assignedTo:''});persist();refreshCount();renderRows();const inputs=itemsWrap.querySelectorAll('input[type=text]');if(inputs.length)inputs[inputs.length-1].focus();};
+
+    footer.appendChild(fDot);
+    footer.appendChild(addEv);
+    footer.appendChild(addTk);
+    card.appendChild(footer);
 
     ct.appendChild(card);
   });
 }
-
 function openChecklistEditor(idx){
   const isNew = idx === -1;
   const cl = isNew
