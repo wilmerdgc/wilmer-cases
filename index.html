@@ -62,6 +62,8 @@ firebase.auth().signInAnonymously().then(()=>{
 // PASTE YOUR OAUTH CLIENT ID HERE (from Google Cloud Console)
 const GMAIL_CLIENT_ID = '861569441296-88uroovr20c81vhiitj09i39mhnnlbp8.apps.googleusercontent.com';
 const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar.events';
+// Auto-sync calendar target — only runs when signed in as this email.
+const CALENDAR_AUTO_SYNC_EMAIL = 'wilmerdgcolina@gmail.com';
 </script>
 <style>
 /* ═══════════════════════════════════════════════════
@@ -3994,6 +3996,17 @@ async function gmailApi(endpoint, opts={}){
 async function gmailGetProfile(){
   const data = await gmailApi('profile');
   if(data) _gmailUserEmail = data.emailAddress || '';
+  // Refresh the Calendar auto-sync button state + kick off an initial sync
+  // when we're authenticated as the target email. Delay slightly so the
+  // inbox UI finishes rendering the button before we touch it.
+  setTimeout(()=>{
+    try{ _updateCalAutoSyncIndicator&&_updateCalAutoSyncIndicator(); }catch(e){}
+    try{
+      if(_isAutoSyncAccount&&_isAutoSyncAccount()){
+        _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync();
+      }
+    }catch(e){}
+  }, 250);
 }
 
 // ── Google Calendar integration ──────────────────────────────
@@ -4088,6 +4101,70 @@ async function _upsertRecordToCalendar(r){
     r._gcalEventId = res.id;
     r._gcalSyncedAt = Date.now();
     return { ok:true, created:true, id: res.id };
+  }
+}
+
+// Signature of the fields we push to Calendar — used to skip unchanged records
+// on automatic re-syncs so we don't spam the API with no-op PATCH requests.
+function _calSig(r){
+  return [r.event,r.type,r.client,r.clid,r.anum,r.atty,r.assigned,r.date,r.timeStart,r.timeEnd,r.notes,r.hearingMode].map(v=>v==null?'':String(v)).join('|');
+}
+function _isAutoSyncAccount(){
+  return !!(_gmailAccessToken && _gmailUserEmail && _gmailUserEmail.toLowerCase() === CALENDAR_AUTO_SYNC_EMAIL.toLowerCase());
+}
+function _updateCalAutoSyncIndicator(){
+  const el = document.getElementById('cal-sync-btn');
+  if(!el) return;
+  if(_isAutoSyncAccount()){
+    el.title = 'Auto-sync ON — events push to '+CALENDAR_AUTO_SYNC_EMAIL+' automatically. Click to sync now.';
+    el.style.borderColor = 'var(--sage)';
+    el.style.color = 'var(--sage)';
+    el.textContent = '📅 Auto-sync ON';
+  } else {
+    el.title = 'Auto-sync only runs when signed in as '+CALENDAR_AUTO_SYNC_EMAIL+'. Click to sync manually with the current account.';
+    el.style.borderColor = 'var(--slate)';
+    el.style.color = 'var(--slate)';
+    el.textContent = '📅 Sync to Calendar';
+  }
+}
+
+let _calAutoSyncTimer = null;
+let _calAutoSyncInFlight = false;
+function _scheduleCalendarAutoSync(){
+  if(!_isAutoSyncAccount()) return;
+  clearTimeout(_calAutoSyncTimer);
+  _calAutoSyncTimer = setTimeout(_runCalendarAutoSync, 5000);
+}
+async function _runCalendarAutoSync(){
+  if(_calAutoSyncInFlight || _calSyncRunning) return;
+  if(!_isAutoSyncAccount()) return;
+  _calAutoSyncInFlight = true;
+  try{
+    // 1. Delete Calendar events for records that became deleted / finished /
+    //    reminder-children since the last sync.
+    const toDelete = records.filter(r => r._gcalEventId && !_isSyncableRecord(r));
+    for(const r of toDelete){
+      try{
+        await calendarApi('calendars/primary/events/'+encodeURIComponent(r._gcalEventId),{method:'DELETE'});
+      }catch(e){}
+      delete r._gcalEventId; delete r._gcalSig; delete r._gcalSyncedAt;
+    }
+    // 2. Upsert only records whose signature changed (or that were never synced)
+    const toUpsert = records.filter(r => _isSyncableRecord(r) && (!r._gcalEventId || _calSig(r) !== r._gcalSig));
+    for(let i=0; i<toUpsert.length; i+=5){
+      const batch = toUpsert.slice(i, i+5);
+      await Promise.all(batch.map(async r => {
+        const res = await _upsertRecordToCalendar(r).catch(()=>({ok:false}));
+        if(res && res.ok) r._gcalSig = _calSig(r);
+      }));
+    }
+    if(toDelete.length || toUpsert.length){
+      // Persist the new ids/sigs. markUnsaved will re-schedule auto-sync, but
+      // the sig check on the next tick makes it a no-op, so there's no loop.
+      try{ markUnsaved(); }catch(e){}
+    }
+  } finally {
+    _calAutoSyncInFlight = false;
   }
 }
 
@@ -9476,7 +9553,9 @@ function saveAllData(){
   if(!_dataInitialized){ return; }
   const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,venues,firmInfo,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
-if(_autoBackupHandle) _writeAutoBackup();}catch(e){showToast('Save failed: storage may be full');}}
+if(_autoBackupHandle) _writeAutoBackup();// Auto-push events to Google Calendar when signed in as the target email
+try{ _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync(); }catch(e){}
+}catch(e){showToast('Save failed: storage may be full');}}
 function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);return true;}catch(e){return false;}}
 window.markUnsaved=function(){document.getElementById('unsaved-dot').style.display='inline-block';document.getElementById('btn-save').classList.add('unsaved');clearTimeout(window._autoSaveTimer);window._autoSaveTimer=setTimeout(()=>{saveAllData();},1000);};
 function setLastBackupLabel(action){
