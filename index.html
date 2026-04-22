@@ -10064,14 +10064,325 @@ function renderToolsPage(){
   if(!el)return;
   el.innerHTML=`
     <div style="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);margin-bottom:6px;">Tools &amp; Forms</div>
-    <div style="font-size:13px;color:var(--ink-muted);margin-bottom:24px;">Select a form to fill out using case data.</div>
+    <div style="font-size:13px;color:var(--ink-muted);margin-bottom:24px;">Forms and data utilities.</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;">
       <div onclick="renderG28Form()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
         <div style="font-size:24px;margin-bottom:8px;">📝</div>
         <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Form G-28</div>
         <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Notice of Entry of Appearance as Attorney or Accredited Representative</div>
       </div>
+      <div onclick="renderMergeDuplicates()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
+        <div style="font-size:24px;margin-bottom:8px;">🔀</div>
+        <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Merge duplicate clients</div>
+        <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Combine two client entries into one without losing any of their events, tasks, or notes.</div>
+      </div>
     </div>`;
+}
+
+// ══════════════════════════════════════════════════
+// MERGE DUPLICATE CLIENTS
+//
+// Each case shares a `clid` identifier. Originally clients were stored as
+// a single `record.client` string. When separate first/middle/last name
+// fields were introduced, some clients ended up with two different clid
+// values — one from before the split, one created after. This tool groups
+// those together and lets the user merge a secondary clid into a master
+// clid: all records are re-keyed, caseMeta is unioned, the secondary's
+// caseMeta entry is removed. No records are deleted, no data is lost.
+// ══════════════════════════════════════════════════
+
+function _normalizeName(s){ return (s||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+
+function _buildClientIndex(){
+  const byClid={};
+  records.forEach(r=>{
+    const clid=r.clid||r.client;
+    if(!clid) return;
+    if(!byClid[clid]) byClid[clid]={clid, records:[], anums:new Set(), types:new Set(), names:new Set()};
+    byClid[clid].records.push(r);
+    if(r.anum) byClid[clid].anums.add(r.anum.replace(/\D/g,''));
+    if(r.type) byClid[clid].types.add(r.type);
+    if(r.client) byClid[clid].names.add(r.client);
+  });
+  // Augment with caseMeta
+  Object.entries(caseMeta||{}).forEach(([clid,meta])=>{
+    if(!byClid[clid]) byClid[clid]={clid, records:[], anums:new Set(), types:new Set(), names:new Set()};
+    const parts=[meta.clientLastName, meta.clientFirstName, meta.clientMiddleName].filter(Boolean).join(' ');
+    if(parts) byClid[clid].names.add(parts);
+    byClid[clid].meta=meta;
+  });
+  return Object.values(byClid);
+}
+
+function _displayName(c){
+  if(c.meta){
+    const p=[c.meta.clientFirstName,c.meta.clientMiddleName,c.meta.clientLastName].filter(Boolean);
+    if(p.length) return p.join(' ');
+  }
+  return [...c.names][0] || c.clid;
+}
+
+function _signatureKey(c){
+  // Normalized signature used for duplicate detection.
+  // Prefer structured names; fall back to the single-string client field.
+  if(c.meta && (c.meta.clientLastName||c.meta.clientFirstName)){
+    return 'n:'+_normalizeName((c.meta.clientLastName||'')+'|'+(c.meta.clientFirstName||''));
+  }
+  const nm=[...c.names][0]||'';
+  return nm ? 'nm:'+_normalizeName(nm) : null;
+}
+
+function _findDuplicateGroups(){
+  const clients=_buildClientIndex();
+  const byName={};
+  const byAnum={};
+  clients.forEach(c=>{
+    const sig=_signatureKey(c);
+    if(sig){(byName[sig]=byName[sig]||[]).push(c);}
+    c.anums.forEach(a=>{ if(a){(byAnum[a]=byAnum[a]||[]).push(c);} });
+  });
+  const groups=[];
+  const seenPair=new Set();
+  function add(cs, reason){
+    if(cs.length<2) return;
+    // Dedupe by clid
+    const uniq=[...new Map(cs.map(c=>[c.clid,c])).values()];
+    if(uniq.length<2) return;
+    const key=uniq.map(c=>c.clid).sort().join('|');
+    if(seenPair.has(key)) return;
+    seenPair.add(key);
+    groups.push({clients:uniq, reason});
+  }
+  Object.values(byName).forEach(cs=>add(cs,'Same name'));
+  Object.values(byAnum).forEach(cs=>add(cs,'Same A-number'));
+  return {groups, all:clients};
+}
+
+function renderMergeDuplicates(){
+  const el=document.getElementById('tools-content');
+  if(!el) return;
+  const { groups, all } = _findDuplicateGroups();
+
+  el.innerHTML='';
+  const back=document.createElement('button');
+  back.textContent='← Back';
+  back.style.cssText='font-size:11px;padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;margin-bottom:14px;';
+  back.onclick=renderToolsPage;
+  el.appendChild(back);
+
+  const h=document.createElement('div');
+  h.style.cssText="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);margin-bottom:4px;";
+  h.textContent='Merge duplicate clients';
+  el.appendChild(h);
+  const sub=document.createElement('div');
+  sub.style.cssText='font-size:12px;color:var(--ink-muted);margin-bottom:20px;line-height:1.55;';
+  sub.innerHTML='Clients with matching names or A-numbers are listed below. Merging keeps the master record and moves every event, task, and note from the secondary to the master. Nothing is deleted except the duplicate client entry itself.';
+  el.appendChild(sub);
+
+  if(groups.length===0){
+    const empty=document.createElement('div');
+    empty.style.cssText='font-size:13px;color:var(--ink-muted);font-style:italic;padding:24px;border:1px dashed var(--border);border-radius:var(--radius-md);text-align:center;';
+    empty.textContent='No duplicate clients detected by name or A-number.';
+    el.appendChild(empty);
+  } else {
+    const countLbl=document.createElement('div');
+    countLbl.style.cssText='font-size:12px;font-weight:600;color:var(--sage);margin-bottom:10px;';
+    countLbl.textContent=groups.length+' potential duplicate group'+(groups.length===1?'':'s')+' found';
+    el.appendChild(countLbl);
+
+    groups.forEach(g=>{
+      const card=document.createElement('div');
+      card.style.cssText='border:1px solid var(--border);border-radius:var(--radius-lg);background:#fff;padding:14px 16px;margin-bottom:10px;';
+      const hdr=document.createElement('div');
+      hdr.style.cssText='font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:8px;';
+      hdr.textContent=g.reason;
+      card.appendChild(hdr);
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:center;';
+      g.clients.forEach(c=>{
+        const chip=document.createElement('div');
+        chip.style.cssText='font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:18px;background:var(--cream);color:var(--ink);display:inline-flex;align-items:center;gap:8px;';
+        const nm=document.createElement('span');nm.style.fontWeight='600';nm.textContent=_displayName(c);
+        const meta=document.createElement('span');meta.style.cssText='font-size:10px;color:var(--ink-muted);';
+        const anums=[...c.anums].filter(Boolean).join(', ');
+        meta.textContent='clid '+c.clid+' · '+c.records.length+' record'+(c.records.length===1?'':'s')+(anums?' · A# '+anums:'');
+        chip.appendChild(nm);chip.appendChild(meta);
+        row.appendChild(chip);
+      });
+      card.appendChild(row);
+      const mergeBtn=document.createElement('button');
+      mergeBtn.textContent='Merge these…';
+      mergeBtn.style.cssText='margin-top:10px;font-size:12px;font-weight:600;padding:6px 14px;border:none;border-radius:var(--radius-sm);background:var(--ink);color:var(--paper);cursor:pointer;font-family:inherit;';
+      mergeBtn.onclick=()=>openMergeModal(g.clients);
+      card.appendChild(mergeBtn);
+      el.appendChild(card);
+    });
+  }
+
+  // Manual merge UI
+  const hr=document.createElement('div');hr.style.cssText='margin:28px 0 14px;border-top:1px solid var(--border);';
+  el.appendChild(hr);
+  const manH=document.createElement('div');
+  manH.style.cssText="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:6px;";
+  manH.textContent='Manual merge — pick any two clients';
+  el.appendChild(manH);
+  const manSub=document.createElement('div');
+  manSub.style.cssText='font-size:11px;color:var(--ink-muted);margin-bottom:10px;';
+  manSub.textContent='Use this if auto-detection missed a pair (e.g. slight name spelling difference).';
+  el.appendChild(manSub);
+  const pickRow=document.createElement('div');
+  pickRow.style.cssText='display:flex;gap:8px;align-items:center;flex-wrap:wrap;';
+  function mkSel(id){
+    const s=document.createElement('select');s.id=id;
+    s.style.cssText='font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;min-width:260px;background:#fff;';
+    const b=document.createElement('option');b.value='';b.textContent='— pick a client —';s.appendChild(b);
+    all.slice().sort((a,b)=>_displayName(a).localeCompare(_displayName(b))).forEach(c=>{
+      const o=document.createElement('option');o.value=c.clid;
+      o.textContent=_displayName(c)+' (clid '+c.clid+', '+c.records.length+' rec)';
+      s.appendChild(o);
+    });
+    return s;
+  }
+  const sA=mkSel('merge-a'), sB=mkSel('merge-b');
+  const go=document.createElement('button');
+  go.textContent='Merge →';go.style.cssText='font-size:12px;font-weight:600;padding:7px 14px;border:none;border-radius:var(--radius-sm);background:var(--ink);color:var(--paper);cursor:pointer;font-family:inherit;';
+  go.onclick=()=>{
+    const a=sA.value, b=sB.value;
+    if(!a||!b){showToast('Pick two clients');return;}
+    if(a===b){showToast('Pick two different clients');return;}
+    const cs=all.filter(c=>c.clid===a||c.clid===b);
+    openMergeModal(cs);
+  };
+  pickRow.appendChild(sA);pickRow.appendChild(sB);pickRow.appendChild(go);
+  el.appendChild(pickRow);
+}
+
+function openMergeModal(clientsIn){
+  if(!clientsIn||clientsIn.length<2) return;
+  // Only handle pairs for simplicity; if a group has 3+, user resolves in two steps
+  const [cA, cB] = clientsIn;
+
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(44,38,32,0.5);z-index:9800;display:flex;align-items:center;justify-content:center;';
+  const bx=document.createElement('div');
+  bx.style.cssText='background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px 26px;width:640px;max-width:94vw;max-height:90vh;overflow-y:auto;box-shadow:0 16px 50px rgba(44,38,32,0.22);';
+
+  const t=document.createElement('div');
+  t.style.cssText="font-family:var(--font-display);font-size:16px;font-weight:600;color:var(--ink);margin-bottom:6px;";
+  t.textContent='Merge clients';
+  bx.appendChild(t);
+  const sub=document.createElement('div');
+  sub.style.cssText='font-size:12px;color:var(--ink-muted);margin-bottom:16px;line-height:1.55;';
+  sub.textContent='Choose which entry will be kept as the master. All records and notes from the other entry will move onto the master. This can\u2019t be automatically undone.';
+  bx.appendChild(sub);
+
+  function renderCard(c, isChosen, onPick){
+    const card=document.createElement('div');
+    card.style.cssText='flex:1 1 0;border:2px solid '+(isChosen?'var(--sage)':'var(--border)')+';border-radius:var(--radius-md);padding:14px;background:'+(isChosen?'#EBF1EB':'#FDFAF7')+';cursor:pointer;transition:all .14s;';
+    card.onclick=onPick;
+    const nm=document.createElement('div');
+    nm.style.cssText='font-weight:600;color:var(--ink);font-family:var(--font-display);margin-bottom:4px;';
+    nm.textContent=_displayName(c);
+    card.appendChild(nm);
+    const info=document.createElement('div');
+    info.style.cssText='font-size:11px;color:var(--ink-muted);line-height:1.55;';
+    const anums=[...c.anums].filter(Boolean);
+    const types=[...c.types].filter(Boolean);
+    info.innerHTML=
+      '<div>clid <b>'+c.clid+'</b></div>'+
+      '<div>'+c.records.length+' record'+(c.records.length===1?'':'s')+'</div>'+
+      (anums.length?'<div>A# '+anums.join(', ')+'</div>':'')+
+      (types.length?'<div>Case: '+types.join(' · ')+'</div>':'')+
+      (c.meta?'<div>caseMeta present: '+(Object.keys(c.meta).filter(k=>c.meta[k]).length)+' fields</div>':'');
+    card.appendChild(info);
+    const tag=document.createElement('div');
+    tag.style.cssText='margin-top:8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:'+(isChosen?'var(--sage)':'var(--ink-faint)')+';';
+    tag.textContent=isChosen?'✓ MASTER — will be kept':'Click to pick as master';
+    card.appendChild(tag);
+    return card;
+  }
+
+  let masterClid = cA.clid;
+  const row=document.createElement('div');
+  row.style.cssText='display:flex;gap:12px;margin-bottom:18px;';
+  const leftBox=document.createElement('div');leftBox.style.cssText='flex:1;display:flex;';
+  const rightBox=document.createElement('div');rightBox.style.cssText='flex:1;display:flex;';
+  row.appendChild(leftBox);row.appendChild(rightBox);
+  bx.appendChild(row);
+
+  function refresh(){
+    leftBox.innerHTML='';rightBox.innerHTML='';
+    leftBox.appendChild(renderCard(cA, masterClid===cA.clid, ()=>{masterClid=cA.clid;refresh();}));
+    rightBox.appendChild(renderCard(cB, masterClid===cB.clid, ()=>{masterClid=cB.clid;refresh();}));
+  }
+  refresh();
+
+  const warn=document.createElement('div');
+  warn.style.cssText='font-size:11px;color:#C9823A;background:#FAF0E6;border:1px solid #EBD7BE;border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:14px;line-height:1.5;';
+  warn.innerHTML='<b>Before merging:</b> the secondary entry\u2019s records will be re-keyed to the master clid and its caseMeta will be merged in (master fields win on conflict; empty master fields get filled from secondary).';
+  bx.appendChild(warn);
+
+  const actions=document.createElement('div');
+  actions.style.cssText='display:flex;gap:8px;justify-content:flex-end;';
+  const cancel=document.createElement('button');cancel.textContent='Cancel';
+  cancel.style.cssText='font-size:12px;padding:7px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--paper);color:var(--ink-muted);cursor:pointer;font-family:inherit;';
+  cancel.onclick=()=>ov.remove();
+  const go=document.createElement('button');go.textContent='Merge';
+  go.style.cssText='font-size:12px;font-weight:600;padding:7px 18px;border:none;border-radius:var(--radius-sm);background:var(--ink);color:var(--paper);cursor:pointer;font-family:inherit;';
+  go.onclick=()=>{
+    const master = cA.clid===masterClid ? cA : cB;
+    const secondary = cA.clid===masterClid ? cB : cA;
+    const moved = _mergeClients(master.clid, secondary.clid);
+    ov.remove();
+    showToast('Merged '+moved+' record'+(moved===1?'':'s')+' into '+_displayName(master));
+    renderMergeDuplicates();
+    if(typeof renderAll==='function') renderAll();
+  };
+  actions.appendChild(cancel);actions.appendChild(go);
+  bx.appendChild(actions);
+
+  ov.appendChild(bx);
+  ov.onclick=(e)=>{ if(e.target===ov) ov.remove(); };
+  document.body.appendChild(ov);
+}
+
+function _mergeClients(masterClid, secondaryClid){
+  if(!masterClid || !secondaryClid || masterClid===secondaryClid) return 0;
+  // Build master display name from caseMeta (preferring new structured fields)
+  if(!caseMeta[masterClid]) caseMeta[masterClid]={};
+  if(!caseMeta[secondaryClid]) caseMeta[secondaryClid]={};
+  const m = caseMeta[masterClid];
+  const s = caseMeta[secondaryClid];
+  // Merge meta: master fields win where non-empty, fill from secondary otherwise
+  Object.entries(s).forEach(([k,v])=>{
+    if(v==null || v==='') return;
+    if(m[k]==null || m[k]==='') m[k]=v;
+    // For nested objects (respondents, caseIssues, docSections) prefer to union arrays
+    else if(Array.isArray(v) && Array.isArray(m[k])){
+      // Simple union — dedupe by id where possible
+      const seen=new Set(m[k].map(x=>x&&(x.id||JSON.stringify(x))));
+      v.forEach(x=>{ const key=x&&(x.id||JSON.stringify(x)); if(!seen.has(key)){m[k].push(x);seen.add(key);} });
+    }
+    else if(typeof v==='object' && typeof m[k]==='object' && v && m[k]){
+      // Shallow object merge, master wins
+      Object.entries(v).forEach(([kk,vv])=>{ if(m[k][kk]==null || m[k][kk]==='') m[k][kk]=vv; });
+    }
+  });
+  // Compose the master's display name so record.client is updated consistently
+  const masterName = [m.clientFirstName, m.clientMiddleName, m.clientLastName].filter(Boolean).join(' ');
+  // Re-key all records
+  let moved=0;
+  records.forEach(r=>{
+    if(r.clid===secondaryClid){
+      r.clid=masterClid;
+      if(masterName) r.client=masterName;
+      moved++;
+    }
+  });
+  // Delete the secondary's caseMeta
+  delete caseMeta[secondaryClid];
+  markUnsaved();
+  return moved;
 }
 
 function _g28Clients(){
