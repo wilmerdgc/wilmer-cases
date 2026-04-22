@@ -61,7 +61,7 @@ firebase.auth().signInAnonymously().then(()=>{
 // ── Gmail API Configuration ──
 // PASTE YOUR OAUTH CLIENT ID HERE (from Google Cloud Console)
 const GMAIL_CLIENT_ID = '861569441296-88uroovr20c81vhiitj09i39mhnnlbp8.apps.googleusercontent.com';
-const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify';
+const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar.events';
 </script>
 <style>
 /* ═══════════════════════════════════════════════════
@@ -3996,6 +3996,141 @@ async function gmailGetProfile(){
   if(data) _gmailUserEmail = data.emailAddress || '';
 }
 
+// ── Google Calendar integration ──────────────────────────────
+// Uses the same OAuth token as Gmail (calendar.events scope added to
+// GMAIL_SCOPES). Calendar target is 'primary' — the user's default
+// calendar for the email they signed in with.
+async function calendarApi(endpoint, opts={}){
+  if(!_gmailAccessToken){ showToast('Sign in with Google first'); return null; }
+  const base = 'https://www.googleapis.com/calendar/v3/';
+  const res = await fetch(base + endpoint, {
+    ...opts,
+    headers: { 'Authorization': 'Bearer ' + _gmailAccessToken, 'Content-Type':'application/json', ...(opts.headers||{}) }
+  });
+  if(res.status === 401){ gmailSignOut(); showToast('Google session expired — sign in again'); return null; }
+  if(!res.ok){
+    const txt = await res.text();
+    console.error('Calendar API error', res.status, txt);
+    return { _error: res.status, _body: txt };
+  }
+  if(res.status === 204) return {};
+  return res.json();
+}
+
+function _localTz(){
+  try{ return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York'; }catch{ return 'America/New_York'; }
+}
+
+function _isSyncableRecord(r){
+  if(!r || !r.date) return false;
+  if(r.deletedStatus || r.finishedStatus) return false;
+  if(r.notes && r.notes.startsWith('⏰ REMINDER')) return false; // child reminder rows
+  return true;
+}
+
+function _buildCalendarEventPayload(r){
+  const title = ((r.event||r.type||'Event') + ' — ' + (r.client||'(no client)')).slice(0,250);
+  const descLines = [];
+  if(r.type) descLines.push('Case type: ' + r.type);
+  if(r.client) descLines.push('Client: ' + r.client);
+  if(r.clid) descLines.push('Client ID: ' + r.clid);
+  if(r.anum) descLines.push('A#: ' + r.anum);
+  if(r.atty) descLines.push('Paralegal: ' + r.atty);
+  if(r.assigned) descLines.push('Assigned: ' + r.assigned);
+  if(r.hearingMode) descLines.push('Hearing: ' + r.hearingMode);
+  if(r.notes) descLines.push('', r.notes);
+  descLines.push('', '— Synced from Wilmer Cases');
+  const description = descLines.join('\n');
+  const hasTime = !!(r.timeStart || r.timeEnd);
+  const payload = { summary: title, description, source:{ title:'Wilmer Cases', url: location.origin+location.pathname } };
+  if(hasTime){
+    const ts = (r.timeStart||'09:00').padEnd(5,'0').slice(0,5);
+    const te = (r.timeEnd||'').padEnd(5,'0').slice(0,5) || ts;
+    // Default to a 1-hour duration if end is missing or equals start
+    let endStr = te;
+    if(endStr === ts){
+      const [h,m] = ts.split(':').map(Number);
+      const endH = Math.min(23, h+1);
+      endStr = String(endH).padStart(2,'0')+':'+String(m||0).padStart(2,'0');
+    }
+    const tz = _localTz();
+    payload.start = { dateTime: r.date+'T'+ts+':00', timeZone: tz };
+    payload.end   = { dateTime: r.date+'T'+endStr+':00', timeZone: tz };
+  } else {
+    // All-day event: end.date is exclusive, so +1 day
+    payload.start = { date: r.date };
+    payload.end   = { date: addDateDays(r.date, 1) };
+  }
+  return payload;
+}
+
+async function _upsertRecordToCalendar(r){
+  const payload = _buildCalendarEventPayload(r);
+  if(r._gcalEventId){
+    // PATCH existing event
+    const res = await calendarApi('calendars/primary/events/' + encodeURIComponent(r._gcalEventId), {
+      method:'PATCH', body: JSON.stringify(payload)
+    });
+    if(res && res._error){
+      // 404 → event was deleted on Calendar side. Clear id and re-insert.
+      if(res._error === 404 || res._error === 410){
+        delete r._gcalEventId;
+        return _upsertRecordToCalendar(r);
+      }
+      return { ok:false, err: res._error };
+    }
+    return { ok:true, updated:true, id: r._gcalEventId };
+  } else {
+    const res = await calendarApi('calendars/primary/events', {
+      method:'POST', body: JSON.stringify(payload)
+    });
+    if(!res || res._error) return { ok:false, err: (res&&res._error)||'network' };
+    r._gcalEventId = res.id;
+    r._gcalSyncedAt = Date.now();
+    return { ok:true, created:true, id: res.id };
+  }
+}
+
+let _calSyncRunning = false;
+async function calendarSyncAll(){
+  if(_calSyncRunning){ showToast('Sync already running…'); return; }
+  if(!_gmailAccessToken){ showToast('Sign in with Google first'); gmailSignIn(); return; }
+  _calSyncRunning = true;
+  const btn = document.getElementById('cal-sync-btn');
+  const origText = btn ? btn.textContent : '';
+  const targets = records.filter(_isSyncableRecord);
+  if(!targets.length){
+    _calSyncRunning = false;
+    if(btn) btn.textContent = origText;
+    showToast('No scheduled events to sync');
+    return;
+  }
+  if(btn){ btn.disabled = true; btn.textContent = '📅 Syncing 0/'+targets.length; }
+  showToast('📅 Syncing '+targets.length+' events to Google Calendar…');
+  let created=0, updated=0, failed=0, done=0;
+  // Process in small concurrency batches of 5 to stay under the write QPS
+  const batchSize = 5;
+  for(let i=0; i<targets.length; i+=batchSize){
+    const batch = targets.slice(i, i+batchSize);
+    const results = await Promise.all(batch.map(r => _upsertRecordToCalendar(r).catch(e => ({ok:false, err:String(e)}))));
+    results.forEach(res => {
+      if(res.ok){ if(res.created) created++; if(res.updated) updated++; }
+      else failed++;
+    });
+    done += batch.length;
+    if(btn) btn.textContent = '📅 Syncing '+done+'/'+targets.length;
+  }
+  // Persist the new _gcalEventId / _gcalSyncedAt stamps so they survive reload
+  markUnsaved();
+  _calSyncRunning = false;
+  if(btn){ btn.disabled = false; btn.textContent = origText || '📅 Sync to Calendar'; }
+  const parts = [];
+  if(created) parts.push(created+' added');
+  if(updated) parts.push(updated+' updated');
+  if(failed)  parts.push(failed+' failed');
+  showToast('📅 Calendar sync: '+(parts.join(', ')||'nothing changed'));
+}
+
 async function gmailFetchInbox(pageToken, query){
   const el = document.getElementById('gmail-email-list');
   if(!pageToken){ _gmailMessages = []; _gmailNextPageToken = null; if(el) el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--ink-muted);font-size:12px;">Loading...</div>'; }
@@ -4205,6 +4340,7 @@ function gmailRenderConnected(){
           <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--ink-faint);">🔍</span>
         </div>
         <button onclick="gmailOpenCompose()" style="font-size:11px;font-weight:600;padding:7px 14px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Compose</button>
+        <button id="cal-sync-btn" onclick="calendarSyncAll()" title="Push every scheduled event to the Google Calendar of the signed-in account" style="font-size:11px;font-weight:600;padding:7px 14px;border:1px solid var(--slate);border-radius:var(--radius-sm);background:#fff;color:var(--slate);cursor:pointer;font-family:inherit;white-space:nowrap;">📅 Sync to Calendar</button>
         <div style="position:relative;">
           <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'" style="font-size:11px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;" title="Account">
             ${_gmailUserEmail ? _gmailUserEmail.split('@')[0] : 'Account'}
