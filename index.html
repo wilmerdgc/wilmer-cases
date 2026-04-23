@@ -42,12 +42,20 @@ const _deviceId=(function(){
 // it's obvious what to fix.
 // ────────────────────────────────────────────────────────────────────
 let _fbAuthReady=false;
+// Saves that fire before auth resolves are parked here and flushed on auth.
+let _pendingSyncEpoch=null;
 firebase.auth().signInAnonymously().then(()=>{
   _fbAuthReady=true;
+  // Flush a save if one was queued during the auth wait
+  if(_pendingSyncEpoch!==null){
+    const epoch=_pendingSyncEpoch;_pendingSyncEpoch=null;
+    if(typeof _syncToFirestore==='function') _syncToFirestore(epoch);
+  }
 }).catch(err=>{
   _fbOnline=false;
   _offlineReason='Auth failed: '+(err.code||err.message||'unknown')+'. Enable Anonymous sign-in in Firebase Console.';
   if(typeof updateCloudIndicator==='function') updateCloudIndicator();
+  if(typeof showToast==='function') showToast('☁ Cloud disabled — '+_offlineReason);
 });
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14570,7 +14578,16 @@ function applyPayload(p){
 let _offlineReason='';
 let _syncTimer=null;
 
+let _syncFailStreak=0;
 function _syncToFirestore(savedAt){
+  // If anon auth hasn't resolved yet, park the save. It will flush
+  // automatically when signInAnonymously() succeeds (see boot block).
+  // Without this guard, the first edit in a fresh session fires a write
+  // before there's an auth token → rules return 403 and the save is lost.
+  if(!_fbAuthReady){
+    _pendingSyncEpoch = savedAt || Date.now();
+    return;
+  }
   // Debounce — wait 1s after last call before sending
   clearTimeout(_syncTimer);
   _syncTimer=setTimeout(()=>{
@@ -14593,8 +14610,26 @@ function _syncToFirestore(savedAt){
       _savedAt:savedAt||Date.now(),_deviceId:_deviceId
     }));
     db.collection('wilmer').doc('data').set(payload)
-      .then(()=>{ _fbOnline=true; _offlineReason=''; updateCloudIndicator(); })
-      .catch(err=>{ _fbOnline=false; _offlineReason=err.message||err.code||''; updateCloudIndicator(); });
+      .then(()=>{
+        _fbOnline=true; _offlineReason=''; updateCloudIndicator();
+        if(_syncFailStreak>0){
+          _syncFailStreak=0;
+          if(typeof showToast==='function') showToast('☁ Cloud sync recovered ✓');
+        }
+      })
+      .catch(err=>{
+        _fbOnline=false;
+        const reason=err.code||err.message||'unknown';
+        _offlineReason=reason;
+        updateCloudIndicator();
+        _syncFailStreak++;
+        console.warn('[cloud-sync] save failed:', reason, err);
+        // First failure: quiet toast. Three in a row: louder warning.
+        if(typeof showToast==='function'){
+          if(_syncFailStreak===1) showToast('☁ Cloud save failed: '+reason);
+          else if(_syncFailStreak===3) showToast('☁ Cloud still failing — check connection or Firestore rules');
+        }
+      });
   },1000);
 }
 
