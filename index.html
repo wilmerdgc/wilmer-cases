@@ -10299,13 +10299,10 @@ function renderSIJTable(){
       dfCellHtml=`<div title="Double-click to edit" ondblclick="event.stopPropagation();this.querySelectorAll('select,input').forEach(el=>{el.style.pointerEvents='auto';el.style.background='#fff';});const f=this.querySelector('select,input');if(f){f.focus();if(f.tagName==='SELECT'&&typeof f.showPicker==='function'){try{f.showPicker();}catch(e){}}}" style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;white-space:nowrap;cursor:pointer;">${selectHtml}${detailHtml}</div>`;
     }
 
-    // Aging-Out cell: show only when I-360 is in active stages (receipt, pending, approved)
-    const i360ActiveStages=['receipt','pending','approved'];
-    const agingOutActive=i360Unlocked && i360ActiveStages.includes(effectiveUscisKey);
-    let agingOutHtml='<span style="color:var(--ink-faint);">—</span>';
-    if(agingOutActive){
+    // Aging-Out cell — always show when DOB is set
+    let agingOutHtml='<span style="color:var(--ink-faint);font-size:10px;font-style:italic;" title="Add DOB in Case Info">no DOB</span>';
+    {
       const meta=caseMeta[c.clid]||{};
-      // Build list: base client + respondents, each with name and DOB
       const agingClients=[];
       const baseName=c.client||c.clid;
       if(meta.clientDob){
@@ -10325,8 +10322,6 @@ function renderSIJTable(){
           const short=_parts.length<=1?_parts.join(' '):(_parts[0]+' '+_parts[_parts.length-1]);
           return `<div style="font-size:10px;line-height:1.4;color:${color};font-weight:${weight};white-space:nowrap;" title="DOB: ${fmtDate(a.dob)}">${escHtml(short)}: ${txt||'—'}</div>`;
         }).join('');
-      } else {
-        agingOutHtml='<span style="color:var(--ink-faint);font-size:10px;font-style:italic;" title="Add DOB in Case Info">no DOB</span>';
       }
     }
 
