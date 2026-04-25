@@ -10321,7 +10321,8 @@ function renderSIJTable(){
           const warn=/^1y/.test(txt);
           const color=urgent?'#B85C5C':warn?'#C9823A':'var(--ink)';
           const weight=(urgent||warn)?'600':'500';
-          const short=(a.name||'').split(/\s+/).slice(0,2).join(' ');
+          const _parts=(a.name||'').trim().split(/\s+/).filter(Boolean);
+          const short=_parts.length<=1?_parts.join(' '):(_parts[0]+' '+_parts[_parts.length-1]);
           return `<div style="font-size:10px;line-height:1.4;color:${color};font-weight:${weight};white-space:nowrap;" title="DOB: ${fmtDate(a.dob)}">${escHtml(short)}: ${txt||'—'}</div>`;
         }).join('');
       } else {
