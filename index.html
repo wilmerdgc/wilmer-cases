@@ -2751,6 +2751,68 @@ function hideExcelRestorePrompt(){}
         <span style="font-size:11px;color:#9E9186">days before deadline</span>
       </div>
     </div>
+    <!-- Linked-event scheduler: Task is always available; SOP and FC PREP only for FAMILY COURT events -->
+    <div id="modal-linked-events-section" style="margin-top:12px;padding:12px 14px;background:#FAF6EE;border:1px solid #EDE2C8;border-radius:var(--radius-sm);">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;margin-bottom:6px;">Add linked event</div>
+      <div id="le-task-block" style="padding:6px 0;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#2C2620;cursor:pointer;margin-bottom:0;">
+          <input type="checkbox" id="le-task-toggle" onchange="onLeTaskToggle()" style="width:auto;margin:0;cursor:pointer;accent-color:#6A8C6E;"/>
+          Schedule a Task
+        </label>
+        <div id="le-task-panel" style="display:none;margin-top:8px;">
+          <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
+            <div style="flex:1;min-width:140px;">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;display:block;margin-bottom:4px;">Task date</label>
+              <input id="le-task-date" type="date" style="width:100%;font-size:13px;padding:7px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="checkWeekendDate(this.value)"/>
+            </div>
+          </div>
+          <div style="margin-top:8px;">
+            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;display:block;margin-bottom:4px;">Notes (optional)</label>
+            <input id="le-task-notes" type="text" placeholder="Task notes…" style="width:100%;font-size:13px;padding:7px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;"/>
+          </div>
+        </div>
+      </div>
+      <div id="le-sop-block" style="display:none;padding:6px 0;border-top:1px dashed #E5DCC8;margin-top:6px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#2C2620;cursor:pointer;margin-bottom:0;">
+          <input type="checkbox" id="le-sop-toggle" onchange="onLeSopToggle()" style="width:auto;margin:0;cursor:pointer;accent-color:#C9823A;"/>
+          Schedule a SERVICE OF PROCESS
+        </label>
+        <div id="le-sop-panel" style="display:none;margin-top:8px;">
+          <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
+            <div style="flex:1;min-width:140px;">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;display:block;margin-bottom:4px;">Service date</label>
+              <input id="le-sop-date" type="date" style="width:100%;font-size:13px;padding:7px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="checkWeekendDate(this.value)"/>
+            </div>
+          </div>
+          <div style="margin-top:8px;">
+            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;display:block;margin-bottom:4px;">Notes (optional)</label>
+            <input id="le-sop-notes" type="text" placeholder="Service notes…" style="width:100%;font-size:13px;padding:7px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;"/>
+          </div>
+        </div>
+      </div>
+      <div id="le-fcprep-block" style="display:none;padding:6px 0;border-top:1px dashed #E5DCC8;margin-top:6px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#2C2620;cursor:pointer;margin-bottom:0;">
+          <input type="checkbox" id="le-fcprep-toggle" onchange="onLeFcPrepToggle()" style="width:auto;margin:0;cursor:pointer;accent-color:#6A8C6E;"/>
+          Schedule a FAMILY COURT PREP
+        </label>
+        <div id="le-fcprep-panel" style="display:none;margin-top:8px;">
+          <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
+            <div style="flex:1;min-width:140px;">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;display:block;margin-bottom:4px;">Prep date</label>
+              <input id="le-fcprep-date" type="date" style="width:100%;font-size:13px;padding:7px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="checkWeekendDate(this.value)"/>
+            </div>
+            <div style="min-width:90px;">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;display:block;margin-bottom:4px;">Days before</label>
+              <input id="le-fcprep-days-before" type="number" min="1" value="7" style="width:100%;font-size:13px;padding:7px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="onLeFcPrepDaysBeforeChange()"/>
+            </div>
+          </div>
+          <div style="margin-top:8px;">
+            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;display:block;margin-bottom:4px;">Notes (optional)</label>
+            <input id="le-fcprep-notes" type="text" placeholder="Prep notes…" style="width:100%;font-size:13px;padding:7px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;"/>
+          </div>
+        </div>
+      </div>
+    </div>
     <div id="modal-status-section" style="display:none">
       <div class="section-divider"></div>
       <div class="modal-section-label">Mark as</div>
@@ -3133,6 +3195,7 @@ let eventTypeMeta={
   'INDIVIDUAL':       {color:'#6A8C6E'},
   'FILING DEADLINE':  {color:'#B85C5C'},
   'PRIORITY DAY':     {color:'#3D7A6B'},
+  'FAMILY COURT PREP':{color:'#6A8C6E'},
 };
 const BUILTIN_COLUMNS=[{key:'clid',label:'Cl ID'},{key:'client',label:'Client',always:true},{key:'anum',label:'A-number'},{key:'type',label:'Case type'},{key:'atty',label:'Paralegal'},{key:'event',label:'Event'},{key:'date',label:'Deadline'},{key:'assigned',label:'Assigned'},{key:'notes',label:'Notes'}];
 let colVis={clid:true,client:true,anum:true,type:true,atty:true,event:true,date:true,assigned:true,notes:true};
@@ -8344,6 +8407,52 @@ function onMpDaysBeforeChange(){
     document.getElementById('mp-date').value=addDateDays(mDate,-days);
   }
 }
+function onLeTaskToggle(){
+  const on=document.getElementById('le-task-toggle').checked;
+  const pnl=document.getElementById('le-task-panel');
+  if(pnl) pnl.style.display=on?'block':'none';
+  if(on){
+    const di=document.getElementById('le-task-date');
+    if(di&&!di.value) di.value=document.getElementById('fc-date').value||TODAY.toISOString().slice(0,10);
+  }
+}
+function onLeSopToggle(){
+  const on=document.getElementById('le-sop-toggle').checked;
+  const pnl=document.getElementById('le-sop-panel');
+  if(pnl) pnl.style.display=on?'block':'none';
+  if(on){
+    const di=document.getElementById('le-sop-date');
+    if(di&&!di.value) di.value=document.getElementById('fc-date').value||TODAY.toISOString().slice(0,10);
+  }
+}
+function onLeFcPrepToggle(){
+  const on=document.getElementById('le-fcprep-toggle').checked;
+  const pnl=document.getElementById('le-fcprep-panel');
+  if(pnl) pnl.style.display=on?'block':'none';
+  if(on){
+    const fcDate=document.getElementById('fc-date').value;
+    const days=parseInt(document.getElementById('le-fcprep-days-before').value||'7',10);
+    if(fcDate&&!isNaN(days)&&days>0){
+      document.getElementById('le-fcprep-date').value=addDateDays(fcDate,-days);
+    }
+  }
+}
+function onLeFcPrepDaysBeforeChange(){
+  const days=parseInt(document.getElementById('le-fcprep-days-before').value||'7',10);
+  const fcDate=document.getElementById('fc-date').value;
+  if(fcDate&&!isNaN(days)&&days>0){
+    document.getElementById('le-fcprep-date').value=addDateDays(fcDate,-days);
+  }
+}
+function resetLinkedEventToggles(){
+  ['le-task','le-sop','le-fcprep'].forEach(prefix=>{
+    const tog=document.getElementById(prefix+'-toggle');if(tog)tog.checked=false;
+    const pnl=document.getElementById(prefix+'-panel');if(pnl)pnl.style.display='none';
+    const dt=document.getElementById(prefix+'-date');if(dt)dt.value='';
+    const nt=document.getElementById(prefix+'-notes');if(nt)nt.value='';
+  });
+  const dbf=document.getElementById('le-fcprep-days-before');if(dbf)dbf.value='7';
+}
 function onEventTypeChange(val){
   const panel=document.getElementById('so-attachment-panel');
   if(!panel)return;
@@ -8363,6 +8472,18 @@ function onEventTypeChange(val){
       const pnl=document.getElementById('mp-panel');if(pnl)pnl.style.display='none';
     }
   }
+  // FAMILY COURT extras: SERVICE OF PROCESS + FAMILY COURT PREP toggles —
+  // shown only when the parent event is FAMILY COURT (not its prep).
+  const _vuFc=(val||'').toUpperCase();
+  const isFcType=_vuFc==='FAMILY COURT'||_vuFc==='FAMILY COURT TRIAL';
+  ['le-sop','le-fcprep'].forEach(prefix=>{
+    const blk=document.getElementById(prefix+'-block');
+    if(blk) blk.style.display=isFcType?'block':'none';
+    if(!isFcType){
+      const tog=document.getElementById(prefix+'-toggle');if(tog)tog.checked=false;
+      const pnl=document.getElementById(prefix+'-panel');if(pnl)pnl.style.display='none';
+    }
+  });
   const icp=document.getElementById('individual-callup-panel');
   if(icp){icp.style.display=(val==='INDIVIDUAL')?'':'none';if(val==='INDIVIDUAL'){const fcD=document.getElementById('fc-date').value;const ri=document.getElementById('icp-ref-input');if(ri){ri.value=fcD||'';}refreshIndividualCallupPanel(false);}}
   // If the chosen event type is classified as a hearing, auto-open the time range
@@ -8678,8 +8799,8 @@ function openCaseFromModal(){
   closeModal();
   goToCase(clid);
 }
-function openAdd(){editingId=null;pendingStatus=null;document.getElementById('modal-title').textContent='Add event';const ocb=document.getElementById('modal-open-case-btn');if(ocb)ocb.style.display='none';document.getElementById('modal-status-section').style.display='none';document.getElementById('modal-reminder-section').style.display='block';['fc-clid','fc-client','fc-anum','fc-date','fc-notes'].forEach(id=>document.getElementById(id).value='');const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=false;document.getElementById('time-range-panel').classList.remove('open');document.getElementById('fc-time-start').value='';document.getElementById('fc-time-end').value='';document.getElementById('fc-time-display').textContent='';pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();const _icp0=document.getElementById('individual-callup-panel');if(_icp0)_icp0.style.display='none';populateModalDropdowns();resetDateCalc();setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _m0=document.getElementById('modal');_m0.classList.remove('readonly-mode');_m0.style.display='flex';}
-function openEdit(id){const r=records.find(x=>x.id===id);if(!r)return;editingId=id;pendingStatus=null;document.getElementById('modal-title').textContent='Edit event';const _ocb=document.getElementById('modal-open-case-btn');if(_ocb){_ocb.style.display=(r.clid||r.client)?'inline':'none';}document.getElementById('modal-status-section').style.display='block';document.getElementById('modal-reminder-section').style.display='block';pendingReminders=[];if(r){records.forEach(rx=>{if(rx.id===id)return;const isLinked=rx._parentId===id||(!rx._parentId&&(rx.clid||rx.client)===(r.clid||r.client));if(isLinked&&rx.notes&&rx.notes.startsWith('⏰ REMINDER')&&rx.date&&r.date){const diff=Math.round((new Date(r.date.replace(/-/g,'/'))-new Date(rx.date.replace(/-/g,'/')))/(1000*60*60*24));if(diff>0&&!pendingReminders.includes(diff))pendingReminders.push(diff);}});}renderReminderChips();document.getElementById('fc-clid').value=r.clid||'';document.getElementById('fc-client').value=r.client||'';document.getElementById('fc-anum').value=r.anum||'';document.getElementById('fc-date').value=r.date||'';document.getElementById('fc-notes').value=r.notes||'';const hasTime=!!(r.timeStart||r.timeEnd);const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=hasTime;document.getElementById('fc-time-start').value=r.timeStart||'';document.getElementById('fc-time-end').value=r.timeEnd||'';if(hasTime)document.getElementById('time-range-panel').classList.add('open');else document.getElementById('time-range-panel').classList.remove('open');updateTimeDisplay();document.getElementById('fc-history-note').value='';document.getElementById('fc-reschedule-date').value='';document.getElementById('reschedule-panel').classList.remove('open');document.getElementById('reschedule-extras').style.display='none';if(document.getElementById('rs-time-toggle'))document.getElementById('rs-time-toggle').checked=false;document.getElementById('rs-time-range-panel').classList.remove('open');if(document.getElementById('rs-time-start'))document.getElementById('rs-time-start').value='';if(document.getElementById('rs-time-end'))document.getElementById('rs-time-end').value='';document.getElementById('rs-time-display').textContent='';rsReminders=[];renderRsReminderChips();['attended','completed','cancelled','rescheduled','deleted'].forEach(k=>{const el=document.getElementById('sbtn-'+k);if(el)el.classList.remove('sel');});if(r.attendedStatus){const ab=document.getElementById('sbtn-attended');if(ab)ab.classList.add('sel');}resetSoAttachmentPanel();populateModalDropdowns();document.getElementById('fc-casetype').value=r.type||'';document.getElementById('fc-paralegal').value=r.atty||'';document.getElementById('fc-eventtype').value=r.event||'';onEventTypeChange(r.event||'');setHearingMode(r.hearingMode||'');const sid=document.getElementById('so-issue-date');if(sid)sid.value=r.soIssueDate||'';document.getElementById('fc-assigned').value=r.assigned||'';customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);if(el)el.value=r[c.key]||'';});renderHistoryLog(r.history||[]);loadModalChecklistDocs(r);resetDateCalc(r.date||'');document.getElementById('modal').style.display='flex';enterReadOnlyMode(r);}
+function openAdd(){editingId=null;pendingStatus=null;document.getElementById('modal-title').textContent='Add event';const ocb=document.getElementById('modal-open-case-btn');if(ocb)ocb.style.display='none';document.getElementById('modal-status-section').style.display='none';document.getElementById('modal-reminder-section').style.display='block';['fc-clid','fc-client','fc-anum','fc-date','fc-notes'].forEach(id=>document.getElementById(id).value='');const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=false;document.getElementById('time-range-panel').classList.remove('open');document.getElementById('fc-time-start').value='';document.getElementById('fc-time-end').value='';document.getElementById('fc-time-display').textContent='';pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();const _icp0=document.getElementById('individual-callup-panel');if(_icp0)_icp0.style.display='none';populateModalDropdowns();resetDateCalc();setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';resetLinkedEventToggles();onEventTypeChange('');const _m0=document.getElementById('modal');_m0.classList.remove('readonly-mode');_m0.style.display='flex';}
+function openEdit(id){const r=records.find(x=>x.id===id);if(!r)return;editingId=id;pendingStatus=null;resetLinkedEventToggles();document.getElementById('modal-title').textContent='Edit event';const _ocb=document.getElementById('modal-open-case-btn');if(_ocb){_ocb.style.display=(r.clid||r.client)?'inline':'none';}document.getElementById('modal-status-section').style.display='block';document.getElementById('modal-reminder-section').style.display='block';pendingReminders=[];if(r){records.forEach(rx=>{if(rx.id===id)return;const isLinked=rx._parentId===id||(!rx._parentId&&(rx.clid||rx.client)===(r.clid||r.client));if(isLinked&&rx.notes&&rx.notes.startsWith('⏰ REMINDER')&&rx.date&&r.date){const diff=Math.round((new Date(r.date.replace(/-/g,'/'))-new Date(rx.date.replace(/-/g,'/')))/(1000*60*60*24));if(diff>0&&!pendingReminders.includes(diff))pendingReminders.push(diff);}});}renderReminderChips();document.getElementById('fc-clid').value=r.clid||'';document.getElementById('fc-client').value=r.client||'';document.getElementById('fc-anum').value=r.anum||'';document.getElementById('fc-date').value=r.date||'';document.getElementById('fc-notes').value=r.notes||'';const hasTime=!!(r.timeStart||r.timeEnd);const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=hasTime;document.getElementById('fc-time-start').value=r.timeStart||'';document.getElementById('fc-time-end').value=r.timeEnd||'';if(hasTime)document.getElementById('time-range-panel').classList.add('open');else document.getElementById('time-range-panel').classList.remove('open');updateTimeDisplay();document.getElementById('fc-history-note').value='';document.getElementById('fc-reschedule-date').value='';document.getElementById('reschedule-panel').classList.remove('open');document.getElementById('reschedule-extras').style.display='none';if(document.getElementById('rs-time-toggle'))document.getElementById('rs-time-toggle').checked=false;document.getElementById('rs-time-range-panel').classList.remove('open');if(document.getElementById('rs-time-start'))document.getElementById('rs-time-start').value='';if(document.getElementById('rs-time-end'))document.getElementById('rs-time-end').value='';document.getElementById('rs-time-display').textContent='';rsReminders=[];renderRsReminderChips();['attended','completed','cancelled','rescheduled','deleted'].forEach(k=>{const el=document.getElementById('sbtn-'+k);if(el)el.classList.remove('sel');});if(r.attendedStatus){const ab=document.getElementById('sbtn-attended');if(ab)ab.classList.add('sel');}resetSoAttachmentPanel();populateModalDropdowns();document.getElementById('fc-casetype').value=r.type||'';document.getElementById('fc-paralegal').value=r.atty||'';document.getElementById('fc-eventtype').value=r.event||'';onEventTypeChange(r.event||'');setHearingMode(r.hearingMode||'');const sid=document.getElementById('so-issue-date');if(sid)sid.value=r.soIssueDate||'';document.getElementById('fc-assigned').value=r.assigned||'';customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);if(el)el.value=r[c.key]||'';});renderHistoryLog(r.history||[]);loadModalChecklistDocs(r);resetDateCalc(r.date||'');document.getElementById('modal').style.display='flex';enterReadOnlyMode(r);}
 // ── Read-only view / inline edit mode for event modal ──
 function enterEditMode(focusId){
   const m=document.getElementById('modal'); if(!m) return;
@@ -9011,7 +9132,7 @@ function applyDateCalc(){
     setTimeout(()=>res.style.color='#6A8C6E',800);
   }
 }
-function closeModal(){const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';}
+function closeModal(){const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';resetLinkedEventToggles();}
 function handleBackdropClick(e){if(e.target===document.getElementById('modal'))closeModal();}
 
 // ── saveEvent ──
@@ -9054,6 +9175,29 @@ window.saveEvent=function(){
         records.push({id:uid(),...prepData,history:[]});
         showToast('MASTER + MASTER PREP saved ✓');
       }
+    }
+  }
+  // ── Linked extras: TASK (always available), plus SERVICE OF PROCESS and
+  //    FAMILY COURT PREP when the parent event is FAMILY COURT ──
+  const _baseLinked={clid:data.clid,client:data.client,type:data.type,anum:data.anum,atty:data.atty,assigned:data.assigned,timeStart:'',timeEnd:'',hearingMode:'',checklist:[],docs:[]};
+  const _taskTog=document.getElementById('le-task-toggle');
+  if(_taskTog&&_taskTog.checked){
+    const d=document.getElementById('le-task-date').value;
+    const n=document.getElementById('le-task-notes').value.trim();
+    if(d) records.push({id:uid(),..._baseLinked,event:'TASK',date:d,notes:n,history:[]});
+  }
+  if(data.event==='FAMILY COURT'||data.event==='FAMILY COURT TRIAL'){
+    const _sopTog=document.getElementById('le-sop-toggle');
+    if(_sopTog&&_sopTog.checked){
+      const d=document.getElementById('le-sop-date').value;
+      const n=document.getElementById('le-sop-notes').value.trim();
+      if(d) records.push({id:uid(),..._baseLinked,event:'SERVICE OF PROCESS',date:d,notes:n||('Service of process for '+data.event+(data.date?' on '+fmtDate(data.date):'')),history:[]});
+    }
+    const _fcpTog=document.getElementById('le-fcprep-toggle');
+    if(_fcpTog&&_fcpTog.checked){
+      const d=document.getElementById('le-fcprep-date').value;
+      const n=document.getElementById('le-fcprep-notes').value.trim();
+      if(d) records.push({id:uid(),..._baseLinked,event:'FAMILY COURT PREP',date:d,notes:n||('Prep for '+data.event+(data.date?' on '+fmtDate(data.date):'')),history:[]});
     }
   }
   closeModal();_miniCalLastKey='';_invalidateCasesCache();dirtyCaseFilterOpts();markUnsaved();showToast('Changes saved');
