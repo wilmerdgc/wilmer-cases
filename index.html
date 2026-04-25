@@ -10172,8 +10172,12 @@ function renderSIJTable(){
     return{...c,clid,nextFC,nextIC,nextUSCIS,fcStage,fcKey,icStage,icKey,uscisStage,uscisKey,eventCount:caseRecs.length,allEvents:caseRecs};
   });
 
-  // Sort by earliest event across all three categories
+  // Sort by earliest event across all three categories.
+  // Withdrawn IC cases are pushed to the bottom regardless of dates.
   caseData.sort((a,b)=>{
+    const aWd=a.icKey==='withdraw'?1:0;
+    const bWd=b.icKey==='withdraw'?1:0;
+    if(aWd!==bWd) return aWd-bWd;
     const aDate=[a.nextFC,a.nextIC,a.nextUSCIS].filter(Boolean).map(r=>r.date).sort()[0]||'9999';
     const bDate=[b.nextFC,b.nextIC,b.nextUSCIS].filter(Boolean).map(r=>r.date).sort()[0]||'9999';
     return aDate.localeCompare(bDate);
@@ -10301,7 +10305,7 @@ function renderSIJTable(){
       icDateCellHtml=`<span style="color:${ic.dateColor};">${ic.dateHtml}</span>`;
     }else{
       // stage or check — show a small date input (read-only until double-clicked) for the stored date
-      const dateLabel=icKind==='check'?'Last check':'Issued';
+      const dateLabel=icKind==='check'?'Last check':(effectiveIcKey==='withdraw'?'Withdrawn':'Issued');
       icEventCellHtml=`<span style="font-size:10px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.04em;">${dateLabel}</span>`;
       icDateCellHtml=`<input type="date" value="${icStageDate}" readonly title="Double-click to edit (${dateLabel.toLowerCase()} date)" onclick="event.stopPropagation();" ondblclick="event.stopPropagation();this.removeAttribute('readonly');this.style.background='#FFF';this.style.borderColor='var(--ink-faint)';this.focus();this.showPicker&&this.showPicker();" onblur="this.setAttribute('readonly','');this.style.background='#F7F3ED';this.style.borderColor='#EBE5DC';" onchange="event.stopPropagation();if(!caseMeta['${c.clid}'])caseMeta['${c.clid}']={};caseMeta['${c.clid}'].icStageDate=this.value;markUnsaved();" style="font-size:11px;padding:3px 5px;border:1px solid #EBE5DC;border-radius:4px;background:#F7F3ED;color:var(--ink);font-family:inherit;outline:none;cursor:pointer;width:100%;box-sizing:border-box;"/>`;
     }
