@@ -10167,6 +10167,7 @@ function renderSIJTable(){
   thead.innerHTML=`<tr style="background:var(--cream-dark);position:sticky;top:0;z-index:2;">
     ${thFor('Client','client')}
     ${thFor('Cl ID','clid')}
+    ${thFor('Aging Out','aging-out','border-left:3px solid #B85C5C40;')}
     ${thFor('Paralegal','paralegal')}
     ${thFor('FC Stage','fc-stage','border-left:3px solid #C9823A40;')}
     ${thFor('FC Event','fc-event')}
@@ -10178,7 +10179,6 @@ function renderSIJTable(){
     ${thFor('USCIS Event','uscis-event')}
     ${thFor('Priority date','priority-date')}
     ${thFor('DF','df')}
-    ${thFor('Aging Out','aging-out','border-left:3px solid #B85C5C40;')}
   </tr>`;
   tbl.appendChild(thead);
 
@@ -10332,6 +10332,7 @@ function renderSIJTable(){
     tr.innerHTML=`
       <td style="${tdS}font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;z-index:1;background:${rowBg||'var(--cream)'};box-shadow:2px 0 0 var(--border);"><span ondblclick="event.stopPropagation();openCaseDetail('${c.clid}');" title="Double-click to open case" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;" onmouseenter="this.style.textDecorationColor='var(--ink)'" onmouseleave="this.style.textDecorationColor='transparent'">${c.client||c.clid}</span></td>
       <td ondblclick="event.stopPropagation();openCaseDetail('${c.clid}');" title="Double-click to open case" style="${tdS}color:var(--ink-muted);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;">${c.clid||'—'}</td>
+      <td style="${tdS}border-left:3px solid #B85C5C40;">${agingOutHtml}</td>
       <td style="${tdS}color:var(--ink-soft);text-align:center;" title="${(c.atty||'').replace(/"/g,'&quot;')}">${(function(n){if(!n)return '—';const parts=String(n).trim().split(/\s+/).filter(Boolean);if(!parts.length)return '—';if(parts.length===1)return parts[0].slice(0,2).toUpperCase();return (parts[0][0]+parts[parts.length-1][0]).toUpperCase();})(c.atty)}</td>
       <td style="${tdS}border-left:3px solid #C9823A40;">${stageSelectHtml(c.clid,FC_STAGES,c.fcKey,c.fcStage,'fcStage')}</td>
       <td style="${tdS}font-weight:500;color:var(--ink);">${fc.evHtml}</td>
@@ -10342,8 +10343,7 @@ function renderSIJTable(){
       <td style="${tdS}border-left:3px solid #6A8C6E40;">${stageSelectHtml(c.clid,USCIS_STAGES,effectiveUscisKey,effectiveUscisStage,'uscisStage',{disabled:!i360Unlocked})}</td>
       <td style="${tdS}font-weight:500;color:var(--ink);">${i360Unlocked?us.evHtml:'<span style="color:var(--ink-faint);">—</span>'}</td>
       <td style="${tdS}">${priorityDateCell}</td>
-      <td style="${tdS}white-space:nowrap;">${dfCellHtml}</td>
-      <td style="${tdS}border-left:3px solid #B85C5C40;">${agingOutHtml}</td>`;
+      <td style="${tdS}white-space:nowrap;">${dfCellHtml}</td>`;
     tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);
