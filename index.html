@@ -10316,11 +10316,10 @@ function renderSIJTable(){
           const txt=calculateAgeText(a.dob);
           const urgent=txt.includes('aged out')||/^\dm/.test(txt)||/^<1m/.test(txt);
           const warn=/^1y/.test(txt);
-          const color=urgent?'#B85C5C':warn?'#C9823A':'var(--ink)';
-          const weight=(urgent||warn)?'600':'500';
+          const color=urgent?'#B85C5C':warn?'#C9823A':'#6A8C6E';
           const _parts=(a.name||'').trim().split(/\s+/).filter(Boolean);
           const short=_parts.length<=1?_parts.join(' '):(_parts[0]+' '+_parts[_parts.length-1]);
-          return `<div style="font-size:10px;line-height:1.4;color:${color};font-weight:${weight};white-space:nowrap;" title="DOB: ${fmtDate(a.dob)}">${escHtml(short)}: ${txt||'—'}</div>`;
+          return `<div style="font-size:11px;line-height:1.4;color:${color};font-weight:600;white-space:nowrap;" title="${escHtml(short)} — DOB: ${fmtDate(a.dob)}">${txt||'—'}</div>`;
         }).join('');
       }
     }
