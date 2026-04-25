@@ -8351,11 +8351,14 @@ function onEventTypeChange(val){
   if(val==='SCHEDULING ORDER') renderSoExistingAttachments();
   const hms=document.getElementById('modal-hearing-mode-section');
   if(hms)hms.style.display=isHearingEventType(val)?'block':'none';
-  // MASTER PREP scheduler — only for MASTER events
+  // MASTER PREP scheduler — for any MASTER-type event (e.g. MASTER, MASTER WEBEX),
+  // but not the prep events themselves (MASTER PREP / PREP MASTER).
   const mps=document.getElementById('modal-master-prep-section');
   if(mps){
-    mps.style.display=(val==='MASTER')?'block':'none';
-    if(val!=='MASTER'){
+    const _vu=(val||'').toUpperCase();
+    const isMasterType=/\bMASTER\b/.test(_vu) && !_vu.includes('PREP');
+    mps.style.display=isMasterType?'block':'none';
+    if(!isMasterType){
       const tog=document.getElementById('mp-toggle');if(tog)tog.checked=false;
       const pnl=document.getElementById('mp-panel');if(pnl)pnl.style.display='none';
     }
