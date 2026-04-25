@@ -2780,6 +2780,28 @@ function hideExcelRestorePrompt(){}
           </div>
         </div>
       </div>
+      <div id="modal-master-prep-section" style="display:none;margin-top:10px;padding:12px 14px;background:#EBF1EB;border:1px solid #B4CCAD;border-radius:var(--radius-sm);">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#2C2620;cursor:pointer;margin-bottom:0;">
+          <input type="checkbox" id="mp-toggle" onchange="onMasterPrepToggle()" style="width:auto;margin:0;cursor:pointer;accent-color:#6A8C6E;"/>
+          Schedule a MASTER PREP
+        </label>
+        <div id="mp-panel" style="display:none;margin-top:10px;">
+          <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
+            <div style="flex:1;min-width:140px;">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;display:block;margin-bottom:4px;">Prep date</label>
+              <input id="mp-date" type="date" style="width:100%;font-size:13px;padding:7px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="checkWeekendDate(this.value)"/>
+            </div>
+            <div style="min-width:90px;">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;display:block;margin-bottom:4px;">Days before</label>
+              <input id="mp-days-before" type="number" min="1" value="7" style="width:100%;font-size:13px;padding:7px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="onMpDaysBeforeChange()"/>
+            </div>
+          </div>
+          <div style="margin-top:8px;">
+            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;display:block;margin-bottom:4px;">Notes (optional)</label>
+            <input id="mp-notes" type="text" placeholder="Prep notes…" style="width:100%;font-size:13px;padding:7px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;"/>
+          </div>
+        </div>
+      </div>
       <div class="reschedule-panel" id="reschedule-panel">
         <label class="form-label" style="margin-bottom:6px">New date</label>
         <input id="fc-reschedule-date" type="date" oninput="onRescheduleDateChange();checkWeekendDate(this.value)"/>
@@ -8301,6 +8323,27 @@ function onHearingModeChange(){
     lbl.style.fontWeight=sel?'600':'400';
   });
 }
+function onMasterPrepToggle(){
+  const on=document.getElementById('mp-toggle').checked;
+  const pnl=document.getElementById('mp-panel');
+  if(pnl) pnl.style.display=on?'block':'none';
+  if(on){
+    // Default prep date = 7 days before MASTER date
+    const mDate=document.getElementById('fc-date').value;
+    const days=parseInt(document.getElementById('mp-days-before').value||'7',10);
+    if(mDate){
+      const d=addDateDays(mDate,-days);
+      document.getElementById('mp-date').value=d;
+    }
+  }
+}
+function onMpDaysBeforeChange(){
+  const days=parseInt(document.getElementById('mp-days-before').value||'7',10);
+  const mDate=document.getElementById('fc-date').value;
+  if(mDate&&!isNaN(days)&&days>0){
+    document.getElementById('mp-date').value=addDateDays(mDate,-days);
+  }
+}
 function onEventTypeChange(val){
   const panel=document.getElementById('so-attachment-panel');
   if(!panel)return;
@@ -8308,6 +8351,15 @@ function onEventTypeChange(val){
   if(val==='SCHEDULING ORDER') renderSoExistingAttachments();
   const hms=document.getElementById('modal-hearing-mode-section');
   if(hms)hms.style.display=isHearingEventType(val)?'block':'none';
+  // MASTER PREP scheduler — only for MASTER events
+  const mps=document.getElementById('modal-master-prep-section');
+  if(mps){
+    mps.style.display=(val==='MASTER')?'block':'none';
+    if(val!=='MASTER'){
+      const tog=document.getElementById('mp-toggle');if(tog)tog.checked=false;
+      const pnl=document.getElementById('mp-panel');if(pnl)pnl.style.display='none';
+    }
+  }
   const icp=document.getElementById('individual-callup-panel');
   if(icp){icp.style.display=(val==='INDIVIDUAL')?'':'none';if(val==='INDIVIDUAL'){const fcD=document.getElementById('fc-date').value;const ri=document.getElementById('icp-ref-input');if(ri){ri.value=fcD||'';}refreshIndividualCallupPanel(false);}}
   // If the chosen event type is classified as a hearing, auto-open the time range
@@ -8956,7 +9008,7 @@ function applyDateCalc(){
     setTimeout(()=>res.style.color='#6A8C6E',800);
   }
 }
-function closeModal(){const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';}
+function closeModal(){const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';}
 function handleBackdropClick(e){if(e.target===document.getElementById('modal'))closeModal();}
 
 // ── saveEvent ──
@@ -8988,6 +9040,19 @@ window.saveEvent=function(){
     if(pendingSoAttachment&&data.event==='SCHEDULING ORDER'){saveSoAttachmentToCase(data.clid||data.client,nid,data.date,data.notes);}
   }
   if(editingId&&pendingSoAttachment&&data.event==='SCHEDULING ORDER'){saveSoAttachmentToCase(data.clid||data.client,editingId,data.date,data.notes);}
+  // ── MASTER PREP: create a linked prep event if requested ──
+  if(data.event==='MASTER'){
+    const mpToggle=document.getElementById('mp-toggle');
+    if(mpToggle&&mpToggle.checked){
+      const mpDate=document.getElementById('mp-date').value;
+      const mpNotes=document.getElementById('mp-notes').value.trim();
+      if(mpDate){
+        const prepData={clid:data.clid,client:data.client,type:data.type,anum:data.anum,atty:data.atty,assigned:data.assigned,event:'MASTER PREP',date:mpDate,timeStart:'',timeEnd:'',hearingMode:'',notes:mpNotes||('Prep for MASTER on '+fmtDate(data.date)),checklist:[],docs:[]};
+        records.push({id:uid(),...prepData,history:[]});
+        showToast('MASTER + MASTER PREP saved ✓');
+      }
+    }
+  }
   closeModal();_miniCalLastKey='';_invalidateCasesCache();dirtyCaseFilterOpts();markUnsaved();showToast('Changes saved');
   if(currentTab==='settings')renderSettings();else renderAll();
   if(activeCaseClid&&document.getElementById('cases-detail-view').style.display!=='none'){openCaseDetail(activeCaseClid);}
