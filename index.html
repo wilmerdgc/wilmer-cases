@@ -3141,6 +3141,24 @@ function _getStatusBounds(){if(_statusBounds)return _statusBounds;const{mon:wm,s
 function status(d){if(!d)return'no-date';const diff=Math.floor((d-TODAY)/(1000*60*60*24));if(diff<0)return'overdue';const{wm,ws,nm,ns,d15}=_getStatusBounds();if(d>=wm&&d<=ws)return'thisweek';if(d>=nm&&d<=ns)return'nextweek';if(d<=d15)return'15days';return'ok';}
 function badgeClass(s){return{overdue:'overdue',thisweek:'urgent',nextweek:'urgent',['15days']:'ok',ok:'ok','no-date':'no-date'}[s]||'no-date';}
 function fmtDate(s){if(!s)return'—';const d=parseDate(s);return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});}
+// Calculate time until client turns 21 (ages out). Returns text like "2y 3m left" or "aged out" or "".
+function calculateAgeText(dobStr){
+  if(!dobStr) return '';
+  const dob=parseDate(dobStr); if(!dob) return '';
+  const ageOutDate=new Date(dob.getFullYear()+21,dob.getMonth(),dob.getDate());
+  const now=new Date(TODAY);
+  if(ageOutDate<=now) return 'aged out';
+  // Calculate years and months remaining
+  let years=ageOutDate.getFullYear()-now.getFullYear();
+  let months=ageOutDate.getMonth()-now.getMonth();
+  let days=ageOutDate.getDate()-now.getDate();
+  if(days<0){months-=1;}
+  if(months<0){years-=1;months+=12;}
+  if(years<0) return 'aged out';
+  if(years===0&&months===0) return '<1m left';
+  if(years===0) return months+'m left';
+  return years+'y '+months+'m left';
+}
 function fmtShort(s){if(!s)return'—';const d=parseDate(s);return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.remove('warn');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
 function checkWeekendDate(val){if(!val)return false;const[y,m,d]=val.split('-').map(Number);const day=new Date(y,m-1,d).getDay();if(day===0||day===6){const name=day===0?'Sunday':'Saturday';const t=document.getElementById('toast');t.textContent='⚠ '+name+' — is this date intentional?';t.classList.add('warn','show');setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.classList.remove('warn'),200);},3500);return true;}return false;}
@@ -10160,6 +10178,7 @@ function renderSIJTable(){
     ${thFor('USCIS Event','uscis-event')}
     ${thFor('Priority date','priority-date')}
     ${thFor('DF','df')}
+    ${thFor('Aging Out','aging-out','border-left:3px solid #B85C5C40;')}
   </tr>`;
   tbl.appendChild(thead);
 
@@ -10280,6 +10299,36 @@ function renderSIJTable(){
       dfCellHtml=`<div title="Double-click to edit" ondblclick="event.stopPropagation();this.querySelectorAll('select,input').forEach(el=>{el.style.pointerEvents='auto';el.style.background='#fff';});const f=this.querySelector('select,input');if(f){f.focus();if(f.tagName==='SELECT'&&typeof f.showPicker==='function'){try{f.showPicker();}catch(e){}}}" style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;white-space:nowrap;cursor:pointer;">${selectHtml}${detailHtml}</div>`;
     }
 
+    // Aging-Out cell: show only when I-360 is in active stages (receipt, pending, approved)
+    const i360ActiveStages=['receipt','pending','approved'];
+    const agingOutActive=i360Unlocked && i360ActiveStages.includes(effectiveUscisKey);
+    let agingOutHtml='<span style="color:var(--ink-faint);">—</span>';
+    if(agingOutActive){
+      const meta=caseMeta[c.clid]||{};
+      // Build list: base client + respondents, each with name and DOB
+      const agingClients=[];
+      const baseName=c.client||c.clid;
+      if(meta.clientDob){
+        agingClients.push({name:baseName,dob:meta.clientDob});
+      }
+      (meta.respondents||[]).forEach(r=>{
+        if(r.dob){agingClients.push({name:r.name||'Respondent',dob:r.dob});}
+      });
+      if(agingClients.length){
+        agingOutHtml=agingClients.map(a=>{
+          const txt=calculateAgeText(a.dob);
+          const urgent=txt.includes('aged out')||/^\dm/.test(txt)||/^<1m/.test(txt);
+          const warn=/^1y/.test(txt);
+          const color=urgent?'#B85C5C':warn?'#C9823A':'var(--ink)';
+          const weight=(urgent||warn)?'600':'500';
+          const short=(a.name||'').split(/\s+/).slice(0,2).join(' ');
+          return `<div style="font-size:10px;line-height:1.4;color:${color};font-weight:${weight};white-space:nowrap;" title="DOB: ${fmtDate(a.dob)}">${escHtml(short)}: ${txt||'—'}</div>`;
+        }).join('');
+      } else {
+        agingOutHtml='<span style="color:var(--ink-faint);font-size:10px;font-style:italic;" title="Add DOB in Case Info">no DOB</span>';
+      }
+    }
+
     tr.innerHTML=`
       <td style="${tdS}font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;z-index:1;background:${rowBg||'var(--cream)'};box-shadow:2px 0 0 var(--border);"><span ondblclick="event.stopPropagation();openCaseDetail('${c.clid}');" title="Double-click to open case" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;" onmouseenter="this.style.textDecorationColor='var(--ink)'" onmouseleave="this.style.textDecorationColor='transparent'">${c.client||c.clid}</span></td>
       <td ondblclick="event.stopPropagation();openCaseDetail('${c.clid}');" title="Double-click to open case" style="${tdS}color:var(--ink-muted);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;">${c.clid||'—'}</td>
@@ -10293,7 +10342,8 @@ function renderSIJTable(){
       <td style="${tdS}border-left:3px solid #6A8C6E40;">${stageSelectHtml(c.clid,USCIS_STAGES,effectiveUscisKey,effectiveUscisStage,'uscisStage',{disabled:!i360Unlocked})}</td>
       <td style="${tdS}font-weight:500;color:var(--ink);">${i360Unlocked?us.evHtml:'<span style="color:var(--ink-faint);">—</span>'}</td>
       <td style="${tdS}">${priorityDateCell}</td>
-      <td style="${tdS}white-space:nowrap;">${dfCellHtml}</td>`;
+      <td style="${tdS}white-space:nowrap;">${dfCellHtml}</td>
+      <td style="${tdS}border-left:3px solid #B85C5C40;">${agingOutHtml}</td>`;
     tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);
@@ -11532,13 +11582,14 @@ function openCaseDetail(clid){
     nameRow.appendChild(ff2('Family Name (Last) *',lnI));nameRow.appendChild(ff2('Given Name (First) *',fnI));bx.appendChild(nameRow);
     const mnI=document.createElement('input');mnI.type='text';mnI.value=rd.middleName||'';mnI.placeholder='Middle name (optional)…';mnI.style.cssText=_inpS;mnI.onfocus=()=>mnI.style.borderColor='#6A8C6E';mnI.onblur=()=>mnI.style.borderColor='#DDD5CA';ff('Middle Name',mnI);
     const aI=document.createElement('input');aI.type='text';aI.value=rd.anum||'';aI.placeholder='e.g. 246-123-456';aI.style.cssText=_inpS;aI.onfocus=()=>aI.style.borderColor='#6A8C6E';aI.onblur=()=>aI.style.borderColor='#DDD5CA';ff('A-Number',aI);
+    const dobI=document.createElement('input');dobI.type='date';dobI.value=rd.dob||'';dobI.style.cssText=_inpS;dobI.onfocus=()=>dobI.style.borderColor='#6A8C6E';dobI.onblur=()=>dobI.style.borderColor='#DDD5CA';ff('Date of Birth',dobI);
     const rS=document.createElement('select');rS.style.cssText=_inpS+'background:#fff;cursor:pointer;';
     const rd2=document.createElement('option');rd2.value='';rd2.textContent='— Select —';rS.appendChild(rd2);
     ['Spouse','Child','Parent','Sibling','Grandparent','Partner','Derivative','Other'].forEach(o=>{const op=document.createElement('option');op.value=o;op.textContent=o;if(o===rd.relationship)op.selected=true;rS.appendChild(op);});ff('Relationship',rS);
     const ad=document.createElement('div');ad.style.cssText='display:flex;justify-content:flex-end;gap:8px;margin-top:8px;';
     const cb4=document.createElement('button');cb4.textContent='Cancel';cb4.style.cssText='font-size:12px;padding:7px 16px;border:1px solid #DDD5CA;border-radius:8px;background:#F7F3ED;color:#5C5148;cursor:pointer;font-family:inherit;';cb4.onclick=()=>{ov.remove();_respEditor2=null;};
     const sb4=document.createElement('button');sb4.textContent=isNew3?'Add':'Save';sb4.style.cssText='font-size:12px;font-weight:600;padding:7px 18px;border:none;border-radius:8px;background:#2C2620;color:#F7F3ED;cursor:pointer;font-family:inherit;';
-    sb4.onclick=()=>{const ln=lnI.value.trim();const fn=fnI.value.trim();if(!ln){lnI.style.borderColor='#B85C5C';lnI.focus();return;}if(!fn){fnI.style.borderColor='#B85C5C';fnI.focus();return;}const nm=[fn,mnI.value.trim(),ln].filter(Boolean).join(' ');const d={name:nm,lastName:ln,firstName:fn,middleName:mnI.value.trim(),anum:aI.value.trim(),relationship:rS.value,isLead:rd.isLead||false};if(isNew3)caseMeta[clid].respondents.push(d);else{d.isLead=caseMeta[clid].respondents[idx].isLead;Object.assign(caseMeta[clid].respondents[idx],d);}markUnsaved();ov.remove();_respEditor2=null;renderAll2();};
+    sb4.onclick=()=>{const ln=lnI.value.trim();const fn=fnI.value.trim();if(!ln){lnI.style.borderColor='#B85C5C';lnI.focus();return;}if(!fn){fnI.style.borderColor='#B85C5C';fnI.focus();return;}const nm=[fn,mnI.value.trim(),ln].filter(Boolean).join(' ');const d={name:nm,lastName:ln,firstName:fn,middleName:mnI.value.trim(),anum:aI.value.trim(),dob:dobI.value,relationship:rS.value,isLead:rd.isLead||false};if(isNew3)caseMeta[clid].respondents.push(d);else{d.isLead=caseMeta[clid].respondents[idx].isLead;Object.assign(caseMeta[clid].respondents[idx],d);}markUnsaved();ov.remove();_respEditor2=null;renderAll2();};
     ad.appendChild(cb4);ad.appendChild(sb4);bx.appendChild(ad);ov.ondblclick=(e)=>{if(e.target===ov){ov.remove();_respEditor2=null;}};ov.appendChild(bx);document.body.appendChild(ov);setTimeout(()=>lnI.focus(),30);
   }
 
@@ -11580,6 +11631,11 @@ function openCaseDetail(clid){
     // Client Phone
     const clPhoneI=mkText2((caseMeta[clid]||{}).clientPhone||'');clPhoneI.placeholder='Phone…';infoBody._clPhoneInput=clPhoneI;
     mkInfoCell(L1,'Phone',(caseMeta[clid]||{}).clientPhone||'',()=>clPhoneI);
+    // Client DOB
+    const clDobI=document.createElement('input');clDobI.type='date';clDobI.value=(caseMeta[clid]||{}).clientDob||'';clDobI.style.cssText='width:100%;font-size:13px;font-weight:500;color:#2C2620;border:none;outline:none;background:transparent;padding:0;font-family:inherit;';infoBody._clDobInput=clDobI;
+    const dobVal=(caseMeta[clid]||{}).clientDob;
+    const dobDisplay=dobVal?fmtDate(dobVal)+(calculateAgeText(dobVal)?' ('+calculateAgeText(dobVal)+')':''):'';
+    mkInfoCell(L1,'Date of Birth',dobDisplay,()=>clDobI);
 
     // ── Client Address ──
     const addrSection=document.createElement('div');addrSection.style.cssText='grid-column:1/-1;';
@@ -11762,6 +11818,7 @@ function openCaseDetail(clid){
     if(infoBody._clidInput){const nv=infoBody._clidInput.value.trim();allRecs.forEach(r=>r.clid=nv);base.clid=nv;}
     if(infoBody._paraInput){const nv=infoBody._paraInput.value;allRecs.forEach(r=>r.atty=nv);base.atty=nv;}
     if(infoBody._clientEmailInput){if(!caseMeta[clid])caseMeta[clid]={};caseMeta[clid].clientEmail=infoBody._clientEmailInput.value.trim();}
+    if(infoBody._clDobInput){if(!caseMeta[clid])caseMeta[clid]={};caseMeta[clid].clientDob=infoBody._clDobInput.value;}
     if(!caseMeta[clid])caseMeta[clid]={};
     let _nameTrimmed=false;
     if(infoBody._clLastInput){const raw=infoBody._clLastInput.value.trim();const v=_singleName(raw);if(raw!==v){_nameTrimmed=true;infoBody._clLastInput.value=v;}caseMeta[clid].clientLastName=v;}
