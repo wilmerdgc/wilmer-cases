@@ -10188,20 +10188,17 @@ function renderSIJTable(){
     const ic=evCellHtml(c.nextIC);
     const us=evCellHtml(c.nextUSCIS);
 
+    // Build list of clients under this case (lead + respondents)
+    const _meta=caseMeta[c.clid]||{};
+    const clientsInCase=[];
+    clientsInCase.push({name:c.client||c.clid,anum:c.anum,dob:_meta.clientDob,isLead:true});
+    (_meta.respondents||[]).forEach(r=>{clientsInCase.push({name:r.name||'Respondent',anum:r.anum,dob:r.dob,isLead:false});});
+    const rowCount=clientsInCase.length;
+
     // Row background based on earliest urgent event
     const earliest=[c.nextFC,c.nextIC,c.nextUSCIS].filter(Boolean).sort((a,b)=>(a.date||'').localeCompare(b.date||''))[0];
     const rowStatus=earliest?status(parseDate(earliest.date)):'no-date';
     const rowBg={overdue:'#F9EDED',thisweek:'#FAF0E6',nextweek:'',['15days']:'',ok:'',['no-date']:''}[rowStatus]||'';
-
-    const tr=document.createElement('tr');
-    tr.style.cssText='border-bottom:1px solid var(--cream-dark);transition:background .1s;'+(rowBg?'background:'+rowBg+';':'');
-    tr.onmouseenter=()=>tr.style.background=rowBg||'var(--cream)';
-    tr.onmouseleave=()=>tr.style.background=rowBg||'';
-    // Open case on double-click anywhere on the row (skip interactive controls)
-    tr.addEventListener('dblclick',function(e){
-      if(e.target.closest('select,input,button,textarea,a')) return;
-      openCaseDetail(c.clid);
-    });
 
     const tdS='padding:8px 8px;font-size:11px;';
 
@@ -10299,47 +10296,66 @@ function renderSIJTable(){
       dfCellHtml=`<div title="Double-click to edit" ondblclick="event.stopPropagation();this.querySelectorAll('select,input').forEach(el=>{el.style.pointerEvents='auto';el.style.background='#fff';});const f=this.querySelector('select,input');if(f){f.focus();if(f.tagName==='SELECT'&&typeof f.showPicker==='function'){try{f.showPicker();}catch(e){}}}" style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;white-space:nowrap;cursor:pointer;">${selectHtml}${detailHtml}</div>`;
     }
 
-    // Aging-Out cell — always show when DOB is set
-    let agingOutHtml='<span style="color:var(--ink-faint);font-size:10px;font-style:italic;" title="Add DOB in Case Info">no DOB</span>';
-    {
-      const meta=caseMeta[c.clid]||{};
-      const agingClients=[];
-      const baseName=c.client||c.clid;
-      if(meta.clientDob){
-        agingClients.push({name:baseName,dob:meta.clientDob});
+    // Helper to build aging-out cell for one client
+    function agingOutCellHtml(cl){
+      if(!cl.dob){
+        return '<span style="color:var(--ink-faint);font-size:10px;font-style:italic;" title="Add DOB in Case Info">no DOB</span>';
       }
-      (meta.respondents||[]).forEach(r=>{
-        if(r.dob){agingClients.push({name:r.name||'Respondent',dob:r.dob});}
-      });
-      if(agingClients.length){
-        agingOutHtml=agingClients.map(a=>{
-          const txt=calculateAgeText(a.dob);
-          const urgent=txt.includes('aged out')||/^\dm/.test(txt)||/^<1m/.test(txt);
-          const warn=/^1y/.test(txt);
-          const color=urgent?'#B85C5C':warn?'#C9823A':'#6A8C6E';
-          const _parts=(a.name||'').trim().split(/\s+/).filter(Boolean);
-          const short=_parts.length<=1?_parts.join(' '):(_parts[0]+' '+_parts[_parts.length-1]);
-          return `<div style="font-size:11px;line-height:1.4;color:${color};font-weight:600;white-space:nowrap;" title="${escHtml(short)} — DOB: ${fmtDate(a.dob)}">${txt||'—'}</div>`;
-        }).join('');
-      }
+      const txt=calculateAgeText(cl.dob);
+      const urgent=txt.includes('aged out')||/^\dm/.test(txt)||/^<1m/.test(txt);
+      const warn=/^1y/.test(txt);
+      const color=urgent?'#B85C5C':warn?'#C9823A':'#6A8C6E';
+      const _parts=(cl.name||'').trim().split(/\s+/).filter(Boolean);
+      const short=_parts.length<=1?_parts.join(' '):(_parts[0]+' '+_parts[_parts.length-1]);
+      return `<span style="font-size:11px;color:${color};font-weight:600;white-space:nowrap;" title="${escHtml(short)} — DOB: ${fmtDate(cl.dob)}">${txt||'—'}</span>`;
     }
 
-    tr.innerHTML=`
-      <td style="${tdS}font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;z-index:1;background:${rowBg||'var(--cream)'};box-shadow:2px 0 0 var(--border);"><span ondblclick="event.stopPropagation();openCaseDetail('${c.clid}');" title="Double-click to open case" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;" onmouseenter="this.style.textDecorationColor='var(--ink)'" onmouseleave="this.style.textDecorationColor='transparent'">${c.client||c.clid}</span></td>
-      <td ondblclick="event.stopPropagation();openCaseDetail('${c.clid}');" title="Double-click to open case" style="${tdS}color:var(--ink-muted);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;">${c.clid||'—'}</td>
-      <td style="${tdS}border-left:3px solid #B85C5C40;">${agingOutHtml}</td>
-      <td style="${tdS}color:var(--ink-soft);text-align:center;" title="${(c.atty||'').replace(/"/g,'&quot;')}">${(function(n){if(!n)return '—';const parts=String(n).trim().split(/\s+/).filter(Boolean);if(!parts.length)return '—';if(parts.length===1)return parts[0].slice(0,2).toUpperCase();return (parts[0][0]+parts[parts.length-1][0]).toUpperCase();})(c.atty)}</td>
-      <td style="${tdS}border-left:3px solid #C9823A40;">${stageSelectHtml(c.clid,FC_STAGES,c.fcKey,c.fcStage,'fcStage')}</td>
-      <td style="${tdS}font-weight:500;color:var(--ink);">${fc.evHtml}</td>
-      <td style="${tdS}font-weight:600;color:${fc.dateColor};">${fc.dateHtml}</td>
-      <td style="${tdS}border-left:3px solid #6B7FA340;">${stageSelectHtml(c.clid,IC_STAGES,effectiveIcKey,effectiveIcStage,'icStage',{disabled:icDisabled,lockLabel:'🔒 N/A',lockTitle:'Not applicable — case is not in Immigration Court'})}</td>
-      <td style="${tdS}font-weight:500;color:var(--ink);">${icEventCellHtml}</td>
-      <td style="${tdS}font-weight:600;">${icDateCellHtml}</td>
-      <td style="${tdS}border-left:3px solid #6A8C6E40;">${stageSelectHtml(c.clid,USCIS_STAGES,effectiveUscisKey,effectiveUscisStage,'uscisStage',{disabled:!i360Unlocked})}</td>
-      <td style="${tdS}font-weight:500;color:var(--ink);">${i360Unlocked?us.evHtml:'<span style="color:var(--ink-faint);">—</span>'}</td>
-      <td style="${tdS}">${priorityDateCell}</td>
-      <td style="${tdS}white-space:nowrap;">${dfCellHtml}</td>`;
-    tbody.appendChild(tr);
+    // One <tr> per client; shared case-level cells use rowspan on the first row
+    clientsInCase.forEach((cl,cIdx)=>{
+      const isFirstRow=cIdx===0;
+      const isLastRowOfGroup=cIdx===clientsInCase.length-1;
+      const tr=document.createElement('tr');
+      // Rows in the same case share background; bottom border only on last row of group
+      tr.style.cssText=(isLastRowOfGroup?'border-bottom:1px solid var(--cream-dark);':'border-bottom:1px dashed var(--cream-dark);')
+        +'transition:background .1s;'+(rowBg?'background:'+rowBg+';':'');
+      tr.onmouseenter=()=>tr.style.background=rowBg||'var(--cream)';
+      tr.onmouseleave=()=>tr.style.background=rowBg||'';
+      tr.addEventListener('dblclick',function(e){
+        if(e.target.closest('select,input,button,textarea,a')) return;
+        openCaseDetail(c.clid);
+      });
+      const _parts=(cl.name||'').trim().split(/\s+/).filter(Boolean);
+      const shortName=_parts.length<=1?(cl.name||c.clid):(_parts[0]+' '+_parts[_parts.length-1]);
+      const leadBadge=!cl.isLead?'<span style="font-size:9px;color:#C4BAB0;font-weight:500;margin-left:4px;" title="Rider / respondent">•</span>':'';
+
+      // Per-client cells (always rendered)
+      let rowHtml='';
+      // Client column — shows this individual client's name
+      rowHtml+=`<td style="${tdS}font-weight:${cl.isLead?'600':'500'};color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;z-index:1;background:${rowBg||'var(--cream)'};box-shadow:2px 0 0 var(--border);"><span ondblclick="event.stopPropagation();openCaseDetail('${c.clid}');" title="${escHtml(cl.name||'')}${cl.isLead?'':' (rider)'} — Double-click to open case" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;" onmouseenter="this.style.textDecorationColor='var(--ink)'" onmouseleave="this.style.textDecorationColor='transparent'">${escHtml(shortName)}</span>${leadBadge}</td>`;
+      // Cl ID — only on first row
+      if(isFirstRow){
+        rowHtml+=`<td rowspan="${rowCount}" ondblclick="event.stopPropagation();openCaseDetail('${c.clid}');" title="Double-click to open case" style="${tdS}color:var(--ink-muted);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;vertical-align:top;">${c.clid||'—'}</td>`;
+      }
+      // Aging Out — individual per client
+      rowHtml+=`<td style="${tdS}border-left:3px solid #B85C5C40;">${agingOutCellHtml(cl)}</td>`;
+
+      // Shared case-level cells — only rendered on first row with rowspan
+      if(isFirstRow){
+        rowHtml+=`<td rowspan="${rowCount}" style="${tdS}color:var(--ink-soft);text-align:center;vertical-align:top;" title="${(c.atty||'').replace(/"/g,'&quot;')}">${(function(n){if(!n)return '—';const parts=String(n).trim().split(/\s+/).filter(Boolean);if(!parts.length)return '—';if(parts.length===1)return parts[0].slice(0,2).toUpperCase();return (parts[0][0]+parts[parts.length-1][0]).toUpperCase();})(c.atty)}</td>`;
+        rowHtml+=`<td rowspan="${rowCount}" style="${tdS}border-left:3px solid #C9823A40;vertical-align:top;">${stageSelectHtml(c.clid,FC_STAGES,c.fcKey,c.fcStage,'fcStage')}</td>`;
+        rowHtml+=`<td rowspan="${rowCount}" style="${tdS}font-weight:500;color:var(--ink);vertical-align:top;">${fc.evHtml}</td>`;
+        rowHtml+=`<td rowspan="${rowCount}" style="${tdS}font-weight:600;color:${fc.dateColor};vertical-align:top;">${fc.dateHtml}</td>`;
+        rowHtml+=`<td rowspan="${rowCount}" style="${tdS}border-left:3px solid #6B7FA340;vertical-align:top;">${stageSelectHtml(c.clid,IC_STAGES,effectiveIcKey,effectiveIcStage,'icStage',{disabled:icDisabled,lockLabel:'🔒 N/A',lockTitle:'Not applicable — case is not in Immigration Court'})}</td>`;
+        rowHtml+=`<td rowspan="${rowCount}" style="${tdS}font-weight:500;color:var(--ink);vertical-align:top;">${icEventCellHtml}</td>`;
+        rowHtml+=`<td rowspan="${rowCount}" style="${tdS}font-weight:600;vertical-align:top;">${icDateCellHtml}</td>`;
+        rowHtml+=`<td rowspan="${rowCount}" style="${tdS}border-left:3px solid #6A8C6E40;vertical-align:top;">${stageSelectHtml(c.clid,USCIS_STAGES,effectiveUscisKey,effectiveUscisStage,'uscisStage',{disabled:!i360Unlocked})}</td>`;
+        rowHtml+=`<td rowspan="${rowCount}" style="${tdS}font-weight:500;color:var(--ink);vertical-align:top;">${i360Unlocked?us.evHtml:'<span style="color:var(--ink-faint);">—</span>'}</td>`;
+        rowHtml+=`<td rowspan="${rowCount}" style="${tdS}vertical-align:top;">${priorityDateCell}</td>`;
+        rowHtml+=`<td rowspan="${rowCount}" style="${tdS}white-space:nowrap;vertical-align:top;">${dfCellHtml}</td>`;
+      }
+      tr.innerHTML=rowHtml;
+      tbody.appendChild(tr);
+    });
   });
   tbl.appendChild(tbody);
   board.appendChild(tbl);
