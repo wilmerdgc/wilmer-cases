@@ -11669,13 +11669,13 @@ function openCaseDetail(clid){
     const divid=document.createElement('hr');divid.style.cssText='border:none;border-top:1px solid #EDE8E0;margin:4px 0 14px;';infoBody.appendChild(divid);
 
     // ── LEVEL 2 ──
-    const L2=document.createElement('div');L2.style.cssText='display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;';
+    const L2=document.createElement('div');L2.style.cssText='display:flex;flex-direction:column;gap:4px;';
 
     function clientCard(cl,ci,showType,showJudge,showPara,sharedMode){
       const card=document.createElement('div');
-      // Compact flat row style
-      card.style.cssText='display:flex;align-items:flex-start;gap:0;padding:8px 10px;border-radius:7px;flex:1;min-width:180px;'
-        +'border-left:1px solid #DDD5CA;background:transparent;';
+      // One horizontal row per client
+      card.style.cssText='display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:7px;width:100%;'
+        +'border-left:2px solid #DDD5CA;background:#FDFAF7;flex-wrap:wrap;';
 
       // Left tag: "1" or "2" etc — only when multiple clients
       if(allClients.length > 1){
@@ -11705,8 +11705,8 @@ function openCaseDetail(clid){
         if(allClients.length>1){if(cl.isLead){const lb=document.createElement('span');lb.className='respondent-lead-badge';lb.textContent='Lead';lb.title='This is the lead client';row.appendChild(lb);}else{const rb2=document.createElement('span');rb2.className='respondent-rider-badge';rb2.textContent='Rider';rb2.title='Click to set as Lead';rb2.onclick=()=>{if(!caseMeta[clid])caseMeta[clid]={};caseMeta[clid].leadIdx=cl.idx;markUnsaved();saveAllData();renderAll2();showToast('Lead updated ✓');};row.appendChild(rb2);}}
         content.appendChild(row);
       } else {
-        // Inline fields on one row (or two if SJC with two judges)
-        const row=document.createElement('div');row.style.cssText='display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;';
+        // All fields on ONE horizontal row
+        const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:14px;flex-wrap:wrap;width:100%;';
 
         // Name
         if(isEditing){const nI3=mkText2(cl.name);nI3.style.cssText='font-size:12px;font-weight:600;color:#2C2620;border:none;border-bottom:1px solid #DDD5CA;outline:none;background:transparent;padding:1px 0;min-width:100px;width:140px;';cl._nameInput=nI3;row.appendChild(nI3);}
@@ -11715,6 +11715,25 @@ function openCaseDetail(clid){
         // A#
         if(isEditing){const aI3=mkText2(cl.anum);aI3.placeholder='A#';aI3.style.cssText='font-size:11px;color:#9E9186;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;width:90px;';cl._anumInput=aI3;row.appendChild(aI3);}
         else if(cl.anum){const a=document.createElement('span');a.style.cssText='font-size:11px;color:#9E9186;white-space:nowrap;';a.textContent='A# '+cl.anum;row.appendChild(a);}
+
+        // DOB per client — always visible
+        const dobLabelText='DOB';
+        const dobCurrent=cl._isBase?((caseMeta[clid]||{}).clientDob||''):((caseMeta[clid].respondents[cl.idx]||{}).dob||'');
+        const dobLbl=document.createElement('span');dobLbl.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;';dobLbl.textContent=dobLabelText;row.appendChild(dobLbl);
+        if(isEditing){
+          const dI=document.createElement('input');dI.type='date';dI.value=dobCurrent;dI.style.cssText='font-size:11px;color:#5C5148;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;cursor:pointer;font-family:inherit;';
+          cl._dobInput=dI;row.appendChild(dI);
+        } else {
+          const dSpan=document.createElement('span');dSpan.style.cssText='font-size:11px;color:#5C5148;white-space:nowrap;';
+          if(dobCurrent){
+            const ageText=calculateAgeText(dobCurrent);
+            const ageColor=ageText.includes('aged out')||/^\dm/.test(ageText)||/^<1m/.test(ageText)?'#B85C5C':/^1y/.test(ageText)?'#C9823A':'#6A8C6E';
+            dSpan.innerHTML=fmtDate(dobCurrent)+(ageText?' <span style="color:'+ageColor+';font-weight:600;">('+ageText+')</span>':'');
+          } else {
+            dSpan.textContent='—';dSpan.style.color='#C4BAB0';dSpan.style.fontStyle='italic';
+          }
+          row.appendChild(dSpan);
+        }
 
         // Case type
         if(showType){
@@ -11729,7 +11748,7 @@ function openCaseDetail(clid){
 
         content.appendChild(row);
 
-        // Judge row(s)
+        // Judge row(s) — inline into same content area
         if(showJudge){
           const jrow=document.createElement('div');jrow.style.cssText='display:flex;gap:14px;flex-wrap:wrap;margin-top:3px;';
           function inlineJudge(labelText2, judgeKey){
@@ -11837,6 +11856,7 @@ function openCaseDetail(clid){
       if(cl._anumInput){const nv=cl._anumInput.value.trim();if(cl._isBase){allRecs.forEach(r=>r.anum=nv);base.anum=nv;}else if(cl.idx>=0)caseMeta[clid].respondents[cl.idx].anum=nv;}
       if(cl._typeInput){const nv=cl._typeInput.value;if(cl._isBase){allRecs.forEach(r=>r.type=nv);base.type=nv;}else if(cl.idx>=0)caseMeta[clid].respondents[cl.idx].type=nv;}
       if(cl._paraInput){const nv=cl._paraInput.value;if(cl._isBase){allRecs.forEach(r=>r.atty=nv);base.atty=nv;}else if(cl.idx>=0)caseMeta[clid].respondents[cl.idx].atty=nv;}
+      if(cl._dobInput){const nv=cl._dobInput.value;if(cl._isBase){if(!caseMeta[clid])caseMeta[clid]={};caseMeta[clid].clientDob=nv;}else if(cl.idx>=0)caseMeta[clid].respondents[cl.idx].dob=nv;}
     });
     markUnsaved();
     {const _m=caseMeta[clid]||{};const _c=[_m.clientFirstName,_m.clientMiddleName,_m.clientLastName].filter(Boolean).join(' ');document.getElementById('case-detail-title').textContent=_c||base.client||clid;}
