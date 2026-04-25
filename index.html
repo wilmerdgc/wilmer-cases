@@ -10364,6 +10364,10 @@ function renderSIJTable(){
 
     // Helper to build aging-out cell for one client
     function agingOutCellHtml(cl){
+      // If I-360 has Receipt Received or Approved, show OK instead of countdown
+      if(i360Unlocked && (effectiveUscisKey==='receipt' || effectiveUscisKey==='approved')){
+        return '<span style="font-size:11px;color:#6A8C6E;font-weight:700;white-space:nowrap;" title="I-360 ' + (effectiveUscisKey==='approved'?'Approved':'Receipt Received') + ' — aging out no longer applies">OK</span>';
+      }
       if(!cl.dob){
         return '<span style="color:var(--ink-faint);font-size:10px;font-style:italic;" title="Add DOB in Case Info">no DOB</span>';
       }
