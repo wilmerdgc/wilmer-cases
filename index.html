@@ -480,6 +480,7 @@ body.wk-dragging .week-col { transition: background 0.1s, box-shadow 0.1s; }
 .modal-backdrop.readonly-mode .form-row,
 .modal-backdrop.readonly-mode #so-attachment-panel,
 .modal-backdrop.readonly-mode #individual-callup-panel,
+.modal-backdrop.readonly-mode #fc-subevents-panel,
 .modal-backdrop.readonly-mode #modal-custom-fields,
 .modal-backdrop.readonly-mode #modal-reminder-section,
 .modal-backdrop.readonly-mode #modal-status-section,
@@ -2705,6 +2706,17 @@ function hideExcelRestorePrompt(){}
       <span style="font-size:11px;color:#C4BAB0;">=</span>
       <span id="dc-result" style="font-size:11px;color:#6A8C6E;font-weight:500;cursor:pointer;" title="Click to apply to Deadline" onclick="applyDateCalc()">—</span>
     </div>
+    <!-- FC sub-events panel — only for FC HEARING/TRIAL/TASK/INITIAL PETITION/SERVICE -->
+    <div id="fc-subevents-panel" style="display:none;margin:-2px 0 10px;padding:9px 12px;background:#FFF8EE;border:1px solid #F0D9BB;border-radius:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#C9823A;">Add linked FC events</span>
+        <div style="display:flex;gap:6px;">
+          <button type="button" onclick="addFcSubevent('FC TASK')" style="font-size:10px;padding:3px 9px;border:1px solid #F0D9BB;border-radius:5px;background:#fff;color:#C9823A;cursor:pointer;font-weight:600;font-family:inherit;">+ FC TASK</button>
+          <button type="button" onclick="addFcSubevent('FC SERVICE')" style="font-size:10px;padding:3px 9px;border:1px solid #F0D9BB;border-radius:5px;background:#fff;color:#C9823A;cursor:pointer;font-weight:600;font-family:inherit;">+ FC SERVICE</button>
+        </div>
+      </div>
+      <div id="fc-subevents-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
+    </div>
     <div class="form-row" id="modal-time-row">
       <div class="time-toggle-row">
         <label class="form-label" style="margin-bottom:0">Time</label>
@@ -2937,11 +2949,23 @@ let records=[];
 // local storage.
 let _dataInitialized=false;
 let paralegals=[...new Set(records.map(r=>r.atty).filter(Boolean))].sort();
-let eventTypes=[...new Set([...records.map(r=>r.event).filter(Boolean),'90-DAY DEADLINE','60-DAY DEADLINE','30-DAY DEADLINE','CALL UP DEADLINE','PRIORITY DAY'])].sort();
+let eventTypes=[...new Set([...records.map(r=>r.event).filter(Boolean),'90-DAY DEADLINE','60-DAY DEADLINE','30-DAY DEADLINE','CALL UP DEADLINE','PRIORITY DAY','FC HEARING','FC TRIAL','FC TASK','FC INITIAL PETITION','FC SERVICE'])].sort();
 // Event types restricted to specific case types (if not listed here, available to all)
+const SIJ_CASE_TYPES=['Special Juvenile in Court','Special Juvenile Not in Immigration Court','Special Juvenile in Immigration Court'];
 const eventTypeCaseFilter={
-  'PRIORITY DAY':['Special Juvenile in Court','Special Juvenile Not in Immigration Court']
+  'PRIORITY DAY':['Special Juvenile in Court','Special Juvenile Not in Immigration Court'],
+  'FC HEARING':SIJ_CASE_TYPES,
+  'FC TRIAL':SIJ_CASE_TYPES,
+  'FC TASK':SIJ_CASE_TYPES,
+  'FC INITIAL PETITION':SIJ_CASE_TYPES,
+  'FC SERVICE':SIJ_CASE_TYPES
 };
+function ensureFCEventTypes(){
+  ['FC HEARING','FC TRIAL','FC TASK','FC INITIAL PETITION','FC SERVICE'].forEach(t=>{
+    if(!eventTypes.includes(t)) eventTypes.push(t);
+  });
+  eventTypes.sort();
+}
 let caseTypes=[...new Set(records.map(r=>r.type).filter(Boolean))].sort();
 let caseTypeDocLists={};
 (function(){const K='Defensive Asylum';if(!caseTypeDocLists[K]){caseTypeDocLists[K]=[{sectionName:'Story of Persecution',docs:[{name:'Client\'s personal declaration (narrative)'},{name:'Draft story — version 1'},{name:'Draft story — revised'},{name:'Final signed declaration'}]},{sectionName:'Issues',docs:[{name:'One Year Bar — brief / argument'},{name:'CLP — criminal record documents'},{name:'ACA — motion to pretermit'},{name:'CAAR — motion to pretermit'},{name:'HAAv — motion to pretermit'}]},{"sectionName":"Identity & Entry","docs":[{"name":"Passport (all pages)"},{"name":"Birth Certificate + certified translation"},{"name":"National ID card"},{"name":"I-94 Arrival/Departure Record"},{"name":"Visa / Entry documents"}]},{"sectionName":"Application","docs":[{"name":"I-589 (signed, filed copy)"},{"name":"I-589 Amendments (if any)"},{"name":"Proof of service on DHS counsel"}]},{"sectionName":"Court Documents","docs":[{"name":"Notice to Appear (NTA)"},{"name":"Prior immigration court orders"},{"name":"Hearing notice / scheduling order"}]},{"sectionName":"Respondent's Evidence","docs":[{"name":"Personal declaration (respondent)"},{"name":"Witness declarations"},{"name":"Medical / psychological evaluation"},{"name":"Police reports from home country"},{"name":"Court documents from home country"},{"name":"Arrest warrants / threatening communications"},{"name":"Photos of injuries or harm"}]},{"sectionName":"Country Conditions","docs":[{"name":"State Department Human Rights Report"},{"name":"UNHCR country guidance"},{"name":"Human Rights Watch / Amnesty International reports"},{"name":"Expert witness report (if applicable)"},{"name":"News articles supporting the claim"}]},{"sectionName":"Hearing Day","docs":[{"name":"Exhibit list (tabbed and paginated)"},{"name":"Witness list (submitted to court)"},{"name":"Interpreter confirmation (if private)"},{"name":"Copies for judge, DHS counsel, and respondent"}]},{"sectionName":"Financial","docs":[{"name":"Tax returns (last 3 years)"}]},{"sectionName":"Supporting / Optional","docs":[{"name":"Letters of support (community, religious, employer)"},{"name":"Evidence of U.S. ties"},{"name":"Prior asylum denial in third country (if applicable)"}]}];}})();
@@ -8344,7 +8368,61 @@ function onMpDaysBeforeChange(){
     document.getElementById('mp-date').value=addDateDays(mDate,-days);
   }
 }
+// ── FC sub-events (FC TASK / FC SERVICE linked to a parent FC event) ──
+let fcSubevents=[];
+const FC_PARENT_EVENT_TYPES=new Set(['FC HEARING','FC TRIAL','FC TASK','FC INITIAL PETITION','FC SERVICE']);
+function addFcSubevent(type){
+  fcSubevents.push({type,date:'',notes:''});
+  renderFcSubevents();
+}
+function removeFcSubevent(idx){
+  fcSubevents.splice(idx,1);
+  renderFcSubevents();
+}
+function renderFcSubevents(){
+  const container=document.getElementById('fc-subevents-rows');
+  if(!container)return;
+  container.innerHTML='';
+  if(!fcSubevents.length){
+    const empty=document.createElement('div');
+    empty.style.cssText='font-size:11px;color:#C4BAB0;font-style:italic;';
+    empty.textContent='No linked events. Use buttons above to add FC TASK or FC SERVICE.';
+    container.appendChild(empty);
+    return;
+  }
+  fcSubevents.forEach((sub,idx)=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:6px;padding:4px 6px;background:#fff;border:1px solid #F0D9BB;border-radius:6px;';
+    const typeTag=document.createElement('span');
+    typeTag.style.cssText='font-size:10px;font-weight:700;color:#C9823A;background:#FAF0E6;padding:2px 6px;border-radius:4px;flex-shrink:0;';
+    typeTag.textContent=sub.type;
+    const dateInp=document.createElement('input');
+    dateInp.type='date';
+    dateInp.value=sub.date||'';
+    dateInp.title='Date';
+    dateInp.style.cssText='font-size:11px;padding:2px 5px;border:1px solid #F0D9BB;border-radius:5px;background:#FFFCF7;color:#2C2620;font-weight:600;width:130px;flex-shrink:0;';
+    dateInp.oninput=()=>{fcSubevents[idx].date=dateInp.value;checkWeekendDate(dateInp.value);};
+    const notesInp=document.createElement('input');
+    notesInp.type='text';
+    notesInp.value=sub.notes||'';
+    notesInp.placeholder='Notes (optional)';
+    notesInp.style.cssText='font-size:11px;padding:2px 6px;border:1px solid #F0D9BB;border-radius:5px;background:#FFFCF7;color:#2C2620;flex:1;min-width:60px;';
+    notesInp.oninput=()=>{fcSubevents[idx].notes=notesInp.value;};
+    const rm=document.createElement('button');
+    rm.type='button';
+    rm.textContent='✕';
+    rm.title='Remove';
+    rm.style.cssText='font-size:11px;padding:2px 7px;border:1px solid #F0D9BB;border-radius:5px;background:#fff;color:#C9823A;cursor:pointer;flex-shrink:0;';
+    rm.onclick=()=>removeFcSubevent(idx);
+    row.appendChild(typeTag);row.appendChild(dateInp);row.appendChild(notesInp);row.appendChild(rm);
+    container.appendChild(row);
+  });
+}
+function resetFcSubevents(){fcSubevents=[];renderFcSubevents();}
+
 function onEventTypeChange(val){
+  const fcse=document.getElementById('fc-subevents-panel');
+  if(fcse){fcse.style.display=FC_PARENT_EVENT_TYPES.has(val)?'':'none';if(FC_PARENT_EVENT_TYPES.has(val))renderFcSubevents();}
   const panel=document.getElementById('so-attachment-panel');
   if(!panel)return;
   panel.style.display=(val==='SCHEDULING ORDER')?'':'none';
@@ -8675,8 +8753,8 @@ function openCaseFromModal(){
   closeModal();
   goToCase(clid);
 }
-function openAdd(){editingId=null;pendingStatus=null;document.getElementById('modal-title').textContent='Add event';const ocb=document.getElementById('modal-open-case-btn');if(ocb)ocb.style.display='none';document.getElementById('modal-status-section').style.display='none';document.getElementById('modal-reminder-section').style.display='block';['fc-clid','fc-client','fc-anum','fc-date','fc-notes'].forEach(id=>document.getElementById(id).value='');const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=false;document.getElementById('time-range-panel').classList.remove('open');document.getElementById('fc-time-start').value='';document.getElementById('fc-time-end').value='';document.getElementById('fc-time-display').textContent='';pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();const _icp0=document.getElementById('individual-callup-panel');if(_icp0)_icp0.style.display='none';populateModalDropdowns();resetDateCalc();setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _m0=document.getElementById('modal');_m0.classList.remove('readonly-mode');_m0.style.display='flex';}
-function openEdit(id){const r=records.find(x=>x.id===id);if(!r)return;editingId=id;pendingStatus=null;document.getElementById('modal-title').textContent='Edit event';const _ocb=document.getElementById('modal-open-case-btn');if(_ocb){_ocb.style.display=(r.clid||r.client)?'inline':'none';}document.getElementById('modal-status-section').style.display='block';document.getElementById('modal-reminder-section').style.display='block';pendingReminders=[];if(r){records.forEach(rx=>{if(rx.id===id)return;const isLinked=rx._parentId===id||(!rx._parentId&&(rx.clid||rx.client)===(r.clid||r.client));if(isLinked&&rx.notes&&rx.notes.startsWith('⏰ REMINDER')&&rx.date&&r.date){const diff=Math.round((new Date(r.date.replace(/-/g,'/'))-new Date(rx.date.replace(/-/g,'/')))/(1000*60*60*24));if(diff>0&&!pendingReminders.includes(diff))pendingReminders.push(diff);}});}renderReminderChips();document.getElementById('fc-clid').value=r.clid||'';document.getElementById('fc-client').value=r.client||'';document.getElementById('fc-anum').value=r.anum||'';document.getElementById('fc-date').value=r.date||'';document.getElementById('fc-notes').value=r.notes||'';const hasTime=!!(r.timeStart||r.timeEnd);const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=hasTime;document.getElementById('fc-time-start').value=r.timeStart||'';document.getElementById('fc-time-end').value=r.timeEnd||'';if(hasTime)document.getElementById('time-range-panel').classList.add('open');else document.getElementById('time-range-panel').classList.remove('open');updateTimeDisplay();document.getElementById('fc-history-note').value='';document.getElementById('fc-reschedule-date').value='';document.getElementById('reschedule-panel').classList.remove('open');document.getElementById('reschedule-extras').style.display='none';if(document.getElementById('rs-time-toggle'))document.getElementById('rs-time-toggle').checked=false;document.getElementById('rs-time-range-panel').classList.remove('open');if(document.getElementById('rs-time-start'))document.getElementById('rs-time-start').value='';if(document.getElementById('rs-time-end'))document.getElementById('rs-time-end').value='';document.getElementById('rs-time-display').textContent='';rsReminders=[];renderRsReminderChips();['attended','completed','cancelled','rescheduled','deleted'].forEach(k=>{const el=document.getElementById('sbtn-'+k);if(el)el.classList.remove('sel');});if(r.attendedStatus){const ab=document.getElementById('sbtn-attended');if(ab)ab.classList.add('sel');}resetSoAttachmentPanel();populateModalDropdowns();document.getElementById('fc-casetype').value=r.type||'';document.getElementById('fc-paralegal').value=r.atty||'';document.getElementById('fc-eventtype').value=r.event||'';onEventTypeChange(r.event||'');setHearingMode(r.hearingMode||'');const sid=document.getElementById('so-issue-date');if(sid)sid.value=r.soIssueDate||'';document.getElementById('fc-assigned').value=r.assigned||'';customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);if(el)el.value=r[c.key]||'';});renderHistoryLog(r.history||[]);loadModalChecklistDocs(r);resetDateCalc(r.date||'');document.getElementById('modal').style.display='flex';enterReadOnlyMode(r);}
+function openAdd(){editingId=null;pendingStatus=null;document.getElementById('modal-title').textContent='Add event';const ocb=document.getElementById('modal-open-case-btn');if(ocb)ocb.style.display='none';document.getElementById('modal-status-section').style.display='none';document.getElementById('modal-reminder-section').style.display='block';['fc-clid','fc-client','fc-anum','fc-date','fc-notes'].forEach(id=>document.getElementById(id).value='');const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=false;document.getElementById('time-range-panel').classList.remove('open');document.getElementById('fc-time-start').value='';document.getElementById('fc-time-end').value='';document.getElementById('fc-time-display').textContent='';pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();const _icp0=document.getElementById('individual-callup-panel');if(_icp0)_icp0.style.display='none';resetFcSubevents();const _fcs0=document.getElementById('fc-subevents-panel');if(_fcs0)_fcs0.style.display='none';populateModalDropdowns();resetDateCalc();setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _m0=document.getElementById('modal');_m0.classList.remove('readonly-mode');_m0.style.display='flex';}
+function openEdit(id){const r=records.find(x=>x.id===id);if(!r)return;editingId=id;pendingStatus=null;document.getElementById('modal-title').textContent='Edit event';const _ocb=document.getElementById('modal-open-case-btn');if(_ocb){_ocb.style.display=(r.clid||r.client)?'inline':'none';}document.getElementById('modal-status-section').style.display='block';document.getElementById('modal-reminder-section').style.display='block';pendingReminders=[];if(r){records.forEach(rx=>{if(rx.id===id)return;const isLinked=rx._parentId===id||(!rx._parentId&&(rx.clid||rx.client)===(r.clid||r.client));if(isLinked&&rx.notes&&rx.notes.startsWith('⏰ REMINDER')&&rx.date&&r.date){const diff=Math.round((new Date(r.date.replace(/-/g,'/'))-new Date(rx.date.replace(/-/g,'/')))/(1000*60*60*24));if(diff>0&&!pendingReminders.includes(diff))pendingReminders.push(diff);}});}renderReminderChips();document.getElementById('fc-clid').value=r.clid||'';document.getElementById('fc-client').value=r.client||'';document.getElementById('fc-anum').value=r.anum||'';document.getElementById('fc-date').value=r.date||'';document.getElementById('fc-notes').value=r.notes||'';const hasTime=!!(r.timeStart||r.timeEnd);const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=hasTime;document.getElementById('fc-time-start').value=r.timeStart||'';document.getElementById('fc-time-end').value=r.timeEnd||'';if(hasTime)document.getElementById('time-range-panel').classList.add('open');else document.getElementById('time-range-panel').classList.remove('open');updateTimeDisplay();document.getElementById('fc-history-note').value='';document.getElementById('fc-reschedule-date').value='';document.getElementById('reschedule-panel').classList.remove('open');document.getElementById('reschedule-extras').style.display='none';if(document.getElementById('rs-time-toggle'))document.getElementById('rs-time-toggle').checked=false;document.getElementById('rs-time-range-panel').classList.remove('open');if(document.getElementById('rs-time-start'))document.getElementById('rs-time-start').value='';if(document.getElementById('rs-time-end'))document.getElementById('rs-time-end').value='';document.getElementById('rs-time-display').textContent='';rsReminders=[];renderRsReminderChips();['attended','completed','cancelled','rescheduled','deleted'].forEach(k=>{const el=document.getElementById('sbtn-'+k);if(el)el.classList.remove('sel');});if(r.attendedStatus){const ab=document.getElementById('sbtn-attended');if(ab)ab.classList.add('sel');}resetSoAttachmentPanel();resetFcSubevents();populateModalDropdowns();document.getElementById('fc-casetype').value=r.type||'';document.getElementById('fc-paralegal').value=r.atty||'';document.getElementById('fc-eventtype').value=r.event||'';onEventTypeChange(r.event||'');setHearingMode(r.hearingMode||'');const sid=document.getElementById('so-issue-date');if(sid)sid.value=r.soIssueDate||'';document.getElementById('fc-assigned').value=r.assigned||'';customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);if(el)el.value=r[c.key]||'';});renderHistoryLog(r.history||[]);loadModalChecklistDocs(r);resetDateCalc(r.date||'');document.getElementById('modal').style.display='flex';enterReadOnlyMode(r);}
 // ── Read-only view / inline edit mode for event modal ──
 function enterEditMode(focusId){
   const m=document.getElementById('modal'); if(!m) return;
@@ -9008,7 +9086,7 @@ function applyDateCalc(){
     setTimeout(()=>res.style.color='#6A8C6E',800);
   }
 }
-function closeModal(){const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';}
+function closeModal(){const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetFcSubevents();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _fcs1=document.getElementById('fc-subevents-panel');if(_fcs1)_fcs1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';}
 function handleBackdropClick(e){if(e.target===document.getElementById('modal'))closeModal();}
 
 // ── saveEvent ──
@@ -9035,11 +9113,22 @@ window.saveEvent=function(){
       if(pendingStatus==='rescheduled'&&rsReminders.length&&data.date){rsReminders.forEach(days=>{const rd=addDateDays(data.date,-days);records.push({id:uid(),...data,event:'⏰ Reminder',date:rd,notes:'⏰ REMINDER: Task due by '+fmtDate(data.date)+(data.notes?' — '+data.notes:''),_parentId:editingId,history:[]});});}
     }
   }else{
-    const nid=uid();records.push({id:nid,...data,history:[]});
-    if(pendingReminders.length&&data.date){pendingReminders.forEach(days=>{const rd=addDateDays(data.date,-days);records.push({id:uid(),...data,event:'⏰ Reminder',date:rd,notes:'⏰ REMINDER: Task due by '+fmtDate(data.date)+(data.notes?' — '+data.notes:''),_parentId:nid,history:[]});});}
-    if(pendingSoAttachment&&data.event==='SCHEDULING ORDER'){saveSoAttachmentToCase(data.clid||data.client,nid,data.date,data.notes);}
+    var _newRecordId=uid();records.push({id:_newRecordId,...data,history:[]});
+    if(pendingReminders.length&&data.date){pendingReminders.forEach(days=>{const rd=addDateDays(data.date,-days);records.push({id:uid(),...data,event:'⏰ Reminder',date:rd,notes:'⏰ REMINDER: Task due by '+fmtDate(data.date)+(data.notes?' — '+data.notes:''),_parentId:_newRecordId,history:[]});});}
+    if(pendingSoAttachment&&data.event==='SCHEDULING ORDER'){saveSoAttachmentToCase(data.clid||data.client,_newRecordId,data.date,data.notes);}
   }
   if(editingId&&pendingSoAttachment&&data.event==='SCHEDULING ORDER'){saveSoAttachmentToCase(data.clid||data.client,editingId,data.date,data.notes);}
+  // ── FC sub-events: create linked FC TASK / FC SERVICE records ──
+  if(FC_PARENT_EVENT_TYPES.has(data.event)&&fcSubevents.length){
+    const parentId=editingId||(typeof _newRecordId!=='undefined'?_newRecordId:null);
+    let _fcAdded=0;
+    fcSubevents.forEach(sub=>{
+      if(!sub.date)return;
+      records.push({id:uid(),clid:data.clid,client:data.client,type:data.type,anum:data.anum,atty:data.atty,assigned:data.assigned,event:sub.type,date:sub.date,timeStart:'',timeEnd:'',hearingMode:'',notes:sub.notes||'',checklist:[],docs:[],_parentId:parentId,history:[]});
+      _fcAdded++;
+    });
+    if(_fcAdded) showToast(_fcAdded+' linked FC event'+(_fcAdded>1?'s':'')+' added ✓');
+  }
   // ── MASTER PREP: create a linked prep event if requested ──
   if(data.event==='MASTER'){
     const mpToggle=document.getElementById('mp-toggle');
@@ -14718,6 +14807,7 @@ function applyPayload(p){
   if(p.records)records=p.records;
   if(p.paralegals)paralegals=p.paralegals;
   if(p.eventTypes)eventTypes=p.eventTypes;
+  ensureFCEventTypes();
   if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);
   if(p.caseTypes)caseTypes=p.caseTypes;
   if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);
