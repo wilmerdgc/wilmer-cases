@@ -10314,11 +10314,14 @@ function renderSIJTable(){
   });
 
   // ── Sort:
+  //   Bottom-most: cases whose IC stage is WITHDRAW (always last).
   //   Group 1 (top): urgent cases (no DOB or <10mo to age-out, excluding OK).
   //     Within group: no-DOB first, then ascending by months remaining.
-  //   Group 2 (bottom): all other cases (OK or >=10mo).
+  //   Group 2 (middle): all other cases (OK or >=10mo).
   //     Within group: by closest upcoming FC date or IC date (ascending).
   caseData.sort((a,b)=>{
+    const aW=a.icKey==='withdraw', bW=b.icKey==='withdraw';
+    if(aW!==bW) return aW?1:-1;
     if(a._isUrgent!==b._isUrgent) return a._isUrgent?-1:1;
     if(a._isUrgent && b._isUrgent){
       if(a._hasNoDob!==b._hasNoDob) return a._hasNoDob?-1:1;
