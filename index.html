@@ -10261,6 +10261,18 @@ function renderSIJTable(){
 
   const todayStr=TODAY.toISOString().slice(0,10);
 
+  // Helper: months remaining until a client (with given DOB) ages out at 21.
+  // Returns null for missing/unparseable DOB. Negative for already aged out.
+  function _monthsUntilAgeOut(dobStr){
+    if(!dobStr) return null;
+    const dob=parseDate(dobStr); if(!dob) return null;
+    const ageOutDate=new Date(dob.getFullYear()+21,dob.getMonth(),dob.getDate());
+    const now=new Date(TODAY);
+    let m=(ageOutDate.getFullYear()-now.getFullYear())*12+(ageOutDate.getMonth()-now.getMonth());
+    if(ageOutDate.getDate()<now.getDate()) m-=1;
+    return m;
+  }
+
   // Gather data for each case
   const caseData=all.map(c=>{
     const clid=c.clid||c.client;
@@ -10284,13 +10296,36 @@ function renderSIJTable(){
     const icStage=IC_MAP[icKey]||IC_STAGES[0];
     const uscisStage=USCIS_MAP[uscisKey]||USCIS_STAGES[0];
 
-    return{...c,clid,nextFC,nextIC,nextUSCIS,fcStage,fcKey,icStage,icKey,uscisStage,uscisKey,eventCount:caseRecs.length,allEvents:caseRecs};
+    // ── Sort-grouping data: aging-out urgency vs. OK ──
+    // OK = I-360 unlocked (FC stage = SIJ Orders Issued) AND uscis stage is receipt or approved
+    const isOK = fcKey==='sij-issued' && (uscisKey==='receipt'||uscisKey==='approved');
+    // All clients on this case (lead + respondents) — needed for urgency check
+    const _clientDobs=[meta.clientDob, ...((meta.respondents||[]).map(r=>r.dob))];
+    let _hasNoDob=false, _minMonths=Infinity;
+    _clientDobs.forEach(dob=>{
+      if(!dob){ _hasNoDob=true; return; }
+      const m=_monthsUntilAgeOut(dob);
+      if(m!==null && m<_minMonths) _minMonths=m;
+    });
+    // Urgent group: not OK, AND (any client has no DOB OR most-urgent client has < 10 months left)
+    const isUrgent = !isOK && (_hasNoDob || _minMonths<10);
+
+    return{...c,clid,nextFC,nextIC,nextUSCIS,fcStage,fcKey,icStage,icKey,uscisStage,uscisKey,eventCount:caseRecs.length,allEvents:caseRecs,_isOK:isOK,_isUrgent:isUrgent,_hasNoDob,_minMonths};
   });
 
-  // Sort by earliest event across all three categories
+  // ── Sort:
+  //   Group 1 (top): urgent cases (no DOB or <10mo to age-out, excluding OK).
+  //     Within group: no-DOB first, then ascending by months remaining.
+  //   Group 2 (bottom): all other cases (OK or >=10mo).
+  //     Within group: by closest upcoming FC date or IC date (ascending).
   caseData.sort((a,b)=>{
-    const aDate=[a.nextFC,a.nextIC,a.nextUSCIS].filter(Boolean).map(r=>r.date).sort()[0]||'9999';
-    const bDate=[b.nextFC,b.nextIC,b.nextUSCIS].filter(Boolean).map(r=>r.date).sort()[0]||'9999';
+    if(a._isUrgent!==b._isUrgent) return a._isUrgent?-1:1;
+    if(a._isUrgent && b._isUrgent){
+      if(a._hasNoDob!==b._hasNoDob) return a._hasNoDob?-1:1;
+      return a._minMonths-b._minMonths;
+    }
+    const aDate=[a.nextFC,a.nextIC].filter(Boolean).map(r=>r.date).filter(Boolean).sort()[0]||'9999';
+    const bDate=[b.nextFC,b.nextIC].filter(Boolean).map(r=>r.date).filter(Boolean).sort()[0]||'9999';
     return aDate.localeCompare(bDate);
   });
 
