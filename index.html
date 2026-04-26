@@ -11717,6 +11717,9 @@ function openCaseDetail(clid){
     const dobVal=(caseMeta[clid]||{}).clientDob;
     const dobDisplay=dobVal?fmtDate(dobVal)+(calculateAgeText(dobVal)?' ('+calculateAgeText(dobVal)+')':''):'';
     mkInfoCell(L1,'Date of Birth',dobDisplay,()=>clDobI);
+    // Country of Birth
+    const clCobI=mkText2((caseMeta[clid]||{}).clientCountryOfBirth||'');clCobI.placeholder='Country of birth…';infoBody._clCobInput=clCobI;
+    mkInfoCell(L1,'Country of Birth',(caseMeta[clid]||{}).clientCountryOfBirth||'',()=>clCobI);
 
     // ── Client Address ──
     const addrSection=document.createElement('div');addrSection.style.cssText='grid-column:1/-1;';
@@ -11935,6 +11938,7 @@ function openCaseDetail(clid){
     if(infoBody._clStateInput)caseMeta[clid].clientState=infoBody._clStateInput.value.trim();
     if(infoBody._clZipInput)caseMeta[clid].clientZip=infoBody._clZipInput.value.trim();
     if(infoBody._clCountryInput)caseMeta[clid].clientCountry=infoBody._clCountryInput.value.trim();
+    if(infoBody._clCobInput)caseMeta[clid].clientCountryOfBirth=infoBody._clCobInput.value.trim();
     if(infoBody._typeInputShared){const nv=infoBody._typeInputShared.value;allRecs.forEach(r=>r.type=nv);base.type=nv;}
     if(infoBody._paraInputShared){const nv=infoBody._paraInputShared.value;allRecs.forEach(r=>r.atty=nv);base.atty=nv;}
     clients.forEach(cl=>{
