@@ -2706,14 +2706,11 @@ function hideExcelRestorePrompt(){}
       <span style="font-size:11px;color:#C4BAB0;">=</span>
       <span id="dc-result" style="font-size:11px;color:#6A8C6E;font-weight:500;cursor:pointer;" title="Click to apply to Deadline" onclick="applyDateCalc()">—</span>
     </div>
-    <!-- FC sub-events panel — only for FC HEARING/TRIAL/TASK/INITIAL PETITION/SERVICE -->
+    <!-- Linked sub-events panel — adapts buttons to event type (FC parents or MASTER) -->
     <div id="fc-subevents-panel" style="display:none;margin:-2px 0 10px;padding:9px 12px;background:#FFF8EE;border:1px solid #F0D9BB;border-radius:8px;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#C9823A;">Add linked FC events</span>
-        <div style="display:flex;gap:6px;">
-          <button type="button" onclick="addFcSubevent('FC TASK')" style="font-size:10px;padding:3px 9px;border:1px solid #F0D9BB;border-radius:5px;background:#fff;color:#C9823A;cursor:pointer;font-weight:600;font-family:inherit;">+ FC TASK</button>
-          <button type="button" onclick="addFcSubevent('FC SERVICE')" style="font-size:10px;padding:3px 9px;border:1px solid #F0D9BB;border-radius:5px;background:#fff;color:#C9823A;cursor:pointer;font-weight:600;font-family:inherit;">+ FC SERVICE</button>
-        </div>
+        <span id="fc-subevents-title" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#C9823A;">Add linked events</span>
+        <div id="fc-subevents-buttons" style="display:flex;gap:6px;"></div>
       </div>
       <div id="fc-subevents-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
     </div>
@@ -8368,9 +8365,34 @@ function onMpDaysBeforeChange(){
     document.getElementById('mp-date').value=addDateDays(mDate,-days);
   }
 }
-// ── FC sub-events (FC TASK / FC SERVICE linked to a parent FC event) ──
+// ── Linked sub-events (FC TASK / FC SERVICE for FC parents; MASTER PREP / TASK for MASTER) ──
 let fcSubevents=[];
 const FC_PARENT_EVENT_TYPES=new Set(['FC HEARING','FC TRIAL','FC TASK','FC INITIAL PETITION','FC SERVICE']);
+const LINKED_SUBEVENT_CONFIG={
+  'FC HEARING':       {title:'Add linked FC events', options:['FC TASK','FC SERVICE']},
+  'FC TRIAL':         {title:'Add linked FC events', options:['FC TASK','FC SERVICE']},
+  'FC TASK':          {title:'Add linked FC events', options:['FC TASK','FC SERVICE']},
+  'FC INITIAL PETITION':{title:'Add linked FC events', options:['FC TASK','FC SERVICE']},
+  'FC SERVICE':       {title:'Add linked FC events', options:['FC TASK','FC SERVICE']},
+  'MASTER':           {title:'Add linked events',    options:['MASTER PREP','TASK']}
+};
+function isLinkedParentEvent(t){return !!LINKED_SUBEVENT_CONFIG[t];}
+function setupLinkedSubeventsPanel(parentType){
+  const cfg=LINKED_SUBEVENT_CONFIG[parentType];
+  const titleEl=document.getElementById('fc-subevents-title');
+  const btnsEl=document.getElementById('fc-subevents-buttons');
+  if(!titleEl||!btnsEl||!cfg)return;
+  titleEl.textContent=cfg.title;
+  btnsEl.innerHTML='';
+  cfg.options.forEach(opt=>{
+    const b=document.createElement('button');
+    b.type='button';
+    b.textContent='+ '+opt;
+    b.style.cssText='font-size:10px;padding:3px 9px;border:1px solid #F0D9BB;border-radius:5px;background:#fff;color:#C9823A;cursor:pointer;font-weight:600;font-family:inherit;';
+    b.onclick=()=>addFcSubevent(opt);
+    btnsEl.appendChild(b);
+  });
+}
 function addFcSubevent(type){
   fcSubevents.push({type,date:'',notes:''});
   renderFcSubevents();
@@ -8422,7 +8444,11 @@ function resetFcSubevents(){fcSubevents=[];renderFcSubevents();}
 
 function onEventTypeChange(val){
   const fcse=document.getElementById('fc-subevents-panel');
-  if(fcse){fcse.style.display=FC_PARENT_EVENT_TYPES.has(val)?'':'none';if(FC_PARENT_EVENT_TYPES.has(val))renderFcSubevents();}
+  if(fcse){
+    const showLinked=isLinkedParentEvent(val);
+    fcse.style.display=showLinked?'':'none';
+    if(showLinked){setupLinkedSubeventsPanel(val);renderFcSubevents();}
+  }
   const panel=document.getElementById('so-attachment-panel');
   if(!panel)return;
   panel.style.display=(val==='SCHEDULING ORDER')?'':'none';
@@ -9118,8 +9144,8 @@ window.saveEvent=function(){
     if(pendingSoAttachment&&data.event==='SCHEDULING ORDER'){saveSoAttachmentToCase(data.clid||data.client,_newRecordId,data.date,data.notes);}
   }
   if(editingId&&pendingSoAttachment&&data.event==='SCHEDULING ORDER'){saveSoAttachmentToCase(data.clid||data.client,editingId,data.date,data.notes);}
-  // ── FC sub-events: create linked FC TASK / FC SERVICE records ──
-  if(FC_PARENT_EVENT_TYPES.has(data.event)&&fcSubevents.length){
+  // ── Linked sub-events: create linked records (FC TASK/SERVICE for FC parents, MASTER PREP/TASK for MASTER) ──
+  if(isLinkedParentEvent(data.event)&&fcSubevents.length){
     const parentId=editingId||(typeof _newRecordId!=='undefined'?_newRecordId:null);
     let _fcAdded=0;
     fcSubevents.forEach(sub=>{
@@ -9127,7 +9153,7 @@ window.saveEvent=function(){
       records.push({id:uid(),clid:data.clid,client:data.client,type:data.type,anum:data.anum,atty:data.atty,assigned:data.assigned,event:sub.type,date:sub.date,timeStart:'',timeEnd:'',hearingMode:'',notes:sub.notes||'',checklist:[],docs:[],_parentId:parentId,history:[]});
       _fcAdded++;
     });
-    if(_fcAdded) showToast(_fcAdded+' linked FC event'+(_fcAdded>1?'s':'')+' added ✓');
+    if(_fcAdded) showToast(_fcAdded+' linked event'+(_fcAdded>1?'s':'')+' added ✓');
   }
   // ── MASTER PREP: create a linked prep event if requested ──
   if(data.event==='MASTER'){
