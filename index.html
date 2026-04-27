@@ -1907,6 +1907,7 @@ function hideExcelRestorePrompt(){}
     <button id="btn-so" onclick="switchView('so')" ondblclick="setDefaultView('so')">Sched. Orders</button>
     <button id="btn-deadlines" onclick="switchView('deadlines')" ondblclick="setDefaultView('deadlines')" style="position:relative;">Call-Ups<span id="deadlines-badge" style="display:none;position:absolute;top:-5px;right:-8px;background:#B85C5C;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:10px;line-height:1.4;"></span></button>
     <button id="btn-sij" onclick="switchView('sij')" ondblclick="setDefaultView('sij')">SIJ</button>
+    <button id="btn-individual" onclick="switchView('individual')" ondblclick="setDefaultView('individual')">Individual</button>
     <span style="flex:1"></span>
     <button onclick="openNewTaskModal()" style="font-size:11px;padding:4px 12px;border:1px solid #B4CCAD;border-radius:20px;background:#EBF1EB;color:#4A6B4E;cursor:pointer;font-weight:600;" onmouseenter="this.style.background='#6A8C6E';this.style.color='#fff'" onmouseleave="this.style.background='#EBF1EB';this.style.color='#4A6B4E'">+ Task</button>
     <button onclick="openAdd()" style="font-size:11px;padding:4px 12px;border:1px solid #DDD5CA;border-radius:20px;background:transparent;color:#9E9186;cursor:pointer;" onmouseenter="this.style.background='#F7F3ED';this.style.color='#5C5148'" onmouseleave="this.style.background='transparent';this.style.color='#9E9186'">+ Add event</button>
@@ -2057,6 +2058,15 @@ function hideExcelRestorePrompt(){}
       <div style="font-size:12px;color:#9E9186;">Special Juvenile cases — same board as Cases → SIJ</div>
     </div>
     <div id="sij-board-cal" class="sij-board"></div>
+  </div>
+  <!-- INDIVIDUAL VIEW — INDIVIDUAL hearings within the next 120 days -->
+  <div id="view-individual" style="display:none">
+    <div style="margin-bottom:14px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;">
+      <div style="font-family:'Lora',Georgia,serif;font-size:18px;font-weight:600;color:#2C2620;">Individual Hearings</div>
+      <div id="individual-subtitle" style="font-size:12px;color:#9E9186;">Within the next 120 days</div>
+    </div>
+    <div id="individual-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+    <div id="individual-empty" style="display:none;text-align:center;padding:3rem;color:#C4BAB0;font-size:13px;font-style:italic;">No INDIVIDUAL hearings within the next 120 days.</div>
   </div>
   <!-- SCHEDULING ORDERS VIEW -->
   <div id="view-so" style="display:none">
@@ -7252,7 +7262,7 @@ function markDefaultViewButton(v){
 function switchView(v){
   if(v==='finished') v='all'; // redirect finished → all
   currentView=v;
-  ['today','week','month','paralegals','me','all','queue','so','deadlines','sij'].forEach(x=>{
+  ['today','week','month','paralegals','me','all','queue','so','deadlines','sij','individual'].forEach(x=>{
     const el = document.getElementById('view-'+x);
     if(el) el.style.display = x===v ? 'block' : 'none';
     const btn = document.getElementById('btn-'+x);
@@ -7261,9 +7271,80 @@ function switchView(v){
   if(v==='sij'){
     // Ensure the primary board (in Cases subtab) has content, then mirror to Calendar view
     if(typeof renderSIJTable==='function') renderSIJTable();
+  } else if(v==='individual'){
+    renderIndividualView();
   } else {
     renderAll();
   }
+}
+
+// ══════════════════════════════════════════════════
+// INDIVIDUAL HEARINGS VIEW (next 120 days)
+// ══════════════════════════════════════════════════
+function renderIndividualView(){
+  const list=document.getElementById('individual-list');
+  const empty=document.getElementById('individual-empty');
+  const sub=document.getElementById('individual-subtitle');
+  if(!list)return;
+  list.innerHTML='';
+  const todayStr2=TODAY.toISOString().slice(0,10);
+  const horizon=new Date(TODAY); horizon.setDate(horizon.getDate()+120);
+  const horizonStr=horizon.toISOString().slice(0,10);
+  // INDIVIDUAL hearings only (exclude INDIVIDUAL PREP), active, within 120 days from today
+  const rows=records.filter(r=>{
+    if(r.event!=='INDIVIDUAL') return false;
+    if(r.finishedStatus||r.deletedStatus) return false;
+    if(!r.date) return false;
+    return r.date>=todayStr2 && r.date<=horizonStr;
+  }).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  if(sub) sub.textContent=rows.length+' INDIVIDUAL hearing'+(rows.length!==1?'s':'')+' within the next 120 days';
+  empty.style.display=rows.length?'none':'block';
+  if(!rows.length) return;
+  rows.forEach(r=>{
+    const d=parseDate(r.date);
+    const days=Math.round((d - TODAY)/(1000*60*60*24));
+    const s=status(d);
+    const colors={overdue:'#B85C5C',thisweek:'#C9823A',nextweek:'#6B7FA3','15days':'#6A8C6E',ok:'#5C5148',['no-date']:'#9E9186'};
+    const bgs   ={overdue:'#F9EDED',thisweek:'#FAF0E6',nextweek:'#EEF1F7','15days':'#EBF1EB',ok:'#F7F3ED',['no-date']:'#F7F3ED'};
+    const c=colors[s]||'#5C5148', bg=bgs[s]||'#F7F3ED';
+    const card=document.createElement('div');
+    card.style.cssText='display:grid;grid-template-columns:74px 110px 1fr 130px 120px 1fr;gap:14px;align-items:center;padding:10px 14px;background:#fff;border:1px solid #DDD5CA;border-left:4px solid '+c+';border-radius:8px;cursor:pointer;transition:background .12s;';
+    card.onmouseenter=()=>card.style.background='#FDFAF7';
+    card.onmouseleave=()=>card.style.background='#fff';
+    card.ondblclick=(e)=>{ if(e.target.closest('button,a')) return; openEdit(r.id); };
+    // Countdown
+    const cd=document.createElement('div');
+    cd.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;background:'+bg+';color:'+c+';border-radius:6px;padding:6px 4px;line-height:1.1;';
+    cd.innerHTML='<span style="font-family:\'Lora\',Georgia,serif;font-size:18px;font-weight:600;">'+days+'</span><span style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;opacity:.9;">'+(days===1?'day':'days')+'</span>';
+    card.appendChild(cd);
+    // Date + time
+    const dt=document.createElement('div');
+    const timeStr=r.timeStart?fmtTime(r.timeStart)+(r.timeEnd?'–'+fmtTime(r.timeEnd):''):'';
+    dt.innerHTML='<div style="font-size:12px;font-weight:600;color:#2C2620;">'+fmtDate(r.date)+'</div>'+(timeStr?'<div style="font-size:11px;color:#9E9186;margin-top:2px;">'+timeStr+'</div>':'');
+    card.appendChild(dt);
+    // Client + A#
+    const cl=document.createElement('div');
+    cl.style.cssText='min-width:0;';
+    cl.innerHTML='<div style="font-family:\'Lora\',Georgia,serif;font-size:14px;font-weight:600;color:#2C2620;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(r.client||'—')+'</div>'+(r.anum?'<div style="font-size:10px;color:#9E9186;margin-top:2px;">A# '+r.anum+(r.clid?' · '+r.clid:'')+'</div>':(r.clid?'<div style="font-size:10px;color:#9E9186;margin-top:2px;">'+r.clid+'</div>':''));
+    card.appendChild(cl);
+    // Paralegal
+    const pa=document.createElement('div');
+    pa.style.cssText='font-size:11px;color:#5C5148;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    pa.textContent=r.atty||'—';
+    card.appendChild(pa);
+    // Hearing mode
+    const hm=document.createElement('div');
+    hm.style.cssText='font-size:10px;color:#6B7FA3;text-transform:uppercase;letter-spacing:.05em;font-weight:600;';
+    hm.textContent=r.hearingMode?(r.hearingMode==='virtual'?'📡 Webex':r.hearingMode==='in-person'?'🏛 In Person':r.hearingMode):'—';
+    card.appendChild(hm);
+    // Notes
+    const nt=document.createElement('div');
+    nt.style.cssText='font-size:11px;color:#9E9186;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    nt.title=r.notes||'';
+    nt.textContent=r.notes||'';
+    card.appendChild(nt);
+    list.appendChild(card);
+  });
 }
 // ══════════════════════════════════════════════════
 // SCHEDULING ORDERS VIEW
@@ -8219,7 +8300,7 @@ function copyDeadlinesText(){
     if(btn){const o=btn.textContent;btn.textContent='✓ Copied!';btn.style.color='#6A8C6E';btn.style.borderColor='#6A8C6E';setTimeout(()=>{btn.textContent=o;btn.style.color='';btn.style.borderColor='';},1800);}
   }).catch(()=>alert(txt));
 }
-function renderAll(){rebuildFilterOptions();if(currentView==='today')renderDayView();else if(currentView==='week')renderWeek();else if(currentView==='month')renderMonth();else if(currentView==='paralegals')renderParalegals();else if(currentView==='me')renderMe();else if(currentView==='all')renderAllEvents();else if(currentView==='queue'){renderQueue();return;}else if(currentView==='so')renderSchedulingOrders();else if(currentView==='deadlines')renderDeadlines();// Only update queue badge when not rendering queue (renderQueue handles its own badge)
+function renderAll(){rebuildFilterOptions();if(currentView==='today')renderDayView();else if(currentView==='week')renderWeek();else if(currentView==='month')renderMonth();else if(currentView==='paralegals')renderParalegals();else if(currentView==='me')renderMe();else if(currentView==='all')renderAllEvents();else if(currentView==='queue'){renderQueue();return;}else if(currentView==='so')renderSchedulingOrders();else if(currentView==='deadlines')renderDeadlines();else if(currentView==='individual')renderIndividualView();// Only update queue badge when not rendering queue (renderQueue handles its own badge)
 updateQueueBadge();updateDeadlinesBadge();}
 </script>
 <script>
