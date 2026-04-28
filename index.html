@@ -10123,6 +10123,104 @@ function restoreData(event){const file=event.target.files[0];if(!file)return;con
   setTimeout(()=>_syncToFirestore(Date.now()),1500);
   }catch(err){showToast('Could not read backup file');}event.target.value='';};reader.readAsText(file);}
 function importFromExcel(event){const file=event.target.files[0];if(!file){hideExcelRestorePrompt();return;}const reader=new FileReader();reader.onload=function(e){try{const data=new Uint8Array(e.target.result);const wb=XLSX.read(data,{type:'array'});const colMap={'Client ID':'clid','Client Name':'client','A-Number':'anum','Case Type':'type','Paralegal':'atty','Event Type':'event','Deadline':'date','Time Start':'timeStart','Time End':'timeEnd','Assigned':'assigned','Notes':'notes','Status':'deletedStatus','Finished Status':'finishedStatus','Deleted Date':'deletedDate'};function sheetToRecs(sn){const ws=wb.Sheets[sn];if(!ws)return[];const rows=XLSX.utils.sheet_to_json(ws,{defval:''});return rows.map(function(row){const rec={id:'r'+Math.random().toString(36).slice(2,10)};Object.keys(row).forEach(function(col){const field=colMap[col];if(field)rec[field]=String(row[col]||'');else rec[col]=String(row[col]||'');});return rec;}).filter(function(r){return r.client||r.clid||r.event;});}const allRecs=[...sheetToRecs('Active'),...sheetToRecs('Finished'),...sheetToRecs('Deleted')];if(!allRecs.length){showToast('No records found');hideExcelRestorePrompt();event.target.value='';return;}if(!confirm('Import '+allRecs.length+' records? This replaces all current records.')){hideExcelRestorePrompt();event.target.value='';return;}records=allRecs;saveAllData();renderAll();hideExcelRestorePrompt();showToast('Imported '+allRecs.length+' records ✓');}catch(err){console.error(err);showToast('Could not read Excel file');hideExcelRestorePrompt();}event.target.value=''};reader.readAsArrayBuffer(file);}
+
+function downloadCasesTemplate(){
+  const baseHeaders=['Client ID','Client Name','A-Number','Case Type','Paralegal','Event Type','Deadline','Time Start','Time End','Assigned','Notes','Status','Finished Status','Deleted Date'];
+  const customHeaders=(typeof customColumns!=='undefined'?customColumns:[]).map(function(c){return c.label;});
+  const headers=baseHeaders.concat(customHeaders);
+  const today=new Date().toISOString().slice(0,10);
+  const sample1=['22814','Jane Smith','245-318-999',(typeof caseTypes!=='undefined'&&caseTypes[0])||'Special Juvenile in Court',(typeof paralegals!=='undefined'&&paralegals[0])||'Jessica Vicuna',(typeof eventTypes!=='undefined'&&eventTypes[0])||'MASTER',today,'09:00','10:00','Me','Sample note — delete this row before importing','','',''].concat(customHeaders.map(function(){return'';}));
+  const wb=XLSX.utils.book_new();
+  function makeSheet(title,withSample){
+    const data=[headers];
+    if(withSample)data.push(sample1);
+    const ws=XLSX.utils.aoa_to_sheet(data);
+    ws['!cols']=headers.map(function(h){return{wch:Math.max(h.length+4,16)};});
+    ws['!freeze']={xSplit:0,ySplit:1};
+    XLSX.utils.book_append_sheet(wb,ws,title);
+  }
+  makeSheet('Active',true);
+  makeSheet('Finished',false);
+  makeSheet('Deleted',false);
+  const refData=[
+    ['Field','Notes'],
+    ['Client ID','Your internal case ID. Used to detect duplicates — rows whose Client ID already exists are skipped.'],
+    ['Client Name','Required.'],
+    ['A-Number','Optional. NNN-NNN-NNN or raw digits. Also used for duplicate detection.'],
+    ['Case Type',(typeof caseTypes!=='undefined'?caseTypes:[]).join(' | ')||'Must match a case type in the app.'],
+    ['Paralegal',(typeof paralegals!=='undefined'?paralegals:[]).join(' | ')||'Must match a paralegal in the app.'],
+    ['Event Type',(typeof eventTypes!=='undefined'?eventTypes:[]).join(' | ')||'Must match an event type in the app.'],
+    ['Deadline','YYYY-MM-DD format (e.g. 2026-05-15).'],
+    ['Time Start','HH:MM 24-hour (optional).'],
+    ['Time End','HH:MM 24-hour (optional).'],
+    ['Assigned','Me, a paralegal name, or blank.'],
+    ['Notes','Free text.'],
+    ['Status','Leave blank for active. Use the Deleted sheet for deleted rows.'],
+    ['Finished Status','Leave blank for active. Use the Finished sheet for finished rows.'],
+    ['Deleted Date','YYYY-MM-DD when applicable.']
+  ];
+  (typeof customColumns!=='undefined'?customColumns:[]).forEach(function(c){
+    refData.push([c.label,c.type==='select'&&c.options?c.options.join(' | '):'Free text']);
+  });
+  refData.push(['','']);
+  refData.push(['How import works','Open the Tools tab → Import new cases from Excel. The app reads all sheets, then for each row checks Client ID and A-Number against existing cases. Matches are skipped; everything else is added. Existing data is never overwritten.']);
+  const wsRef=XLSX.utils.aoa_to_sheet(refData);
+  wsRef['!cols']=[{wch:20},{wch:80}];
+  XLSX.utils.book_append_sheet(wb,wsRef,'Reference');
+  XLSX.writeFile(wb,'cases_template_'+today+'.xlsx');
+  showToast('Template downloaded ✓');
+}
+
+function importNewCasesFromExcel(input){
+  const file=input.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array'});
+      const colMap={'Client ID':'clid','Client Name':'client','A-Number':'anum','Case Type':'type','Paralegal':'atty','Event Type':'event','Deadline':'date','Time Start':'timeStart','Time End':'timeEnd','Assigned':'assigned','Notes':'notes','Status':'deletedStatus','Finished Status':'finishedStatus','Deleted Date':'deletedDate'};
+      const incoming=[];
+      wb.SheetNames.forEach(function(sn){
+        const ws=wb.Sheets[sn];if(!ws)return;
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+        rows.forEach(function(row){
+          const rec={id:'r'+Math.random().toString(36).slice(2,10)};
+          Object.keys(row).forEach(function(col){
+            const field=colMap[col];
+            if(field)rec[field]=String(row[col]||'');
+            else rec[col]=String(row[col]||'');
+          });
+          if(rec.client||rec.clid||rec.anum)incoming.push(rec);
+        });
+      });
+      if(!incoming.length){showToast('No cases found in Excel file');input.value='';return;}
+      const norm=function(s){return String(s||'').replace(/\D/g,'');};
+      const existingClids=new Set(records.map(function(r){return String(r.clid||'').trim();}).filter(Boolean));
+      const existingAnums=new Set(records.map(function(r){return norm(r.anum);}).filter(Boolean));
+      const toAdd=[];let skipped=0;
+      incoming.forEach(function(r){
+        const clid=String(r.clid||'').trim();
+        const anumKey=norm(r.anum);
+        if(clid && existingClids.has(clid)){skipped++;return;}
+        if(anumKey && existingAnums.has(anumKey)){skipped++;return;}
+        toAdd.push(r);
+        if(clid)existingClids.add(clid);
+        if(anumKey)existingAnums.add(anumKey);
+      });
+      if(!toAdd.length){showToast('All '+incoming.length+' rows already exist — nothing new to add');input.value='';return;}
+      const msg='Found '+incoming.length+' rows in Excel:\n• '+toAdd.length+' NEW (will be added)\n• '+skipped+' already exist (will be skipped)\n\nAdd the '+toAdd.length+' new cases?';
+      if(!confirm(msg)){input.value='';return;}
+      records.push.apply(records,toAdd);
+      saveAllData();
+      if(typeof renderAll==='function')renderAll();
+      else if(typeof renderAllEvents==='function')renderAllEvents();
+      showToast('Added '+toAdd.length+' new cases ✓');
+    }catch(err){console.error(err);showToast('Could not read Excel file');}
+    input.value='';
+  };
+  reader.readAsArrayBuffer(file);
+}
 </script>
 <script>
 // ── Cases Tab ──
@@ -10287,6 +10385,7 @@ function renderCasesTypeStats(){
   });
 }
 
+let _sijSearchQuery='';
 function renderSIJTable(){
   // Render the same table into every .sij-board element on the page
   // (Cases → SIJ subtab, Calendar → SIJ view, etc.). Each mount gets its own
@@ -10297,6 +10396,20 @@ function renderSIJTable(){
   if(!all.length){
     boards.forEach(b=>{b.innerHTML='<div style="text-align:center;padding:4rem;color:#9E9186;font-size:13px;">No SIJ cases found.</div>';});
     return;
+  }
+  const _q=(_sijSearchQuery||'').trim().toLowerCase();
+  const _qDigits=_q.replace(/\D/g,'');
+  function _sijMatch(c){
+    if(!_q)return true;
+    const m=caseMeta[c.clid]||{};
+    const fields=[c.client,c.clid,c.anum,c.atty,c.type,m.clientFirstName,m.clientLastName,m.clientMiddleName,m.clientCountry,m.clientCountryOfBirth,m.clientEmail];
+    (m.respondents||[]).forEach(function(r){fields.push(r.name,r.anum);});
+    if(fields.some(function(f){return String(f||'').toLowerCase().includes(_q);}))return true;
+    if(_qDigits.length>=3){
+      if(String(c.anum||'').replace(/\D/g,'').includes(_qDigits))return true;
+      if(String(c.clid||'').replace(/\D/g,'').includes(_qDigits))return true;
+    }
+    return false;
   }
 
   // ── Stage definitions ──
@@ -10458,9 +10571,39 @@ function renderSIJTable(){
     return `<th data-col="${key}" style="${thStyle}${extra||''}width:${w}px;${sticky}">${label}<span class="col-resize" data-col="${key}" style="position:absolute;top:0;right:-3px;width:8px;height:100%;cursor:col-resize;user-select:none;z-index:3;"></span></th>`;
   }
 
+  const filteredCaseData=caseData.filter(_sijMatch);
+  const _totalCount=caseData.length;
+  const _filteredCount=filteredCaseData.length;
+
   boards.forEach(board=>{
-  board.innerHTML='';
-  board.style.cssText='overflow-x:auto;';
+  // Persistent search header — created once, never destroyed, so focus survives re-renders
+  let header=board.querySelector(':scope > .sij-search-header');
+  let tblWrap=board.querySelector(':scope > .sij-table-wrap');
+  if(!header){
+    board.innerHTML='';
+    board.style.cssText='display:flex;flex-direction:column;';
+    header=document.createElement('div');
+    header.className='sij-search-header';
+    header.style.cssText='padding:8px 12px;border-bottom:1px solid var(--border);background:var(--cream);display:flex;align-items:center;gap:10px;flex-shrink:0;';
+    header.innerHTML='<input type="text" class="sij-search-input" placeholder="Search by name, Cl ID, A-Number…" style="flex:1;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;outline:none;background:#fff;color:var(--ink);"/><button type="button" class="sij-search-clear" title="Clear" style="display:none;border:none;background:transparent;color:var(--ink-muted);cursor:pointer;font-size:14px;padding:0 4px;line-height:1;">×</button><span class="sij-search-count" style="font-size:11px;color:var(--ink-muted);white-space:nowrap;"></span>';
+    board.appendChild(header);
+    const inp=header.querySelector('.sij-search-input');
+    const clr=header.querySelector('.sij-search-clear');
+    inp.value=_sijSearchQuery;
+    inp.addEventListener('input',function(){_sijSearchQuery=inp.value;renderSIJTable();});
+    clr.addEventListener('click',function(){_sijSearchQuery='';inp.value='';inp.focus();renderSIJTable();});
+    tblWrap=document.createElement('div');
+    tblWrap.className='sij-table-wrap';
+    tblWrap.style.cssText='overflow-x:auto;flex:1;min-height:0;';
+    board.appendChild(tblWrap);
+  }
+  const _inp=header.querySelector('.sij-search-input');
+  if(document.activeElement!==_inp&&_inp.value!==_sijSearchQuery)_inp.value=_sijSearchQuery;
+  const _clr=header.querySelector('.sij-search-clear');
+  if(_clr)_clr.style.display=_sijSearchQuery?'inline-block':'none';
+  const _cnt=header.querySelector('.sij-search-count');
+  if(_cnt)_cnt.textContent=_q?_filteredCount+' of '+_totalCount:_totalCount+' case'+(_totalCount===1?'':'s');
+  tblWrap.innerHTML='';
   const tbl=document.createElement('table');
   tbl.style.cssText='border-collapse:collapse;font-size:12px;table-layout:fixed;';
   const thead=document.createElement('thead');
@@ -10483,7 +10626,12 @@ function renderSIJTable(){
   tbl.appendChild(thead);
 
   const tbody=document.createElement('tbody');
-  caseData.forEach(c=>{
+  if(!filteredCaseData.length){
+    const empty=document.createElement('tr');
+    empty.innerHTML='<td colspan="14" style="text-align:center;padding:3rem;color:var(--ink-muted);font-size:12px;">No SIJ cases match "'+escHtml(_sijSearchQuery)+'".</td>';
+    tbody.appendChild(empty);
+  }
+  filteredCaseData.forEach(c=>{
     const fc=evCellHtml(c.nextFC);
     const ic=evCellHtml(c.nextIC);
     const us=evCellHtml(c.nextUSCIS);
@@ -10662,7 +10810,7 @@ function renderSIJTable(){
     });
   });
   tbl.appendChild(tbody);
-  board.appendChild(tbl);
+  tblWrap.appendChild(tbl);
 
   // ── Wire up column resize handles ──
   thead.querySelectorAll('span.col-resize').forEach(handle=>{
@@ -10786,6 +10934,13 @@ function renderToolsPage(){
         <div style="font-size:24px;margin-bottom:8px;">🔀</div>
         <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Merge duplicate clients</div>
         <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Combine two client entries into one without losing any of their events, tasks, or notes.</div>
+      </div>
+      <div onclick="document.getElementById('import-new-cases-input').click()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
+        <div style="font-size:24px;margin-bottom:8px;">📥</div>
+        <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Import new cases from Excel</div>
+        <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;margin-bottom:10px;">Add cases from an Excel sheet. Existing cases (matched by Client ID or A-Number) are skipped — current data is never overwritten.</div>
+        <a href="#" onclick="event.stopPropagation();event.preventDefault();downloadCasesTemplate();" style="font-size:11px;color:var(--sage);text-decoration:underline;font-weight:500;">↓ Download blank template</a>
+        <input type="file" id="import-new-cases-input" accept=".xlsx,.xls" style="display:none;" onchange="importNewCasesFromExcel(this);event.stopPropagation();"/>
       </div>
     </div>`;
 }
@@ -14864,7 +15019,7 @@ function openNewCaseModal(){
   paralegals.forEach(p => { const o = document.createElement('option'); o.value=p; o.textContent=p; attyEl.appendChild(o); });
 
   // Clear fields
-  ['nc-lastName','nc-firstName','nc-middleName','nc-clid','nc-anum','nc-email','nc-notes'].forEach(id => {const e=document.getElementById(id);if(e)e.value='';});
+  ['nc-lastName','nc-firstName','nc-middleName','nc-clid','nc-anum','nc-email','nc-countryOfBirth','nc-notes'].forEach(id => {const e=document.getElementById(id);if(e)e.value='';});
   typeEl.value = ''; attyEl.value = '';
 
   document.getElementById('new-case-modal').style.display = 'flex';
@@ -14908,6 +15063,7 @@ function saveNewCase(){
   const clid  = document.getElementById('nc-clid').value.trim();
   const anum  = document.getElementById('nc-anum').value.trim();
   const email = (document.getElementById('nc-email')||{value:''}).value.trim();
+  const countryOfBirth = (document.getElementById('nc-countryOfBirth')||{value:''}).value.trim();
   const atty  = document.getElementById('nc-atty').value;
   const notes = document.getElementById('nc-notes').value.trim();
 
@@ -14929,6 +15085,7 @@ function saveNewCase(){
   caseMeta[_cid].clientFirstName=firstName;
   if(middleName) caseMeta[_cid].clientMiddleName=middleName;
   if(email) caseMeta[_cid].clientEmail=email;
+  if(countryOfBirth) caseMeta[_cid].clientCountryOfBirth=countryOfBirth;
 
   // Add new case type / paralegal if not already in lists
   if(type && !caseTypes.includes(type)) caseTypes.push(type);
@@ -15617,10 +15774,16 @@ function saveNewTask(){
       </div>
     </div>
 
-    <!-- Email -->
-    <div style="margin-bottom:14px;">
-      <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Email</label>
-      <input id="nc-email" type="email" placeholder="client@email.com" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
+    <!-- Email + Country of Birth -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Email</label>
+        <input id="nc-email" type="email" placeholder="client@email.com" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Country of Birth</label>
+        <input id="nc-countryOfBirth" type="text" placeholder="Country of birth…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
+      </div>
     </div>
 
     <!-- Case type -->
