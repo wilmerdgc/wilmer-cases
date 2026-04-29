@@ -12268,23 +12268,21 @@ function openCaseDetail(clid){
         if(isEditing){const aI3=mkText2(cl.anum);aI3.placeholder='A#';aI3.style.cssText='font-size:11px;color:#9E9186;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;width:90px;';cl._anumInput=aI3;row.appendChild(aI3);}
         else if(cl.anum){const a=document.createElement('span');a.style.cssText='font-size:11px;color:#9E9186;white-space:nowrap;';a.textContent='A# '+cl.anum;row.appendChild(a);}
 
-        // DOB per client — always visible
+        // DOB per client — hidden in view mode when empty
         const dobLabelText='DOB';
         const dobCurrent=cl._isBase?((caseMeta[clid]||{}).clientDob||''):((caseMeta[clid].respondents[cl.idx]||{}).dob||'');
-        const dobLbl=document.createElement('span');dobLbl.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;';dobLbl.textContent=dobLabelText;row.appendChild(dobLbl);
-        if(isEditing){
-          const dI=document.createElement('input');dI.type='date';dI.value=dobCurrent;dI.style.cssText='font-size:11px;color:#5C5148;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;cursor:pointer;font-family:inherit;';
-          cl._dobInput=dI;row.appendChild(dI);
-        } else {
-          const dSpan=document.createElement('span');dSpan.style.cssText='font-size:11px;color:#5C5148;white-space:nowrap;';
-          if(dobCurrent){
+        if(isEditing || dobCurrent){
+          const dobLbl=document.createElement('span');dobLbl.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;';dobLbl.textContent=dobLabelText;row.appendChild(dobLbl);
+          if(isEditing){
+            const dI=document.createElement('input');dI.type='date';dI.value=dobCurrent;dI.style.cssText='font-size:11px;color:#5C5148;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;cursor:pointer;font-family:inherit;';
+            cl._dobInput=dI;row.appendChild(dI);
+          } else {
+            const dSpan=document.createElement('span');dSpan.style.cssText='font-size:11px;color:#5C5148;white-space:nowrap;';
             const ageText=calculateAgeText(dobCurrent);
             const ageColor=ageText.includes('aged out')||/^\dm/.test(ageText)||/^<1m/.test(ageText)?'#B85C5C':/^1y/.test(ageText)?'#C9823A':'#6A8C6E';
             dSpan.innerHTML=fmtDate(dobCurrent)+(ageText?' <span style="color:'+ageColor+';font-weight:600;">('+ageText+')</span>':'');
-          } else {
-            dSpan.textContent='—';dSpan.style.color='#C4BAB0';dSpan.style.fontStyle='italic';
+            row.appendChild(dSpan);
           }
-          row.appendChild(dSpan);
         }
 
         // Case type
@@ -12306,6 +12304,8 @@ function openCaseDetail(clid){
           function inlineJudge(labelText2, judgeKey){
             const jid=cl.idx===-1?caseMeta[clid][judgeKey]:((caseMeta[clid].respondents[cl.idx]||{})[judgeKey]);
             const jj=jid?judges.find(x=>x.id===jid):null;
+            // View mode: skip when no judge assigned (no point showing "Not assigned")
+            if(!isEditing && !jj) return;
             const jw=document.createElement('span');jw.style.cssText='display:flex;align-items:center;gap:4px;';
             const jlbl=document.createElement('span');jlbl.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;';jlbl.textContent=labelText2;jw.appendChild(jlbl);
             if(jj){
@@ -12326,14 +12326,18 @@ function openCaseDetail(clid){
           content.appendChild(jrow);
         }
 
-        // Paralegal inline
+        // Paralegal inline — skip on lead in view mode (already shown in Case Information above)
         if(showPara){
           const pv3=cl._isBase?base.atty:(cl.atty||'');
-          const prow=document.createElement('div');prow.style.cssText='display:flex;align-items:baseline;gap:6px;margin-top:2px;';
-          const plbl=document.createElement('span');plbl.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;';plbl.textContent='Paralegal';prow.appendChild(plbl);
-          if(isEditing){const pI=mkSel2(paralegals,pv3);pI.style.cssText='font-size:11px;color:#5C5148;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;cursor:pointer;max-width:160px;';cl._paraInput=pI;prow.appendChild(pI);}
-          else{const pv2=document.createElement('span');pv2.style.cssText='font-size:11px;color:#5C5148;';pv2.textContent=pv3||'—';prow.appendChild(pv2);}
-          content.appendChild(prow);
+          const skipLeadParalegal = !isEditing && cl._isBase;
+          const skipEmptyInView = !isEditing && !pv3;
+          if(!skipLeadParalegal && !skipEmptyInView){
+            const prow=document.createElement('div');prow.style.cssText='display:flex;align-items:baseline;gap:6px;margin-top:2px;';
+            const plbl=document.createElement('span');plbl.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;';plbl.textContent='Paralegal';prow.appendChild(plbl);
+            if(isEditing){const pI=mkSel2(paralegals,pv3);pI.style.cssText='font-size:11px;color:#5C5148;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;cursor:pointer;max-width:160px;';cl._paraInput=pI;prow.appendChild(pI);}
+            else{const pv2=document.createElement('span');pv2.style.cssText='font-size:11px;color:#5C5148;';pv2.textContent=pv3;prow.appendChild(pv2);}
+            content.appendChild(prow);
+          }
         }
       }
 
