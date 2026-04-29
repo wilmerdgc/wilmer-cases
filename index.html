@@ -404,13 +404,17 @@ body.wk-dragging .week-col { transition: background 0.1s, box-shadow 0.1s; }
 .wk-time-badge { display: inline-block; font-size: 9px; font-weight: 700; color: var(--slate); background: var(--slate-light); padding: 1px 6px; border-radius: 4px; margin-top: 3px; letter-spacing: 0.02em; }
 
 /* Month calendar */
-.cal-grid { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; }
+.cal-grid { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)) 34px; gap: 8px; }
+.cal-week-num { display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: var(--ink-faint); cursor: pointer; border-radius: 6px; transition: background .12s, color .12s; user-select: none; }
+.cal-week-num:hover { background: #F0EBE4; color: var(--sage); }
+.cal-day-num { cursor: pointer; }
+.cal-day-num:hover { color: var(--sage) !important; }
 .cal-day { border: 1px solid var(--border); border-radius: var(--radius-md); min-height: 100px; padding: 8px; background: #fff; box-shadow: var(--shadow-sm); }
 .cal-day.today-day { border-color: var(--sage); }
 .cal-day.other-month { opacity: 0.45; }
 .cal-day-num { font-size: 11px; font-weight: 600; color: var(--ink-muted); margin-bottom: 6px; }
 .cal-day-num.today-num { color: var(--sage); }
-.cal-day-headers { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; margin-bottom: 5px; }
+.cal-day-headers { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)) 34px; gap: 8px; margin-bottom: 5px; }
 .cal-day-label { font-size: 10px; font-weight: 600; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.05em; text-align: center; padding: 4px 0; }
 .cal-event-card { margin-bottom: 4px; padding: 4px 7px; border-radius: 5px; cursor: pointer; display: block; transition: filter 0.12s; }
 .cal-event-card:hover { filter: brightness(0.95); }
@@ -2043,7 +2047,7 @@ function hideExcelRestorePrompt(){}
     </div>
   </div>
   <div id="view-week" style="display:none"><div class="nav-row"><button onclick="shiftWeek(-1)">&#8592;</button><span class="nav-title" id="week-title"></span><button onclick="shiftWeek(1)">&#8594;</button><button onclick="weekOffset=0;renderWeek();" title="Jump to current week" style="font-size:10px;font-weight:500;padding:2px 8px;border:1px solid #EDE8E0;border-radius:10px;background:transparent;color:#9E9186;cursor:pointer;font-family:inherit;margin-left:6px;">Today</button><div class="weekend-toggle-bar"><span id="wk-weekend-note" style="font-size:10px;color:#9C6D2F;display:none;">Weekend events present</span><button id="wk-weekend-toggle" class="wt-btn" onclick="toggleWeekendView()" title="Show or hide Saturday &amp; Sunday">+ Weekend</button></div></div><div class="week-grid" id="week-grid"></div><div id="empty-week" style="display:none;text-align:center;padding:3rem;color:#9E9186;font-size:13px">No tasks this week.</div><div id="week-board"></div></div>
-  <div id="view-month" style="display:none"><div class="nav-row"><button onclick="shiftMonth(-1)">&#8592;</button><span class="nav-title" id="month-title"></span><button onclick="shiftMonth(1)">&#8594;</button><button onclick="monthOffset=0;renderMonth();" title="Jump to current month" style="font-size:10px;font-weight:500;padding:2px 8px;border:1px solid #EDE8E0;border-radius:10px;background:transparent;color:#9E9186;cursor:pointer;font-family:inherit;margin-left:6px;">Today</button></div><div class="cal-day-headers"><div class="cal-day-label">Mon</div><div class="cal-day-label">Tue</div><div class="cal-day-label">Wed</div><div class="cal-day-label">Thu</div><div class="cal-day-label">Fri</div></div><div class="cal-grid" id="cal-grid"></div><div id="month-board"></div></div>
+  <div id="view-month" style="display:none"><div class="nav-row"><button onclick="shiftMonth(-1)">&#8592;</button><span class="nav-title" id="month-title"></span><button onclick="shiftMonth(1)">&#8594;</button><button onclick="monthOffset=0;renderMonth();" title="Jump to current month" style="font-size:10px;font-weight:500;padding:2px 8px;border:1px solid #EDE8E0;border-radius:10px;background:transparent;color:#9E9186;cursor:pointer;font-family:inherit;margin-left:6px;">Today</button></div><div class="cal-day-headers"><div class="cal-day-label">Mon</div><div class="cal-day-label">Tue</div><div class="cal-day-label">Wed</div><div class="cal-day-label">Thu</div><div class="cal-day-label">Fri</div><div class="cal-day-label" title="Week of the year" style="opacity:0.5;font-size:9px;">Wk</div></div><div class="cal-grid" id="cal-grid"></div><div id="month-board"></div></div>
   <div id="view-paralegals" style="display:none"><div id="para-grid"></div><div id="empty-para" style="display:none;text-align:center;padding:3rem;color:#9E9186;font-size:13px">No tasks assigned to paralegals.</div></div>
   <div id="view-me" style="display:none"><div id="me-content"></div><div id="empty-me" style="display:none;text-align:center;padding:3rem;color:#9E9186;font-size:13px">No tasks assigned to you yet.</div></div>
   <div id="view-all" style="display:none">
@@ -6832,7 +6836,7 @@ function renderMonth() {
   const monthTasks = [];
   const monthFinished = [];
   const frag=document.createDocumentFragment();
-  dates.forEach(day => {
+  dates.forEach((day, idx) => {
     const dayStr2 = toDateStr(day);
     const isToday = sameDay(day, TODAY), inMonth = day.getMonth() === month;
     const tasks = rowsByDate[dayStr2] || [];
@@ -6841,7 +6845,17 @@ function renderMonth() {
       monthFinished.push(...(finByDate[dayStr2]||[]));
     }
     const cell = document.createElement('div'); cell.className = 'cal-day' + (isToday ? ' today-day' : '') + (inMonth ? '' : ' other-month');
-    const num = document.createElement('div'); num.className = 'cal-day-num' + (isToday ? ' today-num' : ''); num.textContent = day.getDate(); cell.appendChild(num);
+    const num = document.createElement('div'); num.className = 'cal-day-num' + (isToday ? ' today-num' : ''); num.textContent = day.getDate();
+    num.title = 'Open day view for this date';
+    const _clickedDay = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+    num.addEventListener('click', e=>{
+      e.stopPropagation();
+      dayViewDate = _clickedDay;
+      if(typeof dayMiniMonthOffset!=='undefined') dayMiniMonthOffset = 0;
+      if(typeof _miniCalLastKey!=='undefined') _miniCalLastKey = '';
+      switchView('today');
+    });
+    cell.appendChild(num);
     tasks.forEach(r => {
       const s = status(parseDate(r.date));
       const es=getEventStyle(r.event||'');
@@ -6860,6 +6874,24 @@ function renderMonth() {
       setTimeout(() => { document.getElementById('fc-date').value = dayStr2; }, 30);
     });
     frag.appendChild(cell);
+    // Every 5 day cells (Mon–Fri) we append a week-number cell to fill the 6th column
+    if(idx % 5 === 4){
+      // Use the row's Monday (4 days before this Friday) for week-number + week-jump
+      const rowMonday = new Date(day.getFullYear(), day.getMonth(), day.getDate() - 4);
+      const wkNum = getWeekNumber(rowMonday);
+      const wkCell = document.createElement('div');
+      wkCell.className = 'cal-week-num';
+      wkCell.textContent = 'W' + wkNum;
+      wkCell.title = 'Week ' + wkNum + ' — open Week view';
+      wkCell.addEventListener('click', e=>{
+        e.stopPropagation();
+        const todayMonday = getWeekStart(0);
+        const offsetWeeks = Math.round((rowMonday - todayMonday) / (7 * 86400000));
+        weekOffset = offsetWeeks;
+        switchView('week');
+      });
+      frag.appendChild(wkCell);
+    }
   });
   grid.appendChild(frag);
   const boardEl = document.getElementById('month-board');
