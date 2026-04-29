@@ -388,11 +388,11 @@ tbody td { padding: 9px 12px; vertical-align: middle; font-size: 12px; }
 .week-task.task-kind .week-client { font-size: 10px; margin-top: 1px; }
 .week-task.task-kind .week-clid { display: none; }
 .week-task.task-kind .wk-notes { font-size: 9px !important; }
-.weekend-toggle-bar { display: flex; align-items: center; gap: 10px; margin-left: auto; font-size: 11px; color: var(--ink-muted); }
-.weekend-toggle-bar .wt-btn { font-size: 11px; padding: 4px 12px; border: 1px solid var(--border); border-radius: 16px; background: #fff; color: var(--ink-muted); cursor: pointer; transition: all 0.12s; }
-.weekend-toggle-bar .wt-btn:hover { background: var(--cream); border-color: var(--ink-faint); color: var(--ink); }
-.weekend-toggle-bar .wt-btn.active { background: var(--sage); border-color: var(--sage); color: #fff; }
-.weekend-toggle-bar .wt-btn.auto-on { background: var(--cream); border-color: #E8B468; color: #9C6D2F; }
+.weekend-toggle-bar { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 10px; color: var(--ink-faint); }
+.weekend-toggle-bar .wt-btn { font-size: 10px; padding: 1px 8px; border: 1px solid #EDE8E0; border-radius: 10px; background: transparent; color: #B8B0A4; cursor: pointer; transition: all 0.12s; white-space: nowrap; font-family: inherit; }
+.weekend-toggle-bar .wt-btn:hover { border-color: #DDD5CA; color: #5C5148; background: #fff; }
+.weekend-toggle-bar .wt-btn.active { background: transparent; border-color: #C9D9C5; color: #6A8C6E; }
+.weekend-toggle-bar .wt-btn.auto-on { background: transparent; border-color: #E8C49A; color: #C9823A; }
 .wk-summary-btn { font-size: 11px; font-weight: 600; padding: 4px 12px; border: 1px solid #B4CCAD; border-radius: 16px; background: var(--sage-light); color: #4A6B4E; cursor: pointer; transition: all 0.12s; }
 .wk-summary-btn:hover { background: var(--sage); color: #fff; border-color: var(--sage); }
 .week-task[draggable="true"] { cursor: grab; }
@@ -6580,7 +6580,7 @@ function renderWeek() {
   if(wtBtn){
     wtBtn.classList.toggle('active', weekendPref);
     wtBtn.classList.toggle('auto-on', !weekendPref && weekendHasEvents);
-    wtBtn.textContent = showWeekend ? '− Hide weekend' : '+ Weekend';
+    wtBtn.textContent = showWeekend ? '− Sat · Sun' : '+ Sat · Sun';
   }
   if(wtNote){ wtNote.style.display = (!weekendPref && weekendHasEvents) ? 'inline' : 'none'; }
   const N = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
