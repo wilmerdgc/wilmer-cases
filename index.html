@@ -13956,8 +13956,8 @@ function renderCallUpBanner(){
     const cdText=diff===0?'Today':diff<0?Math.abs(diff)+'d overdue':diff+'d left';
     const pill=document.createElement('button');
     pill.style.cssText=`font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid ${color}33;background:${color}14;color:${color};cursor:pointer;font-weight:600;white-space:nowrap;font-family:inherit;transition:filter .1s;`;
-    pill.textContent=(r.event||'CALL-UP')+' · '+cdText;
-    pill.title=r.client+(r.notes?' — '+r.notes:'');
+    pill.textContent=(r.client||'').split(' ')[0]+' · '+cdText;
+    pill.title=(r.event||'CALL-UP')+' — '+r.client+(r.notes?' — '+r.notes:'');
     pill.onmouseenter=()=>pill.style.filter='brightness(0.9)';
     pill.onmouseleave=()=>pill.style.filter='';
     pill.onclick=()=>openEdit(r.id);
