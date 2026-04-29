@@ -14020,14 +14020,9 @@ function renderIndividualBanner(){
   banner.innerHTML='';
   banner.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 14px;background:#EEF1F7;border:1px solid #B8C4DB;border-radius:10px;margin-bottom:10px;flex-wrap:wrap;';
 
-  const icon=document.createElement('span');
-  icon.style.cssText='font-size:14px;flex-shrink:0;';
-  icon.textContent='⚖️';
-  banner.appendChild(icon);
-
   const label=document.createElement('span');
   label.style.cssText='font-size:11px;font-weight:700;color:#4F6A91;white-space:nowrap;';
-  label.textContent=upcoming.length+' INDIVIDUAL hearing'+(upcoming.length!==1?'s':'')+' within 90 days:';
+  label.textContent=upcoming.length+' individual'+(upcoming.length!==1?'s':'')+':';
   banner.appendChild(label);
 
   const pills=document.createElement('div');
