@@ -8980,10 +8980,9 @@ function _renderReadOnlyView(r){
     + (timeStr?`<span>⏰ ${_escHtml(timeStr)}</span>`:'')
     + `</div></div>`;
   const row = (label, value, focusId, extraCls) => {
-    const empty = !value;
-    const cls = 'ro-value' + (empty?' empty':'') + (extraCls?' '+extraCls:'');
-    const display = empty ? '—' : _escHtml(value);
-    return `<div class="ro-row"><div class="ro-label">${_escHtml(label)}</div><div class="${cls}" data-focus="${focusId}" role="button" tabindex="0">${display}</div></div>`;
+    if(!value) return ''; // hide empty fields entirely
+    const cls = 'ro-value' + (extraCls?' '+extraCls:'');
+    return `<div class="ro-row"><div class="ro-label">${_escHtml(label)}</div><div class="${cls}" data-focus="${focusId}" role="button" tabindex="0">${_escHtml(value)}</div></div>`;
   };
   const remindersVal = reminders.length ? reminders.map(d=>d+'d before').join(', ') : '';
   const statusVal = r.finishedStatus ? (r.finishedStatus==='completed'?'Completed':r.finishedStatus==='cancelled'?'Cancelled':r.finishedStatus==='deleted'?'Deleted':r.finishedStatus) : (r.attendedStatus?'Attended':'');
@@ -9003,15 +9002,7 @@ function _renderReadOnlyView(r){
     + row('Notes', r.notes||'', 'fc-notes', 'multiline')
     + customRows
     + `</div>`;
-  let history = '';
-  if(r.history && r.history.length){
-    const items = r.history.slice().reverse().map(h=>{
-      const when = h.date ? new Date(h.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
-      return `<div class="ro-hist-item"><div class="ro-hist-date">${_escHtml(when)}</div><div>${_escHtml(h.note||h.text||'')}</div></div>`;
-    }).join('');
-    history = `<div class="ro-label" style="font-size:10px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 6px;">History</div><div class="ro-history-log">${items}</div>`;
-  }
-  host.innerHTML = hero + grid + history;
+  host.innerHTML = hero + grid;
   host.querySelectorAll('.ro-value').forEach(el=>{
     const fid = el.getAttribute('data-focus');
     el.addEventListener('click', ()=>enterEditMode(fid));
