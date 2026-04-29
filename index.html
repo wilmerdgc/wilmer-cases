@@ -14337,25 +14337,11 @@ function renderDayTimeline(){
   timeline.innerHTML = '';
   timeline.appendChild(nowWrap);
 
-  // Determine range: default 10am–5pm, auto-expand
-  let startHour = 10, endHour = 17;
-  timedEvents.forEach(r => {
-    const sh = Math.floor(timeToMin(r.timeStart)/60);
-    const eh = r.timeEnd ? Math.ceil(timeToMin(r.timeEnd)/60) : sh+1;
-    if(sh < startHour) startHour = Math.max(0, sh);
-    if(eh > endHour)   endHour   = Math.min(24, eh+1);
-  });
+  // Always render the full day (00:00–24:00); the wrap is scrollable so any hour is reachable.
+  const startHour = 0, endHour = 24;
   const isToday = selStr === toDateStr(TODAY);
-  if(isToday){
-    const nowH = new Date().getHours();
-    if(nowH < startHour) startHour = Math.max(0, nowH);
-    if(nowH >= endHour)  endHour   = Math.min(24, nowH+1);
-  }
-
-  // Range label
-  const fmt12 = h => h===0?'12am':h<12?h+'am':h===12?'12pm':(h-12)+'pm';
   const rangeEl = document.getElementById('dv-timeline-range');
-  if(rangeEl) rangeEl.textContent = fmt12(startHour)+' – '+fmt12(endHour);
+  if(rangeEl) rangeEl.textContent = '24-hour · scrollable';
 
   const SLOT_H = 56;
   const LBL_W = 46;
@@ -14646,6 +14632,13 @@ function renderDayTimeline(){
 
   // Now indicator line
   updateNowLine(startHour, SLOT_H);
+
+  // Default scroll: put 10 AM at the top whenever the day changes (preserves scroll on same-day re-renders)
+  const scrollWrap = document.getElementById('dv-timeline-wrap');
+  if(scrollWrap && scrollWrap._dvLastDay !== selStr){
+    scrollWrap._dvLastDay = selStr;
+    scrollWrap.scrollTop = 10 * SLOT_H;
+  }
 }
 
 function timeToMin(t){
