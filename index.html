@@ -10648,6 +10648,15 @@ function renderSIJTable(){
   const filteredCaseData=caseData.filter(_sijMatch);
   const _totalCount=caseData.length;
   const _filteredCount=filteredCaseData.length;
+  // Pick the 3 cases whose next FC/IC/USCIS event is soonest (chronologically) — only those rows get a highlight color
+  const _top3Clids=new Set(
+    filteredCaseData
+      .map(c=>({clid:c.clid,d:[c.nextFC,c.nextIC,c.nextUSCIS].filter(Boolean).map(r=>r.date).filter(Boolean).sort()[0]||''}))
+      .filter(x=>x.d)
+      .sort((a,b)=>a.d.localeCompare(b.d))
+      .slice(0,3)
+      .map(x=>x.clid)
+  );
 
   boards.forEach(board=>{
   // Persistent search header — created once, never destroyed, so focus survives re-renders
@@ -10717,10 +10726,11 @@ function renderSIJTable(){
     (_meta.respondents||[]).forEach(r=>{clientsInCase.push({name:r.name||'Respondent',anum:r.anum,dob:r.dob,isLead:false});});
     const rowCount=clientsInCase.length;
 
-    // Row background based on earliest urgent event
+    // Row background based on earliest urgent event — only the 3 chronologically soonest cases get highlighted
     const earliest=[c.nextFC,c.nextIC,c.nextUSCIS].filter(Boolean).sort((a,b)=>(a.date||'').localeCompare(b.date||''))[0];
     const rowStatus=earliest?status(parseDate(earliest.date)):'no-date';
-    const rowBg={overdue:'#F9EDED',thisweek:'#FAF0E6',nextweek:'',['15days']:'',ok:'',['no-date']:''}[rowStatus]||'';
+    const _rawBg={overdue:'#F9EDED',thisweek:'#FAF0E6',nextweek:'',['15days']:'',ok:'',['no-date']:''}[rowStatus]||'';
+    const rowBg=_top3Clids.has(c.clid)?_rawBg:'';
 
     const tdS='padding:8px 8px;font-size:11px;';
 
