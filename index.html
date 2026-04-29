@@ -14314,9 +14314,18 @@ function renderDayTimeline(){
       const colors = {overdue:['#F9EDED','#B85C5C'],thisweek:['#FFF3E8','#C9823A'],nextweek:['#FFF3E8','#C9823A'],urgent:['#FFF3E8','#C9823A'],['15days']:['#EBF1EB','#6A8C6E'],ok:['#EBF1EB','#6A8C6E'],'no-date':['#EDE8E0','#9E9186']};
       const [bg,fg] = colors[s]||['#EDE8E0','#9E9186'];
       const pill = document.createElement('div');
-      pill.style.cssText = `background:${bg};color:${fg};font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;cursor:pointer;white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis;`;
+      pill.style.cssText = `background:${bg};color:${fg};font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;cursor:grab;white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis;`;
       pill.textContent = (r.event?r.event+' — ':'')+r.client;
+      pill.title = 'Drag to a time slot to schedule, or click to open';
       pill.onclick = ()=>openEdit(r.id);
+      pill.draggable = true;
+      pill.addEventListener('dragstart', e => {
+        pill.style.opacity = '0.5';
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/eventId', r.id);
+        e.dataTransfer.setData('text/plain', r.id);
+      });
+      pill.addEventListener('dragend', () => { pill.style.opacity = ''; });
       stripFrag.appendChild(pill);
     });
     strip.appendChild(stripFrag);
@@ -14347,10 +14356,22 @@ function renderDayTimeline(){
       const color = es.color || COLORS[idx % COLORS.length];
       const evLabel=(es.icon?es.icon+' ':'')+( r.event||r.type);
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:stretch;gap:10px;padding:9px 14px;border-bottom:1px solid #EDE8E0;cursor:pointer;';
+      const isAllDay = !r.timeStart;
+      row.style.cssText = 'display:flex;align-items:stretch;gap:10px;padding:9px 14px;border-bottom:1px solid #EDE8E0;cursor:'+(isAllDay?'grab':'pointer')+';';
       row.onmouseenter = ()=>row.style.background='#FAFAF8';
       row.onmouseleave = ()=>row.style.background='';
       row.onclick = ()=>openEdit(r.id);
+      if(isAllDay){
+        row.draggable = true;
+        row.title = 'Drag onto the timeline to schedule a time';
+        row.addEventListener('dragstart', e => {
+          row.style.opacity = '0.5';
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/eventId', r.id);
+          e.dataTransfer.setData('text/plain', r.id);
+        });
+        row.addEventListener('dragend', () => { row.style.opacity = ''; });
+      }
 
       const bar = document.createElement('div');
       bar.style.cssText = `width:3px;border-radius:2px;background:${color};flex-shrink:0;`;
@@ -14677,6 +14698,42 @@ function renderDayTimeline(){
   if(scrollWrap && scrollWrap._dvLastDay !== selStr){
     scrollWrap._dvLastDay = selStr;
     scrollWrap.scrollTop = 10 * SLOT_H;
+  }
+
+  // ── Drop zone: dragging an all-day event onto the timeline assigns it that hour ──
+  if(scrollWrap && !scrollWrap._dropInit){
+    scrollWrap._dropInit = true;
+    scrollWrap.addEventListener('dragover', e => {
+      const types = e.dataTransfer && e.dataTransfer.types;
+      if(types && (Array.from(types).indexOf('text/eventId')!==-1 || Array.from(types).indexOf('text/plain')!==-1)){
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      }
+    });
+    scrollWrap.addEventListener('drop', e => {
+      e.preventDefault();
+      const id = e.dataTransfer.getData('text/eventId') || e.dataTransfer.getData('text/plain');
+      if(!id) return;
+      const idx = records.findIndex(x => x.id === id);
+      if(idx < 0) return;
+      const tl = document.getElementById('dv-timeline');
+      if(!tl) return;
+      const tlRect = tl.getBoundingClientRect();
+      const relY = e.clientY - tlRect.top;
+      let rawMin = (relY / 56) * 60; // SLOT_H = 56
+      rawMin = Math.max(0, Math.min(23*60+45, Math.round(rawMin/15)*15));
+      const sh = Math.floor(rawMin/60), sm = rawMin % 60;
+      const eMin = Math.min(24*60-15, rawMin + 60); // default 1-hour duration
+      const eh = Math.floor(eMin/60), em = eMin % 60;
+      const pad = n => String(n).padStart(2,'0');
+      records[idx].timeStart = sh + ':' + pad(sm);
+      records[idx].timeEnd   = eh + ':' + pad(em);
+      markUnsaved();
+      saveAllData();
+      renderDayView();
+      const ap = sh>=12 ? 'PM' : 'AM', h12 = (sh%12)||12;
+      showToast('Scheduled at ' + h12 + ':' + pad(sm) + ' ' + ap + ' ✓');
+    });
   }
 }
 
