@@ -252,6 +252,14 @@ button.btn-sm { font-size: 11px; padding: 4px 11px; }
 .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; margin-bottom: 12px; align-items: center; }
 .filters select, .filters input { font-size: 11px; padding: 4px 8px; border: 1px solid #EDE8E0; border-radius: 6px; background: transparent; color: #9E9186; min-width: 0; width: auto; outline: none; cursor: pointer; }
 .filters select:hover, .filters input:hover, .filters select:focus, .filters input:focus { border-color: #DDD5CA; color: #5C5148; background: #fff; }
+.ms-trigger { font-size: 11px; padding: 4px 22px 4px 8px; border: 1px solid #EDE8E0; border-radius: 6px; background: transparent; color: #9E9186; cursor: pointer; font-family: inherit; outline: none; text-align: left; min-width: 130px; position: relative; }
+.ms-trigger:hover, .ms-trigger:focus { border-color: #DDD5CA; color: #5C5148; background: #fff; }
+.ms-trigger.has-selection { border-color: #B4CCAD; color: #4A6B4E; background: #EBF1EB; }
+.ms-trigger::after { content: '▾'; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 9px; opacity: 0.5; }
+.f-event-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; cursor: pointer; border-radius: 5px; }
+.f-event-row:hover { background: #F7F3ED; }
+.f-event-row input[type="checkbox"] { margin: 0; cursor: pointer; flex-shrink: 0; accent-color: #6A8C6E; }
+.f-event-row label { font-size: 12px; color: #2C2620; cursor: pointer; flex: 1; line-height: 1.3; font-family: inherit; }
 
 /* ── View buttons ──────────────────────────────── */
 .view-btn-group {
@@ -1914,7 +1922,18 @@ function hideExcelRestorePrompt(){}
   </div>
   <div class="filters">
     <select id="f-atty" style="width:auto"><option value="">All paralegals</option></select>
-    <select id="f-event" style="width:auto"><option value="">All event types</option></select>
+    <div id="f-event-wrap" style="position:relative;display:inline-block;">
+      <button type="button" id="f-event-btn" class="ms-trigger">All event types</button>
+      <div id="f-event-pop" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:50;background:#fff;border:1px solid #DDD5CA;border-radius:8px;box-shadow:0 8px 24px rgba(44,38,32,0.14);min-width:240px;max-width:320px;">
+        <input type="text" id="f-event-search" placeholder="Filter event types…" style="width:calc(100% - 16px);margin:8px;font-size:11px;padding:5px 8px;border:1px solid #EDE8E0;border-radius:6px;outline:none;font-family:inherit;color:#2C2620;box-sizing:border-box;"/>
+        <div id="f-event-list" style="max-height:280px;overflow-y:auto;padding:0 6px 6px;"></div>
+        <div style="border-top:1px solid #EDE8E0;display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:#FDFAF7;border-radius:0 0 8px 8px;">
+          <button type="button" id="f-event-clear" style="font-size:11px;border:none;background:transparent;color:#9E9186;cursor:pointer;padding:4px 6px;font-family:inherit;">Clear</button>
+          <button type="button" id="f-event-done" style="font-size:11px;border:1px solid #B4CCAD;background:#EBF1EB;color:#4A6B4E;cursor:pointer;padding:3px 12px;border-radius:6px;font-weight:600;font-family:inherit;">Done</button>
+        </div>
+      </div>
+      <select id="f-event" multiple style="display:none;"></select>
+    </div>
     <select id="f-type" style="width:auto"><option value="">All case types</option></select>
     <input id="f-search" type="text" placeholder="Search client, A# or Cl ID" style="width:180px"/>
   </div>
@@ -5857,21 +5876,34 @@ function rebuildFilterOptions(){
   const ca=ae.value,ce=ee.value,ct2=te?te.value:'';
   ae.innerHTML='<option value="">All paralegals</option>';
   paralegals.forEach(a=>{const o=document.createElement('option');o.value=a;o.textContent=a;if(a===ca)o.selected=true;ae.appendChild(o);});
-  ee.innerHTML='<option value="">All event types</option>';
-  eventTypes.forEach(e=>{const o=document.createElement('option');o.value=e;o.textContent=e;if(e===ce)o.selected=true;ee.appendChild(o);});
+  // Event types is a multi-select hidden behind a custom dropdown — preserve selection across rebuilds
+  const prevSelected=new Set(Array.from(ee.selectedOptions||[]).map(o=>o.value).filter(Boolean));
+  ee.innerHTML='';
+  eventTypes.forEach(e=>{const o=document.createElement('option');o.value=e;o.textContent=e;if(prevSelected.has(e))o.selected=true;ee.appendChild(o);});
+  if(typeof _renderEventFilterCheckboxes==='function')_renderEventFilterCheckboxes();
+  if(typeof _updateEventFilterLabel==='function')_updateEventFilterLabel();
   if(te){te.innerHTML='<option value="">All case types</option>';caseTypes.forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=t;if(t===ct2)o.selected=true;te.appendChild(o);});}
+}
+function eventTypeMatches(ev){
+  const el=document.getElementById('f-event');
+  if(!el)return true;
+  const sel=el.selectedOptions;
+  if(!sel||!sel.length)return true;
+  const set=new Set(Array.from(sel).map(o=>o.value).filter(Boolean));
+  return !set.size||set.has(ev);
 }
 function getFiltered(){
   const atty=(document.getElementById('f-atty')||{}).value||'';
-  const evt=(document.getElementById('f-event')||{}).value||'';
+  const evtEl=document.getElementById('f-event');
+  const evtSet=evtEl?new Set(Array.from(evtEl.selectedOptions||[]).map(o=>o.value).filter(Boolean)):new Set();
   const q=((document.getElementById('f-search')||{}).value||'').toLowerCase();
   const te=document.getElementById('f-type');
   const ctype=te?te.value:'';
-  if(!atty&&!evt&&!ctype&&!q) return records.filter(r=>!r.finishedStatus&&!r.deletedStatus);
+  if(!atty&&!evtSet.size&&!ctype&&!q) return records.filter(r=>!r.finishedStatus&&!r.deletedStatus);
   return records.filter(r=>{
     if(r.finishedStatus||r.deletedStatus)return false;
     if(atty&&r.atty!==atty)return false;
-    if(evt&&r.event!==evt)return false;
+    if(evtSet.size&&!evtSet.has(r.event))return false;
     if(ctype&&r.type!==ctype)return false;
     if(q&&!r.client.toLowerCase().includes(q)&&!(r.anum||'').toLowerCase().includes(q)&&!(r.clid||'').toLowerCase().includes(q))return false;
     return true;
@@ -9584,7 +9616,7 @@ async function doSendComposeEmail(){
 }
 
 // ── Finished & All Events ──
-function renderFinished(){rebuildFilterOptions();const q=(document.getElementById('f-search').value||'').toLowerCase();const atty=document.getElementById('f-atty').value,evt=document.getElementById('f-event').value;const rows=records.filter(r=>{if(!r.finishedStatus&&!r.deletedStatus)return false;if(_isRecordCaseClosed(r))return false;if(atty&&r.atty!==atty)return false;if(evt&&r.event!==evt)return false;if(q&&!r.client.toLowerCase().includes(q)&&!(r.anum||'').toLowerCase().includes(q)&&!(r.clid||'').toLowerCase().includes(q))return false;return true;});rows.sort((a,b)=>{const ha=a.history&&a.history.length?a.history[a.history.length-1].date:'';const hb=b.history&&b.history.length?b.history[b.history.length-1].date:'';return hb.localeCompare(ha);});const tr=document.getElementById('thead-finished');tr.innerHTML='';allColumns().forEach(col=>{if(colVis[col.key]!==false||col.always){const th=document.createElement('th');th.textContent=col.label;tr.appendChild(th);}});const ts=document.createElement('th');ts.textContent='Status';tr.appendChild(ts);const te2=document.createElement('th');tr.appendChild(te2);const tbody=document.getElementById('tbody-finished');tbody.innerHTML='';const sm={completed:{label:'Completed',bg:'#EBF1EB',color:'#6A8C6E'},attended:{label:'Attended',bg:'#EEF1F7',color:'#6B7FA3'},cancelled:{label:'Cancelled',bg:'#F9EDED',color:'#B85C5C'},rescheduled:{label:'Rescheduled',bg:'#EEF1F7',color:'#6B7FA3'},deleted:{label:'Deleted',bg:'#EDE8E0',color:'#9E9186'}};const frag=document.createDocumentFragment();rows.forEach(r=>{const isDel=!!r.deletedStatus;const smk=isDel?'deleted':r.finishedStatus;const s2=sm[smk]||{label:smk,bg:'#f5f5f5',color:'#888'};const re=(r.history||[]).slice().reverse().find(h=>['completed','attended','cancelled','deleted'].includes(h.type)&&h.note);const tr2=document.createElement('tr');tr2.className='finished-row';let c='';if(colVis.clid!==false)c+=`<td class="muted">${r.clid||'—'}</td>`;c+=`<td style="font-weight:500;text-decoration:line-through;color:#C4BAB0">${r.client}</td>`;if(colVis.anum!==false)c+=`<td class="muted">${r.anum||'—'}</td>`;if(colVis.type!==false)c+=`<td class="muted">${r.type}</td>`;if(colVis.atty!==false)c+=`<td class="muted">${r.atty||'—'}</td>`;if(colVis.event!==false)c+=`<td class="muted">${r.event||'—'}</td>`;if(colVis.date!==false)c+=`<td class="muted">${fmtDate(r.date)}</td>`;if(colVis.assigned!==false)c+=`<td class="muted">${r.assigned||'—'}</td>`;customColumns.forEach(col=>{if(colVis[col.key]!==false)c+=`<td class="muted">${r[col.key]||'—'}</td>`;});if(colVis.notes!==false)c+=`<td class="muted">${r.notes||'—'}</td>`;c+=`<td><span class="finished-status-badge" style="background:${s2.bg};color:${s2.color}">${s2.label}</span>${re?`<div style="font-size:11px;color:#9E9186;margin-top:4px;font-style:italic">"${re.note}"</div>`:''}</td>`;c+=isDel?`<td><button class="edit-btn" onclick="restoreRecord('${r.id}')" style="color:#6B7FA3;border-color:#CBD5E8">&#8635; Restore</button></td>`:`<td><button class="edit-btn" onclick="openEdit('${r.id}')">Edit</button></td>`;tr2.innerHTML=c;frag.appendChild(tr2);});tbody.appendChild(frag);document.getElementById('empty-finished').style.display=rows.length?'none':'block';document.getElementById('tbl-finished').style.display=rows.length?'':'none';}
+function renderFinished(){rebuildFilterOptions();const q=(document.getElementById('f-search').value||'').toLowerCase();const atty=document.getElementById('f-atty').value;const rows=records.filter(r=>{if(!r.finishedStatus&&!r.deletedStatus)return false;if(_isRecordCaseClosed(r))return false;if(atty&&r.atty!==atty)return false;if(!eventTypeMatches(r.event))return false;if(q&&!r.client.toLowerCase().includes(q)&&!(r.anum||'').toLowerCase().includes(q)&&!(r.clid||'').toLowerCase().includes(q))return false;return true;});rows.sort((a,b)=>{const ha=a.history&&a.history.length?a.history[a.history.length-1].date:'';const hb=b.history&&b.history.length?b.history[b.history.length-1].date:'';return hb.localeCompare(ha);});const tr=document.getElementById('thead-finished');tr.innerHTML='';allColumns().forEach(col=>{if(colVis[col.key]!==false||col.always){const th=document.createElement('th');th.textContent=col.label;tr.appendChild(th);}});const ts=document.createElement('th');ts.textContent='Status';tr.appendChild(ts);const te2=document.createElement('th');tr.appendChild(te2);const tbody=document.getElementById('tbody-finished');tbody.innerHTML='';const sm={completed:{label:'Completed',bg:'#EBF1EB',color:'#6A8C6E'},attended:{label:'Attended',bg:'#EEF1F7',color:'#6B7FA3'},cancelled:{label:'Cancelled',bg:'#F9EDED',color:'#B85C5C'},rescheduled:{label:'Rescheduled',bg:'#EEF1F7',color:'#6B7FA3'},deleted:{label:'Deleted',bg:'#EDE8E0',color:'#9E9186'}};const frag=document.createDocumentFragment();rows.forEach(r=>{const isDel=!!r.deletedStatus;const smk=isDel?'deleted':r.finishedStatus;const s2=sm[smk]||{label:smk,bg:'#f5f5f5',color:'#888'};const re=(r.history||[]).slice().reverse().find(h=>['completed','attended','cancelled','deleted'].includes(h.type)&&h.note);const tr2=document.createElement('tr');tr2.className='finished-row';let c='';if(colVis.clid!==false)c+=`<td class="muted">${r.clid||'—'}</td>`;c+=`<td style="font-weight:500;text-decoration:line-through;color:#C4BAB0">${r.client}</td>`;if(colVis.anum!==false)c+=`<td class="muted">${r.anum||'—'}</td>`;if(colVis.type!==false)c+=`<td class="muted">${r.type}</td>`;if(colVis.atty!==false)c+=`<td class="muted">${r.atty||'—'}</td>`;if(colVis.event!==false)c+=`<td class="muted">${r.event||'—'}</td>`;if(colVis.date!==false)c+=`<td class="muted">${fmtDate(r.date)}</td>`;if(colVis.assigned!==false)c+=`<td class="muted">${r.assigned||'—'}</td>`;customColumns.forEach(col=>{if(colVis[col.key]!==false)c+=`<td class="muted">${r[col.key]||'—'}</td>`;});if(colVis.notes!==false)c+=`<td class="muted">${r.notes||'—'}</td>`;c+=`<td><span class="finished-status-badge" style="background:${s2.bg};color:${s2.color}">${s2.label}</span>${re?`<div style="font-size:11px;color:#9E9186;margin-top:4px;font-style:italic">"${re.note}"</div>`:''}</td>`;c+=isDel?`<td><button class="edit-btn" onclick="restoreRecord('${r.id}')" style="color:#6B7FA3;border-color:#CBD5E8">&#8635; Restore</button></td>`:`<td><button class="edit-btn" onclick="openEdit('${r.id}')">Edit</button></td>`;tr2.innerHTML=c;frag.appendChild(tr2);});tbody.appendChild(frag);document.getElementById('empty-finished').style.display=rows.length?'none':'block';document.getElementById('tbl-finished').style.display=rows.length?'':'none';}
 function _sortAllEvents(rows){
   const {key,dir} = _allEventsSort;
   return rows.slice().sort((a,b)=>{
@@ -9600,11 +9632,11 @@ function _sortAllEvents(rows){
 
 function renderAllEvents(){
   const q=(document.getElementById('f-search').value||'').toLowerCase();
-  const atty=document.getElementById('f-atty').value,evt=document.getElementById('f-event').value;
+  const atty=document.getElementById('f-atty').value;
   const tea=document.getElementById('f-type');const ctypea=tea?tea.value:'';
   let rows=[...records].filter(r=>{
     if(atty&&r.atty!==atty)return false;
-    if(evt&&r.event!==evt)return false;
+    if(!eventTypeMatches(r.event))return false;
     if(ctypea&&r.type!==ctypea)return false;
     if(q&&!r.client.toLowerCase().includes(q)&&!(r.anum||'').toLowerCase().includes(q)&&!(r.clid||'').toLowerCase().includes(q))return false;
     return true;
@@ -15595,10 +15627,83 @@ db.collection('wilmer_daynotes').doc(dnKey).onSnapshot(
   ()=>{}
 );
 // ── Perf: debounce filter inputs ──
-['f-search','f-atty','f-event','f-type'].forEach(id=>{
+['f-search','f-atty','f-type'].forEach(id=>{
   const el=document.getElementById(id);
   if(el) el.addEventListener('input',_debouncedRenderAll);
 });
+// Multi-select event-type filter: hidden <select> fires 'change' when toggled via the custom dropdown
+(function(){
+  const fe=document.getElementById('f-event');
+  if(fe) fe.addEventListener('change',_debouncedRenderAll);
+})();
+function _renderEventFilterCheckboxes(){
+  const list=document.getElementById('f-event-list');
+  const sel=document.getElementById('f-event');
+  if(!list||!sel)return;
+  const q=((document.getElementById('f-event-search')||{}).value||'').toLowerCase();
+  const selected=new Set(Array.from(sel.selectedOptions).map(o=>o.value).filter(Boolean));
+  list.innerHTML='';
+  let shown=0;
+  eventTypes.forEach(t=>{
+    if(q&&!t.toLowerCase().includes(q))return;
+    shown++;
+    const row=document.createElement('div');
+    row.className='f-event-row';
+    const cb=document.createElement('input');cb.type='checkbox';cb.checked=selected.has(t);
+    const lbl=document.createElement('label');lbl.textContent=t;
+    row.appendChild(cb);row.appendChild(lbl);
+    row.addEventListener('click',function(e){
+      if(e.target!==cb) cb.checked=!cb.checked;
+      const opt=Array.from(sel.options).find(o=>o.value===t);
+      if(opt) opt.selected=cb.checked;
+      _updateEventFilterLabel();
+      sel.dispatchEvent(new Event('change',{bubbles:true}));
+    });
+    list.appendChild(row);
+  });
+  if(!shown){
+    const empty=document.createElement('div');
+    empty.style.cssText='padding:14px 8px;font-size:11px;color:#9E9186;text-align:center;font-style:italic;';
+    empty.textContent='No event types match "'+(q||'')+'"';
+    list.appendChild(empty);
+  }
+}
+function _updateEventFilterLabel(){
+  const btn=document.getElementById('f-event-btn');
+  const sel=document.getElementById('f-event');
+  if(!btn||!sel)return;
+  const arr=Array.from(sel.selectedOptions).map(o=>o.value).filter(Boolean);
+  if(!arr.length){btn.textContent='All event types';btn.classList.remove('has-selection');}
+  else if(arr.length===1){btn.textContent=arr[0];btn.classList.add('has-selection');}
+  else {btn.textContent=arr.length+' event types';btn.classList.add('has-selection');}
+}
+(function _initEventFilterDropdown(){
+  const btn=document.getElementById('f-event-btn');
+  const pop=document.getElementById('f-event-pop');
+  const search=document.getElementById('f-event-search');
+  const clear=document.getElementById('f-event-clear');
+  const done=document.getElementById('f-event-done');
+  if(!btn||!pop)return;
+  btn.addEventListener('click',function(e){
+    e.stopPropagation();
+    const isOpen=pop.style.display==='block';
+    pop.style.display=isOpen?'none':'block';
+    if(!isOpen){_renderEventFilterCheckboxes();if(search){search.value='';setTimeout(()=>search.focus(),20);}}
+  });
+  document.addEventListener('click',function(e){
+    if(pop.style.display==='block'&&!pop.contains(e.target)&&e.target!==btn)pop.style.display='none';
+  });
+  if(search) search.addEventListener('input',_renderEventFilterCheckboxes);
+  if(clear) clear.addEventListener('click',function(){
+    const sel=document.getElementById('f-event');
+    Array.from(sel.options).forEach(o=>o.selected=false);
+    _renderEventFilterCheckboxes();
+    _updateEventFilterLabel();
+    sel.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  if(done) done.addEventListener('click',function(){pop.style.display='none';});
+  _updateEventFilterLabel();
+})();
 const csEl=document.getElementById('cases-search');
 if(csEl) csEl.addEventListener('input',function(){
   // If a case detail is open, close it so search results are visible and the
