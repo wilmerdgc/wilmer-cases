@@ -12042,11 +12042,13 @@ function openCaseDetail(clid){
   function mkText2(val){ const i=document.createElement('input');i.type='text';i.value=val||'';i.style.cssText='width:100%;font-size:13px;font-weight:500;color:#2C2620;border:none;outline:none;background:transparent;padding:0;font-family:inherit;';return i; }
   function mkSel2(options,cur){ const s=document.createElement('select');s.style.cssText='width:100%;font-size:13px;font-weight:500;color:#2C2620;border:none;outline:none;background:transparent;padding:0;font-family:inherit;cursor:pointer;';const bo=document.createElement('option');bo.value='';bo.textContent='—';s.appendChild(bo);options.forEach(o=>{const opt=document.createElement('option');opt.value=o;opt.textContent=o;if(o===cur)opt.selected=true;s.appendChild(opt);});return s; }
   function mkInfoCell(grid2, labelText, value, editInputFn){
+    // View mode: hide cells with empty values so the overview stays compact
+    if(!isEditing && !value) return null;
     const item=document.createElement('div');item.className='case-info-item';
     if(isEditing){item.style.background='#fff';item.style.border='1px solid #DDD5CA';}
     const lbl=document.createElement('div');lbl.className='case-info-label';lbl.textContent=labelText;item.appendChild(lbl);
     if(isEditing && editInputFn){item.appendChild(editInputFn());}
-    else{const v=document.createElement('div');v.className='case-info-value';v.textContent=value||'—';item.appendChild(v);}
+    else{const v=document.createElement('div');v.className='case-info-value';v.textContent=value;item.appendChild(v);}
     if(grid2) grid2.appendChild(item);
     return item;
   }
