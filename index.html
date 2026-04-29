@@ -13943,14 +13943,9 @@ function renderCallUpBanner(){
   banner.innerHTML='';
   banner.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 14px;background:#FFF3E8;border:1px solid #E8C49A;border-radius:10px;margin-bottom:10px;flex-wrap:wrap;';
 
-  const icon=document.createElement('span');
-  icon.style.cssText='font-size:14px;flex-shrink:0;';
-  icon.textContent='⏰';
-  banner.appendChild(icon);
-
   const label=document.createElement('span');
   label.style.cssText='font-size:11px;font-weight:700;color:#C9823A;white-space:nowrap;';
-  label.textContent=urgentCallUps.length+' call-up'+(urgentCallUps.length!==1?'s':'')+' due soon:';
+  label.textContent='Call-ups:';
   banner.appendChild(label);
 
   const pills=document.createElement('div');
