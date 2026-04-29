@@ -497,6 +497,7 @@ body.wk-dragging .week-col { transition: background 0.1s, box-shadow 0.1s; }
 .modal-backdrop.readonly-mode #modal-reminder-section,
 .modal-backdrop.readonly-mode #modal-status-section,
 .modal-backdrop.readonly-mode #modal-time-row,
+.modal-backdrop.readonly-mode #modal-date-calc,
 .modal-backdrop.readonly-mode #modal-copy-btn { display: none !important; }
 .modal-backdrop.readonly-mode .modal-save-btn { display: none !important; }
 .modal-backdrop.readonly-mode #modal-readonly-view { display: block; }
@@ -2734,7 +2735,7 @@ function hideExcelRestorePrompt(){}
     </div>
     <div class="form-row"><label class="form-label">Deadline</label><input id="fc-date" type="date" oninput="updateDateCalc();renderReminderChips();checkWeekendDate(this.value);(function(){const ri=document.getElementById('icp-ref-input');if(ri&&document.getElementById('individual-callup-panel').style.display!=='none')ri.value=this.value;}).call(this);refreshIndividualCallupPanel(false)"/></div>
     <!-- Date calculator -->
-    <div style="display:flex;align-items:center;gap:6px;margin:-6px 0 10px 0;padding:0 2px;">
+    <div id="modal-date-calc" style="display:flex;align-items:center;gap:6px;margin:-6px 0 10px 0;padding:0 2px;">
       <input id="dc-start" type="date" title="Start date" oninput="updateDateCalc()" style="font-size:11px;padding:3px 6px;border:1px solid #EDE8E0;border-radius:5px;color:#9E9186;background:#FDFAF7;width:130px;"/>
       <select id="dc-op" onchange="updateDateCalc()" style="font-size:11px;padding:3px 5px;border:1px solid #EDE8E0;border-radius:5px;color:#9E9186;background:#FDFAF7;width:46px;">
         <option value="+">+</option>
