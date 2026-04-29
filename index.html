@@ -12185,23 +12185,27 @@ function openCaseDetail(clid){
     mkInfoCell(L1,'Country of Birth',(caseMeta[clid]||{}).clientCountryOfBirth||'',()=>clCobI);
 
     // ── Client Address ──
-    const addrSection=document.createElement('div');addrSection.style.cssText='grid-column:1/-1;';
-    const addrLabel=document.createElement('div');addrLabel.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;margin:4px 0 5px;';addrLabel.textContent='Client Address';addrSection.appendChild(addrLabel);
-    const addrGrid=document.createElement('div');addrGrid.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;';
     const _clAddr=caseMeta[clid]||{};
+    const _hasAddrInfo = !!(_clAddr.clientStreet||_clAddr.clientApt||_clAddr.clientCity||_clAddr.clientState||_clAddr.clientZip||_clAddr.clientCountry);
+    // In view mode, skip the entire Client Address section when no field is filled
     const clStreetI=mkText2(_clAddr.clientStreet||'');clStreetI.placeholder='Street…';infoBody._clStreetInput=clStreetI;
-    mkInfoCell(addrGrid,'Street',_clAddr.clientStreet||'',()=>clStreetI);
     const clAptI=mkText2(_clAddr.clientApt||'');clAptI.placeholder='Apt/Ste/Flr…';infoBody._clAptInput=clAptI;
-    mkInfoCell(addrGrid,'Apt / Ste / Flr',_clAddr.clientApt||'',()=>clAptI);
     const clCityI=mkText2(_clAddr.clientCity||'');clCityI.placeholder='City…';infoBody._clCityInput=clCityI;
-    mkInfoCell(addrGrid,'City',_clAddr.clientCity||'',()=>clCityI);
     const clStateI=mkText2(_clAddr.clientState||'');clStateI.placeholder='State…';infoBody._clStateInput=clStateI;
-    mkInfoCell(addrGrid,'State',_clAddr.clientState||'',()=>clStateI);
     const clZipI=mkText2(_clAddr.clientZip||'');clZipI.placeholder='ZIP…';infoBody._clZipInput=clZipI;
-    mkInfoCell(addrGrid,'ZIP Code',_clAddr.clientZip||'',()=>clZipI);
     const clCountryI=mkText2(_clAddr.clientCountry||'');clCountryI.placeholder='Country…';infoBody._clCountryInput=clCountryI;
-    mkInfoCell(addrGrid,'Country',_clAddr.clientCountry||'',()=>clCountryI);
-    addrSection.appendChild(addrGrid);L1.appendChild(addrSection);
+    if(isEditing || _hasAddrInfo){
+      const addrSection=document.createElement('div');addrSection.style.cssText='grid-column:1/-1;';
+      const addrLabel=document.createElement('div');addrLabel.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;margin:4px 0 5px;';addrLabel.textContent='Client Address';addrSection.appendChild(addrLabel);
+      const addrGrid=document.createElement('div');addrGrid.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;';
+      mkInfoCell(addrGrid,'Street',_clAddr.clientStreet||'',()=>clStreetI);
+      mkInfoCell(addrGrid,'Apt / Ste / Flr',_clAddr.clientApt||'',()=>clAptI);
+      mkInfoCell(addrGrid,'City',_clAddr.clientCity||'',()=>clCityI);
+      mkInfoCell(addrGrid,'State',_clAddr.clientState||'',()=>clStateI);
+      mkInfoCell(addrGrid,'ZIP Code',_clAddr.clientZip||'',()=>clZipI);
+      mkInfoCell(addrGrid,'Country',_clAddr.clientCountry||'',()=>clCountryI);
+      addrSection.appendChild(addrGrid);L1.appendChild(addrSection);
+    }
 
     // Consolidated
     if(isEditing){
@@ -12260,9 +12264,9 @@ function openCaseDetail(clid){
         // All fields on ONE horizontal row
         const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:14px;flex-wrap:wrap;width:100%;';
 
-        // Name
+        // Name — in view mode, skip the lead client's name (it's already in Family/Given Name above)
         if(isEditing){const nI3=mkText2(cl.name);nI3.style.cssText='font-size:12px;font-weight:600;color:#2C2620;border:none;border-bottom:1px solid #DDD5CA;outline:none;background:transparent;padding:1px 0;min-width:100px;width:140px;';cl._nameInput=nI3;row.appendChild(nI3);}
-        else{const n=document.createElement('span');n.style.cssText="font-size:12px;font-weight:600;color:#2C2620;font-family:'Lora',Georgia,serif;white-space:nowrap;";n.textContent=cl.name||'—';row.appendChild(n);}
+        else if(!cl._isBase && cl.name){const n=document.createElement('span');n.style.cssText="font-size:12px;font-weight:600;color:#2C2620;font-family:'Lora',Georgia,serif;white-space:nowrap;";n.textContent=cl.name;row.appendChild(n);}
 
         // A#
         if(isEditing){const aI3=mkText2(cl.anum);aI3.placeholder='A#';aI3.style.cssText='font-size:11px;color:#9E9186;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;width:90px;';cl._anumInput=aI3;row.appendChild(aI3);}
