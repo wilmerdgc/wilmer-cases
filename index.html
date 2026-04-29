@@ -3223,21 +3223,23 @@ function _getStatusBounds(){if(_statusBounds)return _statusBounds;const{mon:wm,s
 function status(d){if(!d)return'no-date';const diff=Math.floor((d-TODAY)/(1000*60*60*24));if(diff<0)return'overdue';const{wm,ws,nm,ns,d15}=_getStatusBounds();if(d>=wm&&d<=ws)return'thisweek';if(d>=nm&&d<=ns)return'nextweek';if(d<=d15)return'15days';return'ok';}
 function badgeClass(s){return{overdue:'overdue',thisweek:'urgent',nextweek:'urgent',['15days']:'ok',ok:'ok','no-date':'no-date'}[s]||'no-date';}
 function fmtDate(s){if(!s)return'—';const d=parseDate(s);return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});}
-// Calculate time until client turns 21 (ages out). Returns text like "2y 3m left" or "aged out" or "".
+// Calculate time until client turns 21 (ages out). Returns text like "2y 3m left", "13d left", or "aged out".
 function calculateAgeText(dobStr){
   if(!dobStr) return '';
   const dob=parseDate(dobStr); if(!dob) return '';
   const ageOutDate=new Date(dob.getFullYear()+21,dob.getMonth(),dob.getDate());
   const now=new Date(TODAY);
   if(ageOutDate<=now) return 'aged out';
-  // Calculate years and months remaining
+  // Less than a month away → show exact days remaining
+  const daysLeft=Math.ceil((ageOutDate-now)/(1000*60*60*24));
+  if(daysLeft<=30) return daysLeft+'d left';
+  // Otherwise compute years/months
   let years=ageOutDate.getFullYear()-now.getFullYear();
   let months=ageOutDate.getMonth()-now.getMonth();
   let days=ageOutDate.getDate()-now.getDate();
   if(days<0){months-=1;}
   if(months<0){years-=1;months+=12;}
   if(years<0) return 'aged out';
-  if(years===0&&months===0) return '<1m left';
   if(years===0) return months+'m left';
   return years+'y '+months+'m left';
 }
