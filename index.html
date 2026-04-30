@@ -3447,6 +3447,47 @@ function _gmailFindLinkedCase(msgId){
   }
   return null;
 }
+// Scan a chunk of text for digit sequences (Cl IDs or A-Numbers) and resolve any
+// that match an existing record. Returns up to 5 unique suggestions.
+function _gmailFindCasesByNumber(text){
+  if(!text) return [];
+  const out = [];
+  const seen = new Set();
+  // Index records once
+  const byClid = new Map();
+  const byAnum = new Map();
+  (typeof records !== 'undefined' ? records : []).forEach(r => {
+    if(r.clid){
+      const c = String(r.clid).trim();
+      if(c && !byClid.has(c)) byClid.set(c, r);
+    }
+    if(r.anum){
+      const a = String(r.anum).replace(/\D/g,'');
+      if(a && a.length >= 7 && !byAnum.has(a)) byAnum.set(a, r);
+    }
+  });
+  if(!byClid.size && !byAnum.size) return [];
+  // Match digit-with-optional-dashes patterns
+  const re = /\b\d[\d-]{2,}\d\b/g;
+  let m;
+  while((m = re.exec(text)) !== null){
+    const raw = m[0];
+    const digits = raw.replace(/\D/g,'');
+    if(digits.length < 4) continue;
+    if(byClid.has(digits)){
+      const r = byClid.get(digits);
+      const k = 'clid:' + (r.clid || r.client) + ':' + digits;
+      if(!seen.has(k)){ seen.add(k); out.push({type:'Cl ID', match:raw, record:r}); }
+    }
+    if(digits.length >= 7 && byAnum.has(digits)){
+      const r = byAnum.get(digits);
+      const k = 'anum:' + (r.clid || r.client) + ':' + digits;
+      if(!seen.has(k)){ seen.add(k); out.push({type:'A#', match:raw, record:r}); }
+    }
+    if(out.length >= 5) break;
+  }
+  return out;
+}
 // Look up a case whose clientEmail (case-insensitive) matches the sender's email.
 // Returns {clid, clientName, paralegalName, paralegalEmail} or null.
 function _gmailFindCaseByEmail(email){
@@ -4797,6 +4838,31 @@ function gmailRenderMessage(){
   // If the sender is a known client, surface the case + paralegal so the lawyer
   // can see context immediately and the Reply buttons can auto-cc the paralegal.
   const _linkedByEmail = _gmailFindCaseByEmail(fromEmail);
+  // Even when there's no email match, scan the subject + body for Cl IDs / A-Numbers
+  // and suggest matching cases.
+  const _suggestText = (m.subject||'') + '\n' + (m.snippet||'') + '\n' + String(m.body||'').replace(/<[^>]+>/g,' ');
+  const _suggestions = !_linkedByEmail ? _gmailFindCasesByNumber(_suggestText) : [];
+  let _suggestBadge = '';
+  if(_suggestions.length){
+    const items = _suggestions.map(s => {
+      const r = s.record;
+      const clidVal = r.clid || r.client || '';
+      const meta = (typeof caseMeta !== 'undefined' && caseMeta[clidVal]) || {};
+      const clientName = [meta.clientFirstName, meta.clientMiddleName, meta.clientLastName].filter(Boolean).join(' ').trim() || r.client || clidVal;
+      const paraName = r.atty ? escHtml(r.atty) : '<span style="color:#C4BAB0;">unassigned</span>';
+      const paraEmail = (r.atty && paralegalEmails[r.atty]) ? paralegalEmails[r.atty] : '';
+      return '<div style="margin-top:5px;padding-top:5px;border-top:1px dashed #E8C49A;display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;">'
+        + '<span style="font-size:10px;font-weight:600;color:#9C6D2F;">Found <code style="background:#FFF8EE;padding:0 4px;border-radius:3px;font-family:monospace;">' + escHtml(s.match) + '</code> (' + s.type + ')</span>'
+        + '<button type="button" onclick="goToCase(\'' + escHtml(clidVal).replace(/'/g,"\\'") + '\')" style="border:none;background:transparent;color:#6B4A1A;font-family:inherit;font-size:12px;font-weight:600;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:0;">' + escHtml(clientName) + '</button>'
+        + (r.clid ? '<span style="font-size:11px;color:#9C6D2F;">· Cl ID <b>' + escHtml(r.clid) + '</b></span>' : '')
+        + '<span style="font-size:11px;color:#9C6D2F;">· Paralegal: <b>' + paraName + '</b>' + (paraEmail ? ' &lt;' + escHtml(paraEmail) + '&gt;' : '') + '</span>'
+        + '</div>';
+    }).join('');
+    _suggestBadge = '<div style="margin-top:8px;padding:8px 12px;background:#FAF0E6;border:1px solid #E8C49A;border-radius:8px;font-size:12px;color:#6B4A1A;">'
+      + '<span style="font-size:10px;font-weight:700;color:#C9823A;text-transform:uppercase;letter-spacing:.04em;">Possible match' + (_suggestions.length>1 ? 'es' : '') + '</span>'
+      + items
+      + '</div>';
+  }
   let _linkedBadge = '';
   if(_linkedByEmail){
     const clidEsc = escHtml(_linkedByEmail.clid);
@@ -4828,7 +4894,7 @@ function gmailRenderMessage(){
           <div style="font-size:11px;color:var(--ink-muted);margin-top:2px;">to ${escHtml(m.to)}${m.cc?'<br>cc '+escHtml(m.cc):''}</div>
         </div>
       </div>
-      ${_linkedBadge}
+      ${_linkedBadge}${_suggestBadge}
       <!-- Action toolbar -->
       <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">
         <!-- Row 1: Reply actions -->
