@@ -4363,12 +4363,48 @@ async function calendarSyncAll(){
   showToast('📅 Calendar sync: '+(parts.join(', ')||'nothing changed'));
 }
 
+// Which Gmail mailbox is currently shown in the list. 'inbox' or 'sent'.
+let _gmailMailbox = 'inbox';
+// Set of thread IDs the user has sent a message in (so we can show a "replied" badge in the inbox).
+let _gmailRepliedThreads = new Set();
+async function _gmailRefreshRepliedThreads(){
+  // One cheap call: fetch IDs of recent SENT messages and harvest their threadIds.
+  // Each entry returns just {id, threadId}, no headers.
+  try{
+    const data = await gmailApi('messages?maxResults=100&labelIds=SENT');
+    if(!data || !data.messages) return;
+    _gmailRepliedThreads = new Set(data.messages.map(m => m.threadId).filter(Boolean));
+  }catch(e){}
+}
+function gmailSwitchMailbox(box){
+  if(box!=='inbox' && box!=='sent') return;
+  _gmailMailbox = box;
+  // Update segmented control styles
+  const ib = document.getElementById('mailbox-inbox-btn');
+  const sb = document.getElementById('mailbox-sent-btn');
+  if(ib && sb){
+    const sel = (b) => { b.style.background='var(--ink)'; b.style.color='#fff'; };
+    const unsel = (b) => { b.style.background='#fff'; b.style.color='var(--ink-muted)'; };
+    if(box==='inbox'){ sel(ib); unsel(sb); } else { unsel(ib); sel(sb); }
+  }
+  // Reset and refetch
+  _gmailMessages = [];
+  _gmailNextPageToken = null;
+  _gmailCurrentMsg = null;
+  const reader = document.getElementById('gmail-email-reader');
+  if(reader) reader.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ink-faint);font-size:13px;">Select an email to read</div>';
+  gmailFetchInbox();
+}
 async function gmailFetchInbox(pageToken, query){
   const el = document.getElementById('gmail-email-list');
   if(!pageToken){ _gmailMessages = []; _gmailNextPageToken = null; if(el) el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--ink-muted);font-size:12px;">Loading...</div>'; }
-  let url = 'messages?maxResults=20&labelIds=INBOX';
+  const labelId = (_gmailMailbox==='sent') ? 'SENT' : 'INBOX';
+  let url = 'messages?maxResults=20&labelIds=' + labelId;
   if(pageToken) url += '&pageToken=' + pageToken;
   if(query) url += '&q=' + encodeURIComponent(query);
+  // Inbox mode: refresh the set of thread IDs we've replied to in parallel,
+  // so the list can show a "replied" badge.
+  const repliedRefresh = (_gmailMailbox==='inbox' && !pageToken) ? _gmailRefreshRepliedThreads() : Promise.resolve();
   const data = await gmailApi(url);
   if(!data) return;
   _gmailNextPageToken = data.nextPageToken || null;
@@ -4376,8 +4412,9 @@ async function gmailFetchInbox(pageToken, query){
     if(!pageToken && el) el.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--ink-muted);font-size:13px;">No emails found</div>';
     return;
   }
-  // Fetch headers for each message (batch)
-  const details = await Promise.all(data.messages.map(m => gmailApi('messages/' + m.id + '?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date')));
+  // Fetch headers for each message (batch). Include To so the list can show
+  // recipients in the Sent mailbox.
+  const details = await Promise.all(data.messages.map(m => gmailApi('messages/' + m.id + '?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date')));
   details.forEach(d => {
     if(!d) return;
     const headers = {};
@@ -4387,12 +4424,15 @@ async function gmailFetchInbox(pageToken, query){
       threadId: d.threadId,
       snippet: d.snippet || '',
       from: headers.from || '',
+      to: headers.to || '',
       subject: headers.subject || '(no subject)',
       date: headers.date || '',
       labelIds: d.labelIds || [],
       isUnread: (d.labelIds || []).includes('UNREAD')
     });
   });
+  // Wait for the replied-threads refresh so the badges show on first paint.
+  await repliedRefresh;
   gmailRenderEmailList();
 }
 
@@ -4558,6 +4598,12 @@ async function gmailSendMessage(to, subject, body, threadId, inReplyTo, cc, atta
     body: JSON.stringify(payload)
   });
   if(data){
+    // If we sent into a thread (reply/replyAll/forward), mark it locally as
+    // replied so the inbox list immediately shows the ↩ badge.
+    if(threadId && typeof _gmailRepliedThreads !== 'undefined'){
+      _gmailRepliedThreads.add(threadId);
+      if(_gmailMailbox === 'inbox') gmailRenderEmailList();
+    }
     showToast('Email sent ✓');
     return true;
   }
@@ -4644,6 +4690,10 @@ function gmailRenderConnected(){
     <div style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
       <!-- Top bar -->
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0;">
+        <div style="display:flex;flex-shrink:0;">
+          <button id="mailbox-inbox-btn" onclick="gmailSwitchMailbox('inbox')" style="font-size:11px;font-weight:600;padding:7px 12px;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);background:${_gmailMailbox==='sent'?'#fff':'var(--ink)'};color:${_gmailMailbox==='sent'?'var(--ink-muted)':'#fff'};cursor:pointer;font-family:inherit;">📥 Inbox</button>
+          <button id="mailbox-sent-btn" onclick="gmailSwitchMailbox('sent')" style="font-size:11px;font-weight:600;padding:7px 12px;border:1px solid var(--border);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:${_gmailMailbox==='sent'?'var(--ink)':'#fff'};color:${_gmailMailbox==='sent'?'#fff':'var(--ink-muted)'};cursor:pointer;font-family:inherit;">📤 Sent</button>
+        </div>
         <div style="flex:1;position:relative;">
           <input id="gmail-search-input" type="text" placeholder="Search emails..." style="width:100%;font-size:12px;padding:7px 10px 7px 30px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;background:#fff;"
             onkeydown="if(event.key==='Enter')gmailDoSearch()"/>
@@ -4685,27 +4735,37 @@ function gmailRenderEmailList(){
   if(!el) return;
   el.innerHTML = '';
   _gmailMessages.forEach(m => {
-    const fromName = m.from.replace(/<.*>/, '').trim() || m.from;
-    const fromEmail = (m.from.match(/<(.+?)>/)||[])[1] || m.from;
+    // In the Sent mailbox the recipient is more useful than the sender.
+    const isSent = (_gmailMailbox==='sent');
+    const headerSrc = isSent ? (m.to || m.from || '') : (m.from || '');
+    // For Sent with multiple recipients, show the first one's name plus "+N more"
+    const firstRecipient = isSent ? (headerSrc.split(',')[0]||'').trim() : headerSrc;
+    const extraCount = isSent ? Math.max(0, headerSrc.split(',').length - 1) : 0;
+    const displayName = (firstRecipient.replace(/<.*>/, '').trim() || firstRecipient || '(no recipient)')
+      + (extraCount ? ' +' + extraCount : '');
+    const displayEmail = (firstRecipient.match(/<(.+?)>/)||[])[1] || firstRecipient;
     const dateStr = gmailFormatDate(m.date);
     const hasAtt = !!(m.attachments && m.attachments.length);
     const isCurrent = _gmailCurrentMsg && _gmailCurrentMsg.id === m.id;
     const div = document.createElement('div');
-    const baseBg = m.isUnread ? '#fff' : '#FAF7F2';
+    // Sent messages aren't "unread"; treat them all as read for styling.
+    const showUnread = !isSent && m.isUnread;
+    const baseBg = showUnread ? '#fff' : '#FAF7F2';
     const hoverBg = '#F0EBE4';
     const selectedBg = '#EBF1EB';
-    div.style.cssText = 'display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border-bottom:1px solid #F0EBE4;cursor:pointer;transition:background .1s, box-shadow .1s;background:' + (isCurrent?selectedBg:baseBg) + ';' + (m.isUnread ? 'box-shadow:inset 3px 0 0 var(--sage);' : '');
+    div.style.cssText = 'display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border-bottom:1px solid #F0EBE4;cursor:pointer;transition:background .1s, box-shadow .1s;background:' + (isCurrent?selectedBg:baseBg) + ';' + (showUnread ? 'box-shadow:inset 3px 0 0 var(--sage);' : '');
     div.onmouseenter = () => { if(!isCurrent) div.style.background = hoverBg; };
     div.onmouseleave = () => { if(!isCurrent) div.style.background = baseBg; };
     div.onclick = () => gmailFetchMessage(m.id);
+    const labelPrefix = isSent ? '<span style="color:var(--ink-faint);font-weight:400;">to </span>' : '';
     div.innerHTML =
-      gmailAvatar(fromName, fromEmail)
+      gmailAvatar(displayName, displayEmail)
       + '<div style="flex:1;min-width:0;">'
         + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">'
-          + '<div style="font-size:13px;font-weight:' + (m.isUnread?'700':'500') + ';color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">' + escHtml(fromName) + '</div>'
-          + '<div style="font-size:10px;color:' + (m.isUnread?'var(--sage)':'var(--ink-faint)') + ';white-space:nowrap;flex-shrink:0;font-weight:' + (m.isUnread?'600':'400') + ';">' + dateStr + '</div>'
+          + '<div style="font-size:13px;font-weight:' + (showUnread?'700':'500') + ';color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">' + labelPrefix + escHtml(displayName) + '</div>'
+          + '<div style="font-size:10px;color:' + (showUnread?'var(--sage)':'var(--ink-faint)') + ';white-space:nowrap;flex-shrink:0;font-weight:' + (showUnread?'600':'400') + ';">' + dateStr + '</div>'
         + '</div>'
-        + '<div style="font-size:12px;color:var(--ink);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:' + (m.isUnread?'600':'500') + ';">' + escHtml(m.subject||'(no subject)') + (hasAtt?' <span style="color:var(--ink-faint);font-weight:400;">📎</span>':'') + '</div>'
+        + '<div style="font-size:12px;color:var(--ink);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:' + (showUnread?'600':'500') + ';">' + (!isSent && _gmailRepliedThreads.has(m.threadId) ? '<span title="You replied to this thread" style="color:var(--sage);font-weight:600;margin-right:4px;">↩</span>' : '') + escHtml(m.subject||'(no subject)') + (hasAtt?' <span style="color:var(--ink-faint);font-weight:400;">📎</span>':'') + '</div>'
         + '<div style="font-size:11px;color:var(--ink-muted);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.35;">' + escHtml(m.snippet||'') + '</div>'
       + '</div>';
     el.appendChild(div);
