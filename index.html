@@ -9546,6 +9546,31 @@ function _renderReadOnlyView(r){
   };
   const remindersVal = reminders.length ? reminders.map(d=>d+'d before').join(', ') : '';
   const statusVal = r.finishedStatus ? (r.finishedStatus==='completed'?'Completed':r.finishedStatus==='cancelled'?'Cancelled':r.finishedStatus==='deleted'?'Deleted':r.finishedStatus) : (r.attendedStatus?'Attended':'');
+  // Pull the most recent history note that matches the current status (the
+  // "reason" the user typed when marking complete / cancelled / etc.) so it
+  // shows alongside the Status row instead of being buried in History.
+  let statusNote = '';
+  if(r.history && r.history.length){
+    const wanted = r.finishedStatus || (r.attendedStatus ? 'attended' : '');
+    if(wanted){
+      for(let i=r.history.length-1; i>=0; i--){
+        const h = r.history[i];
+        if(h && h.type === wanted && h.note){ statusNote = h.note; break; }
+      }
+    }
+  }
+  // Any other history notes (manual notes the user added on edits) — list them
+  // separately so nothing the user wrote is lost in view mode.
+  const otherHistoryNotes = [];
+  if(r.history && r.history.length){
+    r.history.forEach(h => {
+      if(!h || !h.note) return;
+      if(h.note === statusNote) return; // already shown as Status note
+      const when = h.date ? String(h.date) : '';
+      const tag = h.type ? h.type.charAt(0).toUpperCase()+h.type.slice(1) : '';
+      otherHistoryNotes.push((when ? when+' · ' : '') + (tag ? tag+': ' : '') + h.note);
+    });
+  }
   const customRows = (customColumns||[]).map(c=>row(c.label||c.key, r[c.key]||'', 'fc-'+c.key)).join('');
   const grid = `<div class="ro-grid">`
     + row('Client ID', r.clid||'', 'fc-clid')
@@ -9558,8 +9583,10 @@ function _renderReadOnlyView(r){
     + row('Time', timeStr, 'fc-time-toggle')
     + row('Assigned', r.assigned||'', 'fc-assigned')
     + (statusVal?row('Status', statusVal, 'sbtn-attended'):'')
+    + row('Status note', statusNote, 'fc-history-note', 'multiline')
     + row('Reminders', remindersVal, 'fc-reminder-custom')
     + row('Notes', r.notes||'', 'fc-notes', 'multiline')
+    + (otherHistoryNotes.length ? row('Other notes', otherHistoryNotes.join('\n\n'), 'fc-history-note', 'multiline') : '')
     + customRows
     + `</div>`;
   host.innerHTML = hero + grid;
