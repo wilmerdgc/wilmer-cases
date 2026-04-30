@@ -9590,19 +9590,21 @@ function openEmailComposeModal(opts){
   opts=opts||{};
   // Ensure Gmail is initialized
   gmailInit();
+  // Reset any leftover attachments from a previous compose session
+  if(typeof gmailResetCompose==='function') gmailResetCompose();
   // Remove any existing compose modal
   const existing=document.getElementById('email-compose-overlay');
   if(existing) existing.remove();
   const ov=document.createElement('div');
   ov.id='email-compose-overlay';
   ov.style.cssText='position:fixed;inset:0;background:rgba(44,38,32,0.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  ov.ondblclick=e=>{if(e.target===ov)ov.remove();};
+  ov.ondblclick=e=>{if(e.target===ov){if(typeof gmailResetCompose==='function')gmailResetCompose();ov.remove();}};
   const box=document.createElement('div');
   box.style.cssText='background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);width:580px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;';
   box.innerHTML=`
     <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
       <div style="font-family:var(--font-display);font-size:15px;font-weight:600;color:var(--ink);">✉ Compose Email</div>
-      <button onclick="document.getElementById('email-compose-overlay').remove()" style="border:none;background:transparent;font-size:18px;color:var(--ink-muted);cursor:pointer;padding:0 4px;">×</button>
+      <button onclick="if(typeof gmailResetCompose==='function')gmailResetCompose();document.getElementById('email-compose-overlay').remove()" style="border:none;background:transparent;font-size:18px;color:var(--ink-muted);cursor:pointer;padding:0 4px;">×</button>
     </div>
     <div style="padding:16px 20px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1;">
       <div style="display:flex;align-items:center;gap:6px;">
@@ -9616,9 +9618,15 @@ function openEmailComposeModal(opts){
       <div id="emc-quick-add" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
       <input id="emc-subject" type="text" value="${(opts.subject||'').replace(/"/g,'&quot;')}" placeholder="Subject..." style="font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;"/>
       <textarea id="emc-body" placeholder="Write your message..." style="min-height:220px;font-size:13px;line-height:1.7;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;resize:vertical;">${(opts.body||'').replace(/</g,'&lt;')}</textarea>
+      <div id="emc-attach-chips" style="min-height:0;"></div>
     </div>
-    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;">
-      <button onclick="document.getElementById('email-compose-overlay').remove()" style="font-size:12px;padding:8px 18px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Cancel</button>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;">
+      <label style="font-size:12px;padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;" title="Attach files (max 25 MB each)">
+        📎 Attach
+        <input type="file" multiple style="display:none;" onchange="gmailAttachAddFiles(this,'emc-attach-chips')"/>
+      </label>
+      <span style="flex:1"></span>
+      <button onclick="if(typeof gmailResetCompose==='function')gmailResetCompose();document.getElementById('email-compose-overlay').remove()" style="font-size:12px;padding:8px 18px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Cancel</button>
       <button onclick="doSendComposeEmail()" style="font-size:12px;font-weight:600;padding:8px 22px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Send</button>
     </div>`;
   ov.appendChild(box);
@@ -9761,8 +9769,10 @@ async function doSendComposeEmail(){
   if(window._emcSignatureHtml){
     htmlBody+='<br><br>--<br>'+window._emcSignatureHtml;
   }
-  const ok=await gmailSendMessage(to.trim(),subject,htmlBody,null,null,cc.trim());
+  const atts=(typeof _gmailComposeAttachments!=='undefined' && _gmailComposeAttachments.length)?_gmailComposeAttachments.slice():null;
+  const ok=await gmailSendMessage(to.trim(),subject,htmlBody,null,null,cc.trim(),atts);
   if(ok){
+    if(typeof gmailResetCompose==='function') gmailResetCompose();
     const ov=document.getElementById('email-compose-overlay');
     if(ov) ov.remove();
     window._emcSignatureHtml=null;
