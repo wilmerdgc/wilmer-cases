@@ -2828,6 +2828,26 @@ function hideExcelRestorePrompt(){}
             </label>
           </div>
         </div>
+        <!-- Virtual hearing details: judge picker + Webex link, only shown when "Virtual" is selected -->
+        <div id="modal-virtual-details" style="display:none;margin-top:10px;padding:12px 14px;background:#EEF1F7;border:1px solid #CBD5E8;border-radius:var(--radius-sm);">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:9px;">
+            <span style="font-size:13px;">📡</span>
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6B7FA3;">Virtual hearing details</span>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+            <div style="flex:1;min-width:180px;">
+              <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;margin-bottom:3px;">Judge</label>
+              <select id="vh-judge" onchange="onVirtualJudgeChange()" style="width:100%;font-size:12px;padding:7px 10px;border:1px solid #CBD5E8;border-radius:6px;font-family:inherit;background:#fff;color:#2C2620;">
+                <option value="">— Select judge —</option>
+              </select>
+            </div>
+            <div style="flex:2;min-width:240px;">
+              <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;margin-bottom:3px;">Webex link</label>
+              <input id="vh-link" type="url" placeholder="https://usdoj.webex.com/meet/…" style="width:100%;font-size:12px;padding:7px 10px;border:1px solid #CBD5E8;border-radius:6px;font-family:inherit;box-sizing:border-box;background:#fff;color:#2C2620;"/>
+            </div>
+          </div>
+          <div style="font-size:10px;color:#9E9186;margin-top:6px;line-height:1.4;">Picking a judge fills in their saved Webex link. Edit it to override for this event only.</div>
+        </div>
       </div>
       <div id="modal-master-prep-section" style="display:none;margin-top:10px;padding:12px 14px;background:#EBF1EB;border:1px solid #B4CCAD;border-radius:var(--radius-sm);">
         <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#2C2620;cursor:pointer;margin-bottom:0;">
@@ -8640,6 +8660,52 @@ function onHearingModeChange(){
     lbl.style.color=sel?s.color:'var(--ink-soft)';
     lbl.style.fontWeight=sel?'600':'400';
   });
+  // Show/hide the virtual hearing details (judge + Webex link)
+  const vd=document.getElementById('modal-virtual-details');
+  if(vd) vd.style.display=(mode==='virtual')?'block':'none';
+  if(mode==='virtual') populateVirtualJudgeDropdown();
+}
+// ── Virtual hearing details ──
+function populateVirtualJudgeDropdown(){
+  const sel=document.getElementById('vh-judge');
+  if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="">— Select judge —</option>';
+  (typeof judges!=='undefined'?judges:[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).forEach(j=>{
+    const o=document.createElement('option');
+    o.value=j.id;
+    o.textContent=j.name+(j.role?' · '+j.role:'')+(j.venue?' · '+j.venue:'');
+    if(j.virtualRoom) o.dataset.virtualRoom=j.virtualRoom;
+    sel.appendChild(o);
+  });
+  if(cur) sel.value=cur;
+}
+function onVirtualJudgeChange(){
+  const sel=document.getElementById('vh-judge');
+  const link=document.getElementById('vh-link');
+  if(!sel||!link) return;
+  const opt=sel.selectedOptions[0];
+  const judgeRoom=opt?opt.dataset.virtualRoom||'':'';
+  // Always pull in the judge's saved link when the judge changes
+  if(judgeRoom) link.value=judgeRoom;
+}
+function setVirtualHearingDetails(judgeId, link){
+  populateVirtualJudgeDropdown();
+  const sel=document.getElementById('vh-judge'); if(sel) sel.value=judgeId||'';
+  const lk=document.getElementById('vh-link'); if(lk) lk.value=link||'';
+}
+function getVirtualHearingDetails(){
+  const sel=document.getElementById('vh-judge');
+  const lk=document.getElementById('vh-link');
+  return {
+    hearingJudgeId:(sel?sel.value:'')||'',
+    virtualLink:(lk?lk.value.trim():'')||''
+  };
+}
+function resetVirtualHearingDetails(){
+  const sel=document.getElementById('vh-judge'); if(sel) sel.value='';
+  const lk=document.getElementById('vh-link'); if(lk) lk.value='';
+  const vd=document.getElementById('modal-virtual-details'); if(vd) vd.style.display='none';
 }
 function onMasterPrepToggle(){
   const on=document.getElementById('mp-toggle').checked;
@@ -9076,8 +9142,8 @@ function openCaseFromModal(){
   closeModal();
   goToCase(clid);
 }
-function openAdd(){editingId=null;pendingStatus=null;document.getElementById('modal-title').textContent='Add event';const ocb=document.getElementById('modal-open-case-btn');if(ocb)ocb.style.display='none';document.getElementById('modal-status-section').style.display='none';document.getElementById('modal-reminder-section').style.display='block';['fc-clid','fc-client','fc-anum','fc-date','fc-notes'].forEach(id=>document.getElementById(id).value='');const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=false;document.getElementById('time-range-panel').classList.remove('open');document.getElementById('fc-time-start').value='';document.getElementById('fc-time-end').value='';document.getElementById('fc-time-display').textContent='';pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();const _icp0=document.getElementById('individual-callup-panel');if(_icp0)_icp0.style.display='none';resetFcSubevents();const _fcs0=document.getElementById('fc-subevents-panel');if(_fcs0)_fcs0.style.display='none';populateModalDropdowns();resetDateCalc();setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _m0=document.getElementById('modal');_m0.classList.remove('readonly-mode');_m0.style.display='flex';}
-function openEdit(id){const r=records.find(x=>x.id===id);if(!r)return;editingId=id;pendingStatus=null;document.getElementById('modal-title').textContent='Edit event';const _ocb=document.getElementById('modal-open-case-btn');if(_ocb){_ocb.style.display=(r.clid||r.client)?'inline':'none';}document.getElementById('modal-status-section').style.display='block';document.getElementById('modal-reminder-section').style.display='block';pendingReminders=[];if(r){records.forEach(rx=>{if(rx.id===id)return;const isLinked=rx._parentId===id||(!rx._parentId&&(rx.clid||rx.client)===(r.clid||r.client));if(isLinked&&rx.notes&&rx.notes.startsWith('⏰ REMINDER')&&rx.date&&r.date){const diff=Math.round((new Date(r.date.replace(/-/g,'/'))-new Date(rx.date.replace(/-/g,'/')))/(1000*60*60*24));if(diff>0&&!pendingReminders.includes(diff))pendingReminders.push(diff);}});}renderReminderChips();document.getElementById('fc-clid').value=r.clid||'';document.getElementById('fc-client').value=r.client||'';document.getElementById('fc-anum').value=r.anum||'';document.getElementById('fc-date').value=r.date||'';document.getElementById('fc-notes').value=r.notes||'';const hasTime=!!(r.timeStart||r.timeEnd);const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=hasTime;document.getElementById('fc-time-start').value=r.timeStart||'';document.getElementById('fc-time-end').value=r.timeEnd||'';if(hasTime)document.getElementById('time-range-panel').classList.add('open');else document.getElementById('time-range-panel').classList.remove('open');updateTimeDisplay();document.getElementById('fc-history-note').value='';document.getElementById('fc-reschedule-date').value='';document.getElementById('reschedule-panel').classList.remove('open');document.getElementById('reschedule-extras').style.display='none';if(document.getElementById('rs-time-toggle'))document.getElementById('rs-time-toggle').checked=false;document.getElementById('rs-time-range-panel').classList.remove('open');if(document.getElementById('rs-time-start'))document.getElementById('rs-time-start').value='';if(document.getElementById('rs-time-end'))document.getElementById('rs-time-end').value='';document.getElementById('rs-time-display').textContent='';rsReminders=[];renderRsReminderChips();['attended','completed','cancelled','rescheduled','deleted'].forEach(k=>{const el=document.getElementById('sbtn-'+k);if(el)el.classList.remove('sel');});if(r.attendedStatus){const ab=document.getElementById('sbtn-attended');if(ab)ab.classList.add('sel');}resetSoAttachmentPanel();resetFcSubevents();populateModalDropdowns();document.getElementById('fc-casetype').value=r.type||'';document.getElementById('fc-paralegal').value=r.atty||'';document.getElementById('fc-eventtype').value=r.event||'';onEventTypeChange(r.event||'');setHearingMode(r.hearingMode||'');const sid=document.getElementById('so-issue-date');if(sid)sid.value=r.soIssueDate||'';document.getElementById('fc-assigned').value=r.assigned||'';customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);if(el)el.value=r[c.key]||'';});renderHistoryLog(r.history||[]);loadModalChecklistDocs(r);resetDateCalc(r.date||'');document.getElementById('modal').style.display='flex';enterReadOnlyMode(r);}
+function openAdd(){editingId=null;pendingStatus=null;document.getElementById('modal-title').textContent='Add event';const ocb=document.getElementById('modal-open-case-btn');if(ocb)ocb.style.display='none';document.getElementById('modal-status-section').style.display='none';document.getElementById('modal-reminder-section').style.display='block';['fc-clid','fc-client','fc-anum','fc-date','fc-notes'].forEach(id=>document.getElementById(id).value='');const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=false;document.getElementById('time-range-panel').classList.remove('open');document.getElementById('fc-time-start').value='';document.getElementById('fc-time-end').value='';document.getElementById('fc-time-display').textContent='';pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetVirtualHearingDetails();const _icp0=document.getElementById('individual-callup-panel');if(_icp0)_icp0.style.display='none';resetFcSubevents();const _fcs0=document.getElementById('fc-subevents-panel');if(_fcs0)_fcs0.style.display='none';populateModalDropdowns();resetDateCalc();setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _m0=document.getElementById('modal');_m0.classList.remove('readonly-mode');_m0.style.display='flex';}
+function openEdit(id){const r=records.find(x=>x.id===id);if(!r)return;editingId=id;pendingStatus=null;document.getElementById('modal-title').textContent='Edit event';const _ocb=document.getElementById('modal-open-case-btn');if(_ocb){_ocb.style.display=(r.clid||r.client)?'inline':'none';}document.getElementById('modal-status-section').style.display='block';document.getElementById('modal-reminder-section').style.display='block';pendingReminders=[];if(r){records.forEach(rx=>{if(rx.id===id)return;const isLinked=rx._parentId===id||(!rx._parentId&&(rx.clid||rx.client)===(r.clid||r.client));if(isLinked&&rx.notes&&rx.notes.startsWith('⏰ REMINDER')&&rx.date&&r.date){const diff=Math.round((new Date(r.date.replace(/-/g,'/'))-new Date(rx.date.replace(/-/g,'/')))/(1000*60*60*24));if(diff>0&&!pendingReminders.includes(diff))pendingReminders.push(diff);}});}renderReminderChips();document.getElementById('fc-clid').value=r.clid||'';document.getElementById('fc-client').value=r.client||'';document.getElementById('fc-anum').value=r.anum||'';document.getElementById('fc-date').value=r.date||'';document.getElementById('fc-notes').value=r.notes||'';const hasTime=!!(r.timeStart||r.timeEnd);const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=hasTime;document.getElementById('fc-time-start').value=r.timeStart||'';document.getElementById('fc-time-end').value=r.timeEnd||'';if(hasTime)document.getElementById('time-range-panel').classList.add('open');else document.getElementById('time-range-panel').classList.remove('open');updateTimeDisplay();document.getElementById('fc-history-note').value='';document.getElementById('fc-reschedule-date').value='';document.getElementById('reschedule-panel').classList.remove('open');document.getElementById('reschedule-extras').style.display='none';if(document.getElementById('rs-time-toggle'))document.getElementById('rs-time-toggle').checked=false;document.getElementById('rs-time-range-panel').classList.remove('open');if(document.getElementById('rs-time-start'))document.getElementById('rs-time-start').value='';if(document.getElementById('rs-time-end'))document.getElementById('rs-time-end').value='';document.getElementById('rs-time-display').textContent='';rsReminders=[];renderRsReminderChips();['attended','completed','cancelled','rescheduled','deleted'].forEach(k=>{const el=document.getElementById('sbtn-'+k);if(el)el.classList.remove('sel');});if(r.attendedStatus){const ab=document.getElementById('sbtn-attended');if(ab)ab.classList.add('sel');}resetSoAttachmentPanel();resetFcSubevents();populateModalDropdowns();document.getElementById('fc-casetype').value=r.type||'';document.getElementById('fc-paralegal').value=r.atty||'';document.getElementById('fc-eventtype').value=r.event||'';onEventTypeChange(r.event||'');setHearingMode(r.hearingMode||'');setVirtualHearingDetails(r.hearingJudgeId||'',r.virtualLink||'');const sid=document.getElementById('so-issue-date');if(sid)sid.value=r.soIssueDate||'';document.getElementById('fc-assigned').value=r.assigned||'';customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);if(el)el.value=r[c.key]||'';});renderHistoryLog(r.history||[]);loadModalChecklistDocs(r);resetDateCalc(r.date||'');document.getElementById('modal').style.display='flex';enterReadOnlyMode(r);}
 // ── Read-only view / inline edit mode for event modal ──
 function enterEditMode(focusId){
   const m=document.getElementById('modal'); if(!m) return;
@@ -9400,7 +9466,7 @@ function applyDateCalc(){
     setTimeout(()=>res.style.color='#6A8C6E',800);
   }
 }
-function closeModal(){const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetFcSubevents();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _fcs1=document.getElementById('fc-subevents-panel');if(_fcs1)_fcs1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';}
+function closeModal(){const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetVirtualHearingDetails();resetFcSubevents();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _fcs1=document.getElementById('fc-subevents-panel');if(_fcs1)_fcs1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';}
 function handleBackdropClick(e){if(e.target===document.getElementById('modal'))closeModal();}
 
 // ── saveEvent ──
@@ -9412,7 +9478,9 @@ window.saveEvent=function(){
   if(['completed','cancelled','deleted'].includes(pendingStatus)&&!historyNote){const labels={completed:'completion',cancelled:'cancellation',deleted:'deletion'};alert(`A reason is required when marking as ${pendingStatus}.`);document.getElementById('fc-history-note').focus();document.getElementById('fc-history-note').style.borderColor='#B85C5C';return;}
   const tOn=document.getElementById('fc-time-toggle')&&document.getElementById('fc-time-toggle').checked;
   const hearingMode=getHearingMode();
-  const data={clid:document.getElementById('fc-clid').value.trim(),client,type,anum:document.getElementById('fc-anum').value.trim(),atty:document.getElementById('fc-paralegal').value,event:document.getElementById('fc-eventtype').value,date:document.getElementById('fc-date').value,timeStart:tOn?document.getElementById('fc-time-start').value:'',timeEnd:tOn?document.getElementById('fc-time-end').value:'',assigned:document.getElementById('fc-assigned').value,notes:document.getElementById('fc-notes').value.trim(),hearingMode:isHearingEventType(document.getElementById('fc-eventtype').value)?hearingMode:'',checklist:modalChecklist.filter(x=>x.trim()),docs:modalDocs.filter(x=>(x.name||x||'').trim()),soIssueDate:(document.getElementById('fc-eventtype').value==='SCHEDULING ORDER'?(document.getElementById('so-issue-date')||{}).value||'':'')};  customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);data[c.key]=el?el.value:'';});
+  const _isHearingEvt=isHearingEventType(document.getElementById('fc-eventtype').value);
+  const _vhd=(_isHearingEvt&&hearingMode==='virtual')?getVirtualHearingDetails():{hearingJudgeId:'',virtualLink:''};
+  const data={clid:document.getElementById('fc-clid').value.trim(),client,type,anum:document.getElementById('fc-anum').value.trim(),atty:document.getElementById('fc-paralegal').value,event:document.getElementById('fc-eventtype').value,date:document.getElementById('fc-date').value,timeStart:tOn?document.getElementById('fc-time-start').value:'',timeEnd:tOn?document.getElementById('fc-time-end').value:'',assigned:document.getElementById('fc-assigned').value,notes:document.getElementById('fc-notes').value.trim(),hearingMode:_isHearingEvt?hearingMode:'',hearingJudgeId:_vhd.hearingJudgeId,virtualLink:_vhd.virtualLink,checklist:modalChecklist.filter(x=>x.trim()),docs:modalDocs.filter(x=>(x.name||x||'').trim()),soIssueDate:(document.getElementById('fc-eventtype').value==='SCHEDULING ORDER'?(document.getElementById('so-issue-date')||{}).value||'':'')};  customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);data[c.key]=el?el.value:'';});
   if(editingId){
     const idx=records.findIndex(r=>r.id===editingId);
     if(idx>-1){
