@@ -3825,10 +3825,10 @@ function _exitPreviewSplitMode(){
   document.body.classList.remove('preview-split-mode');
 }
 // Action chip cluster for the match banners — apply Gmail label, create
-// local folder, and add a new event to the linked case. Each chip is tagged
-// with data-action so _gmailRefreshActionChipsState can flip it to a "✓ done"
-// style after the action has actually been performed.
-function _gmailCaseActionsHtml(clid){
+// local folder, add a new event to the linked case. When inPreview is true
+// (called from the doc viewer's top bar) we also offer "Attach to case",
+// which stores the previewed document into caseMeta[clid].docSections.
+function _gmailCaseActionsHtml(clid, inPreview){
   const safe = String(clid||'').replace(/'/g,"\\'");
   const dataClid = escHtml(String(clid||''));
   if(!safe) return '';
@@ -3836,8 +3836,43 @@ function _gmailCaseActionsHtml(clid){
   return '<div class="case-actions" data-clid="' + dataClid + '" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">'
     + '<button type="button" data-action="label" onclick="gmailApplyCaseLabel(\'' + safe + '\')" title="Apply a Gmail label named &quot;Last First Cl ID&quot; to this email" style="' + baseStyle + '">🏷 Label this email</button>'
     + '<button type="button" data-action="folder" onclick="gmailCreateCaseFolder(\'' + safe + '\')" title="Pick a parent folder and create a subfolder named &quot;Last First Cl ID&quot;" style="' + baseStyle + '">📁 Create folder</button>'
+    + (inPreview ? '<button type="button" data-action="attach" onclick="attachPreviewedDocToCase(\'' + safe + '\')" title="Save the previewed document into this case" style="' + baseStyle + '">📎 Attach to case</button>' : '')
     + '<button type="button" data-action="event" onclick="gmailAddEventToCase(\'' + safe + '\')" title="Add a new event to this case, pre-filled" style="' + baseStyle + '">＋ Add event</button>'
     + '</div>';
+}
+// Track what the doc viewer is currently showing so the "Attach to case" chip
+// (and similar) can read the file data without needing a separate fetch.
+let _docViewerCurrent = null;
+function attachPreviewedDocToCase(clid){
+  const cur = _docViewerCurrent;
+  if(!cur || !cur.dataUrl){ showToast('No document being previewed'); return; }
+  if(!clid){ showToast('No case selected'); return; }
+  if(typeof caseMeta === 'undefined') return;
+  if(!caseMeta[clid]) caseMeta[clid] = {};
+  if(!caseMeta[clid].docSections) caseMeta[clid].docSections = [];
+  // Find or create the "From Inbox" section
+  let section = caseMeta[clid].docSections.find(s => s.sectionName === 'From Inbox');
+  if(!section){
+    section = { sectionName: 'From Inbox', docs: [] };
+    caseMeta[clid].docSections.unshift(section);
+  }
+  const docName = (cur.fname || 'Attachment').trim();
+  if(section.docs.some(d => d.name === docName)){
+    showToast('Already attached: ' + docName);
+    return;
+  }
+  section.docs.push({
+    name: docName,
+    fileData: cur.dataUrl,
+    mimeType: cur.mimeType || 'application/octet-stream',
+    uploadedAt: (typeof todayStr==='function'?todayStr():new Date().toISOString().slice(0,10)),
+    _gmailMsgId: (_gmailCurrentMsg && _gmailCurrentMsg.id) || undefined
+  });
+  if(typeof markUnsaved === 'function') markUnsaved();
+  // Reflect ✓ done state on the chip
+  const chip = document.querySelector('#doc-viewer-chips button[data-action="attach"]');
+  if(chip && typeof _markChipDone === 'function') _markChipDone(chip, true, 'Attached');
+  showToast('Attached "' + docName + '" to case ✓');
 }
 // Flip a chip into a green "✓ done" state so the user knows the action was
 // already performed for this email/case (idempotent — no-op if already done).
@@ -3892,6 +3927,12 @@ async function _gmailRefreshActionChipsState(rootArg){
         const handle = await loadCaseFolderHandle(clid);
         _markChipDone(folderChip, !!handle, 'Folder linked');
       }catch(e){}
+    }
+    const attachChip = cluster.querySelector('button[data-action="attach"]');
+    if(attachChip && _docViewerCurrent && _docViewerCurrent.fname){
+      const sections = (caseMeta[clid] || {}).docSections || [];
+      const already = sections.some(s => (s.docs||[]).some(d => d && d.name === _docViewerCurrent.fname));
+      _markChipDone(attachChip, already, 'Attached');
     }
   }
 }
@@ -9899,15 +9940,18 @@ function openDocViewer(dataUrl, mimeType, fname, clid){
   document.getElementById('doc-viewer-title').textContent=fname;
   const dlBtn=document.getElementById('doc-viewer-dl');
   dlBtn.onclick=()=>{const link=document.createElement('a');link.href=dataUrl;link.download=fname;link.click();};
+  // Track the current preview so action chips (e.g. "Attach to case") can
+  // read its data without a refetch.
+  if(typeof _docViewerCurrent !== 'undefined') _docViewerCurrent = { dataUrl, mimeType, fname, clid };
   // Inject case action chips into the top bar when this preview is for a case
   const chipsHost=document.getElementById('doc-viewer-chips');
   if(chipsHost){
-    chipsHost.innerHTML = clid && typeof _gmailCaseActionsHtml === 'function' ? _gmailCaseActionsHtml(clid) : '';
+    chipsHost.innerHTML = clid && typeof _gmailCaseActionsHtml === 'function' ? _gmailCaseActionsHtml(clid, true) : '';
     if(clid){
       // Strip the default top margin so the cluster sits inline with the bar
       const cluster = chipsHost.querySelector('.case-actions');
       if(cluster) cluster.style.marginTop = '0';
-      // Reflect ✓ done state on each chip (label / folder)
+      // Reflect ✓ done state on each chip (label / folder / attach)
       if(typeof _gmailRefreshActionChipsState === 'function') _gmailRefreshActionChipsState(chipsHost);
     }
   }
