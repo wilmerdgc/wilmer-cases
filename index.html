@@ -476,6 +476,11 @@ body.wk-dragging .week-col { transition: background 0.1s, box-shadow 0.1s; }
   backdrop-filter: blur(2px);
   will-change: opacity;
 }
+/* Split-screen mode: PDF/image preview on the left half, event modal on the
+   right half. Triggered by + Add event from inside the doc viewer. */
+body.preview-split-mode #doc-viewer-overlay { right: 50% !important; transition: right .2s ease; }
+body.preview-split-mode #modal { left: 50% !important; backdrop-filter: none; background: rgba(44,38,32,0.18); }
+body.preview-split-mode #modal .modal { max-width: 460px; }
 .modal {
   background: var(--cream);
   border: 1px solid var(--border);
@@ -3785,6 +3790,8 @@ async function gmailCreateCaseFolder(clid){
 }
 // Open the Add Event modal pre-filled for a specific case, optionally seeding
 // the notes field with the current email subject so context isn't lost.
+// If the doc viewer is currently open, side-by-side layout the two so the
+// user can reference the PDF while filling the event.
 function gmailAddEventToCase(clid){
   if(!clid){ showToast('No case selected'); return; }
   if(typeof openAdd !== 'function'){ showToast('Add Event is not available'); return; }
@@ -3804,7 +3811,17 @@ function gmailAddEventToCase(clid){
       const nEl = document.getElementById('fc-notes');
       if(nEl && !nEl.value) nEl.value = 'From email: ' + _gmailCurrentMsg.subject;
     }
+    // If the document preview is currently visible, switch to side-by-side.
+    const docOv = document.getElementById('doc-viewer-overlay');
+    if(docOv && docOv.style.display !== 'none' && docOv.offsetParent !== null){
+      document.body.classList.add('preview-split-mode');
+    }
   }, 60);
+}
+// Exit split-screen mode (called from the modal close path and the doc
+// viewer close path). Safe to call when not in split mode.
+function _exitPreviewSplitMode(){
+  document.body.classList.remove('preview-split-mode');
 }
 // Action chip cluster for the match banners — apply Gmail label, create
 // local folder, and add a new event to the linked case. Each chip is tagged
@@ -9854,7 +9871,7 @@ function openDocViewer(dataUrl, mimeType, fname, clid){
     closeBtn.style.cssText='font-size:16px;border:none;background:transparent;color:#9E9186;cursor:pointer;padding:2px 6px;border-radius:4px;line-height:1;';
     closeBtn.onmouseenter=()=>{closeBtn.style.color='#fff';};
     closeBtn.onmouseleave=()=>{closeBtn.style.color='#9E9186';};
-    closeBtn.onclick=()=>{overlay.style.display='none';};
+    closeBtn.onclick=()=>{overlay.style.display='none';if(typeof _exitPreviewSplitMode==='function')_exitPreviewSplitMode();};
     btnRow.appendChild(dlBtn);btnRow.appendChild(closeBtn);
     bar.appendChild(title);
     bar.appendChild(chips);
@@ -9868,7 +9885,10 @@ function openDocViewer(dataUrl, mimeType, fname, clid){
     // OR the empty padded area inside the scrollable content wrap, but never
     // when the user is interacting with the document itself).
     const closeOnBackdrop = (e) => {
-      if(e.target === overlay || e.target === content){ overlay.style.display='none'; }
+      if(e.target === overlay || e.target === content){
+        overlay.style.display='none';
+        if(typeof _exitPreviewSplitMode==='function') _exitPreviewSplitMode();
+      }
     };
     overlay.ondblclick = closeOnBackdrop;
     content.ondblclick = closeOnBackdrop;
@@ -10344,7 +10364,7 @@ function applyDateCalc(){
     setTimeout(()=>res.style.color='#6A8C6E',800);
   }
 }
-function closeModal(){const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetVirtualHearingDetails();resetFcSubevents();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _fcs1=document.getElementById('fc-subevents-panel');if(_fcs1)_fcs1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';}
+function closeModal(){if(typeof _exitPreviewSplitMode==='function')_exitPreviewSplitMode();const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetVirtualHearingDetails();resetFcSubevents();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _fcs1=document.getElementById('fc-subevents-panel');if(_fcs1)_fcs1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';}
 function handleBackdropClick(e){if(e.target===document.getElementById('modal'))closeModal();}
 
 // ── saveEvent ──
