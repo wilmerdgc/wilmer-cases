@@ -2331,6 +2331,7 @@ function hideExcelRestorePrompt(){}
     </div>
   </div>
   <div class="settings-section"><div class="settings-section-title">Paralegals</div><div id="paralegal-tags"></div><div class="tag-add-row"><input id="new-paralegal" type="text" placeholder="Add paralegal..."/><button onclick="addTag('paralegal')">Add</button></div></div>
+  <div class="settings-section"><div class="settings-section-title">Attorneys</div><div id="attorney-tags"></div><div class="tag-add-row"><input id="new-attorney" type="text" placeholder="Add attorney..."/><button onclick="addTag('attorney')">Add</button></div></div>
   <div class="settings-section">
     <div class="settings-section-title">Event types</div>
     <div id="eventtype-tags"></div>
@@ -3224,6 +3225,13 @@ function saveVenues(){ try{ localStorage.setItem('casetracker_venues', JSON.stri
 function loadVenues(){ try{ const d=localStorage.getItem('casetracker_venues'); if(d) venues=JSON.parse(d); }catch(e){} }
 function saveParalegalEmails(){ try{ localStorage.setItem('casetracker_paralegal_emails', JSON.stringify(paralegalEmails)); }catch(e){} }
 function loadParalegalEmails(){ try{ const d=localStorage.getItem('casetracker_paralegal_emails'); if(d) paralegalEmails=JSON.parse(d); }catch(e){} }
+// Attorneys (the lawyers in the firm) — same shape as paralegals.
+let attorneys=[];
+let attorneyEmails={};
+function saveAttorneys(){ try{ localStorage.setItem('casetracker_attorneys', JSON.stringify(attorneys)); }catch(e){} }
+function loadAttorneys(){ try{ const d=localStorage.getItem('casetracker_attorneys'); if(d) attorneys=JSON.parse(d); }catch(e){} }
+function saveAttorneyEmails(){ try{ localStorage.setItem('casetracker_attorney_emails', JSON.stringify(attorneyEmails)); }catch(e){} }
+function loadAttorneyEmails(){ try{ const d=localStorage.getItem('casetracker_attorney_emails'); if(d) attorneyEmails=JSON.parse(d); }catch(e){} }
 let eventTypeMeta={
   'SCHEDULING ORDER': {color:'#C9823A'},
   '90-DAY DEADLINE':  {color:'#6B7FA3'},
@@ -3511,19 +3519,39 @@ function _gmailExtractCaseSuggestion(m){
   const haystack = subject + '\n' + (m.snippet||'') + '\n' + bodyText;
 
   let lastName = '', firstName = '', middleName = '', clid = '', anumLast3 = '';
+  // Common non-name acronyms in legal email subjects — never picked as a name.
+  const STOP_WORDS = new Set(['EOIR','USCIS','BIA','DHS','ICE','CBP','RFE','NOID','MTR','PSG','SIJ','VAWA','TPS','FWD','RE','I-589','I-360','I-130','I-485']);
+  function _stripStop(words){ return words.filter(w => !STOP_WORDS.has(w)); }
 
-  // 1) Subject: ALL-CAPS lastname (3+ letters), then digits (2-4)
-  // e.g. "Fwd: EOIR - JUAREZ - 316 - Entered - Orders - RMV"
-  // We pick the all-caps word that's directly followed by "- DIGITS -"
-  const subjRe = /\b([A-Z][A-Z'\-]{2,})\s*[-–]\s*(\d{1,5})\s*[-–]/g;
-  let sm;
-  while((sm = subjRe.exec(subject)) !== null){
-    // Skip common non-name acronyms in legal email subjects
-    const stopWords = new Set(['EOIR','USCIS','BIA','DHS','ICE','CBP','RFE','NOID','MTR','PSG','SIJ','VAWA','TPS','FWD','RE']);
-    if(stopWords.has(sm[1])) continue;
-    lastName = sm[1];
-    anumLast3 = sm[2];
-    break;
+  // 1a) Roster-style: "LASTNAME [LASTNAME], Firstname- 23724"
+  //     - Last names ALL CAPS (one or two), separated by spaces
+  //     - Comma + Proper-cased first name
+  //     - Optional dash + digits → Cl ID
+  // Matches subjects like "BACULIMA COLLAGUAZO, Josue- 23724".
+  const rosterRe = /\b([A-Z][A-Z'\-]{1,}(?:\s+[A-Z][A-Z'\-]{1,})*)\s*,\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*[-–]?\s*(\d{3,7})?/;
+  const rm = subject.match(rosterRe);
+  if(rm){
+    const lastTokens = _stripStop(rm[1].split(/\s+/));
+    const firstTokens = rm[2].split(/\s+/);
+    if(lastTokens.length){
+      lastName = lastTokens.join(' ');
+      firstName = firstTokens[0] || '';
+      if(firstTokens.length > 1) middleName = firstTokens.slice(1).join(' ');
+      if(rm[3]) clid = rm[3];
+    }
+  }
+
+  // 1b) EOIR-style fallback: "LASTNAME - 316 -" (digits = last 3 of A#)
+  // Only used when the roster pattern didn't match.
+  if(!lastName){
+    const subjRe = /\b([A-Z][A-Z'\-]{2,})\s*[-–]\s*(\d{1,5})\s*[-–]/g;
+    let sm;
+    while((sm = subjRe.exec(subject)) !== null){
+      if(STOP_WORDS.has(sm[1])) continue;
+      lastName = sm[1];
+      anumLast3 = sm[2];
+      break;
+    }
   }
 
   // 2) Body: "ID NNNNN Firstname [Middle] Lastname"
@@ -3548,9 +3576,11 @@ function _gmailExtractCaseSuggestion(m){
     }
   }
 
-  // Normalize lastName casing (keep proper-case if it came from body)
+  // Normalize lastName casing (proper-case each word) when it came from the
+  // subject in ALL-CAPS form. Leave it alone if the body already gave us
+  // properly-cased name parts.
   if(lastName && lastName === lastName.toUpperCase()){
-    lastName = lastName.charAt(0) + lastName.slice(1).toLowerCase();
+    lastName = lastName.split(/\s+/).map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
   }
 
   // 3) Recipients → paralegal lookup
@@ -5873,7 +5903,7 @@ function migrateDocLists(){Object.keys(caseTypeDocLists).forEach(ct=>{const arr=
 function addCaseType(){const inp=document.getElementById('new-casetype');const val=inp.value.trim();if(!val){alert('Case type name required.');return;}if(caseTypes.includes(val)){alert('Case type already exists.');return;}caseTypes.push(val);inp.value='';renderCaseTypesSection();updateSettingsSaveBar();dirtyFilterOpts();}
 
 // ── Settings rendering ──
-function renderSettings(){renderColVis();renderParalegalTags();renderEventTypeTags();renderTags('casetype',caseTypes);renderVenueTags();renderSettingsTable();renderFirmInfoFields();}
+function renderSettings(){renderColVis();renderParalegalTags();renderAttorneyTags();renderEventTypeTags();renderTags('casetype',caseTypes);renderVenueTags();renderSettingsTable();renderFirmInfoFields();}
 function renderFirmInfoFields(){
   const fields=['lastName','firstName','middleName','firmName','barNumber','licensingAuthority','street','apt','city','state','zip','phone','mobile','email','fax'];
   fields.forEach(k=>{const el=document.getElementById('fi-'+k);if(el)el.value=firmInfo[k]||'';});
@@ -5923,6 +5953,50 @@ function renderParalegalTags(){
     const removeBtn=document.createElement('button');removeBtn.innerHTML='×';removeBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0;';
     removeBtn.onclick=()=>{delete paralegalEmails[v];paralegals.splice(i,1);updateSettingsSaveBar();markUnsaved();renderParalegalTags();};
     row.appendChild(nameEl);row.appendChild(emailIn);row.appendChild(transferBtn);row.appendChild(removeBtn);el.appendChild(row);
+  });
+}
+
+// Renders the Attorneys section in Settings. Mirrors renderParalegalTags but
+// without the "Transfer cases" button (cases are owned by paralegals via
+// r.atty, not by attorneys).
+function renderAttorneyTags(){
+  const el=document.getElementById('attorney-tags');if(!el)return;el.innerHTML='';
+  el.style.cssText='display:flex;flex-direction:column;gap:6px;margin-bottom:10px;';
+  attorneys.forEach((v,i)=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 10px;background:#FDFAF7;border:1px solid #EDE8E0;border-radius:8px;';
+    const nameEl=document.createElement('span');nameEl.style.cssText='font-size:12px;font-weight:600;color:#2C2620;min-width:120px;cursor:pointer;';nameEl.textContent=v;nameEl.title='Click to edit name';
+    nameEl.onclick=()=>{
+      const newName=prompt('Edit attorney name:',v);
+      if(newName&&newName.trim()&&newName.trim()!==v){
+        const old=v;
+        attorneys[i]=newName.trim();
+        if(attorneyEmails[old]){attorneyEmails[newName.trim()]=attorneyEmails[old];delete attorneyEmails[old];}
+        updateSettingsSaveBar();markUnsaved();renderAttorneyTags();
+      }
+    };
+    const emailIn=document.createElement('input');emailIn.type='email';emailIn.placeholder='email@example.com';emailIn.value=attorneyEmails[v]||'';
+    emailIn.style.cssText='flex:1;font-size:11px;padding:4px 8px;border:1px solid #EDE8E0;border-radius:5px;color:#5C5148;background:#fff;outline:none;font-family:inherit;min-width:160px;cursor:pointer;';
+    emailIn.readOnly=true;emailIn.title='Click 3 times to edit';
+    let clickCount=0,clickTimer=null;
+    const lockEmail=()=>{emailIn.readOnly=true;emailIn.style.cursor='pointer';emailIn.style.background='#fff';emailIn.title='Click 3 times to edit';clickCount=0;if(clickTimer){clearTimeout(clickTimer);clickTimer=null;}};
+    emailIn.onclick=()=>{
+      if(!emailIn.readOnly)return;
+      clickCount++;
+      if(clickTimer)clearTimeout(clickTimer);
+      if(clickCount>=3){
+        emailIn.readOnly=false;emailIn.style.cursor='text';emailIn.style.background='#FFFEF5';emailIn.title='';clickCount=0;
+        emailIn.focus();
+      }else{
+        clickTimer=setTimeout(()=>{clickCount=0;},800);
+      }
+    };
+    emailIn.onfocus=()=>{if(!emailIn.readOnly)emailIn.style.borderColor='#6A8C6E';};
+    emailIn.oninput=()=>{const em=emailIn.value.trim();if(em)attorneyEmails[v]=em;else delete attorneyEmails[v];updateSettingsSaveBar();markUnsaved();};
+    emailIn.onblur=()=>{emailIn.style.borderColor='#EDE8E0';const em=emailIn.value.trim();if(em)attorneyEmails[v]=em;else delete attorneyEmails[v];updateSettingsSaveBar();markUnsaved();lockEmail();};
+    const removeBtn=document.createElement('button');removeBtn.innerHTML='×';removeBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0;';
+    removeBtn.onclick=()=>{delete attorneyEmails[v];attorneys.splice(i,1);updateSettingsSaveBar();markUnsaved();renderAttorneyTags();};
+    row.appendChild(nameEl);row.appendChild(emailIn);row.appendChild(removeBtn);el.appendChild(row);
   });
 }
 
@@ -6208,7 +6282,7 @@ function toggleAddColForm(){const f=document.getElementById('add-col-form');f.cl
 function addCustomColumn(){const name=document.getElementById('new-col-name').value.trim(),type=document.getElementById('new-col-type').value;if(!name){alert('Column name required.');return;}const key='custom_'+name.toLowerCase().replace(/\s+/g,'_')+'_'+Date.now();customColumns.push({key,label:name,type,options:type==='select'?[...paralegals,'Me']:[]});colVis[key]=true;records.forEach(r=>r[key]='');document.getElementById('new-col-name').value='';document.getElementById('add-col-form').classList.remove('open');showToast(`Column "${name}" added`);renderSettings();updateSettingsSaveBar();}
 function removeCustomColumn(key){customColumns=customColumns.filter(c=>c.key!==key);delete colVis[key];records.forEach(r=>delete r[key]);renderSettings();renderAll();updateSettingsSaveBar();}
 function startEditTag(tag,label,kind,i,arr){if(tag.classList.contains('editing'))return;tag.classList.add('editing');const oldVal=arr[i];const input=document.createElement('input');input.className='tag-edit-input';input.value=oldVal;input.style.width=(Math.max(oldVal.length,4)*8)+'px';input.oninput=()=>{input.style.width=(Math.max(input.value.length,4)*8)+'px';};label.replaceWith(input);input.focus();input.select();function commit(){const newVal=input.value.trim();if(newVal&&newVal!==oldVal){if(kind==='paralegal'){paralegals[i]=newVal;records.forEach(r=>{if(r.atty===oldVal)r.atty=newVal;if(r.assigned===oldVal)r.assigned=newVal;});}else if(kind==='eventtype'){eventTypes[i]=newVal;records.forEach(r=>{if(r.event===oldVal)r.event=newVal;});}else if(kind==='casetype'){caseTypes[i]=newVal;records.forEach(r=>{if(r.type===oldVal)r.type=newVal;});}updateSettingsSaveBar();}renderSettings();}input.onblur=commit;input.onkeydown=(e)=>{if(e.key==='Enter'){e.preventDefault();input.blur();}if(e.key==='Escape'){input.value=oldVal;input.blur();}};}
-function addTag(kind){const inp=document.getElementById('new-'+kind),val=inp.value.trim();if(!val)return;if(kind==='paralegal'&&!paralegals.includes(val))paralegals.push(val);else if(kind==='eventtype'&&!eventTypes.includes(val))eventTypes.push(val);else if(kind==='casetype'&&!caseTypes.includes(val))caseTypes.push(val);inp.value='';renderSettings();updateSettingsSaveBar();dirtyFilterOpts();if(kind==='paralegal')markUnsaved();}
+function addTag(kind){const inp=document.getElementById('new-'+kind),val=inp.value.trim();if(!val)return;if(kind==='paralegal'&&!paralegals.includes(val))paralegals.push(val);else if(kind==='attorney'&&!attorneys.includes(val))attorneys.push(val);else if(kind==='eventtype'&&!eventTypes.includes(val))eventTypes.push(val);else if(kind==='casetype'&&!caseTypes.includes(val))caseTypes.push(val);inp.value='';renderSettings();updateSettingsSaveBar();dirtyFilterOpts();if(kind==='paralegal'||kind==='attorney')markUnsaved();}
 function removeTag(kind,i){if(kind==='paralegal')paralegals.splice(i,1);else if(kind==='eventtype')eventTypes.splice(i,1);else if(kind==='casetype')caseTypes.splice(i,1);renderSettings();updateSettingsSaveBar();dirtyFilterOpts();}
 function renderSettingsTable(){const cols=allColumns().filter(c=>c.key!=='notes');const thead=document.getElementById('settings-thead');thead.innerHTML='';[...cols,{key:'notes',label:'Notes'},{key:'_a',label:''}].forEach(c=>{const th=document.createElement('th');th.textContent=c.label;thead.appendChild(th);});const tbody=document.getElementById('settings-tbody');tbody.innerHTML='';const stFrag=document.createDocumentFragment();const sorted=[...records].filter(r=>!r.deletedStatus).map(r=>({r,d:parseDate(r.date)})).sort((a,b)=>{if(!a.d&&!b.d)return 0;if(!a.d)return 1;if(!b.d)return-1;return a.d-b.d;}).map(x=>x.r);sorted.forEach(r=>{const isE=editingRowId===r.id;const tr=document.createElement('tr');tr.className=isE?'editing-row':'';if(isE){let c=`<td><input id="se-clid-${r.id}" value="${r.clid||''}" style="min-width:55px"/></td><td><input id="se-client-${r.id}" value="${r.client}" style="min-width:90px"/></td><td><input id="se-anum-${r.id}" value="${r.anum||''}" style="min-width:80px"/></td><td><select id="se-type-${r.id}" style="min-width:110px">${caseTypes.map(c=>`<option${c===r.type?' selected':''}>${c}</option>`).join('')}</select></td><td><select id="se-atty-${r.id}" style="min-width:100px"><option value="">—</option>${paralegals.map(p=>`<option${p===r.atty?' selected':''}>${p}</option>`).join('')}</select></td><td><select id="se-event-${r.id}" style="min-width:100px"><option value="">—</option>${eventTypes.map(e=>`<option${e===r.event?' selected':''}>${e}</option>`).join('')}</select></td><td><input type="date" id="se-date-${r.id}" value="${r.date||''}" style="min-width:110px"/></td><td><select id="se-assigned-${r.id}" style="min-width:90px"><option value="">—</option><option value="Me"${r.assigned==='Me'?' selected':''}>Me</option>${paralegals.map(p=>`<option${p===r.assigned?' selected':''}>${p}</option>`).join('')}</select></td>`;customColumns.forEach(cc=>{c+=cc.type==='select'?`<td><select id="se-${cc.key}-${r.id}" style="min-width:90px"><option value="">—</option>${cc.options.map(o=>`<option${o===(r[cc.key]||'')?(' selected="selected"'):''}">${o}</option>`).join('')}</select></td>`:`<td><input id="se-${cc.key}-${r.id}" value="${r[cc.key]||''}" style="min-width:90px"/></td>`;});c+=`<td><input id="se-notes-${r.id}" value="${r.notes||''}" style="min-width:130px"/></td><td style="white-space:nowrap"><button class="btn-success btn-sm" onclick="saveRow('${r.id}')" style="margin-right:4px">Save</button><button class="btn-sm" onclick="cancelRow()">Cancel</button></td>`;tr.innerHTML=c;}else{let c=`<td class="muted">${r.clid||'—'}</td><td style="font-weight:500">${r.client}</td><td class="muted">${r.anum||'—'}</td><td class="muted">${r.type}</td><td class="muted">${r.atty||'—'}</td><td>${r.event||'—'}</td><td><span class="badge ${badgeClass(status(parseDate(r.date)))}">${fmtDate(r.date)}</span></td><td>${r.assigned?`<span class="badge ${r.assigned==='Me'?'badge-me':'no-date'}">${r.assigned}</span>`:'—'}</td>`;customColumns.forEach(cc=>{c+=`<td class="muted">${r[cc.key]||'—'}</td>`;});c+=`<td class="muted" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.notes}">${r.notes||'—'}</td><td style="white-space:nowrap"><button class="edit-btn" onclick="startEditRow('${r.id}')" style="margin-right:4px">Edit</button><button class="btn-danger btn-sm" onclick="deleteById('${r.id}')">Del</button></td>`;tr.innerHTML=c;}tbody.appendChild(tr);});}
 function startEditRow(id){editingRowId=id;renderSettingsTable();}
@@ -9975,16 +10049,22 @@ function openDocViewer(dataUrl, mimeType, fname, clid){
   // Track the current preview so action chips (e.g. "Attach to case") can
   // read its data without a refetch.
   if(typeof _docViewerCurrent !== 'undefined') _docViewerCurrent = { dataUrl, mimeType, fname, clid };
-  // Inject case action chips into the top bar when this preview is for a case
+  // Inject case action chips into the top bar.
+  // - If we know the case (clid), show the full action cluster.
+  // - If we don't but we're previewing a Gmail attachment, offer "+ Add new case…"
+  //   which opens openNewCaseModal pre-filled from the email's parsed signals.
   const chipsHost=document.getElementById('doc-viewer-chips');
   if(chipsHost){
-    chipsHost.innerHTML = clid && typeof _gmailCaseActionsHtml === 'function' ? _gmailCaseActionsHtml(clid, true) : '';
-    if(clid){
-      // Strip the default top margin so the cluster sits inline with the bar
+    if(clid && typeof _gmailCaseActionsHtml === 'function'){
+      chipsHost.innerHTML = _gmailCaseActionsHtml(clid, true);
       const cluster = chipsHost.querySelector('.case-actions');
       if(cluster) cluster.style.marginTop = '0';
-      // Reflect ✓ done state on each chip (label / folder / attach)
       if(typeof _gmailRefreshActionChipsState === 'function') _gmailRefreshActionChipsState(chipsHost);
+    } else if(typeof _gmailCurrentMsg !== 'undefined' && _gmailCurrentMsg){
+      const baseStyle = 'font-size:10px;font-weight:600;padding:3px 9px;border:1px solid #B8C4DB;border-radius:12px;background:#EEF1F7;color:#4F6A91;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;';
+      chipsHost.innerHTML = '<button type="button" onclick="gmailApplySuggestionFromCurrent()" title="Open the New Case form pre-filled from this email" style="' + baseStyle + '">＋ Add new case…</button>';
+    } else {
+      chipsHost.innerHTML = '';
     }
   }
   const content=document.getElementById('doc-viewer-content');
@@ -11098,12 +11178,12 @@ function saveAllData(){
   // that wiped a month of real data). See showWelcomeGate() for the
   // modal that sets _dataInitialized after the user picks a path.
   if(!_dataInitialized){ return; }
-  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,venues,firmInfo,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
+  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();// Auto-push events to Google Calendar when signed in as the target email
 try{ _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync(); }catch(e){}
 }catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);return true;}catch(e){return false;}}
 window.markUnsaved=function(){document.getElementById('unsaved-dot').style.display='inline-block';document.getElementById('btn-save').classList.add('unsaved');clearTimeout(window._autoSaveTimer);window._autoSaveTimer=setTimeout(()=>{saveAllData();},1000);};
 function setLastBackupLabel(action){
   const n=new Date();
@@ -16716,7 +16796,7 @@ function _syncToFirestore(savedAt){
       // These three used to be local-only, so a wipe of localStorage lost
       // them permanently and they were absent from cloud snapshots. Now they
       // ride along so the nightly GitHub Actions backup captures 100% of state.
-      customChecklists,paralegalEmails,venues,firmInfo,
+      customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,
       _savedAt:savedAt||Date.now(),_deviceId:_deviceId
     }));
     db.collection('wilmer').doc('data').set(payload)
@@ -16779,7 +16859,7 @@ function forcePullFromCloud(){
       _dataInitialized=true; // explicit pull permits saves again
       try{
         const _now=Date.now();
-        const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,venues,_savedAt:_now};
+        const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
         localStorage.setItem('casetracker_v1',JSON.stringify(payload));
         localStorage.setItem('wilmer_save_epoch',String(cloudData._savedAt||_now));
       }catch(e){}
@@ -16984,6 +17064,8 @@ const loaded=loadSavedData();
 loadJudges();
 loadCustomChecklists();
 loadLastBackupLabel();
+loadAttorneys();
+loadAttorneyEmails();
 dayViewDate = new Date(TODAY);
 dayMiniMonthOffset = 0;
 const savedDefaultView = localStorage.getItem('defaultView') || 'today';
@@ -17100,7 +17182,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         _dataInitialized=true; // cloud was applied — safe to autosave
         try{
           const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,venues,_savedAt:_now};
+          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
           localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
@@ -17125,7 +17207,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         // re-push to Firestore and cause an infinite ping-pong loop
         try{
           const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,venues,_savedAt:_now};
+          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
           localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
