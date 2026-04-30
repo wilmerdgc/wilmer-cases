@@ -3768,6 +3768,84 @@ async function gmailDoCreateLabelAndMove(){
   }
 }
 
+// ── Labels editor: toggle multiple user labels on the current message ──
+async function gmailToggleLabelsDropdown(){
+  const drop = document.getElementById('gmail-labels-dropdown');
+  if(!drop) return;
+  if(drop.style.display === 'block'){ drop.style.display = 'none'; return; }
+  drop.innerHTML = '<div style="padding:12px;text-align:center;color:var(--ink-muted);font-size:11px;">Loading labels...</div>';
+  drop.style.display = 'block';
+  const labels = await gmailFetchLabels();
+  const userLabels = (labels||[]).filter(l => l.type === 'user');
+  function paint(query){
+    drop.innerHTML = '';
+    const searchWrap = document.createElement('div');
+    searchWrap.style.cssText = 'padding:8px;border-bottom:1px solid var(--cream-dark);position:sticky;top:0;background:#fff;z-index:1;';
+    searchWrap.innerHTML = '<input id="gmail-labels-search" type="text" placeholder="Search labels…" value="'+escHtml(query||'')+'" style="width:100%;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;background:#fff;" autocomplete="off"/>';
+    drop.appendChild(searchWrap);
+    const list = document.createElement('div');
+    drop.appendChild(list);
+    const ql = (query||'').toLowerCase();
+    const filtered = userLabels.filter(l => !ql || (l.name||'').toLowerCase().includes(ql));
+    if(!filtered.length){
+      const empty = document.createElement('div');
+      empty.style.cssText = 'padding:14px;text-align:center;color:var(--ink-faint);font-size:11px;';
+      empty.textContent = userLabels.length ? 'No labels match' : 'No user labels — create one in Gmail or via Move to';
+      list.appendChild(empty);
+    } else {
+      const currentIds = (_gmailCurrentMsg && _gmailCurrentMsg.labelIds) || [];
+      filtered.forEach(l => {
+        const isApplied = currentIds.includes(l.id);
+        const item = document.createElement('div');
+        item.style.cssText = 'padding:7px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;';
+        item.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border:1.5px solid '+(isApplied?'var(--sage)':'var(--border)')+';border-radius:3px;background:'+(isApplied?'var(--sage)':'#fff')+';color:#fff;font-size:10px;flex-shrink:0;line-height:1;">'+(isApplied?'✓':'')+'</span>'
+          + '<span style="font-size:14px;">🏷</span>'
+          + '<span style="flex:1;">'+escHtml(l.name)+'</span>';
+        item.onmouseenter = () => item.style.background = 'var(--cream)';
+        item.onmouseleave = () => item.style.background = '';
+        item.onclick = async () => {
+          const ok = await gmailToggleLabelOnMessage(l.id, !isApplied);
+          if(ok){
+            const inp = document.getElementById('gmail-labels-search');
+            paint(inp ? inp.value : '');
+            // Re-focus the search input
+            setTimeout(() => { const f = document.getElementById('gmail-labels-search'); if(f) f.focus(); }, 0);
+          }
+        };
+        list.appendChild(item);
+      });
+    }
+    setTimeout(() => {
+      const inp = document.getElementById('gmail-labels-search');
+      if(inp){ if(!query) inp.focus(); inp.oninput = () => paint(inp.value); }
+    }, 0);
+  }
+  paint('');
+  // Close on outside click
+  setTimeout(() => {
+    const close = e => { if(!drop.contains(e.target) && e.target.closest && !e.target.closest('[onclick*="gmailToggleLabelsDropdown"]')){ drop.style.display='none'; document.removeEventListener('mousedown',close); }};
+    document.addEventListener('mousedown', close);
+  }, 0);
+}
+async function gmailToggleLabelOnMessage(labelId, applyIt){
+  if(!_gmailCurrentMsg) return false;
+  const msgId = _gmailCurrentMsg.id;
+  const body = applyIt ? { addLabelIds: [labelId] } : { removeLabelIds: [labelId] };
+  const result = await gmailApi('messages/' + msgId + '/modify', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if(!result){ showToast('Failed to update labels'); return false; }
+  if(applyIt){
+    if(!_gmailCurrentMsg.labelIds.includes(labelId)) _gmailCurrentMsg.labelIds.push(labelId);
+    showToast('Label added ✓');
+  } else {
+    _gmailCurrentMsg.labelIds = _gmailCurrentMsg.labelIds.filter(id => id !== labelId);
+    showToast('Label removed ✓');
+  }
+  return true;
+}
 async function gmailMoveToLabel(labelId, labelName){
   if(!_gmailCurrentMsg) return;
   const msgId = _gmailCurrentMsg.id;
@@ -4909,6 +4987,10 @@ function gmailRenderMessage(){
           <div style="position:relative;display:inline-block;">
             <button onclick="gmailToggleMoveTo()" style="font-size:11px;font-weight:600;padding:7px 13px;border:1px solid var(--slate);border-radius:var(--radius-sm);background:var(--slate-light);color:var(--slate);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--slate)';this.style.color='#fff'" onmouseleave="this.style.background='var(--slate-light)';this.style.color='var(--slate)'">📂 Move to</button>
             <div id="gmail-moveto-dropdown" style="display:none;position:absolute;left:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:300;min-width:220px;max-height:320px;overflow-y:auto;"></div>
+          </div>
+          <div style="position:relative;display:inline-block;">
+            <button onclick="gmailToggleLabelsDropdown()" title="Add or remove labels on this message" style="font-size:11px;font-weight:600;padding:7px 13px;border:1px solid #C9823A;border-radius:var(--radius-sm);background:#FAF0E6;color:#C9823A;cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='#C9823A';this.style.color='#fff'" onmouseleave="this.style.background='#FAF0E6';this.style.color='#C9823A'">🏷 Labels</button>
+            <div id="gmail-labels-dropdown" style="display:none;position:absolute;left:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:300;min-width:240px;max-height:340px;overflow-y:auto;"></div>
           </div>
           <span style="width:1px;height:18px;background:var(--border);flex-shrink:0;"></span>
           <button onclick="gmailPrintMessage()" style="font-size:11px;padding:7px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">🖨 Print</button>
