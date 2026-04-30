@@ -6842,10 +6842,16 @@ function renderWeek() {
         }
       }
       appendSoMeta(t, r, 'var(--amber)');
-      // External-link icon for hearings with a Webex link (judge's saved room)
+      // Hearing format indicator: link icon for virtual, pin icon for in-person
       if(!_isReminder){
         const _vlink = eventVirtualLink(r);
-        if(_vlink) t.appendChild(makeExternalLinkBtn(_vlink, 'Open Webex link', 'position:absolute;top:5px;right:5px;margin:0;padding:2px;', 11));
+        const _abs = 'position:absolute;top:5px;right:5px;margin:0;padding:2px;';
+        if(_vlink){
+          t.appendChild(makeExternalLinkBtn(_vlink, 'Open Webex link', _abs, 11));
+        } else {
+          const _venue = eventInPersonVenue(r);
+          if(_venue !== null) t.appendChild(makePinIconBtn(_venue, _abs, 11));
+        }
       }
       body.appendChild(t);
     });
@@ -7029,7 +7035,13 @@ function renderMonth() {
       if(es.color) card.style.borderLeft=`3px solid ${es.color}`;
       appendSoMeta(card, r, fg);
       const _vlinkM = eventVirtualLink(r);
-      if(_vlinkM) card.appendChild(makeExternalLinkBtn(_vlinkM, 'Open Webex link', 'position:absolute;top:3px;right:3px;margin:0;padding:1px;', 10));
+      const _absM = 'position:absolute;top:3px;right:3px;margin:0;padding:1px;';
+      if(_vlinkM){
+        card.appendChild(makeExternalLinkBtn(_vlinkM, 'Open Webex link', _absM, 10));
+      } else {
+        const _venueM = eventInPersonVenue(r);
+        if(_venueM !== null) card.appendChild(makePinIconBtn(_venueM, _absM, 10));
+      }
       cell.appendChild(card);
     });
     cell.addEventListener('dblclick', e => {
@@ -8714,17 +8726,54 @@ function resetVirtualHearingDetails(){
   const lk=document.getElementById('vh-link'); if(lk) lk.value='';
   const vd=document.getElementById('modal-virtual-details'); if(vd) vd.style.display='none';
 }
-// Resolve the Webex/virtual link for a record: prefer the judge's saved virtual room
-// (so changes to the judge propagate to all their hearings), fall back to any
-// event-specific override.
+// Resolve the Webex/virtual link for a record. Only returns a link when the
+// hearing is actually marked virtual — otherwise an in-person hearing assigned
+// to a judge who happens to have a virtualRoom would incorrectly show the icon.
+// Prefers the judge's saved virtual room (so changes to the judge propagate to
+// all their hearings), falls back to any event-specific override.
 function eventVirtualLink(r){
   if(!r) return '';
+  if(r.hearingMode !== 'virtual') return '';
   if(r.hearingJudgeId && typeof judges !== 'undefined'){
     const j = judges.find(x => x.id === r.hearingJudgeId);
     if(j && j.virtualRoom) return j.virtualRoom;
   }
   if(r.virtualLink) return r.virtualLink;
   return '';
+}
+// Returns the venue string for an in-person hearing (from the assigned judge),
+// '' if in-person but no venue known, or null if not in-person.
+function eventInPersonVenue(r){
+  if(!r) return null;
+  if(r.hearingMode !== 'in-person') return null;
+  if(r.hearingJudgeId && typeof judges !== 'undefined'){
+    const j = judges.find(x => x.id === r.hearingJudgeId);
+    if(j && j.venue) return j.venue;
+  }
+  return '';
+}
+// Build a discreet pin icon. If venue is given, the pin is a Google Maps link;
+// otherwise it's a static badge marking "in-person".
+function makePinIconBtn(venue, extraStyle, size){
+  const sz = size || 13;
+  const isLink = !!venue;
+  const el = document.createElement(isLink ? 'a' : 'span');
+  if(isLink){
+    el.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(venue);
+    el.target = '_blank';
+    el.rel = 'noopener noreferrer';
+    el.title = '🏛 In person — ' + venue + ' (open in Maps)';
+    el.onclick = e => e.stopPropagation();
+  } else {
+    el.title = '🏛 In-person hearing';
+  }
+  el.style.cssText = 'flex-shrink:0;align-self:center;padding:3px;margin-left:4px;color:#C4BAB0;text-decoration:none;line-height:0;border-radius:4px;display:inline-flex;align-items:center;cursor:' + (isLink ? 'pointer' : 'help') + ';transition:color .12s, background .12s;' + (extraStyle || '');
+  el.innerHTML = '<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 7-8 13-8 13s-8-6-8-13a8 8 0 1 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>';
+  if(isLink){
+    el.onmouseenter = () => { el.style.color = '#C9823A'; el.style.background = '#FAF0E6'; };
+    el.onmouseleave = () => { el.style.color = '#C4BAB0'; el.style.background = ''; };
+  }
+  return el;
 }
 // Build a discreet external-link button that opens a URL in a new tab.
 // extraStyle is appended to the inline style — handy for absolute-positioned variants.
@@ -14652,7 +14701,12 @@ function renderDayTimeline(){
       row.appendChild(bar);
       row.appendChild(body);
       const _vlink = eventVirtualLink(r);
-      if(_vlink) row.appendChild(makeExternalLinkBtn(_vlink, 'Open Webex link'));
+      if(_vlink){
+        row.appendChild(makeExternalLinkBtn(_vlink, 'Open Webex link'));
+      } else {
+        const _venue = eventInPersonVenue(r);
+        if(_venue !== null) row.appendChild(makePinIconBtn(_venue));
+      }
       evFrag.appendChild(row);
     });
     eventsList.appendChild(evFrag);
