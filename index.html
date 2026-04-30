@@ -3776,31 +3776,44 @@ async function _gmailFindOrCreateLabel(name){
 }
 // Parent label every case label is nested under.
 const _GMAIL_CASES_PARENT = 'CLIENTS';
-async function gmailApplyCaseLabel(clid){
-  if(!_gmailCurrentMsg){ showToast('No email selected'); return; }
-  if(!clid){ showToast('No case to label'); return; }
+// Internal: ensure the CLIENTS/<Last First Cl ID> label exists, then add it
+// to the current message. If alsoRemoveInbox is true, also strips INBOX so
+// the message moves out of the inbox into the label-only view.
+async function _gmailApplyOrMoveCaseLabel(clid, alsoRemoveInbox){
+  if(!_gmailCurrentMsg){ showToast('No email selected'); return false; }
+  if(!clid){ showToast('No case to label'); return false; }
   const bare = _gmailCaseLabelName(clid);
-  if(!bare){ showToast('Could not build label name'); return; }
+  if(!bare){ showToast('Could not build label name'); return false; }
   // Ensure the parent "CLIENTS" label exists, then nest under it.
-  // (Gmail uses "Parent/Child" for nested labels and won't auto-create the
-  // parent — so we explicitly create it first if needed.)
   await _gmailFindOrCreateLabel(_GMAIL_CASES_PARENT);
   const fullName = _GMAIL_CASES_PARENT + '/' + bare;
-  showToast('Applying label "' + fullName + '"…');
+  showToast((alsoRemoveInbox ? 'Moving to ' : 'Applying ') + '"' + fullName + '"…');
   const labelId = await _gmailFindOrCreateLabel(fullName);
-  if(!labelId){ showToast('Could not create the label'); return; }
+  if(!labelId){ showToast('Could not create the label'); return false; }
+  const body = { addLabelIds: [labelId] };
+  if(alsoRemoveInbox) body.removeLabelIds = ['INBOX'];
   const ok = await gmailApi('messages/' + _gmailCurrentMsg.id + '/modify', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ addLabelIds: [labelId] })
+    body: JSON.stringify(body)
   });
-  if(!ok){ showToast('Failed to apply label'); return; }
+  if(!ok){ showToast('Failed to update labels'); return false; }
   if(!_gmailCurrentMsg.labelIds.includes(labelId)) _gmailCurrentMsg.labelIds.push(labelId);
-  // Remember this clid for the message so downloads use its filename prefix
+  if(alsoRemoveInbox){
+    _gmailCurrentMsg.labelIds = (_gmailCurrentMsg.labelIds||[]).filter(id => id !== 'INBOX');
+  }
   _gmailMsgSuggestedClid.set(_gmailCurrentMsg.id, clid);
-  showToast('Labeled "' + fullName + '" ✓');
+  showToast((alsoRemoveInbox ? 'Moved to ' : 'Labeled ') + '"' + fullName + '" ✓');
   if(typeof _gmailRefreshActionChipsState === 'function') _gmailRefreshActionChipsState();
+  // If we removed from INBOX while viewing the inbox, drop the row from the
+  // current list so it doesn't sit there ghosted.
+  if(alsoRemoveInbox && _gmailMailbox === 'inbox' && typeof gmailAfterRemoveFromList === 'function'){
+    gmailAfterRemoveFromList(_gmailCurrentMsg.id);
+  }
+  return true;
 }
+async function gmailApplyCaseLabel(clid){ return _gmailApplyOrMoveCaseLabel(clid, false); }
+async function gmailMoveCaseToLabel(clid){ return _gmailApplyOrMoveCaseLabel(clid, true); }
 async function gmailCreateCaseFolder(clid){
   if(!clid){ showToast('No case selected'); return; }
   const name = _gmailCaseLabelName(clid);
@@ -3872,7 +3885,8 @@ function _gmailCaseActionsHtml(clid, inPreview){
   if(!safe) return '';
   const baseStyle = 'font-size:10px;font-weight:600;padding:3px 9px;border:1px solid #DDD5CA;border-radius:12px;background:#FFF;color:#5C5148;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;';
   return '<div class="case-actions" data-clid="' + dataClid + '" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">'
-    + '<button type="button" data-action="label" onclick="gmailApplyCaseLabel(\'' + safe + '\')" title="Apply a Gmail label named &quot;Last First Cl ID&quot; to this email" style="' + baseStyle + '">🏷 Label this email</button>'
+    + '<button type="button" data-action="label" onclick="gmailApplyCaseLabel(\'' + safe + '\')" title="Apply a Gmail label named &quot;Last First Cl ID&quot; to this email (keeps it in Inbox)" style="' + baseStyle + '">🏷 Label this email</button>'
+    + '<button type="button" data-action="move" onclick="gmailMoveCaseToLabel(\'' + safe + '\')" title="Apply the case label and remove the email from Inbox (move to label)" style="' + baseStyle + '">📥 Move to label</button>'
     + '<button type="button" data-action="folder" onclick="gmailCreateCaseFolder(\'' + safe + '\')" title="Pick a parent folder and create a subfolder named &quot;Last First Cl ID&quot;" style="' + baseStyle + '">📁 Create folder</button>'
     + (inPreview ? '<button type="button" data-action="attach" onclick="attachPreviewedDocToCase(\'' + safe + '\')" title="Save the previewed document into this case" style="' + baseStyle + '">📎 Attach to case</button>' : '')
     + '<button type="button" data-action="event" onclick="gmailAddEventToCase(\'' + safe + '\')" title="Add a new event to this case, pre-filled" style="' + baseStyle + '">＋ Add event</button>'
@@ -3984,6 +3998,12 @@ async function _gmailRefreshActionChipsState(rootArg){
       const expectedId = labelsByName.get(expected);
       const applied = !!(expectedId && (_gmailCurrentMsg.labelIds||[]).includes(expectedId));
       _markChipDone(labelChip, applied, 'Labeled');
+      const moveChip = cluster.querySelector('button[data-action="move"]');
+      if(moveChip){
+        // "Move to label" is done when the label is applied AND the email is no longer in INBOX
+        const inInbox = (_gmailCurrentMsg.labelIds||[]).includes('INBOX');
+        _markChipDone(moveChip, applied && !inInbox, 'Moved to label');
+      }
     }
     if(folderChip){
       try{
