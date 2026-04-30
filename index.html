@@ -17980,6 +17980,9 @@ function renderScheduleText(){
       edited.push({r,entries:todayEntries}); seenIds.add(r.id);
     }
   });
+  // Stash the IDs of events represented in the schedule so the email path
+  // (openScheduleInMail) can collect their attached documents.
+  window._schedLastEventIds = Array.from(seenIds);
 
   const totalChanges=added.length+rescheduled.length+statusChanged.length+edited.length;
 
@@ -18091,13 +18094,70 @@ function copyScheduleText(){
   }).catch(()=>document.execCommand('copy'));
 }
 
+// Walk events in the current schedule and gather every document attached to
+// those events (caseMeta[clid].docSections[*].docs where _recordId matches).
+// Returns objects shaped for _gmailComposeAttachments: {name, mimeType, base64, size}.
+function _collectScheduleAttachments(eventIds){
+  const out = [];
+  if(!eventIds || !eventIds.length) return out;
+  const eventSet = new Set(eventIds);
+  const seenName = new Set();
+  Object.keys((typeof caseMeta!=='undefined'?caseMeta:{})||{}).forEach(clid => {
+    const sections = (caseMeta[clid]||{}).docSections || [];
+    sections.forEach(s => {
+      (s.docs||[]).forEach(d => {
+        if(!d || !d.fileData) return;
+        if(!eventSet.has(d._recordId)) return;
+        if(seenName.has(d.name)) return;
+        const m = String(d.fileData).match(/^data:([^;]+);base64,(.*)$/);
+        if(!m) return;
+        const mimeType = m[1] || d.mimeType || 'application/octet-stream';
+        const base64 = m[2];
+        const size = Math.floor(base64.length * 3 / 4);
+        seenName.add(d.name);
+        out.push({ name: d.name, mimeType, base64, size });
+      });
+    });
+  });
+  return out;
+}
 function openScheduleInMail(){
   const ta=document.getElementById('sched-text-area');
   if(!ta)return;
   const title='Calendar Changes — '+TODAY.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-  const subject=encodeURIComponent(title+' — Romero Law Firm');
-  const body=encodeURIComponent(ta.value);
-  window.location.href='mailto:?subject='+subject+'&body='+body;
+  const subject = title + ' — Romero Law Firm';
+  // Fallback to plain mailto if Gmail isn't connected (mailto can't carry attachments)
+  if(typeof _gmailAccessToken === 'undefined' || !_gmailAccessToken){
+    window.location.href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(ta.value);
+    return;
+  }
+  // Build recipients: Loly always; cc the unique paralegals from those events
+  const lolyEmail = 'mvintimilla@theromerofirm.com';
+  const eventIds = (window._schedLastEventIds || []);
+  const paraSet = new Set();
+  eventIds.forEach(id => {
+    const r = (typeof records!=='undefined'?records:[]).find(x => x.id === id);
+    if(r && r.atty && paralegalEmails && paralegalEmails[r.atty]){
+      paraSet.add(paralegalEmails[r.atty]);
+    }
+  });
+  const cc = Array.from(paraSet).filter(e => e.toLowerCase() !== lolyEmail.toLowerCase()).join(', ');
+  // Open the Gmail compose modal first (it resets _gmailComposeAttachments),
+  // then push the auto-collected attachments + render the chip strip.
+  openEmailComposeModal({
+    to: lolyEmail,
+    cc: cc,
+    subject: subject,
+    body: ta.value,
+    _addSignature: false
+  });
+  const atts = _collectScheduleAttachments(eventIds);
+  if(atts.length && typeof _gmailComposeAttachments !== 'undefined'){
+    atts.forEach(a => _gmailComposeAttachments.push(a));
+    if(typeof gmailRenderAttachmentChips === 'function') gmailRenderAttachmentChips('emc-attach-chips');
+    showToast(atts.length + ' document' + (atts.length===1?'':'s') + ' attached from events');
+  }
+  closeScheduleTodayModal();
 }
 </script>
 <script>
