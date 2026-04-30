@@ -9781,7 +9781,6 @@ function openDocViewer(dataUrl, mimeType, fname){
     closeBtn.onmouseenter=()=>{closeBtn.style.color='#fff';};
     closeBtn.onmouseleave=()=>{closeBtn.style.color='#9E9186';};
     closeBtn.onclick=()=>{overlay.style.display='none';};
-    overlay.ondblclick=(e)=>{if(e.target===overlay)overlay.style.display='none';};
     btnRow.appendChild(dlBtn);btnRow.appendChild(closeBtn);
     bar.appendChild(title);bar.appendChild(btnRow);
     // Content area
@@ -9789,6 +9788,14 @@ function openDocViewer(dataUrl, mimeType, fname){
     content.id='doc-viewer-content';
     content.style.cssText='flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:20px;';
     overlay.appendChild(bar);overlay.appendChild(content);
+    // Close on double-click in any of the dark margins (the overlay backdrop
+    // OR the empty padded area inside the scrollable content wrap, but never
+    // when the user is interacting with the document itself).
+    const closeOnBackdrop = (e) => {
+      if(e.target === overlay || e.target === content){ overlay.style.display='none'; }
+    };
+    overlay.ondblclick = closeOnBackdrop;
+    content.ondblclick = closeOnBackdrop;
     document.body.appendChild(overlay);
   }
   // Populate
