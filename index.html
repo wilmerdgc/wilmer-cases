@@ -4358,50 +4358,54 @@ async function gmailToggleLabelsDropdown(){
   drop.style.display = 'block';
   const labels = await gmailFetchLabels();
   const userLabels = (labels||[]).filter(l => l.type === 'user');
-  function paint(query){
-    drop.innerHTML = '';
-    const searchWrap = document.createElement('div');
-    searchWrap.style.cssText = 'padding:8px;border-bottom:1px solid var(--cream-dark);position:sticky;top:0;background:#fff;z-index:1;';
-    searchWrap.innerHTML = '<input id="gmail-labels-search" type="text" placeholder="Search labels…" value="'+escHtml(query||'')+'" style="width:100%;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;background:#fff;" autocomplete="off"/>';
-    drop.appendChild(searchWrap);
-    const list = document.createElement('div');
-    drop.appendChild(list);
+  // Build the chrome ONCE: a sticky search input + a list container. Only the
+  // list is re-rendered on each keystroke, so the input keeps focus across
+  // typing (the previous version rebuilt drop.innerHTML on every input event,
+  // which destroyed the search field after each letter).
+  drop.innerHTML = '';
+  const searchWrap = document.createElement('div');
+  searchWrap.style.cssText = 'padding:8px;border-bottom:1px solid var(--cream-dark);position:sticky;top:0;background:#fff;z-index:1;';
+  searchWrap.innerHTML = '<input id="gmail-labels-search" type="text" placeholder="Search labels…" style="width:100%;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;background:#fff;" autocomplete="off"/>';
+  drop.appendChild(searchWrap);
+  const listEl = document.createElement('div');
+  drop.appendChild(listEl);
+  function renderList(query){
+    listEl.innerHTML = '';
     const ql = (query||'').toLowerCase();
     const filtered = userLabels.filter(l => !ql || (l.name||'').toLowerCase().includes(ql));
     if(!filtered.length){
       const empty = document.createElement('div');
       empty.style.cssText = 'padding:14px;text-align:center;color:var(--ink-faint);font-size:11px;';
       empty.textContent = userLabels.length ? 'No labels match' : 'No user labels — create one in Gmail or via Move to';
-      list.appendChild(empty);
-    } else {
-      const currentIds = (_gmailCurrentMsg && _gmailCurrentMsg.labelIds) || [];
-      filtered.forEach(l => {
-        const isApplied = currentIds.includes(l.id);
-        const item = document.createElement('div');
-        item.style.cssText = 'padding:7px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;';
-        item.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border:1.5px solid '+(isApplied?'var(--sage)':'var(--border)')+';border-radius:3px;background:'+(isApplied?'var(--sage)':'#fff')+';color:#fff;font-size:10px;flex-shrink:0;line-height:1;">'+(isApplied?'✓':'')+'</span>'
-          + '<span style="font-size:14px;">🏷</span>'
-          + '<span style="flex:1;">'+escHtml(l.name)+'</span>';
-        item.onmouseenter = () => item.style.background = 'var(--cream)';
-        item.onmouseleave = () => item.style.background = '';
-        item.onclick = async () => {
-          const ok = await gmailToggleLabelOnMessage(l.id, !isApplied);
-          if(ok){
-            const inp = document.getElementById('gmail-labels-search');
-            paint(inp ? inp.value : '');
-            // Re-focus the search input
-            setTimeout(() => { const f = document.getElementById('gmail-labels-search'); if(f) f.focus(); }, 0);
-          }
-        };
-        list.appendChild(item);
-      });
+      listEl.appendChild(empty);
+      return;
     }
-    setTimeout(() => {
-      const inp = document.getElementById('gmail-labels-search');
-      if(inp){ if(!query) inp.focus(); inp.oninput = () => paint(inp.value); }
-    }, 0);
+    const currentIds = (_gmailCurrentMsg && _gmailCurrentMsg.labelIds) || [];
+    filtered.forEach(l => {
+      const isApplied = currentIds.includes(l.id);
+      const item = document.createElement('div');
+      item.style.cssText = 'padding:7px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;';
+      item.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border:1.5px solid '+(isApplied?'var(--sage)':'var(--border)')+';border-radius:3px;background:'+(isApplied?'var(--sage)':'#fff')+';color:#fff;font-size:10px;flex-shrink:0;line-height:1;">'+(isApplied?'✓':'')+'</span>'
+        + '<span style="font-size:14px;">🏷</span>'
+        + '<span style="flex:1;">'+escHtml(l.name)+'</span>';
+      item.onmouseenter = () => item.style.background = 'var(--cream)';
+      item.onmouseleave = () => item.style.background = '';
+      item.onclick = async () => {
+        const ok = await gmailToggleLabelOnMessage(l.id, !isApplied);
+        if(ok){
+          const inp = document.getElementById('gmail-labels-search');
+          renderList(inp ? inp.value : '');
+        }
+      };
+      listEl.appendChild(item);
+    });
   }
-  paint('');
+  const inp = document.getElementById('gmail-labels-search');
+  if(inp){
+    inp.oninput = () => renderList(inp.value);
+    setTimeout(() => inp.focus(), 0);
+  }
+  renderList('');
   // Close on outside click
   setTimeout(() => {
     const close = e => { if(!drop.contains(e.target) && e.target.closest && !e.target.closest('[onclick*="gmailToggleLabelsDropdown"]')){ drop.style.display='none'; document.removeEventListener('mousedown',close); }};
