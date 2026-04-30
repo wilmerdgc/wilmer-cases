@@ -11191,7 +11191,37 @@ if(_autoBackupHandle) _writeAutoBackup();// Auto-push events to Google Calendar 
 try{ _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync(); }catch(e){}
 }catch(e){showToast('Save failed: storage may be full');}}
 function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);return true;}catch(e){return false;}}
-window.markUnsaved=function(){document.getElementById('unsaved-dot').style.display='inline-block';document.getElementById('btn-save').classList.add('unsaved');clearTimeout(window._autoSaveTimer);window._autoSaveTimer=setTimeout(()=>{saveAllData();},1000);};
+// One pending-render flag, used by both the debounced timer and the global
+// focusout listener: if the user is mid-edit when the timer fires, we set
+// the flag and re-try after they blur, so we never yank focus mid-type.
+let _pendingAutoRender = false;
+function _runAutoRenderIfReady(){
+  const ae = document.activeElement;
+  const isEditing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable);
+  if(isEditing){ _pendingAutoRender = true; return; }
+  _pendingAutoRender = false;
+  // Invalidate cached lookups so the next renderAll computes from fresh data.
+  try{ if(typeof _invalidateCasesCache === 'function') _invalidateCasesCache(); }catch(e){}
+  try{ if(typeof dirtyFilterOpts === 'function')      dirtyFilterOpts(); }catch(e){}
+  try{ if(typeof dirtyCaseFilterOpts === 'function')  dirtyCaseFilterOpts(); }catch(e){}
+  try{ if(typeof renderAll === 'function') renderAll(); }catch(e){}
+}
+// If a render was deferred because focus was inside an input, run it as soon
+// as the user blurs. The capture-phase listener catches every focus loss.
+document.addEventListener('focusout', () => {
+  if(_pendingAutoRender) setTimeout(_runAutoRenderIfReady, 80);
+}, true);
+window.markUnsaved=function(){
+  document.getElementById('unsaved-dot').style.display='inline-block';
+  document.getElementById('btn-save').classList.add('unsaved');
+  clearTimeout(window._autoSaveTimer);
+  window._autoSaveTimer=setTimeout(()=>{saveAllData();},1000);
+  // Auto-render dirty UI so the user doesn't have to refresh to see changes
+  // propagate. Debounced to coalesce rapid edits; deferred when focus is in
+  // an input (see _runAutoRenderIfReady).
+  clearTimeout(window._autoRenderTimer);
+  window._autoRenderTimer=setTimeout(_runAutoRenderIfReady, 400);
+};
 function setLastBackupLabel(action){
   const n=new Date();
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
