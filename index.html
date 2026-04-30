@@ -2932,6 +2932,9 @@ function hideExcelRestorePrompt(){}
         <div class="history-log" id="modal-history-log"></div>
       </div>
     </div>
+    <!-- Shown only when this modal was opened from a preview (split-screen mode);
+         lets the user attach the previewed document into the case. -->
+    <div id="modal-preview-attach" style="display:none;"></div>
     <div class="form-actions">
       <button onclick="closeModal()">Close</button>
       <button id="modal-copy-btn" title="Copy event as plain text" onclick="copyEventText()" style="display:flex;align-items:center;gap:5px;">&#128203; Copy</button>
@@ -3816,6 +3819,8 @@ function gmailAddEventToCase(clid){
     const docOv = document.getElementById('doc-viewer-overlay');
     if(docOv && docOv.style.display !== 'none' && getComputedStyle(docOv).display !== 'none'){
       document.body.classList.add('preview-split-mode');
+      // Surface the in-modal "attach previewed document" banner.
+      if(typeof _populatePreviewAttachInModal === 'function') _populatePreviewAttachInModal(clid);
     }
   }, 60);
 }
@@ -3823,6 +3828,8 @@ function gmailAddEventToCase(clid){
 // viewer close path). Safe to call when not in split mode.
 function _exitPreviewSplitMode(){
   document.body.classList.remove('preview-split-mode');
+  const host = document.getElementById('modal-preview-attach');
+  if(host){ host.style.display = 'none'; host.innerHTML = ''; }
 }
 // Action chip cluster for the match banners — apply Gmail label, create
 // local folder, add a new event to the linked case. When inPreview is true
@@ -3872,7 +3879,32 @@ function attachPreviewedDocToCase(clid){
   // Reflect ✓ done state on the chip
   const chip = document.querySelector('#doc-viewer-chips button[data-action="attach"]');
   if(chip && typeof _markChipDone === 'function') _markChipDone(chip, true, 'Attached');
+  // Refresh the in-modal banner if present (so its button flips to ✓ Attached)
+  if(typeof _populatePreviewAttachInModal === 'function') _populatePreviewAttachInModal(clid);
   showToast('Attached "' + docName + '" to case ✓');
+}
+// Populate the "Previewed document" banner inside the event modal. Only
+// invoked from gmailAddEventToCase when entering split-screen mode, and
+// re-invoked after a successful attach to flip the button to ✓ Attached.
+function _populatePreviewAttachInModal(clid){
+  const host = document.getElementById('modal-preview-attach');
+  if(!host) return;
+  if(!_docViewerCurrent || !_docViewerCurrent.dataUrl || !clid){
+    host.style.display='none'; host.innerHTML=''; return;
+  }
+  const fname = _docViewerCurrent.fname || 'Attachment';
+  const sections = ((typeof caseMeta!=='undefined' && caseMeta[clid]) || {}).docSections || [];
+  const already = sections.some(s => (s.docs||[]).some(d => d && d.name === fname));
+  host.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 12px;background:#FFF8EE;border:1px solid #F0D9BB;border-radius:8px;margin:8px 16px 0;flex-wrap:wrap;';
+  host.innerHTML = '<span style="font-size:10px;font-weight:700;color:#C9823A;text-transform:uppercase;letter-spacing:.04em;">Previewed document</span>'
+    + '<span style="font-size:12px;color:#5C5148;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📎 ' + escHtml(fname) + '</span>'
+    + (already
+      ? '<span style="font-size:11px;color:#6A8C6E;font-weight:600;">✓ Attached to case</span>'
+      : '<button type="button" id="modal-preview-attach-btn" style="font-size:11px;font-weight:600;padding:5px 12px;border:1px solid #C9823A;border-radius:14px;background:#FAF0E6;color:#C9823A;cursor:pointer;font-family:inherit;">📎 Attach to case</button>');
+  if(!already){
+    const btn = host.querySelector('#modal-preview-attach-btn');
+    if(btn) btn.onclick = () => attachPreviewedDocToCase(clid);
+  }
 }
 // Flip a chip into a green "✓ done" state so the user knows the action was
 // already performed for this email/case (idempotent — no-op if already done).
