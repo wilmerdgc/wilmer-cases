@@ -10092,8 +10092,15 @@ function openDocViewer(dataUrl, mimeType, fname, clid){
       if(cluster) cluster.style.marginTop = '0';
       if(typeof _gmailRefreshActionChipsState === 'function') _gmailRefreshActionChipsState(chipsHost);
     } else if(typeof _gmailCurrentMsg !== 'undefined' && _gmailCurrentMsg){
-      const baseStyle = 'font-size:10px;font-weight:600;padding:3px 9px;border:1px solid #B8C4DB;border-radius:12px;background:#EEF1F7;color:#4F6A91;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;';
-      chipsHost.innerHTML = '<button type="button" onclick="gmailApplySuggestionFromCurrent()" title="Open the New Case form pre-filled from this email" style="' + baseStyle + '">＋ Add new case…</button>';
+      // No matched case yet — surface the two "create something" actions so
+      // the user doesn't have to leave the preview to capture context.
+      const blueChip  = 'font-size:10px;font-weight:600;padding:3px 9px;border:1px solid #B8C4DB;border-radius:12px;background:#EEF1F7;color:#4F6A91;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;';
+      const sageChip  = 'font-size:10px;font-weight:600;padding:3px 9px;border:1px solid #B4CCAD;border-radius:12px;background:#EBF1EB;color:#4A6B4E;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;';
+      chipsHost.innerHTML =
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+        + '<button type="button" onclick="gmailApplySuggestionFromCurrent()" title="Open the New Case form pre-filled from this email" style="' + blueChip + '">＋ Add new case…</button>'
+        + '<button type="button" onclick="(function(){if(typeof openAdd!=\'function\')return;openAdd();var d=document.getElementById(\'doc-viewer-overlay\');if(d&&d.style.display!==\'none\'&&getComputedStyle(d).display!==\'none\')document.body.classList.add(\'preview-split-mode\');})()" title="Open the Add Event form (blank); fills in the case fields if you set them" style="' + sageChip + '">＋ Add event</button>'
+        + '</div>';
     } else {
       chipsHost.innerHTML = '';
     }
