@@ -8707,14 +8707,16 @@ function resetVirtualHearingDetails(){
   const lk=document.getElementById('vh-link'); if(lk) lk.value='';
   const vd=document.getElementById('modal-virtual-details'); if(vd) vd.style.display='none';
 }
-// Resolve the Webex/virtual link for a record: explicit override wins, otherwise pull from the judge.
+// Resolve the Webex/virtual link for a record: prefer the judge's saved virtual room
+// (so changes to the judge propagate to all their hearings), fall back to any
+// event-specific override.
 function eventVirtualLink(r){
   if(!r) return '';
-  if(r.virtualLink) return r.virtualLink;
   if(r.hearingJudgeId && typeof judges !== 'undefined'){
     const j = judges.find(x => x.id === r.hearingJudgeId);
     if(j && j.virtualRoom) return j.virtualRoom;
   }
+  if(r.virtualLink) return r.virtualLink;
   return '';
 }
 // Build a discreet external-link button that opens a URL in a new tab.
