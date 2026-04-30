@@ -3579,12 +3579,10 @@ function _gmailExtractCaseSuggestion(m){
     }
   }
 
-  // Normalize lastName casing (proper-case each word) when it came from the
-  // subject in ALL-CAPS form. Leave it alone if the body already gave us
-  // properly-cased name parts.
-  if(lastName && lastName === lastName.toUpperCase()){
-    lastName = lastName.split(/\s+/).map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
-  }
+  // Firm convention: last names are stored UPPERCASED. If the body gave us a
+  // mixed-case last name, force it to upper here so the New Case form
+  // pre-fills consistently with the rest of the app.
+  if(lastName) lastName = lastName.toUpperCase();
 
   // 3) Recipients → paralegal lookup
   let paralegal = '', paralegalEmail = '';
@@ -12748,6 +12746,8 @@ function renderG28Form(selectedClid){
 function _g28FieldChanged(clid,field,value){
   if(!clid)return;
   if(!caseMeta[clid])caseMeta[clid]={};
+  // Last names are stored UPPERCASED everywhere — convention across the firm.
+  if(field === 'clientLastName' && typeof value === 'string') value = value.toUpperCase();
   caseMeta[clid][field]=value;
   markUnsaved();
 }
@@ -13682,7 +13682,7 @@ function openCaseDetail(clid){
     if(infoBody._clDobInput){if(!caseMeta[clid])caseMeta[clid]={};caseMeta[clid].clientDob=infoBody._clDobInput.value;}
     if(!caseMeta[clid])caseMeta[clid]={};
     let _nameTrimmed=false;
-    if(infoBody._clLastInput){const raw=infoBody._clLastInput.value.trim();const v=_singleName(raw);if(raw!==v){_nameTrimmed=true;infoBody._clLastInput.value=v;}caseMeta[clid].clientLastName=v;}
+    if(infoBody._clLastInput){const raw=infoBody._clLastInput.value.trim();let v=_singleName(raw).toUpperCase();if(raw!==v){_nameTrimmed=true;infoBody._clLastInput.value=v;}caseMeta[clid].clientLastName=v;}
     if(infoBody._clFirstInput){const raw=infoBody._clFirstInput.value.trim();const v=_singleName(raw);if(raw!==v){_nameTrimmed=true;infoBody._clFirstInput.value=v;}caseMeta[clid].clientFirstName=v;}
     if(infoBody._clMiddleInput){const raw=infoBody._clMiddleInput.value.trim();const v=_singleName(raw);if(raw!==v){_nameTrimmed=true;infoBody._clMiddleInput.value=v;}caseMeta[clid].clientMiddleName=v;}
     if(_nameTrimmed) showToast('Name fields accept one word each — extras trimmed');
@@ -16633,9 +16633,9 @@ function saveAddCasePage(){
 
   records.push(rec);
 
-  // Save structured name to caseMeta
+  // Save structured name to caseMeta. Last names always stored UPPERCASED.
   if(!caseMeta[caseId]) caseMeta[caseId]={};
-  caseMeta[caseId].clientLastName=lastName;
+  caseMeta[caseId].clientLastName=(lastName||'').toUpperCase();
   caseMeta[caseId].clientFirstName=firstName;
   if(middleName) caseMeta[caseId].clientMiddleName=middleName;
   if(email) caseMeta[caseId].clientEmail=email;
@@ -16724,10 +16724,10 @@ function saveNewCase(){
   };
   records.push(rec);
 
-  // Save structured name to caseMeta
+  // Save structured name to caseMeta. Last names always stored UPPERCASED.
   const _cid=clid||id;
   if(!caseMeta[_cid]) caseMeta[_cid]={};
-  caseMeta[_cid].clientLastName=lastName;
+  caseMeta[_cid].clientLastName=(lastName||'').toUpperCase();
   caseMeta[_cid].clientFirstName=firstName;
   if(middleName) caseMeta[_cid].clientMiddleName=middleName;
   if(email) caseMeta[_cid].clientEmail=email;
@@ -16900,6 +16900,32 @@ const loaded=loadSavedData();
   });
   try{localStorage.setItem('migration_clientFirstName_v1','done');}catch(e){}
   markUnsaved();
+})();
+
+// One-time migration: uppercase every existing clientLastName so display
+// matches the firm convention. New entries are uppercased on save (see
+// saveNewCase, _g28FieldChanged, the Case Information last-name input).
+(function _migrateLastNamesUppercase(){
+  if(localStorage.getItem('migration_lastname_upper_v1')==='done') return;
+  let touched = 0;
+  Object.keys(caseMeta||{}).forEach(clid => {
+    const m = caseMeta[clid];
+    if(m && typeof m.clientLastName === 'string' && m.clientLastName){
+      const up = m.clientLastName.toUpperCase();
+      if(m.clientLastName !== up){ m.clientLastName = up; touched++; }
+    }
+    // Respondent names follow the same convention if populated as objects
+    if(m && Array.isArray(m.respondents)){
+      m.respondents.forEach(r => {
+        if(r && typeof r.clientLastName === 'string' && r.clientLastName){
+          const up = r.clientLastName.toUpperCase();
+          if(r.clientLastName !== up){ r.clientLastName = up; touched++; }
+        }
+      });
+    }
+  });
+  try{localStorage.setItem('migration_lastname_upper_v1','done');}catch(e){}
+  if(touched) markUnsaved();
 })();
 
 // ── One-time resync: when a user edited structured first/middle/last name
