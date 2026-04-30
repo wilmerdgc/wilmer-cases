@@ -3467,7 +3467,8 @@ function _gmailFindCasesByNumber(text){
     }
   });
   if(!byClid.size && !byAnum.size) return [];
-  // Match digit-with-optional-dashes patterns
+  // Match digit-with-optional-dashes patterns. Dedupe by case so the same
+  // client never shows twice (e.g. once via Cl ID, once via A-Number).
   const re = /\b\d[\d-]{2,}\d\b/g;
   let m;
   while((m = re.exec(text)) !== null){
@@ -3476,12 +3477,12 @@ function _gmailFindCasesByNumber(text){
     if(digits.length < 4) continue;
     if(byClid.has(digits)){
       const r = byClid.get(digits);
-      const k = 'clid:' + (r.clid || r.client) + ':' + digits;
+      const k = String(r.clid || r.client);
       if(!seen.has(k)){ seen.add(k); out.push({type:'Cl ID', match:raw, record:r}); }
     }
     if(digits.length >= 7 && byAnum.has(digits)){
       const r = byAnum.get(digits);
-      const k = 'anum:' + (r.clid || r.client) + ':' + digits;
+      const k = String(r.clid || r.client);
       if(!seen.has(k)){ seen.add(k); out.push({type:'A#', match:raw, record:r}); }
     }
     if(out.length >= 5) break;
