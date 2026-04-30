@@ -6842,6 +6842,11 @@ function renderWeek() {
         }
       }
       appendSoMeta(t, r, 'var(--amber)');
+      // External-link icon for hearings with a Webex link (judge's saved room)
+      if(!_isReminder){
+        const _vlink = eventVirtualLink(r);
+        if(_vlink) t.appendChild(makeExternalLinkBtn(_vlink, 'Open Webex link', 'position:absolute;top:5px;right:5px;margin:0;padding:2px;', 11));
+      }
       body.appendChild(t);
     });
     if(!sortedTasks.length){
@@ -7019,10 +7024,12 @@ function renderMonth() {
       const bg = es.color ? es.color+'22' : (cardBg[s] || '#EDE8E0');
       const fg = es.color || cardColor[s] || '#9E9186';
       const evLabel=(es.icon?es.icon+' ':'')+( r.event||r.type);
-      const card = document.createElement('div'); card.className = 'cal-event-card'; card.style.background = bg; card.onclick = () => openEdit(r.id);
+      const card = document.createElement('div'); card.className = 'cal-event-card'; card.style.background = bg; card.style.position='relative'; card.onclick = () => openEdit(r.id);
       card.innerHTML = `<div class="cal-event-name" style="color:${fg}">${evLabel}</div><div class="cal-event-sub" style="color:${fg}">${r.client}</div>${r.notes ? `<div style="font-size:9px;opacity:0.65;margin-top:1px;line-height:1.3;font-style:italic;color:${fg};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.notes}</div>` : ''}`;
       if(es.color) card.style.borderLeft=`3px solid ${es.color}`;
       appendSoMeta(card, r, fg);
+      const _vlinkM = eventVirtualLink(r);
+      if(_vlinkM) card.appendChild(makeExternalLinkBtn(_vlinkM, 'Open Webex link', 'position:absolute;top:3px;right:3px;margin:0;padding:1px;', 10));
       cell.appendChild(card);
     });
     cell.addEventListener('dblclick', e => {
@@ -8720,14 +8727,17 @@ function eventVirtualLink(r){
   return '';
 }
 // Build a discreet external-link button that opens a URL in a new tab.
-function makeExternalLinkBtn(href, title){
+// extraStyle is appended to the inline style — handy for absolute-positioned variants.
+// size sets the SVG dimension in pixels (default 13).
+function makeExternalLinkBtn(href, title, extraStyle, size){
+  const sz = size || 13;
   const a = document.createElement('a');
   a.href = href;
   a.target = '_blank';
   a.rel = 'noopener noreferrer';
   a.title = title || 'Open link in a new tab';
-  a.style.cssText = 'flex-shrink:0;align-self:center;padding:3px;margin-left:4px;color:#C4BAB0;text-decoration:none;line-height:0;border-radius:4px;transition:color .12s, background .12s;';
-  a.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg>';
+  a.style.cssText = 'flex-shrink:0;align-self:center;padding:3px;margin-left:4px;color:#C4BAB0;text-decoration:none;line-height:0;border-radius:4px;transition:color .12s, background .12s;' + (extraStyle || '');
+  a.innerHTML = '<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg>';
   a.onmouseenter = () => { a.style.color = '#6B7FA3'; a.style.background = '#EEF1F7'; };
   a.onmouseleave = () => { a.style.color = '#C4BAB0'; a.style.background = ''; };
   a.onclick = e => e.stopPropagation();
