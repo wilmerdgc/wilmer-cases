@@ -2054,6 +2054,15 @@ function hideExcelRestorePrompt(){}
         <textarea id="dv-day-notes" placeholder="Notes…" rows="3" oninput="saveDayNotes()" style="font-size:13px;font-family:'DM Sans',system-ui,sans-serif;resize:vertical;border:none;border-top:1px solid #EDE8E0;padding:8px 0 0;background:transparent;color:#5C5148;line-height:1.5;outline:none;width:100%;" onfocus="this.style.color='#2C2620'" onblur="this.style.color='#5C5148'"></textarea>
       </div>
     </div>
+
+    <!-- Today's case activity report — short summary of changes you recorded today, grouped by client -->
+    <div style="margin-top:14px;border:1px solid #DDD5CA;border-radius:14px;overflow:hidden;background:#fff;">
+      <div style="padding:10px 16px;border-bottom:1px solid #DDD5CA;background:#F7F3ED;display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9E9186;">Today's case activity</span>
+        <span id="dv-activity-report-summary" style="font-size:10px;color:#C4BAB0;"></span>
+      </div>
+      <div id="dv-activity-report-body" style="padding:4px 16px 12px;"></div>
+    </div>
   </div>
   <div id="view-week" style="display:none"><div class="nav-row"><button onclick="shiftWeek(-1)">&#8592;</button><span class="nav-title" id="week-title"></span><button onclick="shiftWeek(1)">&#8594;</button><button onclick="weekOffset=0;renderWeek();" title="Jump to current week" style="font-size:10px;font-weight:500;padding:2px 8px;border:1px solid #EDE8E0;border-radius:10px;background:transparent;color:#9E9186;cursor:pointer;font-family:inherit;margin-left:6px;">Today</button><div class="weekend-toggle-bar"><span id="wk-weekend-note" style="font-size:10px;color:#9C6D2F;display:none;">Weekend events present</span><button id="wk-weekend-toggle" class="wt-btn" onclick="toggleWeekendView()" title="Show or hide Saturday &amp; Sunday">+ Weekend</button></div></div><div class="week-grid" id="week-grid"></div><div id="empty-week" style="display:none;text-align:center;padding:3rem;color:#9E9186;font-size:13px">No tasks this week.</div><div id="week-board"></div></div>
   <div id="view-month" style="display:none"><div class="nav-row"><button onclick="shiftMonth(-1)">&#8592;</button><span class="nav-title" id="month-title"></span><button onclick="shiftMonth(1)">&#8594;</button><button onclick="monthOffset=0;renderMonth();" title="Jump to current month" style="font-size:10px;font-weight:500;padding:2px 8px;border:1px solid #EDE8E0;border-radius:10px;background:transparent;color:#9E9186;cursor:pointer;font-family:inherit;margin-left:6px;">Today</button></div><div class="cal-day-headers"><div class="cal-day-label">Mon</div><div class="cal-day-label">Tue</div><div class="cal-day-label">Wed</div><div class="cal-day-label">Thu</div><div class="cal-day-label">Fri</div><div class="cal-day-label" title="Week of the year" style="opacity:0.5;font-size:9px;">Wk</div></div><div class="cal-grid" id="cal-grid"></div><div id="month-board"></div></div>
@@ -14383,6 +14392,88 @@ function renderDayView(){
   renderDayTimeline();
   startNowTimer();
   loadDayNotes();
+  renderTodayActivityReport();
+}
+
+// ── Today's case activity report ──
+// Scans every record's history[] for entries dated today (todayStr() match)
+// and groups them by client so you can see at a glance what changes you made.
+function renderTodayActivityReport(){
+  const host = document.getElementById('dv-activity-report-body');
+  const summary = document.getElementById('dv-activity-report-summary');
+  if(!host) return;
+  const todayKey = todayStr();
+  const byClient = new Map();
+  let totalChanges = 0;
+  records.forEach(r => {
+    const hist = r.history || [];
+    const todayEntries = hist.filter(h => h && h.date === todayKey);
+    if(!todayEntries.length) return;
+    const key = r.clid || r.client || '?';
+    if(!byClient.has(key)){
+      byClient.set(key, { clid: r.clid || '', clientName: r.client || key, entries: [] });
+    }
+    todayEntries.forEach(h => {
+      byClient.get(key).entries.push({
+        recordId: r.id,
+        event: r.event || r.type || '(event)',
+        type: h.type,
+        note: h.note || h.text || '',
+        prevDate: h.prevDate,
+        newDate: h.newDate
+      });
+      totalChanges++;
+    });
+  });
+  if(summary){
+    summary.textContent = totalChanges
+      ? totalChanges + ' change' + (totalChanges===1?'':'s') + ' across ' + byClient.size + ' client' + (byClient.size===1?'':'s')
+      : '';
+  }
+  if(!byClient.size){
+    host.innerHTML = '<div style="font-size:12px;color:#C4BAB0;font-style:italic;padding:14px 0;text-align:center;">No case changes recorded today.</div>';
+    return;
+  }
+  const labels = {
+    completed:   { txt: 'Completed',   bg: '#EBF1EB', color: '#6A8C6E' },
+    attended:    { txt: 'Attended',    bg: '#EEF1F7', color: '#6B7FA3' },
+    cancelled:   { txt: 'Cancelled',   bg: '#F9EDED', color: '#B85C5C' },
+    rescheduled: { txt: 'Rescheduled', bg: '#FAF0E6', color: '#C9823A' },
+    deleted:     { txt: 'Deleted',     bg: '#EDE8E0', color: '#9E9186' },
+    note:        { txt: 'Note',        bg: '#F7F3ED', color: '#5C5148' }
+  };
+  host.innerHTML = '';
+  const groups = Array.from(byClient.values()).sort((a,b) => (a.clientName||'').localeCompare(b.clientName||''));
+  groups.forEach((group, gi) => {
+    const sec = document.createElement('div');
+    sec.style.cssText = 'padding:10px 0;' + (gi < groups.length - 1 ? 'border-bottom:1px solid #F0EBE4;' : '');
+    const title = document.createElement('div');
+    title.style.cssText = 'display:flex;align-items:baseline;gap:6px;margin-bottom:6px;cursor:pointer;';
+    title.title = 'Open case';
+    title.onclick = () => { if(typeof goToCase==='function') goToCase(group.clid || group.clientName); };
+    title.innerHTML = '<span style="font-family:\'Lora\',Georgia,serif;font-size:13px;font-weight:600;color:#2C2620;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .12s;">' + escHtml(group.clientName) + '</span>'
+      + (group.clid ? '<span style="font-size:10px;color:#C4BAB0;">#' + escHtml(group.clid) + '</span>' : '')
+      + '<span style="font-size:10px;color:#C4BAB0;">· ' + group.entries.length + ' change' + (group.entries.length===1?'':'s') + '</span>';
+    title.onmouseenter = () => { const s = title.querySelector('span'); if(s) s.style.textDecorationColor = '#5C5148'; };
+    title.onmouseleave = () => { const s = title.querySelector('span'); if(s) s.style.textDecorationColor = 'transparent'; };
+    sec.appendChild(title);
+    group.entries.forEach(e => {
+      const row = document.createElement('div');
+      row.style.cssText = 'font-size:11px;color:#5C5148;line-height:1.5;display:flex;gap:7px;align-items:flex-start;padding:2px 0;';
+      const lbl = labels[e.type] || { txt: (e.type||'Updated').replace(/^./,c=>c.toUpperCase()), bg: '#F7F3ED', color: '#5C5148' };
+      let extra = '';
+      if(e.type === 'rescheduled' && e.prevDate && e.newDate){
+        extra = ' <span style="color:#9E9186;">(' + escHtml(fmtShort(e.prevDate)) + ' → ' + escHtml(fmtShort(e.newDate)) + ')</span>';
+      }
+      const noteHtml = e.note
+        ? ' <span style="color:#9E9186;">— ' + escHtml(e.note.length>140?e.note.slice(0,140)+'…':e.note) + '</span>'
+        : '';
+      row.innerHTML = '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:' + lbl.color + ';background:' + lbl.bg + ';padding:1px 6px;border-radius:4px;flex-shrink:0;align-self:center;">' + escHtml(lbl.txt) + '</span>'
+        + '<span style="flex:1;min-width:0;"><b>' + escHtml(e.event) + '</b>' + extra + noteHtml + '</span>';
+      sec.appendChild(row);
+    });
+    host.appendChild(sec);
+  });
 }
 
 // ── Call-Up urgency banner (shown above Today task list when overdue/due-soon) ──
