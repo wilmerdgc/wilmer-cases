@@ -3734,13 +3734,20 @@ async function _gmailFindOrCreateLabel(name){
   });
   return data ? data.id : null;
 }
+// Parent label every case label is nested under.
+const _GMAIL_CASES_PARENT = 'CLIENTS';
 async function gmailApplyCaseLabel(clid){
   if(!_gmailCurrentMsg){ showToast('No email selected'); return; }
   if(!clid){ showToast('No case to label'); return; }
-  const name = _gmailCaseLabelName(clid);
-  if(!name){ showToast('Could not build label name'); return; }
-  showToast('Applying label "' + name + '"…');
-  const labelId = await _gmailFindOrCreateLabel(name);
+  const bare = _gmailCaseLabelName(clid);
+  if(!bare){ showToast('Could not build label name'); return; }
+  // Ensure the parent "CLIENTS" label exists, then nest under it.
+  // (Gmail uses "Parent/Child" for nested labels and won't auto-create the
+  // parent — so we explicitly create it first if needed.)
+  await _gmailFindOrCreateLabel(_GMAIL_CASES_PARENT);
+  const fullName = _GMAIL_CASES_PARENT + '/' + bare;
+  showToast('Applying label "' + fullName + '"…');
+  const labelId = await _gmailFindOrCreateLabel(fullName);
   if(!labelId){ showToast('Could not create the label'); return; }
   const ok = await gmailApi('messages/' + _gmailCurrentMsg.id + '/modify', {
     method: 'POST',
@@ -3751,7 +3758,7 @@ async function gmailApplyCaseLabel(clid){
   if(!_gmailCurrentMsg.labelIds.includes(labelId)) _gmailCurrentMsg.labelIds.push(labelId);
   // Remember this clid for the message so downloads use its filename prefix
   _gmailMsgSuggestedClid.set(_gmailCurrentMsg.id, clid);
-  showToast('Labeled "' + name + '" ✓');
+  showToast('Labeled "' + fullName + '" ✓');
 }
 async function gmailCreateCaseFolder(clid){
   if(!clid){ showToast('No case selected'); return; }
