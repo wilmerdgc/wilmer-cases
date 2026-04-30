@@ -3812,8 +3812,9 @@ function gmailAddEventToCase(clid){
       if(nEl && !nEl.value) nEl.value = 'From email: ' + _gmailCurrentMsg.subject;
     }
     // If the document preview is currently visible, switch to side-by-side.
+    // (offsetParent is always null for position:fixed, so don't gate on it.)
     const docOv = document.getElementById('doc-viewer-overlay');
-    if(docOv && docOv.style.display !== 'none' && docOv.offsetParent !== null){
+    if(docOv && docOv.style.display !== 'none' && getComputedStyle(docOv).display !== 'none'){
       document.body.classList.add('preview-split-mode');
     }
   }, 60);
