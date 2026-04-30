@@ -476,11 +476,14 @@ body.wk-dragging .week-col { transition: background 0.1s, box-shadow 0.1s; }
   backdrop-filter: blur(2px);
   will-change: opacity;
 }
-/* Split-screen mode: PDF/image preview on the left half, event modal on the
-   right half. Triggered by + Add event from inside the doc viewer. */
+/* Split-screen mode: PDF/image preview on the left half, event or new-case
+   modal on the right half. Triggered by + Add event or + Add new case from
+   inside the doc viewer. */
 body.preview-split-mode #doc-viewer-overlay { right: 50% !important; transition: right .2s ease; }
-body.preview-split-mode #modal { left: 50% !important; backdrop-filter: none; background: rgba(44,38,32,0.18); }
+body.preview-split-mode #modal,
+body.preview-split-mode #new-case-modal { left: 50% !important; backdrop-filter: none; background: rgba(44,38,32,0.18); }
 body.preview-split-mode #modal .modal { max-width: 460px; }
+body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .modal {
   background: var(--cream);
   border: 1px solid var(--border);
@@ -4006,6 +4009,12 @@ function gmailApplySuggestionFromCurrent(){
   if(!parsed){ showToast('Nothing to suggest from this email'); return; }
   if(typeof openNewCaseModal !== 'function'){ showToast('New Case form is not available'); return; }
   openNewCaseModal();
+  // If the doc preview is currently open, side-by-side layout the two so the
+  // user can reference the PDF while filling in the form.
+  const docOv = document.getElementById('doc-viewer-overlay');
+  if(docOv && docOv.style.display !== 'none' && getComputedStyle(docOv).display !== 'none'){
+    document.body.classList.add('preview-split-mode');
+  }
   const set = (id, v) => { const el = document.getElementById(id); if(el && v != null && v !== '') el.value = v; };
   set('nc-lastName',  parsed.lastName);
   set('nc-firstName', parsed.firstName);
@@ -16664,6 +16673,7 @@ function openNewCaseModal(){
 
 function closeNewCaseModal(){
   document.getElementById('new-case-modal').style.display = 'none';
+  if(typeof _exitPreviewSplitMode === 'function') _exitPreviewSplitMode();
 }
 
 function saveNewCase(){
