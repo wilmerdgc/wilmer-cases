@@ -15206,6 +15206,30 @@ function renderTodayActivityReport(){
       totalChanges++;
     });
   });
+  // Also include case-level notes added today (caseMeta[clid].caseNotesList).
+  // These come from the inbox "Add Note" action, attachment saves, etc.
+  Object.keys(caseMeta || {}).forEach(clid => {
+    const list = (caseMeta[clid] || {}).caseNotesList || [];
+    const todayNotes = list.filter(n => n && n.date === todayKey);
+    if(!todayNotes.length) return;
+    const key = clid;
+    if(!byClient.has(key)){
+      // Resolve a client name from the first record on this clid (or fall back to clid)
+      const rec = records.find(r => (r.clid||r.client) === clid);
+      byClient.set(key, { clid, clientName: rec ? (rec.client||clid) : clid, entries: [] });
+    }
+    todayNotes.forEach(n => {
+      byClient.get(key).entries.push({
+        recordId: null,           // case-level, no event to open
+        event: 'Case note',
+        type: 'note',
+        note: n.text || '',
+        prevDate: null,
+        newDate: null
+      });
+      totalChanges++;
+    });
+  });
   if(summary){
     summary.textContent = totalChanges
       ? totalChanges + ' change' + (totalChanges===1?'':'s') + ' across ' + byClient.size + ' client' + (byClient.size===1?'':'s')
@@ -15250,15 +15274,23 @@ function renderTodayActivityReport(){
       // Body: clickable event name + reschedule range + full note (wraps)
       const body = document.createElement('span');
       body.style.cssText = 'flex:1;min-width:0;word-wrap:break-word;overflow-wrap:anywhere;white-space:normal;';
-      const eventBtn = document.createElement('button');
-      eventBtn.type = 'button';
-      eventBtn.title = 'Open event';
-      eventBtn.style.cssText = 'border:none;background:transparent;color:#2C2620;font-family:inherit;font-size:11px;font-weight:700;padding:0;cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .12s;';
-      eventBtn.textContent = e.event;
-      eventBtn.onmouseenter = () => eventBtn.style.textDecorationColor = '#2C2620';
-      eventBtn.onmouseleave = () => eventBtn.style.textDecorationColor = 'transparent';
-      eventBtn.onclick = () => { if(e.recordId && typeof openEdit==='function') openEdit(e.recordId); };
-      body.appendChild(eventBtn);
+      // Case-level notes have no event to open — render as a static label.
+      if(e.recordId){
+        const eventBtn = document.createElement('button');
+        eventBtn.type = 'button';
+        eventBtn.title = 'Open event';
+        eventBtn.style.cssText = 'border:none;background:transparent;color:#2C2620;font-family:inherit;font-size:11px;font-weight:700;padding:0;cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .12s;';
+        eventBtn.textContent = e.event;
+        eventBtn.onmouseenter = () => eventBtn.style.textDecorationColor = '#2C2620';
+        eventBtn.onmouseleave = () => eventBtn.style.textDecorationColor = 'transparent';
+        eventBtn.onclick = () => { if(typeof openEdit==='function') openEdit(e.recordId); };
+        body.appendChild(eventBtn);
+      } else {
+        const eventLbl = document.createElement('span');
+        eventLbl.style.cssText = 'color:#2C2620;font-weight:700;';
+        eventLbl.textContent = e.event;
+        body.appendChild(eventLbl);
+      }
       if(e.type === 'rescheduled' && e.prevDate && e.newDate){
         const range = document.createElement('span');
         range.style.cssText = 'color:#9E9186;margin-left:6px;';
