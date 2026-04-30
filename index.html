@@ -360,8 +360,11 @@ tbody td { padding: 9px 12px; vertical-align: middle; font-size: 12px; }
 .nav-title { font-size: 15px; font-weight: 600; font-family: var(--font-display); }
 .nav-row button { font-size: 16px; padding: 4px 10px; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
 
-.week-grid { display: grid; grid-template-columns: repeat(var(--week-day-count, 5), minmax(180px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 6px; }
-.week-grid.with-weekend { grid-template-columns: repeat(var(--week-day-count, 7), minmax(180px, 1fr)); }
+/* Week view: always size columns so exactly 5 (or 7 with weekend) fit in the visible width.
+   Pre-rendered next-week columns overflow horizontally and become scrollable. */
+.week-grid { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+.week-grid > .week-col { flex: 0 0 calc((100% - 40px) / 5); min-width: 0; }
+.week-grid.with-weekend > .week-col { flex: 0 0 calc((100% - 60px) / 7); }
 .week-col.next-week-start { border-left: 1px dashed #DDD5CA; margin-left: 4px; padding-left: 8px; }
 .week-col { border: 1px solid var(--border); border-radius: var(--radius-md); min-height: 180px; overflow: hidden; background: #fff; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; }
 .week-col.weekend-col { background: #FBF7F1; border-style: dashed; }
@@ -6723,7 +6726,8 @@ function renderWeek() {
   const grid = document.getElementById('week-grid');
   grid.innerHTML = '';
   grid.classList.toggle('with-weekend', showWeekend);
-  grid.style.setProperty('--week-day-count', String(totalDays));
+  // Flex layout sizes columns so exactly 5 (or 7) fit in the visible width;
+  // additional pre-rendered weeks overflow horizontally and become scrollable.
   grid.scrollLeft = 0;
   // Update toggle button state
   const wtBtn = document.getElementById('wk-weekend-toggle');
