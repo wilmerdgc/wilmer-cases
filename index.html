@@ -360,8 +360,9 @@ tbody td { padding: 9px 12px; vertical-align: middle; font-size: 12px; }
 .nav-title { font-size: 15px; font-weight: 600; font-family: var(--font-display); }
 .nav-row button { font-size: 16px; padding: 4px 10px; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
 
-.week-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; }
-.week-grid.with-weekend { grid-template-columns: repeat(7, minmax(0,1fr)); }
+.week-grid { display: grid; grid-template-columns: repeat(var(--week-day-count, 5), minmax(180px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+.week-grid.with-weekend { grid-template-columns: repeat(var(--week-day-count, 7), minmax(180px, 1fr)); }
+.week-col.next-week-start { border-left: 1px dashed #DDD5CA; margin-left: 4px; padding-left: 8px; }
 .week-col { border: 1px solid var(--border); border-radius: var(--radius-md); min-height: 180px; overflow: hidden; background: #fff; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; }
 .week-col.weekend-col { background: #FBF7F1; border-style: dashed; }
 .week-col-header { padding: 10px 12px 8px; border-bottom: 1px solid var(--border); background: var(--cream); display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
@@ -6687,13 +6688,23 @@ function renderWeek() {
   const weekendHasEvents = !!(rowsByDate[satStr]&&rowsByDate[satStr].length) || !!(rowsByDate[sunStr]&&rowsByDate[sunStr].length);
   const showWeekend = weekendPref || weekendHasEvents;
   const dayCount = showWeekend ? 7 : 5;
+  // Render the focused week + the next one, so the user can scroll horizontally to peek
+  const WEEKS_TO_RENDER = 2;
+  const totalDays = dayCount * WEEKS_TO_RENDER;
   const days = [];
-  for (let i = 0; i < dayCount; i++) { const d = new Date(mon); d.setDate(mon.getDate() + i); days.push(d); }
-  const weekLabel = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' – ' + days[days.length-1].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  for (let w = 0; w < WEEKS_TO_RENDER; w++){
+    for (let i = 0; i < dayCount; i++){
+      const d = new Date(mon); d.setDate(mon.getDate() + w*7 + i); days.push(d);
+    }
+  }
+  const focusedEnd = days[dayCount-1];
+  const weekLabel = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' – ' + focusedEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   document.getElementById('week-title').textContent = weekLabel;
   const grid = document.getElementById('week-grid');
   grid.innerHTML = '';
   grid.classList.toggle('with-weekend', showWeekend);
+  grid.style.setProperty('--week-day-count', String(totalDays));
+  grid.scrollLeft = 0;
   // Update toggle button state
   const wtBtn = document.getElementById('wk-weekend-toggle');
   const wtNote = document.getElementById('wk-weekend-note');
@@ -6711,16 +6722,22 @@ function renderWeek() {
   days.forEach((day, i) => {
     const dayStr = toDateStr(day);
     const isToday = sameDay(day, TODAY);
-    const isWeekendDay = i >= 5;
+    const dowIdx = i % dayCount;             // index within its week (0..dayCount-1)
+    const isFocusWeek = i < dayCount;         // first rendered week (matches week-title)
+    const isWeekStart = i > 0 && dowIdx === 0; // boundary between rendered weeks
+    const isWeekendDay = dowIdx >= 5;
     const tasks = rowsByDate[dayStr] || [];
-    if (tasks.length) { any = true; weekTasks.push(...tasks); }
-    weekFinished.push(...(finByDate[dayStr]||[]));
+    if (tasks.length) { any = any || isFocusWeek; if(isFocusWeek) weekTasks.push(...tasks); }
+    if(isFocusWeek) weekFinished.push(...(finByDate[dayStr]||[]));
     const col = document.createElement('div');
-    col.className = 'week-col' + (isWeekendDay ? ' weekend-col' : '');
+    col.className = 'week-col'
+      + (isWeekendDay ? ' weekend-col' : '')
+      + (isWeekStart ? ' next-week-start' : '')
+      + (!isFocusWeek ? ' next-week' : '');
     col.style.cursor = 'default';
     const hdr = document.createElement('div'); hdr.className = 'week-col-header' + (isToday ? ' today-col' : '');
     const monthAbbr = day.toLocaleDateString('en-US',{month:'short'});
-    hdr.innerHTML = `<div><div class="wch-day">${N[i]}</div><div style="font-size:9px;color:var(--ink-faint);font-weight:600;letter-spacing:0.05em;text-transform:uppercase;margin-top:2px;">${monthAbbr}</div></div><div class="wch-num" style="cursor:pointer;" title="Open day view for this date">${day.getDate()}</div>${isToday?'<span class="wch-today-pill">Today</span>':''}`;
+    hdr.innerHTML = `<div><div class="wch-day">${N[dowIdx]}</div><div style="font-size:9px;color:var(--ink-faint);font-weight:600;letter-spacing:0.05em;text-transform:uppercase;margin-top:2px;">${monthAbbr}</div></div><div class="wch-num" style="cursor:pointer;" title="Open day view for this date">${day.getDate()}</div>${isToday?'<span class="wch-today-pill">Today</span>':''}`;
     const _numEl = hdr.querySelector('.wch-num');
     if(_numEl){
       const _clickedDay = new Date(day.getFullYear(), day.getMonth(), day.getDate());
