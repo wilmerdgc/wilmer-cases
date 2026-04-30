@@ -8707,6 +8707,30 @@ function resetVirtualHearingDetails(){
   const lk=document.getElementById('vh-link'); if(lk) lk.value='';
   const vd=document.getElementById('modal-virtual-details'); if(vd) vd.style.display='none';
 }
+// Resolve the Webex/virtual link for a record: explicit override wins, otherwise pull from the judge.
+function eventVirtualLink(r){
+  if(!r) return '';
+  if(r.virtualLink) return r.virtualLink;
+  if(r.hearingJudgeId && typeof judges !== 'undefined'){
+    const j = judges.find(x => x.id === r.hearingJudgeId);
+    if(j && j.virtualRoom) return j.virtualRoom;
+  }
+  return '';
+}
+// Build a discreet external-link button that opens a URL in a new tab.
+function makeExternalLinkBtn(href, title){
+  const a = document.createElement('a');
+  a.href = href;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.title = title || 'Open link in a new tab';
+  a.style.cssText = 'flex-shrink:0;align-self:center;padding:3px;margin-left:4px;color:#C4BAB0;text-decoration:none;line-height:0;border-radius:4px;transition:color .12s, background .12s;';
+  a.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg>';
+  a.onmouseenter = () => { a.style.color = '#6B7FA3'; a.style.background = '#EEF1F7'; };
+  a.onmouseleave = () => { a.style.color = '#C4BAB0'; a.style.background = ''; };
+  a.onclick = e => e.stopPropagation();
+  return a;
+}
 function onMasterPrepToggle(){
   const on=document.getElementById('mp-toggle').checked;
   const pnl=document.getElementById('mp-panel');
@@ -14615,6 +14639,8 @@ function renderDayTimeline(){
       `;
       row.appendChild(bar);
       row.appendChild(body);
+      const _vlink = eventVirtualLink(r);
+      if(_vlink) row.appendChild(makeExternalLinkBtn(_vlink, 'Open Webex link'));
       evFrag.appendChild(row);
     });
     eventsList.appendChild(evFrag);
