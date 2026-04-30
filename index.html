@@ -7457,7 +7457,10 @@ function markDefaultViewButton(v){
 }
 function switchView(v){
   if(v==='finished') v='all'; // redirect finished → all
+  // Save the outgoing view's filters before switching, then apply the target view's saved filters
+  if(typeof _saveCurrentViewFilters==='function') _saveCurrentViewFilters();
   currentView=v;
+  if(typeof _applyFiltersToInputs==='function') _applyFiltersToInputs(viewFilters[v]);
   ['today','week','month','paralegals','me','all','queue','so','deadlines','sij','individual'].forEach(x=>{
     const el = document.getElementById('view-'+x);
     if(el) el.style.display = x===v ? 'block' : 'none';
@@ -15938,6 +15941,47 @@ db.collection('wilmer_daynotes').doc(dnKey).onSnapshot(
 (function(){
   const fe=document.getElementById('f-event');
   if(fe) fe.addEventListener('change',_debouncedRenderAll);
+})();
+
+// ── Per-view filter persistence ──
+// Each calendar/queue view remembers its own search / paralegal / event-types / case-type
+// filter selection. Switching views captures the current state and restores the target's.
+const _DEFAULT_VIEW_FILTERS = {search:'', atty:'', eventTypes:[], type:''};
+let viewFilters = {};
+try{ const _vfs = localStorage.getItem('view_filters_v1'); if(_vfs) viewFilters = JSON.parse(_vfs)||{}; }catch(e){}
+function _captureCurrentFilters(){
+  const sel = document.getElementById('f-event');
+  return {
+    search: (document.getElementById('f-search')||{}).value || '',
+    atty:   (document.getElementById('f-atty')||{}).value   || '',
+    eventTypes: sel ? Array.from(sel.selectedOptions).map(o=>o.value).filter(Boolean) : [],
+    type:   (document.getElementById('f-type')||{}).value   || ''
+  };
+}
+function _applyFiltersToInputs(state){
+  state = Object.assign({}, _DEFAULT_VIEW_FILTERS, state||{});
+  const s = document.getElementById('f-search'); if(s) s.value = state.search;
+  const a = document.getElementById('f-atty');   if(a) a.value = state.atty;
+  const t = document.getElementById('f-type');   if(t) t.value = state.type;
+  const sel = document.getElementById('f-event');
+  if(sel){
+    const wanted = new Set(state.eventTypes||[]);
+    Array.from(sel.options).forEach(o => { o.selected = wanted.has(o.value); });
+    if(typeof _updateEventFilterLabel==='function') _updateEventFilterLabel();
+  }
+}
+function _saveCurrentViewFilters(){
+  if(!currentView) return;
+  viewFilters[currentView] = _captureCurrentFilters();
+  try{ localStorage.setItem('view_filters_v1', JSON.stringify(viewFilters)); }catch(e){}
+}
+['f-search','f-atty','f-type'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(el) el.addEventListener('input', _saveCurrentViewFilters);
+});
+(function(){
+  const fe = document.getElementById('f-event');
+  if(fe) fe.addEventListener('change', _saveCurrentViewFilters);
 })();
 function _renderEventFilterCheckboxes(){
   const list=document.getElementById('f-event-list');
