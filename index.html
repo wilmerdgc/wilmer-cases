@@ -3572,6 +3572,141 @@ function _gmailExtractCaseSuggestion(m){
 // filename prefix even before the email is formally saved to the case.
 const _gmailMsgSuggestedClid = new Map();
 
+// ── Per-case local folder (FileSystemDirectoryHandle, persisted in IndexedDB)
+// Lets the user link an OS folder to a case. Once linked:
+//   - The case detail shows a "📁 <Folder name>" chip that opens a small viewer
+//   - Attachment downloads from labeled emails go straight into that folder
+function _caseFolderDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('wilmer_case_folders', 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains('folders')) db.createObjectStore('folders');
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+async function saveCaseFolderHandle(clid, handle){
+  if(!clid || !handle) return;
+  const db = await _caseFolderDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('folders', 'readwrite');
+    tx.objectStore('folders').put(handle, String(clid));
+    tx.oncomplete = () => resolve();
+    tx.onerror = e => reject(e.target.error);
+  });
+}
+async function loadCaseFolderHandle(clid){
+  if(!clid) return null;
+  try{
+    const db = await _caseFolderDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction('folders', 'readonly');
+      const req = tx.objectStore('folders').get(String(clid));
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = e => reject(e.target.error);
+    });
+  }catch(e){ return null; }
+}
+async function _verifyFolderPermission(handle, mode){
+  if(!handle || typeof handle.queryPermission !== 'function') return false;
+  const opts = { mode: mode || 'readwrite' };
+  if((await handle.queryPermission(opts)) === 'granted') return true;
+  if((await handle.requestPermission(opts)) === 'granted') return true;
+  return false;
+}
+// Convert URL-safe Gmail base64 to a Uint8Array.
+function _b64UrlToBytes(b64url){
+  const b64 = String(b64url||'').replace(/-/g,'+').replace(/_/g,'/');
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+// Modal viewer for a case's linked folder — lists files, clicking one opens it.
+async function openCaseFolderViewer(clid){
+  const handle = await loadCaseFolderHandle(clid);
+  if(!handle){ showToast('No folder linked for this case yet'); return; }
+  if(!(await _verifyFolderPermission(handle, 'read'))){ showToast('Folder access denied'); return; }
+  // Existing overlay (in case the user re-clicked) — replace it
+  const old = document.getElementById('case-folder-ov'); if(old) old.remove();
+  const ov = document.createElement('div');
+  ov.id = 'case-folder-ov';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(44,38,32,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+  ov.onclick = e => { if(e.target===ov) ov.remove(); };
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:14px;padding:20px 22px;width:560px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 14px 40px rgba(44,38,32,0.2);';
+  ov.appendChild(box);
+  const close = () => ov.remove();
+  // Header
+  const head = document.createElement('div');
+  head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;';
+  head.innerHTML = '<div style="font-family:\'Lora\',Georgia,serif;font-size:16px;font-weight:600;color:#2C2620;display:flex;align-items:center;gap:8px;">📁 <span>' + escHtml(handle.name||'Folder') + '</span></div>';
+  const xBtn = document.createElement('button');
+  xBtn.textContent = '×'; xBtn.style.cssText='border:none;background:transparent;cursor:pointer;font-size:18px;color:#9E9186;';
+  xBtn.onclick = close;
+  head.appendChild(xBtn);
+  box.appendChild(head);
+  // Sub
+  const sub = document.createElement('div');
+  sub.style.cssText = 'font-size:11px;color:#9E9186;margin-bottom:10px;';
+  sub.textContent = 'Loading…';
+  box.appendChild(sub);
+  // List
+  const list = document.createElement('div');
+  list.style.cssText = 'flex:1;overflow-y:auto;border:1px solid #EDE8E0;border-radius:8px;background:#FDFAF7;';
+  box.appendChild(list);
+  // Footer
+  const foot = document.createElement('div');
+  foot.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;margin-top:12px;';
+  const relink = document.createElement('button');
+  relink.textContent = '🔗 Re-link folder';
+  relink.title = 'Choose a different folder for this case';
+  relink.style.cssText = 'font-size:11px;padding:6px 12px;border:1px solid #DDD5CA;border-radius:6px;background:#fff;cursor:pointer;font-family:inherit;color:#5C5148;';
+  relink.onclick = async () => { close(); await gmailCreateCaseFolder(clid); };
+  foot.appendChild(relink);
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Close';
+  closeBtn.style.cssText = 'font-size:11px;padding:6px 14px;border:1px solid #DDD5CA;border-radius:6px;background:#F7F3ED;cursor:pointer;font-family:inherit;color:#5C5148;';
+  closeBtn.onclick = close;
+  foot.appendChild(closeBtn);
+  box.appendChild(foot);
+  document.body.appendChild(ov);
+  // Populate file list
+  try{
+    const files = [];
+    for await (const entry of handle.values()){
+      if(entry.kind === 'file') files.push(entry);
+    }
+    sub.textContent = files.length + ' file' + (files.length===1?'':'s') + ' in folder';
+    if(!files.length){
+      list.innerHTML = '<div style="padding:30px;text-align:center;color:#C4BAB0;font-size:12px;font-style:italic;">No files yet — saved attachments will appear here.</div>';
+      return;
+    }
+    files.sort((a,b) => a.name.localeCompare(b.name));
+    files.forEach(f => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid #F0EBE4;cursor:pointer;font-size:12px;color:#2C2620;';
+      row.onmouseenter = () => row.style.background = '#F0EBE4';
+      row.onmouseleave = () => row.style.background = '';
+      row.innerHTML = '<span style="font-size:14px;">📄</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(f.name) + '</span>';
+      row.onclick = async () => {
+        try{
+          const file = await f.getFile();
+          const url = URL.createObjectURL(file);
+          window.open(url, '_blank');
+          setTimeout(()=>URL.revokeObjectURL(url), 60000);
+        }catch(e){ showToast('Could not open file'); }
+      };
+      list.appendChild(row);
+    });
+  }catch(e){
+    sub.textContent = 'Could not list folder';
+    list.innerHTML = '<div style="padding:30px;text-align:center;color:#B85C5C;font-size:12px;">Permission denied or folder no longer available.</div>';
+  }
+}
+
 // "Last First Cl ID" — the canonical label name we use for both Gmail labels
 // and on-disk folders. Pulls names from caseMeta first, falls back to the
 // record's `client` field if structured names aren't set.
@@ -3627,21 +3762,50 @@ async function gmailCreateCaseFolder(clid){
   }
   try{
     const parent = await window.showDirectoryPicker({mode:'readwrite'});
-    await parent.getDirectoryHandle(name, {create:true});
+    const sub = await parent.getDirectoryHandle(name, {create:true});
+    // Persist the subfolder handle so the case can find it later (downloads,
+    // case-detail folder badge, in-app file viewer).
+    try{ await saveCaseFolderHandle(clid, sub); }catch(e){}
     if(_gmailCurrentMsg) _gmailMsgSuggestedClid.set(_gmailCurrentMsg.id, clid);
-    showToast('Folder "' + name + '" ready ✓');
+    showToast('Folder "' + name + '" linked ✓');
   }catch(e){
     if(e && e.name === 'AbortError') return;
     showToast('Could not create folder');
   }
 }
-// Action chip cluster for the match banners — apply Gmail label + create local folder.
+// Open the Add Event modal pre-filled for a specific case, optionally seeding
+// the notes field with the current email subject so context isn't lost.
+function gmailAddEventToCase(clid){
+  if(!clid){ showToast('No case selected'); return; }
+  if(typeof openAdd !== 'function'){ showToast('Add Event is not available'); return; }
+  const rec = (typeof records!=='undefined'?records:[]).find(r => (r.clid||r.client) === clid);
+  openAdd();
+  setTimeout(() => {
+    const set = (id, v) => { const el=document.getElementById(id); if(el && v != null && v !== '') el.value = v; };
+    set('fc-clid', clid);
+    if(rec){
+      set('fc-client', rec.client || '');
+      set('fc-anum', rec.anum || '');
+      set('fc-casetype', rec.type || '');
+      set('fc-paralegal', rec.atty || '');
+      if(typeof onCaseTypeChangeModal === 'function') onCaseTypeChangeModal();
+    }
+    if(_gmailCurrentMsg && _gmailCurrentMsg.subject){
+      const nEl = document.getElementById('fc-notes');
+      if(nEl && !nEl.value) nEl.value = 'From email: ' + _gmailCurrentMsg.subject;
+    }
+  }, 60);
+}
+// Action chip cluster for the match banners — apply Gmail label, create
+// local folder, and add a new event to the linked case.
 function _gmailCaseActionsHtml(clid){
   const safe = String(clid||'').replace(/'/g,"\\'");
   if(!safe) return '';
+  const baseStyle = 'font-size:10px;font-weight:600;padding:3px 9px;border:1px solid #DDD5CA;border-radius:12px;background:#FFF;color:#5C5148;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;';
   return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">'
-    + '<button type="button" onclick="gmailApplyCaseLabel(\'' + safe + '\')" title="Apply a Gmail label named &quot;Last First Cl ID&quot; to this email" style="font-size:10px;font-weight:600;padding:3px 9px;border:1px solid #DDD5CA;border-radius:12px;background:#FFF;color:#5C5148;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;">🏷 Label this email</button>'
-    + '<button type="button" onclick="gmailCreateCaseFolder(\'' + safe + '\')" title="Pick a parent folder and create a subfolder named &quot;Last First Cl ID&quot;" style="font-size:10px;font-weight:600;padding:3px 9px;border:1px solid #DDD5CA;border-radius:12px;background:#FFF;color:#5C5148;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;">📁 Create folder</button>'
+    + '<button type="button" onclick="gmailApplyCaseLabel(\'' + safe + '\')" title="Apply a Gmail label named &quot;Last First Cl ID&quot; to this email" style="' + baseStyle + '">🏷 Label this email</button>'
+    + '<button type="button" onclick="gmailCreateCaseFolder(\'' + safe + '\')" title="Pick a parent folder and create a subfolder named &quot;Last First Cl ID&quot;" style="' + baseStyle + '">📁 Create folder</button>'
+    + '<button type="button" onclick="gmailAddEventToCase(\'' + safe + '\')" title="Add a new event to this case, pre-filled" style="' + baseStyle + '">＋ Add event</button>'
     + '</div>';
 }
 
@@ -3715,11 +3879,22 @@ async function gmailDownloadAttachment(idx, forceClid){
   showToast('Downloading ' + finalName + '...');
   const b64 = await gmailGetAttachmentData(att);
   if(!b64){ showToast('Failed to download attachment'); return; }
-  // Convert base64url to regular base64
-  const b64std = b64.replace(/-/g,'+').replace(/_/g,'/');
-  const byteChars = atob(b64std);
-  const byteArr = new Uint8Array(byteChars.length);
-  for(let i=0;i<byteChars.length;i++) byteArr[i]=byteChars.charCodeAt(i);
+  const byteArr = _b64UrlToBytes(b64);
+  // If a folder is linked for this case, write the file into that folder
+  // directly (skipping the generic browser Downloads dialog).
+  if(linkedClid){
+    try{
+      const handle = await loadCaseFolderHandle(linkedClid);
+      if(handle && await _verifyFolderPermission(handle, 'readwrite')){
+        const fh = await handle.getFileHandle(finalName, {create:true});
+        const w = await fh.createWritable();
+        await w.write(byteArr);
+        await w.close();
+        showToast('Saved to case folder: ' + finalName + ' ✓');
+        return;
+      }
+    }catch(e){ /* fall through to generic download */ }
+  }
   const blob = new Blob([byteArr], {type: att.mimeType || 'application/octet-stream'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -13327,6 +13502,22 @@ function openCaseDetail(clid){
     });
   };
   atRow.appendChild(emailCaseBtn);
+  // Folder badge — shown only if a directory has been linked for this case.
+  // Async-resolved so it doesn't block the row render.
+  const folderBtn = document.createElement('button');
+  folderBtn.className='btn-sm';
+  folderBtn.style.cssText='font-size:11px;padding:3px 11px;border-radius:20px;border-color:#B8C4DB;color:#4F6A91;margin-left:4px;font-weight:600;display:none;';
+  folderBtn.title='Open the linked folder for this case';
+  folderBtn.onclick=()=>openCaseFolderViewer(clid);
+  atRow.appendChild(folderBtn);
+  if(typeof loadCaseFolderHandle === 'function'){
+    loadCaseFolderHandle(clid).then(h => {
+      if(h){
+        folderBtn.textContent = '📁 ' + (h.name || 'Folder');
+        folderBtn.style.display = '';
+      }
+    }).catch(()=>{});
+  }
   activeSecEl.appendChild(atRow);
   if(!active.length){const emp=document.createElement('div');emp.style.cssText='font-size:12px;color:#C4BAB0;padding:6px 0';emp.textContent='No next steps.';activeSecEl.appendChild(emp);}
   else{[...active].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
