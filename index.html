@@ -3838,10 +3838,18 @@ function _markChipDone(chip, done, doneLabel){
     if(chip.dataset._origText != null)  chip.textContent = chip.dataset._origText;
   }
 }
-async function _gmailRefreshActionChipsState(){
-  const root = document.getElementById('gmail-email-reader');
-  if(!root) return;
-  const clusters = root.querySelectorAll('.case-actions');
+async function _gmailRefreshActionChipsState(rootArg){
+  // Refresh chip state under a specific root (preview top bar) or the whole
+  // email reader and the doc viewer chips at once if no root is given.
+  const roots = [];
+  if(rootArg){ roots.push(rootArg); }
+  else {
+    const r1 = document.getElementById('gmail-email-reader'); if(r1) roots.push(r1);
+    const r2 = document.getElementById('doc-viewer-chips');   if(r2) roots.push(r2);
+  }
+  if(!roots.length) return;
+  const clusters = [];
+  roots.forEach(r => r.querySelectorAll('.case-actions').forEach(c => clusters.push(c)));
   if(!clusters.length) return;
   // Pre-fetch labels once for the whole sweep
   let labelsByName = null;
@@ -3979,7 +3987,13 @@ async function gmailPreviewAttachment(idx){
   const b64std = b64.replace(/-/g,'+').replace(/_/g,'/');
   const dataUrl = 'data:'+(att.mimeType||'application/octet-stream')+';base64,'+b64std;
   if(typeof openDocViewer==='function'){
-    openDocViewer(dataUrl, att.mimeType||'application/octet-stream', att.filename);
+    // Resolve the case for this email so the preview top bar shows the
+    // Label / Folder / Add event chips (with their done state).
+    const clidForChips = _gmailFindLinkedCase(m.id)
+      || (typeof _gmailMsgSuggestedClid !== 'undefined' ? _gmailMsgSuggestedClid.get(m.id) : null)
+      || ((_gmailFindCaseByEmail(((m.from||'').match(/<(.+?)>/)||[])[1] || (m.from||''))||{}).clid)
+      || ((_gmailFindCasesByNumber((m.subject||'')+'\n'+(m.snippet||'')+'\n'+String(m.body||'').replace(/<[^>]+>/g,' '))[0]||{}).record||{}).clid;
+    openDocViewer(dataUrl, att.mimeType||'application/octet-stream', att.filename, clidForChips || null);
   }else{
     const w=window.open();
     if(w) w.document.write('<iframe src="'+dataUrl+'" style="border:0;width:100%;height:100vh;"></iframe>');
@@ -9810,7 +9824,7 @@ function resetSoAttachmentPanel(){
   const id=document.getElementById('so-issue-date');if(id)id.value='';
 }
 
-function openDocViewer(dataUrl, mimeType, fname){
+function openDocViewer(dataUrl, mimeType, fname, clid){
   let overlay=document.getElementById('doc-viewer-overlay');
   if(!overlay){
     overlay=document.createElement('div');
@@ -9822,7 +9836,11 @@ function openDocViewer(dataUrl, mimeType, fname){
     bar.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(20,15,10,0.92);flex-shrink:0;gap:12px;';
     const title=document.createElement('span');
     title.id='doc-viewer-title';
-    title.style.cssText='font-size:13px;font-weight:600;color:#F7F3ED;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;';
+    title.style.cssText='font-size:13px;font-weight:600;color:#F7F3ED;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;';
+    // Chips holder for the case action buttons (Label / Folder / Add event)
+    const chips=document.createElement('div');
+    chips.id='doc-viewer-chips';
+    chips.style.cssText='flex-shrink:0;';
     const btnRow=document.createElement('div');
     btnRow.style.cssText='display:flex;align-items:center;gap:8px;flex-shrink:0;';
     const dlBtn=document.createElement('button');
@@ -9838,7 +9856,9 @@ function openDocViewer(dataUrl, mimeType, fname){
     closeBtn.onmouseleave=()=>{closeBtn.style.color='#9E9186';};
     closeBtn.onclick=()=>{overlay.style.display='none';};
     btnRow.appendChild(dlBtn);btnRow.appendChild(closeBtn);
-    bar.appendChild(title);bar.appendChild(btnRow);
+    bar.appendChild(title);
+    bar.appendChild(chips);
+    bar.appendChild(btnRow);
     // Content area
     const content=document.createElement('div');
     content.id='doc-viewer-content';
@@ -9858,6 +9878,18 @@ function openDocViewer(dataUrl, mimeType, fname){
   document.getElementById('doc-viewer-title').textContent=fname;
   const dlBtn=document.getElementById('doc-viewer-dl');
   dlBtn.onclick=()=>{const link=document.createElement('a');link.href=dataUrl;link.download=fname;link.click();};
+  // Inject case action chips into the top bar when this preview is for a case
+  const chipsHost=document.getElementById('doc-viewer-chips');
+  if(chipsHost){
+    chipsHost.innerHTML = clid && typeof _gmailCaseActionsHtml === 'function' ? _gmailCaseActionsHtml(clid) : '';
+    if(clid){
+      // Strip the default top margin so the cluster sits inline with the bar
+      const cluster = chipsHost.querySelector('.case-actions');
+      if(cluster) cluster.style.marginTop = '0';
+      // Reflect ✓ done state on each chip (label / folder)
+      if(typeof _gmailRefreshActionChipsState === 'function') _gmailRefreshActionChipsState(chipsHost);
+    }
+  }
   const content=document.getElementById('doc-viewer-content');
   content.innerHTML='';
   if(mimeType&&mimeType.startsWith('image/')){
