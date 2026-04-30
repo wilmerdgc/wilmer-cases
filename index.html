@@ -3566,6 +3566,85 @@ function _gmailExtractCaseSuggestion(m){
   return { lastName, firstName, middleName, clid, anumLast3, paralegal, paralegalEmail, senderName: fromName, senderEmail: fromEmail };
 }
 
+// ── Per-message "soft link" cache ────────────────────────────────────────
+// When the user labels or creates a folder for a possible-match clid, we
+// record it here so attachment downloads from that message use the case's
+// filename prefix even before the email is formally saved to the case.
+const _gmailMsgSuggestedClid = new Map();
+
+// "Last First Cl ID" — the canonical label name we use for both Gmail labels
+// and on-disk folders. Pulls names from caseMeta first, falls back to the
+// record's `client` field if structured names aren't set.
+function _gmailCaseLabelName(clid){
+  if(!clid) return '';
+  const meta = (typeof caseMeta!=='undefined' && caseMeta[clid]) || {};
+  const last = (meta.clientLastName||'').trim();
+  const first = (meta.clientFirstName||'').trim();
+  if(last || first){
+    return [last, first, String(clid)].filter(Boolean).join(' ').trim();
+  }
+  const rec = (typeof records!=='undefined' ? records : []).find(r => (r.clid||r.client) === clid);
+  if(rec && rec.client) return rec.client.trim() + ' ' + clid;
+  return String(clid);
+}
+async function _gmailFindOrCreateLabel(name){
+  if(!name) return null;
+  const labels = await gmailFetchLabels();
+  const existing = (labels||[]).find(l => (l.name||'').toLowerCase() === name.toLowerCase());
+  if(existing) return existing.id;
+  const data = await gmailApi('labels', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name: name, labelListVisibility: 'labelShow', messageListVisibility: 'show' })
+  });
+  return data ? data.id : null;
+}
+async function gmailApplyCaseLabel(clid){
+  if(!_gmailCurrentMsg){ showToast('No email selected'); return; }
+  if(!clid){ showToast('No case to label'); return; }
+  const name = _gmailCaseLabelName(clid);
+  if(!name){ showToast('Could not build label name'); return; }
+  showToast('Applying label "' + name + '"…');
+  const labelId = await _gmailFindOrCreateLabel(name);
+  if(!labelId){ showToast('Could not create the label'); return; }
+  const ok = await gmailApi('messages/' + _gmailCurrentMsg.id + '/modify', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ addLabelIds: [labelId] })
+  });
+  if(!ok){ showToast('Failed to apply label'); return; }
+  if(!_gmailCurrentMsg.labelIds.includes(labelId)) _gmailCurrentMsg.labelIds.push(labelId);
+  // Remember this clid for the message so downloads use its filename prefix
+  _gmailMsgSuggestedClid.set(_gmailCurrentMsg.id, clid);
+  showToast('Labeled "' + name + '" ✓');
+}
+async function gmailCreateCaseFolder(clid){
+  if(!clid){ showToast('No case selected'); return; }
+  const name = _gmailCaseLabelName(clid);
+  if(!('showDirectoryPicker' in window)){
+    showToast('Folder picking is not supported in this browser');
+    return;
+  }
+  try{
+    const parent = await window.showDirectoryPicker({mode:'readwrite'});
+    await parent.getDirectoryHandle(name, {create:true});
+    if(_gmailCurrentMsg) _gmailMsgSuggestedClid.set(_gmailCurrentMsg.id, clid);
+    showToast('Folder "' + name + '" ready ✓');
+  }catch(e){
+    if(e && e.name === 'AbortError') return;
+    showToast('Could not create folder');
+  }
+}
+// Action chip cluster for the match banners — apply Gmail label + create local folder.
+function _gmailCaseActionsHtml(clid){
+  const safe = String(clid||'').replace(/'/g,"\\'");
+  if(!safe) return '';
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">'
+    + '<button type="button" onclick="gmailApplyCaseLabel(\'' + safe + '\')" title="Apply a Gmail label named &quot;Last First Cl ID&quot; to this email" style="font-size:10px;font-weight:600;padding:3px 9px;border:1px solid #DDD5CA;border-radius:12px;background:#FFF;color:#5C5148;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;">🏷 Label this email</button>'
+    + '<button type="button" onclick="gmailCreateCaseFolder(\'' + safe + '\')" title="Pick a parent folder and create a subfolder named &quot;Last First Cl ID&quot;" style="font-size:10px;font-weight:600;padding:3px 9px;border:1px solid #DDD5CA;border-radius:12px;background:#FFF;color:#5C5148;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;">📁 Create folder</button>'
+    + '</div>';
+}
+
 // Open the New Case modal pre-filled with parsed values from the current email.
 function gmailApplySuggestionFromCurrent(){
   if(!_gmailCurrentMsg){ showToast('No email selected'); return; }
@@ -3625,8 +3704,11 @@ async function gmailDownloadAttachment(idx, forceClid){
   const m = _gmailCurrentMsg;
   if(!m || !m.attachments || !m.attachments[idx]) return;
   const att = m.attachments[idx];
-  // Detect linked case (either explicit override or by searching docSections)
-  const linkedClid = forceClid || _gmailFindLinkedCase(m.id);
+  // Detect linked case: explicit override → saved to case → soft-linked via the
+  // Possible match action chips (Apply label / Create folder).
+  const linkedClid = forceClid
+    || _gmailFindLinkedCase(m.id)
+    || (typeof _gmailMsgSuggestedClid !== 'undefined' ? _gmailMsgSuggestedClid.get(m.id) : null);
   const finalName = linkedClid
     ? _gmailCasePrefixFilename(linkedClid, att.filename)
     : att.filename;
@@ -5057,11 +5139,14 @@ function gmailRenderMessage(){
       const clientName = [meta.clientFirstName, meta.clientMiddleName, meta.clientLastName].filter(Boolean).join(' ').trim() || r.client || clidVal;
       const paraName = r.atty ? escHtml(r.atty) : '<span style="color:#C4BAB0;">unassigned</span>';
       const paraEmail = (r.atty && paralegalEmails[r.atty]) ? paralegalEmails[r.atty] : '';
-      return '<div style="margin-top:5px;padding-top:5px;border-top:1px dashed #E8C49A;display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;">'
-        + '<span style="font-size:10px;font-weight:600;color:#9C6D2F;">Found <code style="background:#FFF8EE;padding:0 4px;border-radius:3px;font-family:monospace;">' + escHtml(s.match) + '</code> (' + s.type + ')</span>'
-        + '<button type="button" onclick="goToCase(\'' + escHtml(clidVal).replace(/'/g,"\\'") + '\')" style="border:none;background:transparent;color:#6B4A1A;font-family:inherit;font-size:12px;font-weight:600;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:0;">' + escHtml(clientName) + '</button>'
-        + (r.clid ? '<span style="font-size:11px;color:#9C6D2F;">· Cl ID <b>' + escHtml(r.clid) + '</b></span>' : '')
-        + '<span style="font-size:11px;color:#9C6D2F;">· Paralegal: <b>' + paraName + '</b>' + (paraEmail ? ' &lt;' + escHtml(paraEmail) + '&gt;' : '') + '</span>'
+      return '<div style="margin-top:5px;padding-top:5px;border-top:1px dashed #E8C49A;">'
+        + '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;">'
+          + '<span style="font-size:10px;font-weight:600;color:#9C6D2F;">Found <code style="background:#FFF8EE;padding:0 4px;border-radius:3px;font-family:monospace;">' + escHtml(s.match) + '</code> (' + s.type + ')</span>'
+          + '<button type="button" onclick="goToCase(\'' + escHtml(clidVal).replace(/'/g,"\\'") + '\')" style="border:none;background:transparent;color:#6B4A1A;font-family:inherit;font-size:12px;font-weight:600;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:0;">' + escHtml(clientName) + '</button>'
+          + (r.clid ? '<span style="font-size:11px;color:#9C6D2F;">· Cl ID <b>' + escHtml(r.clid) + '</b></span>' : '')
+          + '<span style="font-size:11px;color:#9C6D2F;">· Paralegal: <b>' + paraName + '</b>' + (paraEmail ? ' &lt;' + escHtml(paraEmail) + '&gt;' : '') + '</span>'
+        + '</div>'
+        + _gmailCaseActionsHtml(clidVal)
         + '</div>';
     }).join('');
     _suggestBadge = '<div style="margin-top:8px;padding:8px 12px;background:#FAF0E6;border:1px solid #E8C49A;border-radius:8px;font-size:12px;color:#6B4A1A;">'
@@ -5075,13 +5160,16 @@ function gmailRenderMessage(){
     const nameEsc = escHtml(_linkedByEmail.clientName);
     const paraName = _linkedByEmail.paralegalName ? escHtml(_linkedByEmail.paralegalName) : '<span style="color:#C4BAB0;">unassigned</span>';
     const paraEmailHtml = _linkedByEmail.paralegalEmail ? ' &lt;'+escHtml(_linkedByEmail.paralegalEmail)+'&gt;' : '';
-    _linkedBadge = '<div style="margin-top:10px;padding:8px 12px;background:#EBF1EB;border:1px solid #B4CCAD;border-radius:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:#3D5A40;">'
-      + '<span style="font-size:11px;font-weight:700;color:#6A8C6E;text-transform:uppercase;letter-spacing:.04em;">Linked client</span>'
-      + '<button type="button" onclick="goToCase(\''+clidEsc+'\')" title="Open case" style="border:none;background:transparent;color:#3D5A40;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;text-decoration:underline;text-underline-offset:2px;padding:0;">'+nameEsc+'</button>'
-      + '<span style="color:#9E9186;">·</span>'
-      + '<span style="font-size:11px;color:#5C5148;">Cl ID <b>'+clidEsc+'</b></span>'
-      + '<span style="color:#9E9186;">·</span>'
-      + '<span style="font-size:11px;color:#5C5148;">Paralegal: <b>'+paraName+'</b>'+paraEmailHtml+'</span>'
+    _linkedBadge = '<div style="margin-top:10px;padding:8px 12px;background:#EBF1EB;border:1px solid #B4CCAD;border-radius:8px;font-size:12px;color:#3D5A40;">'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+        + '<span style="font-size:11px;font-weight:700;color:#6A8C6E;text-transform:uppercase;letter-spacing:.04em;">Linked client</span>'
+        + '<button type="button" onclick="goToCase(\''+clidEsc+'\')" title="Open case" style="border:none;background:transparent;color:#3D5A40;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;text-decoration:underline;text-underline-offset:2px;padding:0;">'+nameEsc+'</button>'
+        + '<span style="color:#9E9186;">·</span>'
+        + '<span style="font-size:11px;color:#5C5148;">Cl ID <b>'+clidEsc+'</b></span>'
+        + '<span style="color:#9E9186;">·</span>'
+        + '<span style="font-size:11px;color:#5C5148;">Paralegal: <b>'+paraName+'</b>'+paraEmailHtml+'</span>'
+      + '</div>'
+      + _gmailCaseActionsHtml(_linkedByEmail.clid)
       + '</div>';
   }
   el.innerHTML = `
