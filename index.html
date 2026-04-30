@@ -3760,6 +3760,7 @@ async function gmailApplyCaseLabel(clid){
   // Remember this clid for the message so downloads use its filename prefix
   _gmailMsgSuggestedClid.set(_gmailCurrentMsg.id, clid);
   showToast('Labeled "' + fullName + '" ✓');
+  if(typeof _gmailRefreshActionChipsState === 'function') _gmailRefreshActionChipsState();
 }
 async function gmailCreateCaseFolder(clid){
   if(!clid){ showToast('No case selected'); return; }
@@ -3776,6 +3777,7 @@ async function gmailCreateCaseFolder(clid){
     try{ await saveCaseFolderHandle(clid, sub); }catch(e){}
     if(_gmailCurrentMsg) _gmailMsgSuggestedClid.set(_gmailCurrentMsg.id, clid);
     showToast('Folder "' + name + '" linked ✓');
+    if(typeof _gmailRefreshActionChipsState === 'function') _gmailRefreshActionChipsState();
   }catch(e){
     if(e && e.name === 'AbortError') return;
     showToast('Could not create folder');
@@ -3805,16 +3807,67 @@ function gmailAddEventToCase(clid){
   }, 60);
 }
 // Action chip cluster for the match banners — apply Gmail label, create
-// local folder, and add a new event to the linked case.
+// local folder, and add a new event to the linked case. Each chip is tagged
+// with data-action so _gmailRefreshActionChipsState can flip it to a "✓ done"
+// style after the action has actually been performed.
 function _gmailCaseActionsHtml(clid){
   const safe = String(clid||'').replace(/'/g,"\\'");
+  const dataClid = escHtml(String(clid||''));
   if(!safe) return '';
   const baseStyle = 'font-size:10px;font-weight:600;padding:3px 9px;border:1px solid #DDD5CA;border-radius:12px;background:#FFF;color:#5C5148;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;';
-  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">'
-    + '<button type="button" onclick="gmailApplyCaseLabel(\'' + safe + '\')" title="Apply a Gmail label named &quot;Last First Cl ID&quot; to this email" style="' + baseStyle + '">🏷 Label this email</button>'
-    + '<button type="button" onclick="gmailCreateCaseFolder(\'' + safe + '\')" title="Pick a parent folder and create a subfolder named &quot;Last First Cl ID&quot;" style="' + baseStyle + '">📁 Create folder</button>'
-    + '<button type="button" onclick="gmailAddEventToCase(\'' + safe + '\')" title="Add a new event to this case, pre-filled" style="' + baseStyle + '">＋ Add event</button>'
+  return '<div class="case-actions" data-clid="' + dataClid + '" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">'
+    + '<button type="button" data-action="label" onclick="gmailApplyCaseLabel(\'' + safe + '\')" title="Apply a Gmail label named &quot;Last First Cl ID&quot; to this email" style="' + baseStyle + '">🏷 Label this email</button>'
+    + '<button type="button" data-action="folder" onclick="gmailCreateCaseFolder(\'' + safe + '\')" title="Pick a parent folder and create a subfolder named &quot;Last First Cl ID&quot;" style="' + baseStyle + '">📁 Create folder</button>'
+    + '<button type="button" data-action="event" onclick="gmailAddEventToCase(\'' + safe + '\')" title="Add a new event to this case, pre-filled" style="' + baseStyle + '">＋ Add event</button>'
     + '</div>';
+}
+// Flip a chip into a green "✓ done" state so the user knows the action was
+// already performed for this email/case (idempotent — no-op if already done).
+function _markChipDone(chip, done, doneLabel){
+  if(!chip) return;
+  if(chip.dataset._origText == null) chip.dataset._origText = chip.textContent;
+  if(chip.dataset._origStyle == null) chip.dataset._origStyle = chip.getAttribute('style') || '';
+  if(done){
+    chip.style.borderColor = '#B4CCAD';
+    chip.style.background = '#EBF1EB';
+    chip.style.color = '#3D5A40';
+    chip.textContent = '✓ ' + doneLabel;
+    chip.title = doneLabel + ' — already done. Click to redo.';
+  } else {
+    if(chip.dataset._origStyle != null) chip.setAttribute('style', chip.dataset._origStyle);
+    if(chip.dataset._origText != null)  chip.textContent = chip.dataset._origText;
+  }
+}
+async function _gmailRefreshActionChipsState(){
+  const root = document.getElementById('gmail-email-reader');
+  if(!root) return;
+  const clusters = root.querySelectorAll('.case-actions');
+  if(!clusters.length) return;
+  // Pre-fetch labels once for the whole sweep
+  let labelsByName = null;
+  for(const cluster of clusters){
+    const clid = cluster.getAttribute('data-clid');
+    if(!clid) continue;
+    const labelChip = cluster.querySelector('button[data-action="label"]');
+    const folderChip = cluster.querySelector('button[data-action="folder"]');
+    if(labelChip && _gmailCurrentMsg){
+      if(labelsByName === null){
+        const ls = await gmailFetchLabels();
+        labelsByName = new Map();
+        (ls||[]).forEach(l => labelsByName.set((l.name||'').toLowerCase(), l.id));
+      }
+      const expected = (_GMAIL_CASES_PARENT + '/' + _gmailCaseLabelName(clid)).toLowerCase();
+      const expectedId = labelsByName.get(expected);
+      const applied = !!(expectedId && (_gmailCurrentMsg.labelIds||[]).includes(expectedId));
+      _markChipDone(labelChip, applied, 'Labeled');
+    }
+    if(folderChip){
+      try{
+        const handle = await loadCaseFolderHandle(clid);
+        _markChipDone(folderChip, !!handle, 'Folder linked');
+      }catch(e){}
+    }
+  }
 }
 
 // Open the New Case modal pre-filled with parsed values from the current email.
@@ -5435,6 +5488,8 @@ function gmailRenderMessage(){
       <div id="gmail-msg-body" style="font-size:13px;line-height:1.7;color:var(--ink);max-width:100%;overflow-x:auto;word-wrap:break-word;">${m.body}</div>
     </div>
     <div id="gmail-reply-area"></div>`;
+  // Reflect "already done" state on the action chips for the current message.
+  if(typeof _gmailRefreshActionChipsState === 'function') _gmailRefreshActionChipsState();
 }
 
 function gmailOpenReply(replyAll){
