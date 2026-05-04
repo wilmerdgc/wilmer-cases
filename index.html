@@ -2221,6 +2221,7 @@ function hideExcelRestorePrompt(){}
   <div id="cases-detail-view" style="display:none">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap">
       <button onclick="closeCaseDetail()" style="font-size:12px;padding:5px 14px;border-radius:20px">&#8592; Back</button>
+      <div id="case-detail-photo-wrap" style="display:flex;align-items:center;gap:0;"></div>
       <div id="case-detail-title" style="font-size:18px;font-weight:600;font-family:'Lora',Georgia,serif;flex:1;color:#2C2620;"></div>
     </div>
     <div class="cd-tab-nav">
@@ -13343,6 +13344,86 @@ function openJudgePicker(wrapEl, metaKey, clid, onSelect){
   }, 0);
 }
 
+// Render a small client photo slot at the top of the case detail.
+// Stored as caseMeta[clid].clientPhoto (base64 data URL). Click empty slot
+// to upload (max 1 MB, downscaled to 200×200 max). Click filled photo to
+// view large; the × removes it.
+function renderCaseDetailPhoto(clid){
+  const host = document.getElementById('case-detail-photo-wrap');
+  if(!host) return;
+  host.innerHTML = '';
+  const photo = ((typeof caseMeta!=='undefined' && caseMeta[clid]) || {}).clientPhoto || '';
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:relative;width:42px;height:42px;flex-shrink:0;';
+  if(photo){
+    const img = document.createElement('img');
+    img.src = photo;
+    img.alt = 'Client photo';
+    img.title = 'Click to view, hover to remove';
+    img.style.cssText = 'width:42px;height:42px;border-radius:50%;object-fit:cover;border:1.5px solid #DDD5CA;cursor:pointer;background:#F7F3ED;';
+    img.onclick = () => { if(typeof openDocViewer==='function') openDocViewer(photo, 'image/*', 'Client photo'); };
+    wrap.appendChild(img);
+    const remove = document.createElement('button');
+    remove.type = 'button'; remove.textContent = '×'; remove.title = 'Remove photo';
+    remove.style.cssText = 'position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:50%;border:1px solid #DDD5CA;background:#fff;color:#9E9186;cursor:pointer;font-size:13px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;';
+    remove.onmouseenter = () => { remove.style.color = '#B85C5C'; remove.style.borderColor = '#B85C5C'; };
+    remove.onmouseleave = () => { remove.style.color = '#9E9186'; remove.style.borderColor = '#DDD5CA'; };
+    remove.onclick = (e) => {
+      e.stopPropagation();
+      if(!confirm('Remove client photo?')) return;
+      if(!caseMeta[clid]) caseMeta[clid] = {};
+      delete caseMeta[clid].clientPhoto;
+      markUnsaved();
+      renderCaseDetailPhoto(clid);
+    };
+    wrap.appendChild(remove);
+  } else {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.title = 'Add client photo';
+    btn.style.cssText = 'width:42px;height:42px;border-radius:50%;border:1.5px dashed #C4BAB0;background:#F7F3ED;color:#9E9186;cursor:pointer;font-size:18px;font-family:inherit;display:flex;align-items:center;justify-content:center;padding:0;';
+    btn.textContent = '+';
+    btn.onmouseenter = () => { btn.style.borderColor = '#6A8C6E'; btn.style.color = '#6A8C6E'; };
+    btn.onmouseleave = () => { btn.style.borderColor = '#C4BAB0'; btn.style.color = '#9E9186'; };
+    btn.onclick = () => {
+      const fi = document.createElement('input');
+      fi.type = 'file'; fi.accept = 'image/*';
+      fi.onchange = () => _handleCasePhotoFile(clid, fi.files && fi.files[0]);
+      fi.click();
+    };
+    wrap.appendChild(btn);
+  }
+  host.appendChild(wrap);
+}
+function _handleCasePhotoFile(clid, file){
+  if(!file) return;
+  if(file.size > 5 * 1024 * 1024){ showToast('Image too large (max 5 MB)'); return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    // Downscale to 200×200 max via canvas — keeps the saved size small.
+    const img = new Image();
+    img.onload = () => {
+      const max = 200;
+      const ratio = Math.min(max / img.width, max / img.height, 1);
+      const w = Math.round(img.width * ratio), h = Math.round(img.height * ratio);
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      const small = cv.toDataURL((file.type === 'image/png' ? 'image/png' : 'image/jpeg'), 0.85);
+      if(!caseMeta[clid]) caseMeta[clid] = {};
+      caseMeta[clid].clientPhoto = small;
+      markUnsaved();
+      renderCaseDetailPhoto(clid);
+      showToast('Photo saved ✓');
+    };
+    img.onerror = () => showToast('Could not read image');
+    img.src = dataUrl;
+  };
+  reader.onerror = () => showToast('Could not read file');
+  reader.readAsDataURL(file);
+}
+
 function openCaseDetail(clid){
   activeCaseClid=clid;
   document.getElementById('cases-list-view').style.display='none';
@@ -13359,6 +13440,7 @@ function openCaseDetail(clid){
   if(!allRecs.length)return;
   const base=allRecs.reduce((best,r)=>{const s=(r.client?1:0)+(r.anum?1:0)+(r.atty?1:0)+(r.type?1:0);const bs=(best.client?1:0)+(best.anum?1:0)+(best.atty?1:0)+(best.type?1:0);return s>bs?r:best;},allRecs[0]);
   {const _m=caseMeta[clid]||{};const _c=[_m.clientFirstName,_m.clientMiddleName,_m.clientLastName].filter(Boolean).join(' ');document.getElementById('case-detail-title').textContent=_c||base.client||clid;}
+  if(typeof renderCaseDetailPhoto === 'function') renderCaseDetailPhoto(clid);
   const active=allRecs.filter(r=>!r.deletedStatus&&!r.finishedStatus);
   const finished=allRecs.filter(r=>r.finishedStatus&&!r.deletedStatus);
   const deleted=allRecs.filter(r=>r.deletedStatus);
