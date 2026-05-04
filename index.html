@@ -15019,14 +15019,18 @@ function openChecklistEditor(idx){
 // ══════════════════════════════════════════════════
 // ISSUES — Case detail panel
 // ══════════════════════════════════════════════════
+// The case starts with NO issues. The user explicitly adds the ones that
+// apply (from a picker filtered by case type), and each added issue gets
+// its own note + a × to remove.
 function buildCaseIssuesPanel(clid, base, notesSec){
   if(!caseMeta[clid]) caseMeta[clid]={};
   if(!caseMeta[clid].caseIssues) caseMeta[clid].caseIssues={};
 
-  // Filter relevant issues for this case type
+  // Issues relevant to this case type (used for the "+ Add issue" picker).
   const caseType = base.type||'';
   const relevant = caseIssueTypes.filter(iss=>!iss.proceedings.length||iss.proceedings.includes(caseType));
-  if(!relevant.length) return;
+  // If no issue catalog applies AND nothing's been added, hide the panel.
+  if(!relevant.length && !Object.keys(caseMeta[clid].caseIssues).length) return;
 
   const panel=document.createElement('div');panel.className='case-notes-panel';
   const hdr=document.createElement('div');hdr.className='case-notes-panel-header';
@@ -15035,39 +15039,96 @@ function buildCaseIssuesPanel(clid, base, notesSec){
 
   const body=document.createElement('div');body.className='case-notes-body';
 
+  function _addedIssues(){
+    return Object.keys(caseMeta[clid].caseIssues || {})
+      .map(id => caseIssueTypes.find(x => x.id === id))
+      .filter(Boolean);
+  }
+
   function renderIssuesPanel(){
     body.innerHTML='';
-    relevant.forEach(iss=>{
-      const st = caseMeta[clid].caseIssues[iss.id]||{checked:false,note:''};
-      const row=document.createElement('div');
-      row.style.cssText='display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid #F7F3ED;';
-      const cb=document.createElement('input');cb.type='checkbox';cb.checked=!!st.checked;
-      cb.style.cssText='width:13px;height:13px;accent-color:#6A8C6E;cursor:pointer;flex-shrink:0;margin-top:2px;';
-      const right=document.createElement('div');right.style.cssText='flex:1;min-width:0;';
-      const nameSpan=document.createElement('span');
-      nameSpan.style.cssText='font-size:12px;font-weight:600;color:'+(st.checked?'#C4BAB0':'#2C2620')+';cursor:pointer;'+(st.checked?'text-decoration:line-through;':'');
-      nameSpan.textContent=iss.name;
-      nameSpan.onclick=()=>{cb.checked=!cb.checked;cb.onchange();};
-      cb.onchange=()=>{
-        if(!caseMeta[clid].caseIssues[iss.id])caseMeta[clid].caseIssues[iss.id]={};
-        caseMeta[clid].caseIssues[iss.id].checked=cb.checked;
+    const added = _addedIssues();
+    if(!added.length){
+      const empty = document.createElement('div');
+      empty.style.cssText = 'font-size:11px;color:#C4BAB0;font-style:italic;padding:6px 0 4px;';
+      empty.textContent = 'No issues yet. Add one below.';
+      body.appendChild(empty);
+    } else {
+      added.forEach(iss=>{
+        const st = caseMeta[clid].caseIssues[iss.id] || {checked:false, note:''};
+        const row=document.createElement('div');
+        row.style.cssText='display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid #F7F3ED;';
+        const cb=document.createElement('input');cb.type='checkbox';cb.checked=!!st.checked;
+        cb.style.cssText='width:13px;height:13px;accent-color:#6A8C6E;cursor:pointer;flex-shrink:0;margin-top:2px;';
+        const right=document.createElement('div');right.style.cssText='flex:1;min-width:0;';
+        // Name row + remove (×) button
+        const nameRow=document.createElement('div');
+        nameRow.style.cssText='display:flex;align-items:center;gap:6px;';
+        const nameSpan=document.createElement('span');
+        nameSpan.style.cssText='flex:1;font-size:12px;font-weight:600;color:'+(st.checked?'#C4BAB0':'#2C2620')+';cursor:pointer;'+(st.checked?'text-decoration:line-through;':'');
+        nameSpan.textContent=iss.name;
+        nameSpan.onclick=()=>{cb.checked=!cb.checked;cb.onchange();};
+        const xBtn=document.createElement('button');
+        xBtn.type='button';xBtn.textContent='×';xBtn.title='Remove this issue from the case';
+        xBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:14px;padding:0 4px;line-height:1;';
+        xBtn.onmouseenter=()=>xBtn.style.color='#B85C5C';
+        xBtn.onmouseleave=()=>xBtn.style.color='#C4BAB0';
+        xBtn.onclick=()=>{
+          delete caseMeta[clid].caseIssues[iss.id];
+          markUnsaved();renderIssuesPanel();
+        };
+        nameRow.appendChild(nameSpan);nameRow.appendChild(xBtn);
+        cb.onchange=()=>{
+          if(!caseMeta[clid].caseIssues[iss.id])caseMeta[clid].caseIssues[iss.id]={};
+          caseMeta[clid].caseIssues[iss.id].checked=cb.checked;
+          markUnsaved();renderIssuesPanel();
+        };
+        // Note textarea
+        const noteIn=document.createElement('textarea');noteIn.value=st.note||'';noteIn.rows=1;noteIn.placeholder='Notes on this issue…';
+        noteIn.style.cssText='width:100%;font-size:11px;border:none;border-bottom:1px solid #EDE8E0;background:transparent;outline:none;resize:none;line-height:1.5;padding:2px 0;margin-top:2px;font-family:inherit;color:#5C5148;overflow:hidden;';
+        noteIn.oninput=()=>{noteIn.style.height='auto';noteIn.style.height=noteIn.scrollHeight+'px';};
+        noteIn.onchange=()=>{
+          if(!caseMeta[clid].caseIssues[iss.id])caseMeta[clid].caseIssues[iss.id]={};
+          caseMeta[clid].caseIssues[iss.id].note=noteIn.value;markUnsaved();
+        };
+        right.appendChild(nameRow);right.appendChild(noteIn);
+        row.appendChild(cb);row.appendChild(right);body.appendChild(row);
+      });
+    }
+
+    // "+ Add issue" picker — only shows issues not yet added
+    const addedIds = new Set(Object.keys(caseMeta[clid].caseIssues || {}));
+    const available = relevant.filter(iss => !addedIds.has(iss.id));
+    const addRow = document.createElement('div');
+    addRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;';
+    if(!available.length){
+      const allDone = document.createElement('span');
+      allDone.style.cssText='font-size:10px;color:#C4BAB0;font-style:italic;';
+      allDone.textContent = relevant.length ? 'All available issues for this case type are already added.' : 'No issues defined for this case type.';
+      addRow.appendChild(allDone);
+    } else {
+      const sel = document.createElement('select');
+      sel.style.cssText='font-size:11px;padding:5px 8px;border:1px solid #DDD5CA;border-radius:6px;background:#fff;color:#2C2620;font-family:inherit;outline:none;flex:1;min-width:160px;max-width:280px;';
+      const optNone = document.createElement('option'); optNone.value=''; optNone.textContent='Pick an issue to add…'; sel.appendChild(optNone);
+      available.forEach(iss => { const o=document.createElement('option'); o.value=iss.id; o.textContent=iss.name; sel.appendChild(o); });
+      const addBtn = document.createElement('button');
+      addBtn.type='button';addBtn.textContent='+ Add';
+      addBtn.style.cssText='font-size:11px;font-weight:600;padding:5px 12px;border:1px solid #B4CCAD;border-radius:14px;background:#EBF1EB;color:#4A6B4E;cursor:pointer;font-family:inherit;';
+      addBtn.onclick=()=>{
+        const id = sel.value;
+        if(!id) return;
+        caseMeta[clid].caseIssues[id] = {checked:false, note:''};
         markUnsaved();renderIssuesPanel();
       };
-      // Note textarea
-      const noteIn=document.createElement('textarea');noteIn.value=st.note||'';noteIn.rows=1;noteIn.placeholder='Notes on this issue…';
-      noteIn.style.cssText='width:100%;font-size:11px;border:none;border-bottom:1px solid #EDE8E0;background:transparent;outline:none;resize:none;line-height:1.5;padding:2px 0;margin-top:2px;font-family:inherit;color:#5C5148;overflow:hidden;';
-      noteIn.oninput=()=>{noteIn.style.height='auto';noteIn.style.height=noteIn.scrollHeight+'px';};
-      noteIn.onchange=()=>{
-        if(!caseMeta[clid].caseIssues[iss.id])caseMeta[clid].caseIssues[iss.id]={};
-        caseMeta[clid].caseIssues[iss.id].note=noteIn.value;markUnsaved();
-      };
-      right.appendChild(nameSpan);right.appendChild(noteIn);
-      row.appendChild(cb);row.appendChild(right);body.appendChild(row);
-    });
+      addRow.appendChild(sel);addRow.appendChild(addBtn);
+    }
+    body.appendChild(addRow);
   }
   renderIssuesPanel();
   panel.appendChild(hdr);panel.appendChild(body);
-  if(Object.values(caseMeta[clid].caseIssues||{}).some(v=>v.checked||v.note))panel.classList.add('open');
+  // Keep the panel collapsed when there's nothing in it; expand if any
+  // issue has been added (even default-empty) so the user sees them.
+  if(Object.keys(caseMeta[clid].caseIssues||{}).length) panel.classList.add('open');
   notesSec.appendChild(panel);
 }
 
