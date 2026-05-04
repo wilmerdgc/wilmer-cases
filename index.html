@@ -3830,6 +3830,14 @@ async function gmailCreateCaseFolder(clid){
     if(_gmailCurrentMsg) _gmailMsgSuggestedClid.set(_gmailCurrentMsg.id, clid);
     showToast('Folder "' + name + '" linked ✓');
     if(typeof _gmailRefreshActionChipsState === 'function') _gmailRefreshActionChipsState();
+    // Flip any open case-detail folder badge for this clid into "open" mode.
+    const caseFolderBtn = document.querySelector('button[data-folder-for-clid="' + (''+clid).replace(/"/g,'\\"') + '"]');
+    if(caseFolderBtn){
+      caseFolderBtn.textContent = '📁 ' + name;
+      caseFolderBtn.title = 'Open the linked folder for this case';
+      caseFolderBtn.onclick = () => openCaseFolderViewer(clid);
+      caseFolderBtn.style.display = '';
+    }
   }catch(e){
     if(e && e.name === 'AbortError') return;
     showToast('Could not create folder');
@@ -13851,20 +13859,28 @@ function openCaseDetail(clid){
     });
   };
   atRow.appendChild(emailCaseBtn);
-  // Folder badge — shown only if a directory has been linked for this case.
-  // Async-resolved so it doesn't block the row render.
+  // Folder badge — when a directory is linked we show "📁 <Folder name>"
+  // (click opens the in-app file viewer); when not, we show "📁 Create folder"
+  // (click runs the OS folder picker and stores the handle, named
+  // "LASTNAME FirstName <Cl ID>"). Resolved async so it doesn't block render.
   const folderBtn = document.createElement('button');
   folderBtn.className='btn-sm';
+  folderBtn.dataset.folderForClid = String(clid);
   folderBtn.style.cssText='font-size:11px;padding:3px 11px;border-radius:20px;border-color:#B8C4DB;color:#4F6A91;margin-left:4px;font-weight:600;display:none;';
-  folderBtn.title='Open the linked folder for this case';
-  folderBtn.onclick=()=>openCaseFolderViewer(clid);
   atRow.appendChild(folderBtn);
   if(typeof loadCaseFolderHandle === 'function'){
     loadCaseFolderHandle(clid).then(h => {
       if(h){
         folderBtn.textContent = '📁 ' + (h.name || 'Folder');
-        folderBtn.style.display = '';
+        folderBtn.title = 'Open the linked folder for this case';
+        folderBtn.onclick = () => openCaseFolderViewer(clid);
+      } else {
+        const name = (typeof _gmailCaseLabelName === 'function') ? _gmailCaseLabelName(clid) : clid;
+        folderBtn.textContent = '📁 Create folder';
+        folderBtn.title = 'Pick a parent folder; a subfolder named "' + name + '" will be created and linked to this case';
+        folderBtn.onclick = () => gmailCreateCaseFolder(clid);
       }
+      folderBtn.style.display = '';
     }).catch(()=>{});
   }
   activeSecEl.appendChild(atRow);
