@@ -13345,39 +13345,47 @@ function openJudgePicker(wrapEl, metaKey, clid, onSelect){
 }
 
 // Render a small client photo slot at the top of the case detail.
-// Stored as caseMeta[clid].clientPhoto (base64 data URL). Click empty slot
-// to upload (max 1 MB, downscaled to 200×200 max). Click filled photo to
-// view large; the × removes it.
-function renderCaseDetailPhoto(clid){
+// Stored as caseMeta[clid].clientPhoto (base64 data URL).
+// canEdit=true (set by the Case Info edit toggle) shows the upload "+"
+// when empty and the remove × when filled. canEdit=false (default) is
+// read-only — empty cases just hide the slot, filled cases show the
+// photo without controls.
+function renderCaseDetailPhoto(clid, canEdit){
   const host = document.getElementById('case-detail-photo-wrap');
   if(!host) return;
   host.innerHTML = '';
   const photo = ((typeof caseMeta!=='undefined' && caseMeta[clid]) || {}).clientPhoto || '';
+  // Read-only with no photo → hide the slot entirely (no clutter)
+  if(!photo && !canEdit){ host.style.display = 'none'; return; }
+  host.style.display = '';
   const wrap = document.createElement('div');
   wrap.style.cssText = 'position:relative;width:42px;height:42px;flex-shrink:0;';
   if(photo){
     const img = document.createElement('img');
     img.src = photo;
     img.alt = 'Client photo';
-    img.title = 'Click to view, hover to remove';
+    img.title = canEdit ? 'Click to view; × to remove' : 'Click to view';
     img.style.cssText = 'width:42px;height:42px;border-radius:50%;object-fit:cover;border:1.5px solid #DDD5CA;cursor:pointer;background:#F7F3ED;';
     img.onclick = () => { if(typeof openDocViewer==='function') openDocViewer(photo, 'image/*', 'Client photo'); };
     wrap.appendChild(img);
-    const remove = document.createElement('button');
-    remove.type = 'button'; remove.textContent = '×'; remove.title = 'Remove photo';
-    remove.style.cssText = 'position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:50%;border:1px solid #DDD5CA;background:#fff;color:#9E9186;cursor:pointer;font-size:13px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;';
-    remove.onmouseenter = () => { remove.style.color = '#B85C5C'; remove.style.borderColor = '#B85C5C'; };
-    remove.onmouseleave = () => { remove.style.color = '#9E9186'; remove.style.borderColor = '#DDD5CA'; };
-    remove.onclick = (e) => {
-      e.stopPropagation();
-      if(!confirm('Remove client photo?')) return;
-      if(!caseMeta[clid]) caseMeta[clid] = {};
-      delete caseMeta[clid].clientPhoto;
-      markUnsaved();
-      renderCaseDetailPhoto(clid);
-    };
-    wrap.appendChild(remove);
+    if(canEdit){
+      const remove = document.createElement('button');
+      remove.type = 'button'; remove.textContent = '×'; remove.title = 'Remove photo';
+      remove.style.cssText = 'position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:50%;border:1px solid #DDD5CA;background:#fff;color:#9E9186;cursor:pointer;font-size:13px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;';
+      remove.onmouseenter = () => { remove.style.color = '#B85C5C'; remove.style.borderColor = '#B85C5C'; };
+      remove.onmouseleave = () => { remove.style.color = '#9E9186'; remove.style.borderColor = '#DDD5CA'; };
+      remove.onclick = (e) => {
+        e.stopPropagation();
+        if(!confirm('Remove client photo?')) return;
+        if(!caseMeta[clid]) caseMeta[clid] = {};
+        delete caseMeta[clid].clientPhoto;
+        markUnsaved();
+        renderCaseDetailPhoto(clid, true);
+      };
+      wrap.appendChild(remove);
+    }
   } else {
+    // canEdit only — render the upload "+" button
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.title = 'Add client photo';
@@ -13414,7 +13422,8 @@ function _handleCasePhotoFile(clid, file){
       if(!caseMeta[clid]) caseMeta[clid] = {};
       caseMeta[clid].clientPhoto = small;
       markUnsaved();
-      renderCaseDetailPhoto(clid);
+      // Re-render in edit mode (the only way to reach the upload flow)
+      renderCaseDetailPhoto(clid, true);
       showToast('Photo saved ✓');
     };
     img.onerror = () => showToast('Could not read image');
@@ -13578,6 +13587,9 @@ function openCaseDetail(clid){
   // ── Main render ──
   function renderAll2(){
     infoBody.innerHTML='';
+    // Re-render the photo slot with the current edit state so the +/× controls
+    // only appear while the user is editing case information.
+    if(typeof renderCaseDetailPhoto === 'function') renderCaseDetailPhoto(clid, isEditing);
     const isConsolidated=!!caseMeta[clid].consolidated;
     const isSJC=(base.type||'').includes('Special Juvenile');
 
