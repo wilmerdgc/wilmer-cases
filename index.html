@@ -4820,8 +4820,15 @@ function gmailInit(){
     client_id: GMAIL_CLIENT_ID,
     scope: GMAIL_SCOPES,
     callback: (resp) => {
-      if(resp.error) { console.error('Gmail auth error', resp); return; }
+      if(resp.error) {
+        // Silent attempt failed — user wasn't signed in to Google in this
+        // browser, or consent was revoked. Don't surface the error; the
+        // manual "Connect Gmail" button stays available as a fallback.
+        console.warn('Gmail auth:', resp.error);
+        return;
+      }
       _gmailAccessToken = resp.access_token;
+      try{ localStorage.setItem('gmail_connected_before','1'); }catch(e){}
       gmailGetProfile().then(()=>{
         gmailRenderConnected();
         gmailFetchInbox();
@@ -4829,7 +4836,15 @@ function gmailInit(){
     }
   });
   _gmailInitialized = true;
-  // Check if we already have a token in session
+  // Auto-connect: if the user has connected before, try a silent token
+  // refresh on every load (prompt:'' tells Google Identity Services to use
+  // the cached grant without showing UI). Falls through silently to the
+  // sign-in screen if the silent path can't complete.
+  try{
+    if(localStorage.getItem('gmail_connected_before') === '1' && !_gmailAccessToken){
+      _gmailTokenClient.requestAccessToken({ prompt: '' });
+    }
+  }catch(e){}
   const el = document.getElementById('gmail-api-ui');
   if(el) el.style.display = 'flex';
 }
@@ -4843,6 +4858,8 @@ function gmailSignOut(){
   if(_gmailAccessToken){
     google.accounts.oauth2.revoke(_gmailAccessToken);
   }
+  // Clear the auto-connect flag so the next session doesn't silently re-connect.
+  try{ localStorage.removeItem('gmail_connected_before'); }catch(e){}
   _gmailAccessToken = null;
   _gmailUserEmail = '';
   _gmailMessages = [];
@@ -7653,24 +7670,27 @@ function renderWeek() {
   const weekendHasEvents = !!(rowsByDate[satStr]&&rowsByDate[satStr].length) || !!(rowsByDate[sunStr]&&rowsByDate[sunStr].length);
   const showWeekend = weekendPref || weekendHasEvents;
   const dayCount = showWeekend ? 7 : 5;
-  // Render the focused week + the next one, so the user can scroll horizontally to peek
-  const WEEKS_TO_RENDER = 2;
-  const totalDays = dayCount * WEEKS_TO_RENDER;
+  // Render a wide window centered on the focus week so the user can scroll
+  // horizontally far into the past or future without losing context. The
+  // focused week's first column is then scrolled to the left edge below.
+  const PAST_WEEKS = (typeof _weekViewPastBuffer === 'number' ? _weekViewPastBuffer : 12);
+  const FUTURE_WEEKS = (typeof _weekViewFutureBuffer === 'number' ? _weekViewFutureBuffer : 12);
+  const totalWeeks = PAST_WEEKS + 1 + FUTURE_WEEKS;
+  const totalDays = dayCount * totalWeeks;
   const days = [];
-  for (let w = 0; w < WEEKS_TO_RENDER; w++){
+  for (let w = -PAST_WEEKS; w <= FUTURE_WEEKS; w++){
+    const wkMon = getWeekStart(weekOffset + w);
     for (let i = 0; i < dayCount; i++){
-      const d = new Date(mon); d.setDate(mon.getDate() + w*7 + i); days.push(d);
+      const d = new Date(wkMon); d.setDate(wkMon.getDate() + i); days.push(d);
     }
   }
-  const focusedEnd = days[dayCount-1];
+  const focusStartIdx = PAST_WEEKS * dayCount;
+  const focusedEnd = days[focusStartIdx + dayCount - 1];
   const weekLabel = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' – ' + focusedEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   document.getElementById('week-title').textContent = weekLabel;
   const grid = document.getElementById('week-grid');
   grid.innerHTML = '';
   grid.classList.toggle('with-weekend', showWeekend);
-  // Flex layout sizes columns so exactly 5 (or 7) fit in the visible width;
-  // additional pre-rendered weeks overflow horizontally and become scrollable.
-  grid.scrollLeft = 0;
   // Update toggle button state
   const wtBtn = document.getElementById('wk-weekend-toggle');
   const wtNote = document.getElementById('wk-weekend-note');
@@ -7689,7 +7709,7 @@ function renderWeek() {
     const dayStr = toDateStr(day);
     const isToday = sameDay(day, TODAY);
     const dowIdx = i % dayCount;             // index within its week (0..dayCount-1)
-    const isFocusWeek = i < dayCount;         // first rendered week (matches week-title)
+    const isFocusWeek = i >= focusStartIdx && i < focusStartIdx + dayCount; // matches week-title
     const isWeekStart = i > 0 && dowIdx === 0; // boundary between rendered weeks
     const isWeekendDay = dowIdx >= 5;
     const tasks = rowsByDate[dayStr] || [];
@@ -7829,6 +7849,48 @@ function renderWeek() {
     frag.appendChild(col);
   });
   grid.appendChild(frag);
+  // Scroll the focus week's first column into the left edge of the visible
+  // area — but only when the user just navigated to a new week (shiftWeek,
+  // Today button, etc.). Skip during edge-extension renders so the pan
+  // feels continuous. Done after layout via offsetLeft so it works
+  // regardless of column width.
+  const _shouldRecenter = grid._lastWeekOffset !== weekOffset || grid._lastDayCount !== dayCount;
+  grid._lastWeekOffset = weekOffset;
+  grid._lastDayCount = dayCount;
+  if(_shouldRecenter && !grid._infBusy){
+    setTimeout(() => {
+      const firstFocusCol = grid.children[focusStartIdx];
+      if(firstFocusCol) grid.scrollLeft = firstFocusCol.offsetLeft - 1;
+    }, 0);
+  }
+  // Edge-extension: when the user scrolls within ~300px of either edge,
+  // grow the past/future buffers and re-render, preserving scroll so the
+  // pan feels continuous. Bound once per grid lifetime.
+  if(!grid._infScrollBound){
+    grid._infScrollBound = true;
+    grid.addEventListener('scroll', () => {
+      if(grid._infBusy) return;
+      const sl = grid.scrollLeft, sw = grid.scrollWidth, cw = grid.clientWidth;
+      if(sl < 300){
+        grid._infBusy = true;
+        const oldSL = sl, oldSW = sw;
+        if(typeof _weekViewPastBuffer !== 'number') window._weekViewPastBuffer = 12;
+        window._weekViewPastBuffer += 8;
+        renderWeek();
+        const newSW = grid.scrollWidth;
+        grid.scrollLeft = oldSL + (newSW - oldSW);
+        setTimeout(()=>{ grid._infBusy = false; }, 50);
+      } else if(sl + cw > sw - 300){
+        grid._infBusy = true;
+        if(typeof _weekViewFutureBuffer !== 'number') window._weekViewFutureBuffer = 12;
+        window._weekViewFutureBuffer += 8;
+        const oldSL = sl;
+        renderWeek();
+        grid.scrollLeft = oldSL;
+        setTimeout(()=>{ grid._infBusy = false; }, 50);
+      }
+    });
+  }
   document.getElementById('empty-week').style.display = any ? 'none' : 'block';
   const boardEl = document.getElementById('week-board');
   boardEl.className = 'event-summary-board';
@@ -17334,6 +17396,12 @@ loadCustomChecklists();
 loadLastBackupLabel();
 loadAttorneys();
 loadAttorneyEmails();
+// Kick off Gmail auto-connect at boot so the silent token refresh runs
+// before the user even clicks the Inbox tab. gmailInit is no-op if
+// already initialized; it safely defers if the GIS script hasn't loaded
+// yet, and it's auto-connect aware (only requests the token when the
+// user has connected before).
+try{ if(typeof gmailInit === 'function') gmailInit(); }catch(e){}
 dayViewDate = new Date(TODAY);
 dayMiniMonthOffset = 0;
 const savedDefaultView = localStorage.getItem('defaultView') || 'today';
