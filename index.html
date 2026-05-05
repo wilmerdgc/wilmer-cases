@@ -5115,9 +5115,31 @@ async function _gmailRefreshRepliedThreads(){
     _gmailRepliedThreads = new Set(data.messages.map(m => m.threadId).filter(Boolean));
   }catch(e){}
 }
+// When set, the listing shows messages with this label instead of INBOX/SENT.
+let _gmailActiveLabelId = null;
+let _gmailActiveLabelName = '';
+function _gmailUpdateLabelFilterBtn(){
+  const lb = document.getElementById('gmail-labelfilter-btn');
+  if(!lb) return;
+  if(_gmailActiveLabelId){
+    lb.innerHTML = '🏷 ' + escHtml(_gmailActiveLabelName) + ' <span style="margin-left:6px;color:#fff;opacity:.7;font-weight:400;">×</span>';
+    lb.style.background = 'var(--ink)';
+    lb.style.color = '#fff';
+    lb.title = 'Click to change or clear the label filter';
+  } else {
+    lb.innerHTML = '🏷 Labels';
+    lb.style.background = '#fff';
+    lb.style.color = 'var(--ink-muted)';
+    lb.title = 'View messages by label';
+  }
+}
 function gmailSwitchMailbox(box){
   if(box!=='inbox' && box!=='sent') return;
   _gmailMailbox = box;
+  // Switching to a built-in mailbox clears any active label filter.
+  _gmailActiveLabelId = null;
+  _gmailActiveLabelName = '';
+  _gmailUpdateLabelFilterBtn();
   // Update segmented control styles
   const ib = document.getElementById('mailbox-inbox-btn');
   const sb = document.getElementById('mailbox-sent-btn');
@@ -5134,10 +5156,84 @@ function gmailSwitchMailbox(box){
   if(reader) reader.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ink-faint);font-size:13px;">Select an email to read</div>';
   gmailFetchInbox();
 }
+function gmailFilterByLabel(labelId, labelName){
+  _gmailActiveLabelId = labelId;
+  _gmailActiveLabelName = labelName || '';
+  // Deactivate Inbox/Sent visual selection — neither built-in mailbox is the
+  // current view while a custom label is active.
+  ['mailbox-inbox-btn','mailbox-sent-btn'].forEach(id => {
+    const b = document.getElementById(id);
+    if(b){ b.style.background='#fff'; b.style.color='var(--ink-muted)'; }
+  });
+  _gmailUpdateLabelFilterBtn();
+  _gmailMessages = [];
+  _gmailNextPageToken = null;
+  _gmailCurrentMsg = null;
+  const reader = document.getElementById('gmail-email-reader');
+  if(reader) reader.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ink-faint);font-size:13px;">Select an email to read</div>';
+  gmailFetchInbox();
+}
+async function gmailToggleLabelFilterDropdown(){
+  const drop = document.getElementById('gmail-labelfilter-dropdown');
+  if(!drop) return;
+  if(drop.style.display === 'block'){ drop.style.display='none'; return; }
+  drop.innerHTML = '<div style="padding:12px;text-align:center;color:var(--ink-muted);font-size:11px;">Loading labels…</div>';
+  drop.style.display = 'block';
+  const labels = await gmailFetchLabels();
+  const userLabels = (labels||[]).filter(l => l.type === 'user').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  // Build chrome ONCE so the search input keeps focus across keystrokes.
+  drop.innerHTML = '';
+  const sw = document.createElement('div');
+  sw.style.cssText = 'padding:8px;border-bottom:1px solid var(--cream-dark);position:sticky;top:0;background:#fff;z-index:1;';
+  sw.innerHTML = '<input id="gmail-labelfilter-search" type="text" placeholder="Search labels…" style="width:100%;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;background:#fff;" autocomplete="off"/>';
+  drop.appendChild(sw);
+  const listEl = document.createElement('div');
+  drop.appendChild(listEl);
+  function render(q){
+    listEl.innerHTML = '';
+    const ql = (q||'').toLowerCase();
+    const filtered = userLabels.filter(l => !ql || (l.name||'').toLowerCase().includes(ql));
+    // Clear-filter row when an active label is set
+    if(_gmailActiveLabelId){
+      const clr = document.createElement('div');
+      clr.style.cssText = 'padding:8px 12px;font-size:11px;font-weight:600;cursor:pointer;color:var(--ink-muted);border-bottom:1px solid var(--cream-dark);display:flex;align-items:center;gap:8px;';
+      clr.innerHTML = '<span style="font-size:13px;">×</span><span>Clear filter — show ' + (_gmailMailbox==='sent'?'Sent':'Inbox') + '</span>';
+      clr.onmouseenter = () => clr.style.background = 'var(--cream)';
+      clr.onmouseleave = () => clr.style.background = '';
+      clr.onclick = () => { drop.style.display='none'; gmailSwitchMailbox(_gmailMailbox || 'inbox'); };
+      listEl.appendChild(clr);
+    }
+    if(!filtered.length){
+      const empty = document.createElement('div');
+      empty.style.cssText = 'padding:14px;text-align:center;color:var(--ink-faint);font-size:11px;';
+      empty.textContent = userLabels.length ? 'No labels match' : 'No user labels yet — add some via Gmail or Move-to.';
+      listEl.appendChild(empty);
+      return;
+    }
+    filtered.forEach(l => {
+      const isActive = _gmailActiveLabelId === l.id;
+      const item = document.createElement('div');
+      item.style.cssText = 'padding:7px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;' + (isActive ? 'background:var(--cream);font-weight:600;' : '');
+      item.innerHTML = '<span style="font-size:14px;flex-shrink:0;">🏷</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(l.name) + '</span>' + (isActive ? '<span style="font-size:10px;color:var(--sage);">active</span>' : '');
+      item.onmouseenter = () => { if(!isActive) item.style.background = 'var(--cream)'; };
+      item.onmouseleave = () => { if(!isActive) item.style.background = ''; };
+      item.onclick = () => { drop.style.display='none'; gmailFilterByLabel(l.id, l.name); };
+      listEl.appendChild(item);
+    });
+  }
+  const inp = document.getElementById('gmail-labelfilter-search');
+  if(inp){ inp.oninput = () => render(inp.value); setTimeout(()=>inp.focus(), 0); }
+  render('');
+  setTimeout(() => {
+    const close = e => { if(!drop.contains(e.target) && e.target.closest && !e.target.closest('[onclick*="gmailToggleLabelFilterDropdown"]')){ drop.style.display='none'; document.removeEventListener('mousedown',close); }};
+    document.addEventListener('mousedown', close);
+  }, 0);
+}
 async function gmailFetchInbox(pageToken, query){
   const el = document.getElementById('gmail-email-list');
   if(!pageToken){ _gmailMessages = []; _gmailNextPageToken = null; if(el) el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--ink-muted);font-size:12px;">Loading...</div>'; }
-  const labelId = (_gmailMailbox==='sent') ? 'SENT' : 'INBOX';
+  // Active label takes precedence over the Inbox/Sent toggle.
+  const labelId = _gmailActiveLabelId || ((_gmailMailbox==='sent') ? 'SENT' : 'INBOX');
   let url = 'messages?maxResults=20&labelIds=' + labelId;
   if(pageToken) url += '&pageToken=' + pageToken;
   if(query) url += '&q=' + encodeURIComponent(query);
@@ -5430,8 +5526,12 @@ function gmailRenderConnected(){
       <!-- Top bar -->
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0;">
         <div style="display:flex;flex-shrink:0;">
-          <button id="mailbox-inbox-btn" onclick="gmailSwitchMailbox('inbox')" style="font-size:11px;font-weight:600;padding:7px 12px;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);background:${_gmailMailbox==='sent'?'#fff':'var(--ink)'};color:${_gmailMailbox==='sent'?'var(--ink-muted)':'#fff'};cursor:pointer;font-family:inherit;">📥 Inbox</button>
-          <button id="mailbox-sent-btn" onclick="gmailSwitchMailbox('sent')" style="font-size:11px;font-weight:600;padding:7px 12px;border:1px solid var(--border);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:${_gmailMailbox==='sent'?'var(--ink)':'#fff'};color:${_gmailMailbox==='sent'?'#fff':'var(--ink-muted)'};cursor:pointer;font-family:inherit;">📤 Sent</button>
+          <button id="mailbox-inbox-btn" onclick="gmailSwitchMailbox('inbox')" style="font-size:11px;font-weight:600;padding:7px 12px;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);background:${(!_gmailActiveLabelId && _gmailMailbox!=='sent')?'var(--ink)':'#fff'};color:${(!_gmailActiveLabelId && _gmailMailbox!=='sent')?'#fff':'var(--ink-muted)'};cursor:pointer;font-family:inherit;">📥 Inbox</button>
+          <button id="mailbox-sent-btn" onclick="gmailSwitchMailbox('sent')" style="font-size:11px;font-weight:600;padding:7px 12px;border:1px solid var(--border);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:${(!_gmailActiveLabelId && _gmailMailbox==='sent')?'var(--ink)':'#fff'};color:${(!_gmailActiveLabelId && _gmailMailbox==='sent')?'#fff':'var(--ink-muted)'};cursor:pointer;font-family:inherit;">📤 Sent</button>
+        </div>
+        <div style="position:relative;flex-shrink:0;">
+          <button id="gmail-labelfilter-btn" onclick="gmailToggleLabelFilterDropdown()" title="${_gmailActiveLabelId ? 'Click to change or clear the label filter' : 'View messages by label'}" style="font-size:11px;font-weight:600;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:${_gmailActiveLabelId ? 'var(--ink)' : '#fff'};color:${_gmailActiveLabelId ? '#fff' : 'var(--ink-muted)'};cursor:pointer;font-family:inherit;white-space:nowrap;">${_gmailActiveLabelId ? ('🏷 ' + escHtml(_gmailActiveLabelName) + ' <span style=\"margin-left:6px;color:#fff;opacity:.7;font-weight:400;\">×</span>') : '🏷 Labels'}</button>
+          <div id="gmail-labelfilter-dropdown" style="display:none;position:absolute;left:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:300;min-width:240px;max-height:340px;overflow-y:auto;"></div>
         </div>
         <div style="flex:1;position:relative;">
           <input id="gmail-search-input" type="text" placeholder="Search emails..." style="width:100%;font-size:12px;padding:7px 10px 7px 30px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;background:#fff;"
@@ -5475,7 +5575,9 @@ function gmailRenderEmailList(){
   el.innerHTML = '';
   _gmailMessages.forEach(m => {
     // In the Sent mailbox the recipient is more useful than the sender.
-    const isSent = (_gmailMailbox==='sent');
+    // When filtering by a custom label, show inbox-style "from" rows
+    // regardless of the underlying _gmailMailbox toggle.
+    const isSent = (_gmailMailbox==='sent') && !_gmailActiveLabelId;
     const headerSrc = isSent ? (m.to || m.from || '') : (m.from || '');
     // For Sent with multiple recipients, show the first one's name plus "+N more"
     const firstRecipient = isSent ? (headerSrc.split(',')[0]||'').trim() : headerSrc;
