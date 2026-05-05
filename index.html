@@ -5777,6 +5777,7 @@ function gmailRenderMessage(){
         `).join('')}
       </div>
     </div>` : ''}
+    <div id="gmail-inline-images" style="display:none;padding:14px 24px;border-bottom:1px solid var(--border);background:#FDFAF7;"></div>
     <div style="padding:20px 24px;">
       <style>#gmail-msg-body img{max-width:100%;height:auto;}</style>
       <div id="gmail-msg-body" style="font-size:13px;line-height:1.7;color:var(--ink);max-width:100%;overflow-x:auto;word-wrap:break-word;">${m.body}</div>
@@ -5784,6 +5785,56 @@ function gmailRenderMessage(){
     <div id="gmail-reply-area"></div>`;
   // Reflect "already done" state on the action chips for the current message.
   if(typeof _gmailRefreshActionChipsState === 'function') _gmailRefreshActionChipsState();
+  // Auto-show image attachments as inline thumbnails so the user doesn't
+  // have to click 👁 on each one separately to see what their client sent.
+  if(typeof gmailRenderInlineImages === 'function') gmailRenderInlineImages();
+}
+async function gmailRenderInlineImages(){
+  const host = document.getElementById('gmail-inline-images');
+  const m = _gmailCurrentMsg;
+  if(!host || !m || !m.attachments) return;
+  const imgAtts = m.attachments
+    .map((a, i) => ({ a, i }))
+    .filter(x => x.a.mimeType && x.a.mimeType.startsWith('image/'));
+  if(!imgAtts.length){ host.style.display = 'none'; host.innerHTML = ''; return; }
+  host.style.display = '';
+  host.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">🖼 Images (' + imgAtts.length + ')</div>'
+    + '<div id="gmail-inline-images-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>';
+  const grid = host.querySelector('#gmail-inline-images-grid');
+  // Render placeholders synchronously, fill async to keep the reader responsive.
+  for(const {a, i} of imgAtts){
+    const tile = document.createElement('div');
+    tile.style.cssText = 'width:160px;height:120px;border:1px solid var(--border);border-radius:6px;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;color:var(--ink-faint);font-size:11px;position:relative;';
+    tile.title = a.filename + ' — click to view full size';
+    tile.textContent = 'Loading…';
+    tile.onclick = () => gmailPreviewAttachment(i);
+    grid.appendChild(tile);
+    // Fetch (uses inline data when present, attachmentId fallback otherwise)
+    try{
+      let b64 = a.data;
+      if(!b64 && a.attachmentId){
+        const r = await gmailApi('messages/' + m.id + '/attachments/' + a.attachmentId);
+        if(r && r.data) b64 = r.data;
+      }
+      if(b64){
+        const b64std = b64.replace(/-/g,'+').replace(/_/g,'/');
+        const dataUrl = 'data:' + (a.mimeType||'image/jpeg') + ';base64,' + b64std;
+        tile.textContent = '';
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.alt = a.filename;
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+        tile.appendChild(img);
+        // Caption row
+        const cap = document.createElement('div');
+        cap.style.cssText = 'position:absolute;left:0;right:0;bottom:0;padding:3px 6px;background:rgba(0,0,0,0.55);color:#fff;font-size:10px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        cap.textContent = a.filename;
+        tile.appendChild(cap);
+      } else {
+        tile.textContent = 'Could not load';
+      }
+    }catch(e){ tile.textContent = 'Failed'; }
+  }
 }
 
 function gmailOpenReply(replyAll){
