@@ -2756,7 +2756,7 @@ function hideExcelRestorePrompt(){}
       </div>
       <div id="icp-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
     </div>
-    <div class="form-row"><label class="form-label">Deadline</label><input id="fc-date" type="date" oninput="updateDateCalc();renderReminderChips();checkWeekendDate(this.value);(function(){const ri=document.getElementById('icp-ref-input');if(ri&&document.getElementById('individual-callup-panel').style.display!=='none')ri.value=this.value;}).call(this);refreshIndividualCallupPanel(false)"/></div>
+    <div class="form-row"><label class="form-label">Deadline</label><input id="fc-date" type="date" oninput="updateDateCalc();renderReminderChips();checkWeekendDate(this.value);(function(){const ri=document.getElementById('icp-ref-input');if(ri&&document.getElementById('individual-callup-panel').style.display!=='none')ri.value=this.value;}).call(this);refreshIndividualCallupPanel(false);if(typeof onRecurModeChange==='function')onRecurModeChange();"/></div>
     <!-- Date calculator -->
     <div id="modal-date-calc" style="display:flex;align-items:center;gap:6px;margin:-6px 0 10px 0;padding:0 2px;">
       <input id="dc-start" type="date" title="Start date" oninput="updateDateCalc()" style="font-size:11px;padding:3px 6px;border:1px solid #EDE8E0;border-radius:5px;color:#9E9186;background:#FDFAF7;width:130px;"/>
@@ -2767,6 +2767,25 @@ function hideExcelRestorePrompt(){}
       <input id="dc-days" type="number" min="0" placeholder="days" oninput="updateDateCalc()" style="font-size:11px;padding:3px 6px;border:1px solid #EDE8E0;border-radius:5px;color:#9E9186;background:#FDFAF7;width:60px;"/>
       <span style="font-size:11px;color:#C4BAB0;">=</span>
       <span id="dc-result" style="font-size:11px;color:#6A8C6E;font-weight:500;cursor:pointer;" title="Click to apply to Deadline" onclick="applyDateCalc()">—</span>
+    </div>
+    <!-- Recurrence panel — OFFICE TASK only. Lets the user repeat the task
+         daily / weekly / monthly. Hidden for any other event type and on edit. -->
+    <div id="recurrence-panel" style="display:none;margin:-2px 0 10px;padding:9px 12px;background:#EEF1F7;border:1px solid #CBD5E8;border-radius:8px;">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#4F6A91;white-space:nowrap;">🔁 Repeat</span>
+        <select id="fc-recur-mode" onchange="onRecurModeChange()" style="font-size:12px;padding:4px 8px;border:1px solid #CBD5E8;border-radius:5px;background:#fff;color:#2C2620;">
+          <option value="none">Doesn't repeat</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+        <span id="fc-recur-count-wrap" style="display:none;align-items:center;gap:6px;">
+          <span style="font-size:11px;color:#4F6A91;">for</span>
+          <input id="fc-recur-count" type="number" min="2" max="52" value="4" oninput="onRecurModeChange()" style="font-size:12px;padding:3px 6px;border:1px solid #CBD5E8;border-radius:5px;width:56px;background:#fff;text-align:center;"/>
+          <span id="fc-recur-unit" style="font-size:11px;color:#4F6A91;">occurrences</span>
+        </span>
+      </div>
+      <div id="fc-recur-hint" style="display:none;font-size:10px;color:#7A8AA3;margin-top:6px;font-style:italic;"></div>
     </div>
     <!-- Linked sub-events panel — adapts buttons to event type (FC parents or MASTER) -->
     <div id="fc-subevents-panel" style="display:none;margin:-2px 0 10px;padding:9px 12px;background:#FFF8EE;border:1px solid #F0D9BB;border-radius:8px;">
@@ -3031,7 +3050,7 @@ let records=[];
 // local storage.
 let _dataInitialized=false;
 let paralegals=[...new Set(records.map(r=>r.atty).filter(Boolean))].sort();
-let eventTypes=[...new Set([...records.map(r=>r.event).filter(Boolean),'90-DAY DEADLINE','60-DAY DEADLINE','30-DAY DEADLINE','CALL UP DEADLINE','PRIORITY DAY','FC HEARING','FC TRIAL','FC TASK','FC INITIAL PETITION','FC SERVICE'])].sort();
+let eventTypes=[...new Set([...records.map(r=>r.event).filter(Boolean),'90-DAY DEADLINE','60-DAY DEADLINE','30-DAY DEADLINE','CALL UP DEADLINE','PRIORITY DAY','FC HEARING','FC TRIAL','FC TASK','FC INITIAL PETITION','FC SERVICE','PERSONAL TASK','OFFICE TASK'])].sort();
 // Event types restricted to specific case types (if not listed here, available to all)
 const SIJ_CASE_TYPES=['Special Juvenile in Court','Special Juvenile Not in Immigration Court','Special Juvenile in Immigration Court'];
 const eventTypeCaseFilter={
@@ -3043,7 +3062,7 @@ const eventTypeCaseFilter={
   'FC SERVICE':SIJ_CASE_TYPES
 };
 function ensureFCEventTypes(){
-  ['FC HEARING','FC TRIAL','FC TASK','FC INITIAL PETITION','FC SERVICE'].forEach(t=>{
+  ['FC HEARING','FC TRIAL','FC TASK','FC INITIAL PETITION','FC SERVICE','PERSONAL TASK','OFFICE TASK'].forEach(t=>{
     if(!eventTypes.includes(t)) eventTypes.push(t);
   });
   eventTypes.sort();
@@ -4035,13 +4054,18 @@ function gmailApplySuggestionFromCurrent(){
   const parsed = _gmailExtractCaseSuggestion(_gmailCurrentMsg);
   if(!parsed){ showToast('Nothing to suggest from this email'); return; }
   if(typeof openNewCaseModal !== 'function'){ showToast('New Case form is not available'); return; }
-  openNewCaseModal();
-  // If the doc preview is currently open, side-by-side layout the two so the
-  // user can reference the PDF while filling in the form.
+  // If the doc preview is currently open, switch to side-by-side BEFORE the
+  // modal is shown so it renders directly into the right half (otherwise the
+  // modal flashes full-screen first, and on some layouts can end up painted
+  // under the preview overlay because both share z-index 9999).
   const docOv = document.getElementById('doc-viewer-overlay');
-  if(docOv && docOv.style.display !== 'none' && getComputedStyle(docOv).display !== 'none'){
-    document.body.classList.add('preview-split-mode');
-  }
+  const splitting = !!(docOv && docOv.style.display !== 'none' && getComputedStyle(docOv).display !== 'none');
+  if(splitting) document.body.classList.add('preview-split-mode');
+  openNewCaseModal();
+  // Make sure the modal stacks above the doc viewer when both are visible —
+  // CSS-only fix that doesn't disturb non-split callers.
+  const ncm = document.getElementById('new-case-modal');
+  if(ncm){ ncm.style.zIndex = splitting ? '10001' : '9999'; }
   const set = (id, v) => { const el = document.getElementById(id); if(el && v != null && v !== '') el.value = v; };
   set('nc-lastName',  parsed.lastName);
   set('nc-firstName', parsed.firstName);
@@ -5700,7 +5724,6 @@ function gmailRenderConnected(){
           <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--ink-faint);pointer-events:none;">🔍</span>
         </div>
         <button onclick="gmailOpenCompose()" style="height:32px;font-size:11px;font-weight:600;padding:0 16px;border:1px solid var(--sage);border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Compose</button>
-        <button id="cal-sync-btn" onclick="calendarSyncAll()" title="Push every scheduled event to the Google Calendar of the signed-in account" style="height:32px;font-size:11px;font-weight:600;padding:0 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;white-space:nowrap;" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">📅 Sync</button>
         <div style="position:relative;">
           <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'" style="height:32px;font-size:11px;font-weight:500;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" title="Account" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">
             ${_gmailUserEmail ? _gmailUserEmail.split('@')[0] : 'Account'} ▾
@@ -10240,6 +10263,25 @@ function onEventTypeChange(val){
     fcse.style.display=showLinked?'':'none';
     if(showLinked){setupLinkedSubeventsPanel(val);renderFcSubevents();}
   }
+  // Recurrence panel — OFFICE TASK only, and only when creating a new record
+  // (editing an existing record shouldn't retroactively spawn copies).
+  const recur=document.getElementById('recurrence-panel');
+  if(recur){
+    const show=(val==='OFFICE TASK') && !editingId;
+    recur.style.display=show?'':'none';
+    if(show){
+      const m=document.getElementById('fc-recur-mode');
+      if(m && !m.value) m.value='none';
+      onRecurModeChange();
+    } else {
+      const m=document.getElementById('fc-recur-mode');
+      if(m) m.value='none';
+      const wrap=document.getElementById('fc-recur-count-wrap');
+      if(wrap) wrap.style.display='none';
+      const hint=document.getElementById('fc-recur-hint');
+      if(hint) hint.style.display='none';
+    }
+  }
   const panel=document.getElementById('so-attachment-panel');
   if(!panel)return;
   panel.style.display=(val==='SCHEDULING ORDER')?'':'none';
@@ -10288,6 +10330,52 @@ function onEventTypeChange(val){
     const panel2=document.getElementById('time-range-panel');
     if(panel2){ panel2.style.background=''; panel2.style.borderColor=''; }
   }
+}
+
+// Recurrence panel UI — toggles the count input and updates the hint preview
+// based on the current Deadline + chosen frequency.
+function onRecurModeChange(){
+  const m=(document.getElementById('fc-recur-mode')||{}).value||'none';
+  const wrap=document.getElementById('fc-recur-count-wrap');
+  const hint=document.getElementById('fc-recur-hint');
+  const unit=document.getElementById('fc-recur-unit');
+  if(!wrap||!hint) return;
+  if(m==='none'){
+    wrap.style.display='none';
+    hint.style.display='none';
+    return;
+  }
+  wrap.style.display='inline-flex';
+  if(unit) unit.textContent = m==='daily' ? 'days' : m==='weekly' ? 'weeks' : 'months';
+  // Build a quick preview of the dates that will be created.
+  const baseDate=(document.getElementById('fc-date')||{}).value;
+  if(!baseDate){
+    hint.textContent='Pick a Deadline above to see the schedule.';
+    hint.style.display='block';
+    return;
+  }
+  const n=Math.max(2, Math.min(52, parseInt((document.getElementById('fc-recur-count')||{}).value||'4',10)));
+  const dates=_recurDates(baseDate, m, n);
+  const preview=dates.slice(0,3).map(fmtDate).join(', ') + (dates.length>3 ? ', … ' + fmtDate(dates[dates.length-1]) : '');
+  hint.textContent='Will create '+dates.length+' events: '+preview;
+  hint.style.display='block';
+}
+
+// Compute the N dates for a recurrence series starting at baseISO ('YYYY-MM-DD').
+// Returns an array of ISO date strings, including the base date as element 0.
+function _recurDates(baseISO, mode, count){
+  if(!baseISO) return [];
+  const [y, mo, d] = baseISO.split('-').map(Number);
+  const out=[];
+  for(let i=0; i<count; i++){
+    const dt = new Date(y, mo-1, d);
+    if(mode==='daily') dt.setDate(dt.getDate() + i);
+    else if(mode==='weekly') dt.setDate(dt.getDate() + i*7);
+    else if(mode==='monthly') dt.setMonth(dt.getMonth() + i);
+    const iso = dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+    out.push(iso);
+  }
+  return out;
 }
 
 function refreshIndividualCallupPanel(fromInput){
@@ -10997,6 +11085,29 @@ window.saveEvent=function(){
     var _newRecordId=uid();records.push({id:_newRecordId,...data,history:[]});
     if(pendingReminders.length&&data.date){pendingReminders.forEach(days=>{const rd=addDateDays(data.date,-days);records.push({id:uid(),...data,event:'⏰ Reminder',date:rd,notes:'⏰ REMINDER: Task due by '+fmtDate(data.date)+(data.notes?' — '+data.notes:''),_parentId:_newRecordId,history:[]});});}
     if(pendingSoAttachment&&data.event==='SCHEDULING ORDER'){saveSoAttachmentToCase(data.clid||data.client,_newRecordId,data.date,data.notes);}
+    // ── OFFICE TASK recurrence: stamp out N copies on a daily/weekly/monthly cadence ──
+    if(data.event==='OFFICE TASK'){
+      const recurMode=((document.getElementById('fc-recur-mode')||{}).value)||'none';
+      if(recurMode!=='none' && data.date){
+        const recurCount=Math.max(2, Math.min(52, parseInt((document.getElementById('fc-recur-count')||{}).value||'2',10)));
+        const dates=_recurDates(data.date, recurMode, recurCount);
+        // dates[0] is the base date which we just saved — skip it and create copies for the rest.
+        let _added=0;
+        for(let i=1; i<dates.length; i++){
+          const copyId=uid();
+          records.push({id:copyId, ...data, date:dates[i], _parentId:_newRecordId, _recurMode:recurMode, history:[]});
+          // Replicate per-occurrence reminders so recurring tasks still ping ahead of time.
+          if(pendingReminders.length){
+            pendingReminders.forEach(days=>{
+              const rd=addDateDays(dates[i],-days);
+              records.push({id:uid(),...data,event:'⏰ Reminder',date:rd,notes:'⏰ REMINDER: Task due by '+fmtDate(dates[i])+(data.notes?' — '+data.notes:''),_parentId:copyId,history:[]});
+            });
+          }
+          _added++;
+        }
+        if(_added) showToast(_added+' recurring task'+(_added===1?'':'s')+' added ✓');
+      }
+    }
   }
   if(editingId&&pendingSoAttachment&&data.event==='SCHEDULING ORDER'){saveSoAttachmentToCase(data.clid||data.client,editingId,data.date,data.notes);}
   // ── Linked sub-events: create linked records (FC TASK/SERVICE for FC parents, MASTER PREP/TASK for MASTER) ──
