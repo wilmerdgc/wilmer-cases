@@ -4467,6 +4467,157 @@ async function gmailMoveToLabel(labelId, labelName){
   }
 }
 
+// ── Snooze queue (local-only) ───────────────────────────────────────────
+// Snoozed messages are stored as [{msgId, threadId, until}] in localStorage.
+// On every inbox open + every 60s while the app is running, due snoozes are
+// restored to the inbox via messages.modify(addLabelIds:['INBOX']).
+const _GMAIL_SNOOZE_KEY = 'gmail_snooze_queue_v1';
+function _gmailLoadSnoozeQueue(){
+  try{ const r = localStorage.getItem(_GMAIL_SNOOZE_KEY); return r ? JSON.parse(r) : []; }catch(e){ return []; }
+}
+function _gmailSaveSnoozeQueue(q){
+  try{ localStorage.setItem(_GMAIL_SNOOZE_KEY, JSON.stringify(q)); }catch(e){}
+}
+async function _gmailProcessSnoozeQueue(){
+  if(!_gmailAccessToken) return;
+  let q = _gmailLoadSnoozeQueue();
+  if(!q.length) return;
+  const now = Date.now();
+  const due = q.filter(s => s.until && s.until <= now);
+  if(!due.length) return;
+  for(const s of due){
+    try{
+      await gmailApi('messages/' + s.msgId + '/modify', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ addLabelIds: ['INBOX'] })
+      });
+    }catch(e){}
+  }
+  q = q.filter(s => !due.includes(s));
+  _gmailSaveSnoozeQueue(q);
+  if(due.length) showToast(due.length + ' snoozed email' + (due.length===1?'':'s') + ' returned to inbox');
+}
+function _gmailFmtSnoozeTime(ts){
+  const d = new Date(ts);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate()+1);
+  const isTomorrow = d.toDateString() === tomorrow.toDateString();
+  const time = d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+  if(sameDay) return 'today ' + time;
+  if(isTomorrow) return 'tomorrow ' + time;
+  return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ', ' + time;
+}
+function gmailToggleSnoozeMenu(){
+  const drop = document.getElementById('gmail-snooze-dropdown');
+  if(!drop) return;
+  if(drop.style.display === 'block'){ drop.style.display='none'; return; }
+  drop.innerHTML = '';
+  // Compute preset times relative to now
+  const now = new Date();
+  const presets = [];
+  // Later today: 3h from now, but only if it's before 8 PM and at least 3h before midnight
+  const later = new Date(now.getTime() + 3*60*60*1000);
+  if(later.getDate() === now.getDate() && later.getHours() < 22) presets.push({ label: 'Later today', sub: _gmailFmtSnoozeTime(later.getTime()), ts: later.getTime() });
+  // Tomorrow 8 AM
+  const tom = new Date(now); tom.setDate(tom.getDate()+1); tom.setHours(8,0,0,0);
+  presets.push({ label: 'Tomorrow', sub: _gmailFmtSnoozeTime(tom.getTime()), ts: tom.getTime() });
+  // This weekend (Saturday 8 AM); skip if today is Saturday or later
+  const sat = new Date(now); const dayN = sat.getDay();
+  if(dayN < 6){ sat.setDate(sat.getDate() + (6 - dayN)); sat.setHours(8,0,0,0); presets.push({ label: 'This weekend', sub: _gmailFmtSnoozeTime(sat.getTime()), ts: sat.getTime() }); }
+  // Next Monday 8 AM
+  const mon = new Date(now); const daysToMon = ((1 - mon.getDay() + 7) % 7) || 7; mon.setDate(mon.getDate() + daysToMon); mon.setHours(8,0,0,0);
+  presets.push({ label: 'Next week', sub: _gmailFmtSnoozeTime(mon.getTime()), ts: mon.getTime() });
+  presets.forEach(p => {
+    const item = document.createElement('div');
+    item.style.cssText = 'padding:9px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;';
+    item.innerHTML = '<span style="color:var(--ink);font-weight:500;">' + p.label + '</span><span style="color:var(--ink-faint);font-size:11px;">' + p.sub + '</span>';
+    item.onmouseenter = () => item.style.background = 'var(--cream)';
+    item.onmouseleave = () => item.style.background = '';
+    item.onclick = () => { drop.style.display='none'; gmailSnoozeMessage(p.ts); };
+    drop.appendChild(item);
+  });
+  // Custom date/time row
+  const custom = document.createElement('div');
+  custom.style.cssText = 'padding:9px 14px;border-top:1px solid var(--cream-dark);';
+  custom.innerHTML = '<div style="font-size:11px;color:var(--ink-muted);font-weight:600;margin-bottom:6px;">Pick date & time</div>'
+    + '<input id="gmail-snooze-custom" type="datetime-local" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;box-sizing:border-box;outline:none;"/>'
+    + '<button id="gmail-snooze-custom-go" style="margin-top:6px;width:100%;font-size:11px;font-weight:600;padding:6px;border:none;border-radius:6px;background:var(--ink);color:#fff;cursor:pointer;font-family:inherit;">Snooze</button>';
+  drop.appendChild(custom);
+  drop.style.display = 'block';
+  setTimeout(() => {
+    const inp = document.getElementById('gmail-snooze-custom');
+    const go = document.getElementById('gmail-snooze-custom-go');
+    if(inp){
+      const def = new Date(now); def.setDate(def.getDate()+1); def.setHours(8,0,0,0);
+      const pad = n => String(n).padStart(2,'0');
+      inp.value = def.getFullYear()+'-'+pad(def.getMonth()+1)+'-'+pad(def.getDate())+'T'+pad(def.getHours())+':'+pad(def.getMinutes());
+    }
+    if(go) go.onclick = () => {
+      const v = (document.getElementById('gmail-snooze-custom')||{}).value;
+      if(!v) return;
+      const ts = new Date(v).getTime();
+      if(!ts || ts <= Date.now()){ showToast('Pick a future date/time'); return; }
+      drop.style.display='none';
+      gmailSnoozeMessage(ts);
+    };
+    const close = e => { if(!drop.contains(e.target) && e.target.closest && !e.target.closest('[onclick*="gmailToggleSnoozeMenu"]')){ drop.style.display='none'; document.removeEventListener('mousedown',close); }};
+    document.addEventListener('mousedown', close);
+  }, 0);
+}
+async function gmailSnoozeMessage(untilTs){
+  if(!_gmailCurrentMsg){ showToast('No email selected'); return; }
+  if(!untilTs || untilTs <= Date.now()){ showToast('Pick a future time'); return; }
+  const msgId = _gmailCurrentMsg.id;
+  const threadId = _gmailCurrentMsg.threadId;
+  // Remove from inbox so it disappears from the list
+  const ok = await gmailApi('messages/' + msgId + '/modify', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ removeLabelIds: ['INBOX'] })
+  });
+  if(!ok){ showToast('Failed to snooze'); return; }
+  const q = _gmailLoadSnoozeQueue();
+  q.push({ msgId, threadId, until: untilTs, queuedAt: Date.now() });
+  _gmailSaveSnoozeQueue(q);
+  showToast('Snoozed until ' + _gmailFmtSnoozeTime(untilTs) + ' ✓');
+  gmailAfterRemoveFromList(msgId);
+}
+
+// ── Scheduled send queue (local-only) ───────────────────────────────────
+// Messages stored as [{to, cc, subject, htmlBody, threadId, inReplyTo,
+// attachments, sendAt}] in localStorage. Periodically and on every load,
+// due entries are sent via gmailSendMessage.
+const _GMAIL_SCHEDULED_KEY = 'gmail_scheduled_sends_v1';
+function _gmailLoadScheduledSends(){
+  try{ const r = localStorage.getItem(_GMAIL_SCHEDULED_KEY); return r ? JSON.parse(r) : []; }catch(e){ return []; }
+}
+function _gmailSaveScheduledSends(q){
+  try{ localStorage.setItem(_GMAIL_SCHEDULED_KEY, JSON.stringify(q)); }catch(e){}
+}
+async function _gmailProcessScheduledSends(){
+  if(!_gmailAccessToken) return;
+  let q = _gmailLoadScheduledSends();
+  if(!q.length) return;
+  const now = Date.now();
+  const due = q.filter(s => s.sendAt && s.sendAt <= now);
+  if(!due.length) return;
+  for(const s of due){
+    try{
+      await gmailSendMessage(s.to, s.subject, s.htmlBody, s.threadId, s.inReplyTo, s.cc, s.attachments);
+    }catch(e){}
+  }
+  q = q.filter(s => !due.includes(s));
+  _gmailSaveScheduledSends(q);
+}
+function gmailScheduleEmail(payload){
+  if(!payload || !payload.sendAt) return;
+  const q = _gmailLoadScheduledSends();
+  q.push(payload);
+  _gmailSaveScheduledSends(q);
+}
+
 async function gmailArchiveMessage(){
   if(!_gmailCurrentMsg) return;
   const msgId = _gmailCurrentMsg.id;
@@ -4832,6 +4983,15 @@ function gmailInit(){
       gmailGetProfile().then(()=>{
         gmailRenderConnected();
         gmailFetchInbox();
+        // Process any due snoozes and scheduled sends now that we have a token,
+        // then keep checking once a minute for as long as the page is open.
+        try{ _gmailProcessSnoozeQueue(); }catch(e){}
+        try{ _gmailProcessScheduledSends(); }catch(e){}
+        if(!window._gmailQueueTimers){
+          window._gmailQueueTimers = true;
+          setInterval(()=>{ try{ _gmailProcessSnoozeQueue(); }catch(e){} }, 60000);
+          setInterval(()=>{ try{ _gmailProcessScheduledSends(); }catch(e){} }, 60000);
+        }
       });
     }
   });
@@ -5739,6 +5899,10 @@ function gmailRenderMessage(){
             <div id="gmail-labels-dropdown" style="display:none;position:absolute;left:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:300;min-width:240px;max-height:340px;overflow-y:auto;"></div>
           </div>
           <span style="width:1px;height:18px;background:var(--border);flex-shrink:0;"></span>
+          <div style="position:relative;display:inline-block;">
+            <button onclick="gmailToggleSnoozeMenu()" title="Hide from inbox until a chosen time" style="font-size:11px;padding:7px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">💤 Snooze ▾</button>
+            <div id="gmail-snooze-dropdown" style="display:none;position:absolute;left:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:300;min-width:240px;overflow:hidden;"></div>
+          </div>
           <button onclick="gmailPrintMessage()" style="font-size:11px;padding:7px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">🖨 Print</button>
           <button onclick="gmailArchiveMessage()" style="font-size:11px;padding:7px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">📥 Archive</button>
           <button onclick="gmailTrashMessage()" style="font-size:11px;padding:7px 13px;border:1px solid var(--rose);border-radius:var(--radius-sm);background:var(--rose-light);color:var(--rose);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--rose)';this.style.color='#fff'" onmouseleave="this.style.background='var(--rose-light)';this.style.color='var(--rose)'">🗑 Trash</button>
@@ -11043,7 +11207,11 @@ function openEmailComposeModal(opts){
       </label>
       <span style="flex:1"></span>
       <button onclick="if(typeof gmailResetCompose==='function')gmailResetCompose();document.getElementById('email-compose-overlay').remove()" style="font-size:12px;padding:8px 18px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Cancel</button>
-      <button onclick="doSendComposeEmail()" style="font-size:12px;font-weight:600;padding:8px 22px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Send</button>
+      <div style="position:relative;display:inline-flex;">
+        <button onclick="doSendComposeEmail()" style="font-size:12px;font-weight:600;padding:8px 22px;border:none;border-right:1px solid rgba(0,0,0,0.18);border-radius:var(--radius-sm) 0 0 var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Send</button>
+        <button onclick="emcToggleScheduleMenu()" title="Schedule send" style="font-size:12px;font-weight:600;padding:8px 10px;border:none;border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">▾</button>
+        <div id="emc-schedule-dropdown" style="display:none;position:absolute;right:0;bottom:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:300;min-width:240px;overflow:hidden;"></div>
+      </div>
     </div>`;
   ov.appendChild(box);
   document.body.appendChild(ov);
@@ -11194,6 +11362,95 @@ async function doSendComposeEmail(){
     window._emcSignatureHtml=null;
     showToast('Email sent ✓');
   }
+}
+
+// ── Schedule send menu (compose modal) ────────────────────────────────────
+// Mirrors the snooze preset times. On selection, builds the same payload
+// doSendComposeEmail would have built and pushes it onto the scheduled queue
+// so _gmailProcessScheduledSends sends it later.
+function emcToggleScheduleMenu(){
+  const drop=document.getElementById('emc-schedule-dropdown');
+  if(!drop) return;
+  if(drop.style.display==='block'){ drop.style.display='none'; return; }
+  drop.innerHTML='';
+  const now=new Date();
+  const presets=[];
+  // Tomorrow morning 8 AM
+  const tom=new Date(now); tom.setDate(tom.getDate()+1); tom.setHours(8,0,0,0);
+  presets.push({label:'Tomorrow morning',sub:_gmailFmtSnoozeTime(tom.getTime()),ts:tom.getTime()});
+  // Tomorrow afternoon 1 PM
+  const tomPm=new Date(now); tomPm.setDate(tomPm.getDate()+1); tomPm.setHours(13,0,0,0);
+  presets.push({label:'Tomorrow afternoon',sub:_gmailFmtSnoozeTime(tomPm.getTime()),ts:tomPm.getTime()});
+  // Next Monday 8 AM
+  const mon=new Date(now); const daysToMon=((1-mon.getDay()+7)%7)||7; mon.setDate(mon.getDate()+daysToMon); mon.setHours(8,0,0,0);
+  presets.push({label:'Monday morning',sub:_gmailFmtSnoozeTime(mon.getTime()),ts:mon.getTime()});
+  presets.forEach(p=>{
+    const item=document.createElement('div');
+    item.style.cssText='padding:9px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;';
+    item.innerHTML='<span style="color:var(--ink);font-weight:500;">'+p.label+'</span><span style="color:var(--ink-faint);font-size:11px;">'+p.sub+'</span>';
+    item.onmouseenter=()=>item.style.background='var(--cream)';
+    item.onmouseleave=()=>item.style.background='';
+    item.onclick=()=>{ drop.style.display='none'; doScheduleComposeEmail(p.ts); };
+    drop.appendChild(item);
+  });
+  // Custom date/time
+  const custom=document.createElement('div');
+  custom.style.cssText='padding:9px 14px;border-top:1px solid var(--cream-dark);';
+  custom.innerHTML='<div style="font-size:11px;color:var(--ink-muted);font-weight:600;margin-bottom:6px;">Pick date & time</div>'
+    +'<input id="emc-schedule-custom" type="datetime-local" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;box-sizing:border-box;outline:none;"/>'
+    +'<button id="emc-schedule-custom-go" style="margin-top:6px;width:100%;font-size:11px;font-weight:600;padding:6px;border:none;border-radius:6px;background:var(--ink);color:#fff;cursor:pointer;font-family:inherit;">Schedule send</button>';
+  drop.appendChild(custom);
+  drop.style.display='block';
+  setTimeout(()=>{
+    const inp=document.getElementById('emc-schedule-custom');
+    const go=document.getElementById('emc-schedule-custom-go');
+    if(inp){
+      const def=new Date(now); def.setDate(def.getDate()+1); def.setHours(8,0,0,0);
+      const pad=n=>String(n).padStart(2,'0');
+      inp.value=def.getFullYear()+'-'+pad(def.getMonth()+1)+'-'+pad(def.getDate())+'T'+pad(def.getHours())+':'+pad(def.getMinutes());
+    }
+    if(go) go.onclick=()=>{
+      const v=(document.getElementById('emc-schedule-custom')||{}).value;
+      if(!v) return;
+      const ts=new Date(v).getTime();
+      if(!ts||ts<=Date.now()){ showToast('Pick a future date/time'); return; }
+      drop.style.display='none';
+      doScheduleComposeEmail(ts);
+    };
+    const close=e=>{ if(!drop.contains(e.target)&&e.target.closest&&!e.target.closest('[onclick*="emcToggleScheduleMenu"]')){ drop.style.display='none'; document.removeEventListener('mousedown',close); }};
+    document.addEventListener('mousedown',close);
+  },0);
+}
+
+async function doScheduleComposeEmail(sendAt){
+  const to=(document.getElementById('emc-to')||{}).value||'';
+  const cc=(document.getElementById('emc-cc')||{}).value||'';
+  const subject=(document.getElementById('emc-subject')||{}).value||'';
+  const bodyRaw=(document.getElementById('emc-body')||{}).value||'';
+  if(!to.trim()){ showToast('Enter a recipient'); return; }
+  if(!sendAt||sendAt<=Date.now()){ showToast('Pick a future send time'); return; }
+  if(!_gmailAccessToken){ showGmailConnectPrompt(); return; }
+  let htmlBody=bodyRaw.replace(/\n--\n[\s\S]*$/,'').trim().replace(/\n/g,'<br>');
+  if(window._emcSignatureHtml){
+    htmlBody+='<br><br>--<br>'+window._emcSignatureHtml;
+  }
+  const atts=(typeof _gmailComposeAttachments!=='undefined' && _gmailComposeAttachments.length)?_gmailComposeAttachments.slice():null;
+  gmailScheduleEmail({
+    to: to.trim(),
+    cc: cc.trim(),
+    subject: subject,
+    htmlBody: htmlBody,
+    threadId: null,
+    inReplyTo: null,
+    attachments: atts,
+    sendAt: sendAt,
+    queuedAt: Date.now()
+  });
+  if(typeof gmailResetCompose==='function') gmailResetCompose();
+  const ov=document.getElementById('email-compose-overlay');
+  if(ov) ov.remove();
+  window._emcSignatureHtml=null;
+  showToast('Scheduled for '+_gmailFmtSnoozeTime(sendAt)+' ✓');
 }
 
 // ── Finished & All Events ──
