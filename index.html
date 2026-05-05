@@ -5683,28 +5683,29 @@ function gmailRenderConnected(){
   if(!container) return;
   container.innerHTML = `
     <div style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
-      <!-- Top bar -->
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <!-- Top bar — every chrome control is the same height (32px) and uses
+           the same border/radius/spacing so the row reads as a single set -->
+      <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;">
         <div style="display:flex;flex-shrink:0;">
-          <button id="mailbox-inbox-btn" onclick="gmailSwitchMailbox('inbox')" style="font-size:11px;font-weight:600;padding:7px 12px;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);background:${(!_gmailActiveLabelId && _gmailMailbox!=='sent')?'var(--ink)':'#fff'};color:${(!_gmailActiveLabelId && _gmailMailbox!=='sent')?'#fff':'var(--ink-muted)'};cursor:pointer;font-family:inherit;">📥 Inbox</button>
-          <button id="mailbox-sent-btn" onclick="gmailSwitchMailbox('sent')" style="font-size:11px;font-weight:600;padding:7px 12px;border:1px solid var(--border);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:${(!_gmailActiveLabelId && _gmailMailbox==='sent')?'var(--ink)':'#fff'};color:${(!_gmailActiveLabelId && _gmailMailbox==='sent')?'#fff':'var(--ink-muted)'};cursor:pointer;font-family:inherit;">📤 Sent</button>
+          <button id="mailbox-inbox-btn" onclick="gmailSwitchMailbox('inbox')" style="height:32px;font-size:11px;font-weight:600;padding:0 14px;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);background:${(!_gmailActiveLabelId && _gmailMailbox!=='sent')?'var(--ink)':'#fff'};color:${(!_gmailActiveLabelId && _gmailMailbox!=='sent')?'#fff':'var(--ink-muted)'};cursor:pointer;font-family:inherit;">📥 Inbox</button>
+          <button id="mailbox-sent-btn" onclick="gmailSwitchMailbox('sent')" style="height:32px;font-size:11px;font-weight:600;padding:0 14px;border:1px solid var(--border);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:${(!_gmailActiveLabelId && _gmailMailbox==='sent')?'var(--ink)':'#fff'};color:${(!_gmailActiveLabelId && _gmailMailbox==='sent')?'#fff':'var(--ink-muted)'};cursor:pointer;font-family:inherit;">📤 Sent</button>
         </div>
         <div style="position:relative;flex-shrink:0;">
-          <button id="gmail-labelfilter-btn" onclick="gmailToggleLabelFilterDropdown()" title="${_gmailActiveLabelId ? 'Click to change or clear the label filter' : 'View messages by label'}" style="font-size:11px;font-weight:600;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:${_gmailActiveLabelId ? 'var(--ink)' : '#fff'};color:${_gmailActiveLabelId ? '#fff' : 'var(--ink-muted)'};cursor:pointer;font-family:inherit;white-space:nowrap;">${_gmailActiveLabelId ? ('🏷 ' + escHtml(_gmailActiveLabelName) + ' <span style=\"margin-left:6px;color:#fff;opacity:.7;font-weight:400;\">×</span>') : '🏷 Labels'}</button>
+          <button id="gmail-labelfilter-btn" onclick="gmailToggleLabelFilterDropdown()" title="${_gmailActiveLabelId ? 'Click to change or clear the label filter' : 'View messages by label'}" style="height:32px;font-size:11px;font-weight:600;padding:0 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:${_gmailActiveLabelId ? 'var(--ink)' : '#fff'};color:${_gmailActiveLabelId ? '#fff' : 'var(--ink-muted)'};cursor:pointer;font-family:inherit;white-space:nowrap;">${_gmailActiveLabelId ? ('🏷 ' + escHtml(_gmailActiveLabelName) + ' <span style=\"margin-left:6px;color:#fff;opacity:.7;font-weight:400;\">×</span>') : '🏷 Labels'}</button>
           <div id="gmail-labelfilter-dropdown" style="display:none;position:absolute;left:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:300;min-width:240px;max-height:340px;overflow-y:auto;"></div>
         </div>
-        <div style="flex:1;position:relative;">
-          <input id="gmail-search-input" type="text" placeholder="Search emails..." style="width:100%;font-size:12px;padding:7px 10px 7px 30px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;background:#fff;"
+        <div style="flex:1;position:relative;min-width:0;">
+          <input id="gmail-search-input" type="text" placeholder="Search emails..." style="width:100%;height:32px;font-size:12px;padding:0 12px 0 32px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;background:#fff;box-sizing:border-box;outline:none;"
             onkeydown="if(event.key==='Enter')gmailDoSearch()"/>
-          <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--ink-faint);">🔍</span>
+          <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--ink-faint);pointer-events:none;">🔍</span>
         </div>
-        <button onclick="gmailOpenCompose()" style="font-size:11px;font-weight:600;padding:7px 14px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Compose</button>
-        <button id="cal-sync-btn" onclick="calendarSyncAll()" title="Push every scheduled event to the Google Calendar of the signed-in account" style="font-size:11px;font-weight:600;padding:7px 14px;border:1px solid var(--slate);border-radius:var(--radius-sm);background:#fff;color:var(--slate);cursor:pointer;font-family:inherit;white-space:nowrap;">📅 Sync to Calendar</button>
+        <button onclick="gmailOpenCompose()" style="height:32px;font-size:11px;font-weight:600;padding:0 16px;border:1px solid var(--sage);border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Compose</button>
+        <button id="cal-sync-btn" onclick="calendarSyncAll()" title="Push every scheduled event to the Google Calendar of the signed-in account" style="height:32px;font-size:11px;font-weight:600;padding:0 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;white-space:nowrap;" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">📅 Sync</button>
         <div style="position:relative;">
-          <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'" style="font-size:11px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;" title="Account">
-            ${_gmailUserEmail ? _gmailUserEmail.split('@')[0] : 'Account'}
+          <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'" style="height:32px;font-size:11px;font-weight:500;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" title="Account" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">
+            ${_gmailUserEmail ? _gmailUserEmail.split('@')[0] : 'Account'} ▾
           </button>
-          <div style="display:none;position:absolute;right:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:100;padding:8px 0;min-width:180px;">
+          <div style="display:none;position:absolute;right:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:100;padding:8px 0;min-width:200px;">
             <div style="padding:8px 14px;font-size:11px;color:var(--ink-muted);border-bottom:1px solid var(--cream-dark);">${_gmailUserEmail}</div>
             <div onclick="gmailFetchInbox();this.parentElement.style.display='none'" style="padding:8px 14px;font-size:12px;cursor:pointer;color:var(--ink);" onmouseenter="this.style.background='var(--cream)'" onmouseleave="this.style.background=''">Refresh Inbox</div>
             <div onclick="gmailSignOut();this.parentElement.style.display='none'" style="padding:8px 14px;font-size:12px;cursor:pointer;color:var(--rose);" onmouseenter="this.style.background='var(--rose-light)'" onmouseleave="this.style.background=''">Disconnect</div>
@@ -5879,33 +5880,39 @@ function gmailRenderMessage(){
         </div>
       </div>
       ${_linkedBadge}${_suggestBadge}${_newCaseBadge}
-      <!-- Action toolbar -->
-      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">
-        <!-- Row 1: Reply actions -->
+      <!-- Action toolbar — every button is the same height (30px) and uses
+           the same border, radius, font and gap. Color is reserved for the
+           two semantic extremes (primary action: Save to Case · destructive:
+           Trash); everything else is a neutral ghost so the row reads as a
+           balanced set. -->
+      <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;">
+        <!-- Row 1: Reply actions (joined segmented group) -->
         <div style="display:flex;align-items:center;gap:1px;background:var(--border);border-radius:var(--radius-sm);overflow:hidden;width:fit-content;">
-          <button onclick="gmailOpenReply(false)" style="font-size:11px;font-weight:600;padding:7px 14px;border:none;background:var(--cream);color:var(--ink);cursor:pointer;font-family:inherit;transition:background .12s;" onmouseenter="this.style.background='#E8E1D6'" onmouseleave="this.style.background='var(--cream)'">↩ Reply</button>
-          <button onclick="gmailOpenReply(true)" style="font-size:11px;font-weight:600;padding:7px 14px;border:none;background:var(--cream);color:var(--ink);cursor:pointer;font-family:inherit;transition:background .12s;" onmouseenter="this.style.background='#E8E1D6'" onmouseleave="this.style.background='var(--cream)'">↩↩ Reply All</button>
-          <button onclick="gmailOpenForward()" style="font-size:11px;padding:7px 14px;border:none;background:var(--cream);color:var(--ink-soft);cursor:pointer;font-family:inherit;transition:background .12s;" onmouseenter="this.style.background='#E8E1D6'" onmouseleave="this.style.background='var(--cream)'">→ Forward</button>
+          <button onclick="gmailOpenReply(false)" style="height:30px;font-size:11px;font-weight:600;padding:0 16px;border:none;background:var(--cream);color:var(--ink);cursor:pointer;font-family:inherit;transition:background .12s;" onmouseenter="this.style.background='#E8E1D6'" onmouseleave="this.style.background='var(--cream)'">↩ Reply</button>
+          <button onclick="gmailOpenReply(true)" style="height:30px;font-size:11px;font-weight:600;padding:0 16px;border:none;background:var(--cream);color:var(--ink);cursor:pointer;font-family:inherit;transition:background .12s;" onmouseenter="this.style.background='#E8E1D6'" onmouseleave="this.style.background='var(--cream)'">↩↩ Reply All</button>
+          <button onclick="gmailOpenForward()" style="height:30px;font-size:11px;font-weight:500;padding:0 16px;border:none;background:var(--cream);color:var(--ink-soft);cursor:pointer;font-family:inherit;transition:background .12s;" onmouseenter="this.style.background='#E8E1D6'" onmouseleave="this.style.background='var(--cream)'">→ Forward</button>
         </div>
-        <!-- Row 2: Organize actions -->
-        <div style="display:flex;align-items:center;gap:6px;">
-          <button onclick="gmailOpenSaveToCase()" style="font-size:11px;font-weight:600;padding:7px 13px;border:1px solid var(--sage-mid);border-radius:var(--radius-sm);background:var(--sage-light);color:var(--sage);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--sage-mid)';this.style.color='#fff'" onmouseleave="this.style.background='var(--sage-light)';this.style.color='var(--sage)'">📁 Save to Case</button>
+        <!-- Row 2: Organize actions — case actions on the left, utility in the
+             middle, destructive on the right (with auto spacer). -->
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <button onclick="gmailOpenSaveToCase()" style="height:30px;font-size:11px;font-weight:600;padding:0 14px;border:1px solid var(--sage);border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.opacity='0.88'" onmouseleave="this.style.opacity='1'">📁 Save to Case</button>
           <div style="position:relative;display:inline-block;">
-            <button onclick="gmailToggleMoveTo()" style="font-size:11px;font-weight:600;padding:7px 13px;border:1px solid var(--slate);border-radius:var(--radius-sm);background:var(--slate-light);color:var(--slate);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--slate)';this.style.color='#fff'" onmouseleave="this.style.background='var(--slate-light)';this.style.color='var(--slate)'">📂 Move to</button>
+            <button onclick="gmailToggleMoveTo()" style="height:30px;font-size:11px;font-weight:500;padding:0 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--cream-dark)';this.style.color='var(--ink)'" onmouseleave="this.style.background='#fff';this.style.color='var(--ink-muted)'">📂 Move to ▾</button>
             <div id="gmail-moveto-dropdown" style="display:none;position:absolute;left:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:300;min-width:220px;max-height:320px;overflow-y:auto;"></div>
           </div>
           <div style="position:relative;display:inline-block;">
-            <button onclick="gmailToggleLabelsDropdown()" title="Add or remove labels on this message" style="font-size:11px;font-weight:600;padding:7px 13px;border:1px solid #C9823A;border-radius:var(--radius-sm);background:#FAF0E6;color:#C9823A;cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='#C9823A';this.style.color='#fff'" onmouseleave="this.style.background='#FAF0E6';this.style.color='#C9823A'">🏷 Labels</button>
+            <button onclick="gmailToggleLabelsDropdown()" title="Add or remove labels on this message" style="height:30px;font-size:11px;font-weight:500;padding:0 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--cream-dark)';this.style.color='var(--ink)'" onmouseleave="this.style.background='#fff';this.style.color='var(--ink-muted)'">🏷 Labels ▾</button>
             <div id="gmail-labels-dropdown" style="display:none;position:absolute;left:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:300;min-width:240px;max-height:340px;overflow-y:auto;"></div>
           </div>
-          <span style="width:1px;height:18px;background:var(--border);flex-shrink:0;"></span>
+          <span style="width:1px;height:18px;background:var(--border);flex-shrink:0;margin:0 2px;"></span>
           <div style="position:relative;display:inline-block;">
-            <button onclick="gmailToggleSnoozeMenu()" title="Hide from inbox until a chosen time" style="font-size:11px;padding:7px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">💤 Snooze ▾</button>
+            <button onclick="gmailToggleSnoozeMenu()" title="Hide from inbox until a chosen time" style="height:30px;font-size:11px;font-weight:500;padding:0 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--cream-dark)';this.style.color='var(--ink)'" onmouseleave="this.style.background='#fff';this.style.color='var(--ink-muted)'">💤 Snooze ▾</button>
             <div id="gmail-snooze-dropdown" style="display:none;position:absolute;left:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:300;min-width:240px;overflow:hidden;"></div>
           </div>
-          <button onclick="gmailPrintMessage()" style="font-size:11px;padding:7px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">🖨 Print</button>
-          <button onclick="gmailArchiveMessage()" style="font-size:11px;padding:7px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">📥 Archive</button>
-          <button onclick="gmailTrashMessage()" style="font-size:11px;padding:7px 13px;border:1px solid var(--rose);border-radius:var(--radius-sm);background:var(--rose-light);color:var(--rose);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--rose)';this.style.color='#fff'" onmouseleave="this.style.background='var(--rose-light)';this.style.color='var(--rose)'">🗑 Trash</button>
+          <button onclick="gmailPrintMessage()" style="height:30px;font-size:11px;font-weight:500;padding:0 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--cream-dark)';this.style.color='var(--ink)'" onmouseleave="this.style.background='#fff';this.style.color='var(--ink-muted)'">🖨 Print</button>
+          <button onclick="gmailArchiveMessage()" style="height:30px;font-size:11px;font-weight:500;padding:0 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--cream-dark)';this.style.color='var(--ink)'" onmouseleave="this.style.background='#fff';this.style.color='var(--ink-muted)'">📥 Archive</button>
+          <span style="flex:1;"></span>
+          <button onclick="gmailTrashMessage()" style="height:30px;font-size:11px;font-weight:500;padding:0 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--rose);cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.background='var(--rose)';this.style.color='#fff';this.style.borderColor='var(--rose)'" onmouseleave="this.style.background='#fff';this.style.color='var(--rose)';this.style.borderColor='var(--border)'">🗑 Trash</button>
         </div>
       </div>
       <div id="gmail-save-to-case-panel" style="display:none;margin-top:10px;padding:12px;background:var(--sage-light);border:1px solid var(--sage-mid);border-radius:var(--radius-sm);">
@@ -5924,7 +5931,7 @@ function gmailRenderMessage(){
       </div>
     </div>
     ${m.attachments && m.attachments.length ? `
-    <div style="padding:14px 24px;border-bottom:1px solid var(--border);background:#FDFAF7;">
+    <div style="padding:16px 28px;border-bottom:1px solid var(--border);background:#FDFAF7;">
       <div style="font-size:11px;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">📎 Attachments (${m.attachments.length})</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;">
         ${m.attachments.map((a,i) => `
@@ -5941,8 +5948,8 @@ function gmailRenderMessage(){
         `).join('')}
       </div>
     </div>` : ''}
-    <div id="gmail-inline-images" style="display:none;padding:14px 24px;border-bottom:1px solid var(--border);background:#FDFAF7;"></div>
-    <div style="padding:20px 24px;">
+    <div id="gmail-inline-images" style="display:none;padding:16px 28px;border-bottom:1px solid var(--border);background:#FDFAF7;"></div>
+    <div style="padding:24px 28px;">
       <style>#gmail-msg-body img{max-width:100%;height:auto;}</style>
       <div id="gmail-msg-body" style="font-size:13px;line-height:1.7;color:var(--ink);max-width:100%;overflow-x:auto;word-wrap:break-word;">${m.body}</div>
     </div>
