@@ -12156,12 +12156,12 @@ function saveAllData(){
   // that wiped a month of real data). See showWelcomeGate() for the
   // modal that sets _dataInitialized after the user picks a path.
   if(!_dataInitialized){ return; }
-  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
+  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,bondPrepQuestions,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();// Auto-push events to Google Calendar when signed in as the target email
 try{ _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync(); }catch(e){}
 }catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}return true;}catch(e){return false;}}
 // One pending-render flag, used by both the debounced timer and the global
 // focusout listener: if the user is mid-edit when the timer fires, we set
 // the flag and re-try after they blur, so we never yank focus mid-type.
@@ -13300,7 +13300,248 @@ function renderToolsPage(){
         <a href="#" onclick="event.stopPropagation();event.preventDefault();downloadCasesTemplate();" style="font-size:11px;color:var(--sage);text-decoration:underline;font-weight:500;">↓ Download blank template</a>
         <input type="file" id="import-new-cases-input" accept=".xlsx,.xls" style="display:none;" onchange="importNewCasesFromExcel(this);event.stopPropagation();"/>
       </div>
+      <div onclick="renderBondPrep()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
+        <div style="font-size:24px;margin-bottom:8px;">⚖️</div>
+        <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Bond Hearing Prep</div>
+        <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Maintain a bank of standard bond questions and record each client's answers in one place.</div>
+      </div>
     </div>`;
+}
+
+// ══════════════════════════════════════════════════
+// BOND HEARING PREP
+//
+// Two-pane tool. The LEFT pane is a global question bank that applies to
+// every case (questions live in localStorage under bond_prep_questions_v1).
+// The RIGHT pane lets the user pick any case and record one answer per
+// question. Answers are stored on caseMeta[clid].bondPrepAnswers as a
+// {questionId: answerText} map so they round-trip with the rest of the
+// case data through saveAllData / cloud sync.
+// ══════════════════════════════════════════════════
+
+const BOND_PREP_KEY = 'bond_prep_questions_v1';
+let bondPrepQuestions = (function(){
+  try{ const raw = localStorage.getItem(BOND_PREP_KEY); if(raw) return JSON.parse(raw); }catch(e){}
+  // Default seed — common bond hearing questions; user can edit/delete/add.
+  return [
+    { id: 'bp_'+Date.now()+'_1', text: 'How long has the client lived in the United States?' },
+    { id: 'bp_'+Date.now()+'_2', text: 'Does the client have any U.S. citizen or LPR family members? List names and relationships.' },
+    { id: 'bp_'+Date.now()+'_3', text: 'Does the client have stable housing if released? Address and who lives there.' },
+    { id: 'bp_'+Date.now()+'_4', text: 'Does the client have a job offer or employment history? Employer + length.' },
+    { id: 'bp_'+Date.now()+'_5', text: 'Any prior criminal history? List arrests and dispositions.' },
+    { id: 'bp_'+Date.now()+'_6', text: 'Any community ties — church, school, volunteer organizations?' },
+    { id: 'bp_'+Date.now()+'_7', text: 'Any prior immigration violations or removals?' },
+    { id: 'bp_'+Date.now()+'_8', text: 'Does the client have a sponsor willing to pay bond? Name and relationship.' },
+  ];
+})();
+
+function _saveBondPrepQuestions(){
+  try{ localStorage.setItem(BOND_PREP_KEY, JSON.stringify(bondPrepQuestions)); }catch(e){}
+  if(typeof markUnsaved==='function') markUnsaved();
+}
+
+// State for the right-side answers pane.
+let _bondPrepActiveClid = null;
+
+function renderBondPrep(){
+  const el = document.getElementById('tools-content');
+  if(!el) return;
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <button onclick="renderToolsPage()" style="font-size:11px;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">← Back</button>
+      <div>
+        <div style="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);">⚖️ Bond Hearing Prep</div>
+        <div style="font-size:12px;color:var(--ink-muted);">Standard questions on the left, per-case answers on the right.</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start;">
+      <!-- Left pane: question bank -->
+      <div style="border:1px solid var(--border);border-radius:var(--radius-lg);background:#fff;box-shadow:var(--shadow-sm);overflow:hidden;">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--cream-dark);background:var(--cream);display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div style="font-size:12px;font-weight:600;color:var(--ink);">Standard questions</div>
+          <span id="bp-count" style="font-size:11px;color:var(--ink-muted);"></span>
+        </div>
+        <div id="bp-questions-list" style="max-height:540px;overflow-y:auto;"></div>
+        <div style="padding:12px 16px;border-top:1px solid var(--cream-dark);background:var(--cream);">
+          <div style="display:flex;gap:6px;">
+            <input id="bp-new-q" type="text" placeholder="Add a new question…" style="flex:1;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;background:#fff;outline:none;box-sizing:border-box;" onkeydown="if(event.key==='Enter'){_bondPrepAddQuestion();event.preventDefault();}"/>
+            <button onclick="_bondPrepAddQuestion()" style="font-size:11px;font-weight:600;padding:7px 14px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">+ Add</button>
+          </div>
+        </div>
+      </div>
+      <!-- Right pane: case selector + answers -->
+      <div style="border:1px solid var(--border);border-radius:var(--radius-lg);background:#fff;box-shadow:var(--shadow-sm);overflow:hidden;">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--cream-dark);background:var(--cream);">
+          <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:6px;">Pick a case</div>
+          <div style="position:relative;">
+            <input id="bp-case-search" type="text" placeholder="Search by client name or Cl ID…" autocomplete="off"
+              style="width:100%;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;background:#fff;outline:none;box-sizing:border-box;"
+              oninput="_bondPrepCaseSearch(this.value)" onfocus="_bondPrepCaseSearch(this.value)"/>
+            <div id="bp-case-drop" style="display:none;position:absolute;top:calc(100%+3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:200;max-height:220px;overflow-y:auto;"></div>
+          </div>
+          <div id="bp-case-selected" style="font-size:11px;color:var(--sage);font-weight:600;margin-top:6px;min-height:14px;"></div>
+        </div>
+        <div id="bp-answers-host" style="padding:14px 18px;"></div>
+      </div>
+    </div>`;
+  _renderBondPrepQuestions();
+  _renderBondPrepAnswers();
+}
+
+function _renderBondPrepQuestions(){
+  const list = document.getElementById('bp-questions-list');
+  const cnt  = document.getElementById('bp-count');
+  if(!list) return;
+  if(cnt) cnt.textContent = bondPrepQuestions.length + (bondPrepQuestions.length===1?' question':' questions');
+  if(!bondPrepQuestions.length){
+    list.innerHTML = '<div style="padding:22px 16px;text-align:center;color:var(--ink-faint);font-size:11px;">No questions yet. Add one below.</div>';
+    return;
+  }
+  list.innerHTML = bondPrepQuestions.map((q, i) => {
+    const idEsc = escHtml(q.id);
+    const txtEsc = escHtml(q.text||'');
+    return '<div data-bpq="' + idEsc + '" style="padding:10px 16px;border-bottom:1px solid var(--cream-dark);display:flex;align-items:flex-start;gap:8px;">'
+      + '<span style="font-size:10px;font-weight:700;color:var(--ink-faint);min-width:18px;padding-top:2px;">' + (i+1) + '.</span>'
+      + '<span class="bpq-text" style="flex:1;font-size:12px;line-height:1.5;color:var(--ink);">' + txtEsc + '</span>'
+      + '<button data-act="edit" title="Edit question" style="height:24px;font-size:10px;padding:0 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;flex-shrink:0;">✏</button>'
+      + '<button data-act="delete" title="Delete question" style="height:24px;font-size:10px;padding:0 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--rose);cursor:pointer;font-family:inherit;flex-shrink:0;">🗑</button>'
+      + '</div>';
+  }).join('');
+  // One delegated handler — survives every re-render.
+  list.onclick = (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if(!btn) return;
+    const row = btn.closest('[data-bpq]');
+    if(!row) return;
+    const qid = row.getAttribute('data-bpq');
+    if(btn.getAttribute('data-act')==='edit') _bondPrepStartEdit(qid, row);
+    else if(btn.getAttribute('data-act')==='delete') _bondPrepDelete(qid);
+  };
+}
+
+function _bondPrepAddQuestion(){
+  const inp = document.getElementById('bp-new-q');
+  if(!inp) return;
+  const text = (inp.value||'').trim();
+  if(!text){ inp.focus(); return; }
+  bondPrepQuestions.push({ id: 'bp_'+Date.now()+'_'+Math.random().toString(36).slice(2,6), text });
+  _saveBondPrepQuestions();
+  inp.value = '';
+  _renderBondPrepQuestions();
+  _renderBondPrepAnswers();
+}
+
+function _bondPrepStartEdit(qid, row){
+  const q = bondPrepQuestions.find(x => x.id===qid);
+  if(!q || !row) return;
+  const txtSpan = row.querySelector('.bpq-text');
+  if(!txtSpan) return;
+  txtSpan.innerHTML = '<input type="text" value="' + escHtml(q.text).replace(/"/g,'&quot;') + '" style="width:100%;font-size:12px;padding:5px 8px;border:1px solid var(--sage-mid);border-radius:6px;font-family:inherit;outline:none;box-sizing:border-box;"/>';
+  const inp = txtSpan.querySelector('input');
+  // Replace action buttons with Save / Cancel.
+  row.querySelectorAll('button').forEach(b => b.remove());
+  const save = document.createElement('button');
+  save.textContent = 'Save';
+  save.style.cssText = 'height:24px;font-size:10px;font-weight:600;padding:0 10px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;flex-shrink:0;';
+  save.onclick = () => {
+    const v = (inp.value||'').trim();
+    if(!v){ inp.focus(); return; }
+    q.text = v;
+    _saveBondPrepQuestions();
+    _renderBondPrepQuestions();
+    _renderBondPrepAnswers();
+  };
+  const cancel = document.createElement('button');
+  cancel.textContent = 'Cancel';
+  cancel.style.cssText = 'height:24px;font-size:10px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;flex-shrink:0;';
+  cancel.onclick = () => _renderBondPrepQuestions();
+  row.appendChild(save); row.appendChild(cancel);
+  if(inp){ inp.focus(); inp.select(); inp.onkeydown = e => { if(e.key==='Enter') save.click(); else if(e.key==='Escape') cancel.click(); }; }
+}
+
+function _bondPrepDelete(qid){
+  const q = bondPrepQuestions.find(x => x.id===qid);
+  if(!q) return;
+  if(!confirm('Delete this question?\n\n"' + (q.text||'') + '"\n\nExisting answers for this question will remain on each case but will no longer be displayed.')) return;
+  bondPrepQuestions = bondPrepQuestions.filter(x => x.id!==qid);
+  _saveBondPrepQuestions();
+  _renderBondPrepQuestions();
+  _renderBondPrepAnswers();
+}
+
+// Case picker + answers form ──────────────────────────────────────────────
+function _bondPrepCaseSearch(q){
+  const drop = document.getElementById('bp-case-drop');
+  if(!drop) return;
+  drop.innerHTML = '';
+  const ql = (q||'').toLowerCase();
+  const seen = new Set();
+  const results = [];
+  records.forEach(r => {
+    const key = r.clid || r.client;
+    if(!key || seen.has(key)) return;
+    if(typeof _isCaseClosed==='function' && _isCaseClosed(key)) return;
+    const hay = (r.client||'').toLowerCase() + ' ' + (r.clid||'').toLowerCase() + ' ' + (r.anum||'').toLowerCase();
+    if(ql && !hay.includes(ql)) return;
+    seen.add(key);
+    results.push({ clid: key, client: r.client||key, anum: r.anum||'' });
+  });
+  if(!results.length){ drop.style.display='none'; return; }
+  results.slice(0, 12).forEach(c => {
+    const item = document.createElement('div');
+    item.style.cssText = 'padding:7px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #F7F3ED;';
+    item.innerHTML = '<span style="font-weight:600;color:var(--ink);">' + escHtml(c.client) + '</span>' + (c.clid && c.clid!==c.client ? '<span style="font-size:10px;color:var(--ink-faint);margin-left:5px;">#' + escHtml(c.clid) + '</span>' : '');
+    item.onmouseenter = () => item.style.background = 'var(--cream)';
+    item.onmouseleave = () => item.style.background = '';
+    item.onclick = () => {
+      _bondPrepActiveClid = c.clid;
+      const sel = document.getElementById('bp-case-selected');
+      if(sel) sel.textContent = '✓ ' + c.client + (c.clid && c.clid!==c.client ? ' (#' + c.clid + ')' : '');
+      const sin = document.getElementById('bp-case-search');
+      if(sin) sin.value = c.client;
+      drop.style.display = 'none';
+      _renderBondPrepAnswers();
+    };
+    drop.appendChild(item);
+  });
+  drop.style.display = 'block';
+}
+
+function _renderBondPrepAnswers(){
+  const host = document.getElementById('bp-answers-host');
+  if(!host) return;
+  if(!_bondPrepActiveClid){
+    host.innerHTML = '<div style="padding:36px 20px;text-align:center;color:var(--ink-faint);font-size:12px;">Pick a case above to record answers.</div>';
+    return;
+  }
+  if(!bondPrepQuestions.length){
+    host.innerHTML = '<div style="padding:36px 20px;text-align:center;color:var(--ink-faint);font-size:12px;">No questions yet — add some on the left.</div>';
+    return;
+  }
+  const meta = caseMeta[_bondPrepActiveClid] || (caseMeta[_bondPrepActiveClid] = {});
+  const answers = meta.bondPrepAnswers || (meta.bondPrepAnswers = {});
+  host.innerHTML = bondPrepQuestions.map((q, i) => {
+    const idEsc = escHtml(q.id);
+    const txtEsc = escHtml(q.text||'');
+    const ansEsc = escHtml(answers[q.id]||'');
+    return '<div style="margin-bottom:14px;">'
+      + '<div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:5px;line-height:1.4;"><span style="color:var(--ink-faint);">' + (i+1) + '.</span> ' + txtEsc + '</div>'
+      + '<textarea data-bpa="' + idEsc + '" rows="2" placeholder="Type the client\'s answer…" '
+        + 'oninput="_bondPrepAnswerInput(this)" '
+        + 'style="width:100%;font-size:12px;line-height:1.6;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;box-sizing:border-box;outline:none;resize:vertical;min-height:48px;background:#fff;" '
+        + 'onfocus="this.style.borderColor=\'var(--sage)\'" onblur="this.style.borderColor=\'var(--border)\'">' + ansEsc + '</textarea>'
+      + '</div>';
+  }).join('') + '<div style="font-size:10px;color:var(--ink-faint);font-style:italic;margin-top:6px;">Answers save automatically as you type.</div>';
+}
+
+function _bondPrepAnswerInput(ta){
+  if(!_bondPrepActiveClid) return;
+  const qid = ta.getAttribute('data-bpa');
+  if(!qid) return;
+  const meta = caseMeta[_bondPrepActiveClid] || (caseMeta[_bondPrepActiveClid] = {});
+  const answers = meta.bondPrepAnswers || (meta.bondPrepAnswers = {});
+  answers[qid] = ta.value;
+  if(typeof markUnsaved==='function') markUnsaved();
 }
 
 // ══════════════════════════════════════════════════
