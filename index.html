@@ -5413,6 +5413,212 @@ async function gmailToggleLabelFilterDropdown(){
     document.addEventListener('mousedown', close);
   }, 0);
 }
+
+// ── Manage labels modal ───────────────────────────────────────────────────
+// Compact panel that lets the user rename, delete, and merge user-created
+// Gmail labels. System folders (INBOX, SENT, etc.) are not editable so they
+// don't appear in the list.
+async function gmailOpenManageLabels(){
+  if(!_gmailAccessToken){ showToast('Connect Gmail first'); return; }
+  let ov = document.getElementById('gmail-manage-labels-overlay');
+  if(ov) ov.remove();
+  ov = document.createElement('div');
+  ov.id = 'gmail-manage-labels-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(44,38,32,0.45);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px);';
+  ov.ondblclick = e => { if(e.target===ov) ov.remove(); };
+  ov.innerHTML = `
+    <div style="background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);width:100%;max-width:520px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">
+      <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-family:var(--font-display);font-size:16px;font-weight:600;color:var(--ink);">⚙ Manage labels</div>
+        <button onclick="document.getElementById('gmail-manage-labels-overlay').remove()" style="border:none;background:transparent;font-size:18px;color:var(--ink-faint);cursor:pointer;padding:0;line-height:1;">×</button>
+      </div>
+      <div style="padding:12px 22px 8px;border-bottom:1px solid var(--cream-dark);">
+        <input id="gml-search" type="text" placeholder="Search labels…" autocomplete="off"
+          style="width:100%;height:32px;font-size:12px;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+      </div>
+      <div id="gml-list" style="flex:1;overflow-y:auto;padding:6px 0;"></div>
+      <div style="padding:10px 22px;border-top:1px solid var(--cream-dark);background:var(--cream);font-size:11px;color:var(--ink-faint);">
+        Renaming or deleting a label affects every email that has it. Merging keeps every email intact under the target label, then removes the source.
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  // Force a reload so we see freshly created/renamed labels.
+  _gmailLabels = null;
+  const labels = await gmailFetchLabels();
+  const userLabels = (labels||[]).filter(l => l.type==='user').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const listEl = document.getElementById('gml-list');
+  function rowHtml(l){
+    const idEsc = escHtml(l.id);
+    const nameEsc = escHtml(l.name||'');
+    const nameJson = JSON.stringify(l.name||'');
+    return '<div data-row-id="' + idEsc + '" style="padding:9px 22px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--cream-dark);">'
+      + '<span style="font-size:14px;flex-shrink:0;">🏷</span>'
+      + '<span class="gml-name" style="flex:1;font-size:13px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + nameEsc + '</span>'
+      + '<button onclick="_gmlStartRename(' + JSON.stringify(l.id) + ',' + nameJson + ',this)" title="Rename label" style="height:26px;font-size:11px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" onmouseenter="this.style.background=\'var(--cream-dark)\'" onmouseleave="this.style.background=\'#fff\'">✏ Rename</button>'
+      + '<button onclick="_gmlStartMerge(' + JSON.stringify(l.id) + ',' + nameJson + ',this)" title="Move every email under this label into another label, then delete this one" style="height:26px;font-size:11px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--slate);cursor:pointer;font-family:inherit;" onmouseenter="this.style.background=\'var(--slate-light)\'" onmouseleave="this.style.background=\'#fff\'">↔ Merge</button>'
+      + '<button onclick="_gmlConfirmDelete(' + JSON.stringify(l.id) + ',' + nameJson + ',this)" title="Delete this label (emails are kept)" style="height:26px;font-size:11px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--rose);cursor:pointer;font-family:inherit;" onmouseenter="this.style.background=\'var(--rose-light)\';this.style.borderColor=\'var(--rose)\'" onmouseleave="this.style.background=\'#fff\';this.style.borderColor=\'var(--border)\'">🗑</button>'
+      + '</div>';
+  }
+  function render(filter){
+    const q=(filter||'').toLowerCase();
+    const filtered = userLabels.filter(l => !q || (l.name||'').toLowerCase().includes(q));
+    if(!filtered.length){
+      listEl.innerHTML = '<div style="padding:22px;text-align:center;color:var(--ink-faint);font-size:12px;">' + (userLabels.length ? 'No labels match.' : 'No user labels yet.') + '</div>';
+      return;
+    }
+    listEl.innerHTML = filtered.map(rowHtml).join('');
+  }
+  render('');
+  const sin = document.getElementById('gml-search');
+  if(sin){ setTimeout(()=>sin.focus(), 30); sin.oninput = () => render(sin.value); }
+  // Stash the userLabels list so the merge picker can reuse it without
+  // refetching.
+  window._gmlUserLabels = userLabels;
+}
+
+// Inline rename — replace the row's name span with an input + Save/Cancel.
+function _gmlStartRename(labelId, currentName, btn){
+  const row = btn && btn.closest('[data-row-id]');
+  if(!row) return;
+  const nameEl = row.querySelector('.gml-name');
+  if(!nameEl) return;
+  const orig = currentName || nameEl.textContent;
+  nameEl.innerHTML = '<input id="gml-rename-input" type="text" value="' + escHtml(orig).replace(/"/g,'&quot;') + '" style="width:100%;height:26px;font-size:13px;padding:0 8px;border:1px solid var(--sage-mid);border-radius:6px;font-family:inherit;outline:none;box-sizing:border-box;"/>';
+  const inp = document.getElementById('gml-rename-input');
+  // Replace the action buttons with Save / Cancel for this row.
+  const actionBtns = row.querySelectorAll('button');
+  actionBtns.forEach(b => b.remove());
+  const save = document.createElement('button');
+  save.textContent = 'Save';
+  save.style.cssText = 'height:26px;font-size:11px;font-weight:600;padding:0 12px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;';
+  save.onclick = async () => {
+    const newName = (document.getElementById('gml-rename-input')||{}).value || '';
+    if(!newName.trim()){ showToast('Name cannot be empty'); return; }
+    if(newName.trim() === orig){ gmailOpenManageLabels(); return; } // re-render
+    save.disabled = true; save.textContent = 'Saving…';
+    const ok = await _gmailRenameLabel(labelId, newName.trim());
+    if(ok) showToast('Renamed to "'+newName.trim()+'" ✓');
+    gmailOpenManageLabels(); // refresh
+  };
+  const cancel = document.createElement('button');
+  cancel.textContent = 'Cancel';
+  cancel.style.cssText = 'height:26px;font-size:11px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;';
+  cancel.onclick = () => gmailOpenManageLabels();
+  row.appendChild(save); row.appendChild(cancel);
+  if(inp){ inp.focus(); inp.select(); inp.onkeydown = e => { if(e.key==='Enter') save.click(); else if(e.key==='Escape') cancel.click(); }; }
+}
+
+async function _gmailRenameLabel(labelId, newName){
+  const res = await gmailApi('labels/' + encodeURIComponent(labelId), {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name: newName })
+  });
+  _gmailLabels = null;
+  if(!res){ showToast('Failed to rename — that name may already be in use'); return false; }
+  return true;
+}
+
+// Inline confirm-delete — replaces the buttons with "Confirm / Cancel".
+function _gmlConfirmDelete(labelId, name, btn){
+  const row = btn && btn.closest('[data-row-id]');
+  if(!row) return;
+  const actionBtns = row.querySelectorAll('button');
+  actionBtns.forEach(b => b.remove());
+  const note = document.createElement('span');
+  note.style.cssText = 'font-size:11px;color:var(--rose);font-weight:600;margin-right:6px;';
+  note.textContent = 'Delete "' + name + '"?';
+  const yes = document.createElement('button');
+  yes.textContent = 'Delete';
+  yes.style.cssText = 'height:26px;font-size:11px;font-weight:600;padding:0 12px;border:none;border-radius:var(--radius-sm);background:var(--rose);color:#fff;cursor:pointer;font-family:inherit;';
+  yes.onclick = async () => {
+    yes.disabled = true; yes.textContent = 'Deleting…';
+    const ok = await _gmailDeleteLabel(labelId);
+    if(ok) showToast('Label "'+name+'" deleted ✓');
+    gmailOpenManageLabels();
+  };
+  const no = document.createElement('button');
+  no.textContent = 'Cancel';
+  no.style.cssText = 'height:26px;font-size:11px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;';
+  no.onclick = () => gmailOpenManageLabels();
+  row.appendChild(note); row.appendChild(yes); row.appendChild(no);
+}
+
+async function _gmailDeleteLabel(labelId){
+  // Gmail accepts DELETE /labels/{id}; messages keep their content but lose
+  // this labelId. We just need the request to come back 204 No Content.
+  const base = 'https://gmail.googleapis.com/gmail/v1/users/me/labels/' + encodeURIComponent(labelId);
+  try{
+    const r = await fetch(base, { method:'DELETE', headers: { 'Authorization': 'Bearer ' + _gmailAccessToken } });
+    _gmailLabels = null;
+    if(r.status === 401){ gmailSignOut(); showToast('Gmail session expired — sign in again'); return false; }
+    return r.ok;
+  }catch(e){ console.error('delete label', e); return false; }
+}
+
+// Merge picker — shows a target-label select inside the row, then runs the
+// transfer + delete.
+function _gmlStartMerge(sourceId, sourceName, btn){
+  const row = btn && btn.closest('[data-row-id]');
+  if(!row) return;
+  const others = (window._gmlUserLabels||[]).filter(l => l.id !== sourceId);
+  const actionBtns = row.querySelectorAll('button');
+  actionBtns.forEach(b => b.remove());
+  const sel = document.createElement('select');
+  sel.style.cssText = 'height:26px;font-size:12px;padding:0 6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink);font-family:inherit;max-width:170px;';
+  sel.innerHTML = '<option value="">→ Merge into…</option>' + others.map(l => '<option value="' + escHtml(l.id) + '">' + escHtml(l.name) + '</option>').join('');
+  const go = document.createElement('button');
+  go.textContent = 'Merge';
+  go.style.cssText = 'height:26px;font-size:11px;font-weight:600;padding:0 12px;border:none;border-radius:var(--radius-sm);background:var(--slate);color:#fff;cursor:pointer;font-family:inherit;';
+  go.onclick = async () => {
+    const targetId = sel.value;
+    if(!targetId){ showToast('Pick a target label'); return; }
+    const targetName = ((others.find(l=>l.id===targetId)||{}).name)||'target';
+    go.disabled = true; go.textContent = 'Merging…';
+    const ok = await _gmailMergeLabel(sourceId, targetId);
+    if(ok) showToast('Merged "'+sourceName+'" into "'+targetName+'" ✓');
+    gmailOpenManageLabels();
+  };
+  const cancel = document.createElement('button');
+  cancel.textContent = 'Cancel';
+  cancel.style.cssText = 'height:26px;font-size:11px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;';
+  cancel.onclick = () => gmailOpenManageLabels();
+  row.appendChild(sel); row.appendChild(go); row.appendChild(cancel);
+}
+
+// Move every message that has labelId=sourceId so they instead have targetId
+// (in batches of 500 via batchModify), then delete the source label.
+async function _gmailMergeLabel(sourceId, targetId){
+  if(!sourceId || !targetId || sourceId === targetId) return false;
+  // Page through all messages under the source label and batchModify them.
+  let pageToken = null;
+  let totalMoved = 0;
+  let safety = 0;
+  do {
+    const params = new URLSearchParams({ labelIds: sourceId, maxResults: '500' });
+    if(pageToken) params.set('pageToken', pageToken);
+    const list = await gmailApi('messages?' + params.toString());
+    if(!list){ showToast('Merge failed — could not list messages'); return false; }
+    const msgs = list.messages || [];
+    if(msgs.length){
+      // Gmail's batchModify accepts up to 1000 ids per call; keep batches at 500.
+      const ids = msgs.map(m => m.id);
+      const ok = await gmailApi('messages/batchModify', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ ids, addLabelIds:[targetId], removeLabelIds:[sourceId] })
+      });
+      if(ok === null && _gmailLastError){ showToast('Merge failed mid-way — '+(_gmailLastError.message||'')); return false; }
+      totalMoved += ids.length;
+    }
+    pageToken = list.nextPageToken || null;
+    safety++; if(safety > 50) break;
+  } while(pageToken);
+  // Delete the now-empty source label.
+  const ok = await _gmailDeleteLabel(sourceId);
+  if(!ok){ showToast('Moved '+totalMoved+' email(s) but failed to delete the source label'); return false; }
+  return true;
+}
+
 async function gmailFetchInbox(pageToken, query){
   const el = document.getElementById('gmail-email-list');
   if(!pageToken){ _gmailMessages = []; _gmailNextPageToken = null; if(el) el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--ink-muted);font-size:12px;">Loading...</div>'; }
@@ -5714,8 +5920,9 @@ function gmailRenderConnected(){
           <button id="mailbox-inbox-btn" onclick="gmailSwitchMailbox('inbox')" style="height:32px;font-size:11px;font-weight:600;padding:0 14px;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);background:${(!_gmailActiveLabelId && _gmailMailbox!=='sent')?'var(--ink)':'#fff'};color:${(!_gmailActiveLabelId && _gmailMailbox!=='sent')?'#fff':'var(--ink-muted)'};cursor:pointer;font-family:inherit;">📥 Inbox</button>
           <button id="mailbox-sent-btn" onclick="gmailSwitchMailbox('sent')" style="height:32px;font-size:11px;font-weight:600;padding:0 14px;border:1px solid var(--border);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:${(!_gmailActiveLabelId && _gmailMailbox==='sent')?'var(--ink)':'#fff'};color:${(!_gmailActiveLabelId && _gmailMailbox==='sent')?'#fff':'var(--ink-muted)'};cursor:pointer;font-family:inherit;">📤 Sent</button>
         </div>
-        <div style="position:relative;flex-shrink:0;">
-          <button id="gmail-labelfilter-btn" onclick="gmailToggleLabelFilterDropdown()" title="${_gmailActiveLabelId ? 'Click to change or clear the label filter' : 'View messages by label'}" style="height:32px;font-size:11px;font-weight:600;padding:0 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:${_gmailActiveLabelId ? 'var(--ink)' : '#fff'};color:${_gmailActiveLabelId ? '#fff' : 'var(--ink-muted)'};cursor:pointer;font-family:inherit;white-space:nowrap;">${_gmailActiveLabelId ? ('🏷 ' + escHtml(_gmailActiveLabelName) + ' <span style=\"margin-left:6px;color:#fff;opacity:.7;font-weight:400;\">×</span>') : '🏷 Labels'}</button>
+        <div style="position:relative;flex-shrink:0;display:flex;">
+          <button id="gmail-labelfilter-btn" onclick="gmailToggleLabelFilterDropdown()" title="${_gmailActiveLabelId ? 'Click to change or clear the label filter' : 'View messages by label'}" style="height:32px;font-size:11px;font-weight:600;padding:0 14px;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);background:${_gmailActiveLabelId ? 'var(--ink)' : '#fff'};color:${_gmailActiveLabelId ? '#fff' : 'var(--ink-muted)'};cursor:pointer;font-family:inherit;white-space:nowrap;">${_gmailActiveLabelId ? ('🏷 ' + escHtml(_gmailActiveLabelName) + ' <span style=\"margin-left:6px;color:#fff;opacity:.7;font-weight:400;\">×</span>') : '🏷 Labels'}</button>
+          <button id="gmail-labels-manage-btn" onclick="gmailOpenManageLabels()" title="Organize, rename, delete, or merge labels" style="height:32px;font-size:13px;padding:0 10px;border:1px solid var(--border);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">⚙</button>
           <div id="gmail-labelfilter-dropdown" style="display:none;position:absolute;left:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:300;min-width:240px;max-height:340px;overflow-y:auto;"></div>
         </div>
         <div style="flex:1;position:relative;min-width:0;">
