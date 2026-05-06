@@ -2441,72 +2441,21 @@ function hideExcelRestorePrompt(){}
 <div id="pane-inbox" style="display:none">
   <div style="display:flex;height:calc(100vh - 120px);gap:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);">
 
-    <!-- Gmail API UI -->
-    <div style="flex:1;min-width:0;position:relative;overflow:hidden;border-radius:var(--radius-lg) 0 0 var(--radius-lg);background:#fff;">
+    <!-- Gmail API UI — full width. The right-side Quick Actions panel was
+         retired; the same actions live in the ⚡ Actions dropdown in the top
+         bar, and the three inline panels (Add Note / Open Case / Save
+         Attachment) below now float as fixed-position popups. -->
+    <div style="flex:1;min-width:0;position:relative;overflow:hidden;border-radius:var(--radius-lg);background:#fff;">
       <div id="gmail-api-ui" style="display:flex;flex-direction:column;width:100%;height:100%;overflow:hidden;"></div>
     </div>
 
-    <!-- Right action panel -->
-    <div style="width:240px;flex-shrink:0;border-left:1px solid var(--border);background:#fff;border-radius:0 var(--radius-lg) var(--radius-lg) 0;display:flex;flex-direction:column;overflow-y:auto;">
-
-      <!-- Header -->
-      <div style="padding:18px 18px 14px;border-bottom:1px solid var(--cream-dark);">
-        <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:2px;">Quick Actions</div>
-        <div style="font-size:11px;color:var(--ink-muted);">From this email…</div>
-      </div>
-
-      <!-- Action buttons -->
-      <div style="padding:14px 14px 0;display:flex;flex-direction:column;gap:10px;">
-
-        <!-- Add Event -->
-        <button onclick="inboxOpenAddEvent()" style="display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--cream);color:var(--ink);cursor:pointer;font-family:inherit;text-align:left;transition:all .14s;width:100%;" onmouseenter="this.style.background='var(--sage-light)';this.style.borderColor='var(--sage-mid)'" onmouseleave="this.style.background='var(--cream)';this.style.borderColor='var(--border)'">
-          <span style="font-size:18px;flex-shrink:0;">📅</span>
-          <div>
-            <div style="font-size:12px;font-weight:600;color:var(--ink);">Add Event</div>
-            <div style="font-size:10px;color:var(--ink-muted);margin-top:1px;">Create a new calendar event</div>
-          </div>
-        </button>
-
-        <!-- Add Case -->
-        <button onclick="inboxOpenAddCase()" style="display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--cream);color:var(--ink);cursor:pointer;font-family:inherit;text-align:left;transition:all .14s;width:100%;" onmouseenter="this.style.background='var(--slate-light)';this.style.borderColor='var(--slate)'" onmouseleave="this.style.background='var(--cream)';this.style.borderColor='var(--border)'">
-          <span style="font-size:18px;flex-shrink:0;">📁</span>
-          <div>
-            <div style="font-size:12px;font-weight:600;color:var(--ink);">Add Case</div>
-            <div style="font-size:10px;color:var(--ink-muted);margin-top:1px;">Open a new client case</div>
-          </div>
-        </button>
-
-        <!-- Add Note to Case -->
-        <button onclick="inboxOpenAddNote()" style="display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--cream);color:var(--ink);cursor:pointer;font-family:inherit;text-align:left;transition:all .14s;width:100%;" onmouseenter="this.style.background='var(--amber-light)';this.style.borderColor='var(--amber-mid)'" onmouseleave="this.style.background='var(--cream)';this.style.borderColor='var(--border)'">
-          <span style="font-size:18px;flex-shrink:0;">📝</span>
-          <div>
-            <div style="font-size:12px;font-weight:600;color:var(--ink);">Add Note</div>
-            <div style="font-size:10px;color:var(--ink-muted);margin-top:1px;">Add note to a case</div>
-          </div>
-        </button>
-
-        <!-- Open Case -->
-        <button onclick="inboxOpenCase()" style="display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--cream);color:var(--ink);cursor:pointer;font-family:inherit;text-align:left;transition:all .14s;width:100%;" onmouseenter="this.style.background='var(--rose-light)';this.style.borderColor='#E8C4C4'" onmouseleave="this.style.background='var(--cream)';this.style.borderColor='var(--border)'">
-          <span style="font-size:18px;flex-shrink:0;">🔍</span>
-          <div>
-            <div style="font-size:12px;font-weight:600;color:var(--ink);">Open Case</div>
-            <div style="font-size:10px;color:var(--ink-muted);margin-top:1px;">Go to a client's case</div>
-          </div>
-        </button>
-
-        <!-- Save Attachment -->
-        <button onclick="inboxOpenAttachment()" style="display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--cream);color:var(--ink);cursor:pointer;font-family:inherit;text-align:left;transition:all .14s;width:100%;" onmouseenter="this.style.background='var(--slate-light)';this.style.borderColor='var(--slate)'" onmouseleave="this.style.background='var(--cream)';this.style.borderColor='var(--border)'">
-          <span style="font-size:18px;flex-shrink:0;">📎</span>
-          <div>
-            <div style="font-size:12px;font-weight:600;color:var(--ink);">Save Attachment</div>
-            <div style="font-size:10px;color:var(--ink-muted);margin-top:1px;">Attach a file to a case</div>
-          </div>
-        </button>
-
-      </div>
-
-      <!-- Add Note inline panel -->
-      <div id="inbox-note-panel" style="display:none;padding:14px;border-top:1px solid var(--cream-dark);margin-top:14px;">
+    <!-- Floating popups for Add Note / Open Case / Save Attachment. These
+         used to live in the right-side Quick Actions panel; they're now
+         standalone fixed-position cards so the existing inboxOpen* handlers
+         keep finding their target IDs while the inbox occupies the full
+         width. -->
+    <!-- Add Note popup -->
+    <div id="inbox-note-panel" style="display:none;position:fixed;top:90px;right:32px;width:280px;padding:14px;background:#fff;border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);z-index:9000;">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);margin-bottom:8px;">Add Note to Case</div>
 
         <!-- Case search -->
@@ -2528,8 +2477,8 @@ function hideExcelRestorePrompt(){}
         </div>
       </div>
 
-      <!-- Open Case inline panel -->
-      <div id="inbox-open-case-panel" style="display:none;padding:14px;border-top:1px solid var(--cream-dark);margin-top:0;">
+    <!-- Open Case popup -->
+    <div id="inbox-open-case-panel" style="display:none;position:fixed;top:90px;right:32px;width:280px;padding:14px;background:#fff;border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);z-index:9000;">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);margin-bottom:8px;">Open Case</div>
         <div style="position:relative;">
           <input id="inbox-open-case-search" type="text" placeholder="Search client or ID…" autocomplete="off"
@@ -2542,8 +2491,8 @@ function hideExcelRestorePrompt(){}
         </div>
       </div>
 
-      <!-- Save Attachment inline panel -->
-      <div id="inbox-attach-panel" style="display:none;padding:14px;border-top:1px solid var(--cream-dark);margin-top:0;">
+    <!-- Save Attachment popup -->
+    <div id="inbox-attach-panel" style="display:none;position:fixed;top:90px;right:32px;width:280px;padding:14px;background:#fff;border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);z-index:9000;">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);margin-bottom:8px;">Save Attachment to Case</div>
 
         <!-- Case search -->
@@ -2569,13 +2518,8 @@ function hideExcelRestorePrompt(){}
           <button onclick="inboxSaveAttachment()" style="flex:1;font-size:12px;font-weight:600;padding:7px;border:none;border-radius:6px;background:var(--ink);color:var(--cream);cursor:pointer;font-family:inherit;">Save</button>
           <button onclick="inboxCloseAttachPanel()" style="font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">✕</button>
         </div>
-      </div>
-
-      <!-- Footer -->
-      <div style="padding:14px 18px;margin-top:auto;border-top:1px solid var(--cream-dark);">
-        <button onclick="if(_gmailAccessToken){gmailFetchInbox();}else{gmailSignIn();}" style="font-size:11px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;width:100%;transition:all .14s;" onmouseenter="this.style.background='var(--cream)'" onmouseleave="this.style.background='transparent'">⟳ Refresh Inbox</button>
-      </div>
     </div>
+
   </div>
 </div>
 
