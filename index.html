@@ -5945,6 +5945,19 @@ function gmailRenderConnected(){
           <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--ink-faint);pointer-events:none;">🔍</span>
         </div>
         <button onclick="gmailOpenCompose()" style="height:32px;font-size:11px;font-weight:600;padding:0 16px;border:1px solid var(--sage);border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Compose</button>
+        <!-- Quick Actions menu — same five operations as the right-side panel,
+             collapsed into a top-bar dropdown for fast access from anywhere in
+             the inbox. -->
+        <div style="position:relative;">
+          <button id="gmail-quick-btn" onclick="gmailToggleQuickActions()" title="Quick actions from this email" style="height:32px;font-size:11px;font-weight:600;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">⚡ Actions ▾</button>
+          <div id="gmail-quick-dropdown" style="display:none;position:absolute;right:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:300;min-width:230px;overflow:hidden;">
+            <div data-act="event"      style="padding:9px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;font-size:12px;border-bottom:1px solid var(--cream-dark);" onmouseenter="this.style.background='var(--sage-light)'"  onmouseleave="this.style.background=''"><span style="font-size:16px;flex-shrink:0;">📅</span><div><div style="font-weight:600;color:var(--ink);">Add Event</div><div style="font-size:10px;color:var(--ink-muted);">Create a new calendar event</div></div></div>
+            <div data-act="case"       style="padding:9px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;font-size:12px;border-bottom:1px solid var(--cream-dark);" onmouseenter="this.style.background='var(--slate-light)'" onmouseleave="this.style.background=''"><span style="font-size:16px;flex-shrink:0;">📁</span><div><div style="font-weight:600;color:var(--ink);">Add Case</div><div style="font-size:10px;color:var(--ink-muted);">Open a new client case</div></div></div>
+            <div data-act="note"       style="padding:9px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;font-size:12px;border-bottom:1px solid var(--cream-dark);" onmouseenter="this.style.background='var(--amber-light)'" onmouseleave="this.style.background=''"><span style="font-size:16px;flex-shrink:0;">📝</span><div><div style="font-weight:600;color:var(--ink);">Add Note</div><div style="font-size:10px;color:var(--ink-muted);">Add note to a case</div></div></div>
+            <div data-act="open"       style="padding:9px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;font-size:12px;border-bottom:1px solid var(--cream-dark);" onmouseenter="this.style.background='var(--rose-light)'"  onmouseleave="this.style.background=''"><span style="font-size:16px;flex-shrink:0;">🔍</span><div><div style="font-weight:600;color:var(--ink);">Open Case</div><div style="font-size:10px;color:var(--ink-muted);">Go to a client's case</div></div></div>
+            <div data-act="attachment" style="padding:9px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;font-size:12px;"                                     onmouseenter="this.style.background='var(--slate-light)'" onmouseleave="this.style.background=''"><span style="font-size:16px;flex-shrink:0;">📎</span><div><div style="font-weight:600;color:var(--ink);">Save Attachment</div><div style="font-size:10px;color:var(--ink-muted);">Attach a file to a case</div></div></div>
+          </div>
+        </div>
         <div style="position:relative;">
           <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'" style="height:32px;font-size:11px;font-weight:500;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" title="Account" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">
             ${_gmailUserEmail ? _gmailUserEmail.split('@')[0] : 'Account'} ▾
@@ -5972,6 +5985,34 @@ function gmailDoSearch(){
   const q = (document.getElementById('gmail-search-input')||{}).value||'';
   if(!q.trim()) gmailFetchInbox();
   else gmailSearchMessages(q.trim());
+}
+
+// Open / close the top-bar Quick Actions dropdown. Dispatches the chosen
+// action to the same inbox*Open* handlers used by the right-side panel so
+// behaviour stays identical across the two entry points.
+function gmailToggleQuickActions(){
+  const drop=document.getElementById('gmail-quick-dropdown');
+  if(!drop) return;
+  if(drop.style.display==='block'){ drop.style.display='none'; return; }
+  drop.style.display='block';
+  // One-shot click handler — runs the action and closes the dropdown.
+  drop.onclick=(e)=>{
+    const item=e.target.closest('[data-act]');
+    if(!item) return;
+    drop.style.display='none';
+    const act=item.getAttribute('data-act');
+    try{
+      if(act==='event'      && typeof inboxOpenAddEvent==='function')  inboxOpenAddEvent();
+      else if(act==='case'  && typeof inboxOpenAddCase==='function')   inboxOpenAddCase();
+      else if(act==='note'  && typeof inboxOpenAddNote==='function')   inboxOpenAddNote();
+      else if(act==='open'  && typeof inboxOpenCase==='function')      inboxOpenCase();
+      else if(act==='attachment' && typeof inboxOpenAttachment==='function') inboxOpenAttachment();
+    }catch(err){ console.error('Quick action', act, err); showToast('Action failed'); }
+  };
+  setTimeout(()=>{
+    const close=e=>{ if(!drop.contains(e.target) && e.target.closest && !e.target.closest('[onclick*="gmailToggleQuickActions"]')){ drop.style.display='none'; document.removeEventListener('mousedown',close); }};
+    document.addEventListener('mousedown',close);
+  },0);
 }
 
 function gmailRenderEmailList(){
