@@ -5817,6 +5817,15 @@ function gmailRenderMessage(){
   // and suggest matching cases.
   const _suggestText = (m.subject||'') + '\n' + (m.snippet||'') + '\n' + String(m.body||'').replace(/<[^>]+>/g,' ');
   const _suggestions = !_linkedByEmail ? _gmailFindCasesByNumber(_suggestText) : [];
+  // Stash all clids relevant to this email (linked or matched) so the Reply
+  // and Forward panels can offer "+ Paralegal: <name>" quick-add chips for
+  // each suggested case.
+  window._gmailRelatedClids = [];
+  if(_linkedByEmail) window._gmailRelatedClids.push(_linkedByEmail.clid);
+  _suggestions.forEach(s => {
+    const c = (s.record && (s.record.clid || s.record.client)) || '';
+    if(c && !window._gmailRelatedClids.includes(c)) window._gmailRelatedClids.push(c);
+  });
   // If neither email nor numbers matched any existing client, try to extract
   // signals (LASTNAME/A# from subject, "ID … First Last" from body, paralegal
   // from recipients) and propose adding a brand-new case.
@@ -6031,6 +6040,67 @@ async function gmailRenderInlineImages(){
   }
 }
 
+// Build a row of quick-add chips for the paralegal(s) of every clid in
+// window._gmailRelatedClids. Used by the inline Reply / Forward panels so
+// the user can add a suggested-case paralegal to To/Cc with one click.
+//
+// targetIds: { to: 'gmail-reply-to' | 'gmail-fwd-to', cc: 'gmail-reply-cc' | null }
+// Returns an HTML string ready to drop into the panel; empty string if there
+// are no relevant paralegals to surface.
+function _gmailReplyParalegalChipsHtml(targetIds){
+  const clids = (window._gmailRelatedClids||[]).slice(0,4);
+  if(!clids.length) return '';
+  const seen = new Set();
+  const chips = [];
+  clids.forEach(clid => {
+    const rec = (typeof records!=='undefined' ? records : []).find(r => (r.clid||r.client)===clid);
+    if(!rec || !rec.atty) return;
+    const email = paralegalEmails[rec.atty];
+    if(!email) return;
+    const k = email.toLowerCase();
+    if(seen.has(k)) return;
+    seen.add(k);
+    const meta = (typeof caseMeta!=='undefined' && caseMeta[clid]) || {};
+    const clientShort = [meta.clientFirstName, meta.clientLastName].filter(Boolean).join(' ').trim() || rec.client || clid;
+    const targetTo = JSON.stringify(targetIds.to||'');
+    const targetCc = JSON.stringify(targetIds.cc||'');
+    const emailJson = JSON.stringify(email);
+    chips.push(
+      '<button type="button" onclick="_gmailReplyAddParalegal('+emailJson+','+targetTo+','+targetCc+',this)" '
+      + 'title="Add ' + escHtml(rec.atty) + ' (paralegal for ' + escHtml(clientShort) + ') — ' + escHtml(email) + '" '
+      + 'style="font-size:10px;padding:3px 9px;border:1px solid var(--slate);border-radius:12px;background:transparent;color:var(--slate);cursor:pointer;font-family:inherit;transition:all .12s;" '
+      + 'onmouseenter="this.style.background=\'var(--slate)\';this.style.color=\'#fff\'" '
+      + 'onmouseleave="this.style.background=\'transparent\';this.style.color=\'var(--slate)\'">'
+      + '+ ' + escHtml(rec.atty) + ' <span style="opacity:.7;font-weight:400;">(paralegal)</span>'
+      + '</button>'
+    );
+  });
+  if(!chips.length) return '';
+  return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;font-size:11px;align-items:center;">'
+    + '<span style="color:var(--ink-muted);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Suggested:</span>'
+    + chips.join('')
+    + '</div>';
+}
+
+// Click handler for the Reply / Forward paralegal chip. Adds the email to
+// the Cc field if available, otherwise appends to To. Greys out the chip
+// once added so it can't be doubled up.
+function _gmailReplyAddParalegal(email, toId, ccId, btn){
+  const target = (ccId ? document.getElementById(ccId) : null) || document.getElementById(toId);
+  if(!target){ showToast('Reply form not open'); return; }
+  const cur = (target.value||'').trim();
+  if((cur||'').toLowerCase().split(/[,\s]+/).some(s=>s.replace(/[<>]/g,'')===email.toLowerCase())){
+    showToast('Already added'); return;
+  }
+  target.value = cur ? (cur.endsWith(',') ? cur+' '+email : cur+', '+email) : email;
+  if(btn){
+    btn.style.opacity = '0.4';
+    btn.style.pointerEvents = 'none';
+    btn.style.background = 'var(--slate)';
+    btn.style.color = '#fff';
+  }
+}
+
 function gmailOpenReply(replyAll){
   if(!_gmailCurrentMsg) return;
   const m = _gmailCurrentMsg;
@@ -6082,6 +6152,7 @@ function gmailOpenReply(replyAll){
           <input id="gmail-reply-cc" type="text" value="${escHtml(ccList)}" placeholder="Add Cc..." style="flex:1;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;"/>
         </div>
       </div>
+      ${_gmailReplyParalegalChipsHtml({to:'gmail-reply-to', cc:'gmail-reply-cc'})}
       <textarea id="gmail-reply-body" placeholder="Write your reply..." style="width:100%;min-height:120px;font-size:13px;line-height:1.6;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;resize:vertical;box-sizing:border-box;"></textarea>
       <div id="gmail-reply-attach-chips" style="margin-top:8px;"></div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
@@ -6105,7 +6176,17 @@ function gmailOpenForward(){
   area.innerHTML = `
     <div style="padding:16px 24px;border-top:2px solid var(--amber-mid);background:#fff;">
       <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:8px;">Forward</div>
-      <input id="gmail-fwd-to" type="text" placeholder="Recipient email..." style="width:100%;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;margin-bottom:8px;box-sizing:border-box;"/>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <label style="font-size:11px;color:var(--ink-muted);width:28px;flex-shrink:0;">To:</label>
+          <input id="gmail-fwd-to" type="text" placeholder="Recipient email..." style="flex:1;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;"/>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <label style="font-size:11px;color:var(--ink-muted);width:28px;flex-shrink:0;">Cc:</label>
+          <input id="gmail-fwd-cc" type="text" placeholder="Optional Cc..." style="flex:1;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;"/>
+        </div>
+      </div>
+      ${_gmailReplyParalegalChipsHtml({to:'gmail-fwd-to', cc:'gmail-fwd-cc'})}
       <textarea id="gmail-fwd-body" placeholder="Add a message (optional)..." style="width:100%;min-height:80px;font-size:13px;line-height:1.6;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;resize:vertical;box-sizing:border-box;"></textarea>
       <div id="gmail-fwd-attach-chips" style="margin-top:8px;"></div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
@@ -6135,13 +6216,14 @@ async function gmailDoReply(){
 
 async function gmailDoForward(){
   const to = (document.getElementById('gmail-fwd-to')||{}).value||'';
+  const cc = (document.getElementById('gmail-fwd-cc')||{}).value||'';
   const body = (document.getElementById('gmail-fwd-body')||{}).value||'';
   if(!to.trim()){ showToast('Enter a recipient'); return; }
   const m = _gmailCurrentMsg;
   const fwdBody = (body ? body.replace(/\n/g,'<br>') + '<br><br>' : '') + '<hr style="border:none;border-top:1px solid #ddd;margin:16px 0;"><b>Forwarded message</b><br>From: ' + escHtml(m.from) + '<br>Subject: ' + escHtml(m.subject) + '<br>Date: ' + escHtml(m.date) + '<br><br>' + m.body;
   const subj = m.subject.startsWith('Fwd:') ? m.subject : 'Fwd: ' + m.subject;
   const atts = _gmailComposeAttachments.slice();
-  const ok = await gmailSendMessage(to.trim(), subj, fwdBody, undefined, undefined, undefined, atts);
+  const ok = await gmailSendMessage(to.trim(), subj, fwdBody, undefined, undefined, cc.trim()||undefined, atts);
   if(ok){ gmailResetCompose(); document.getElementById('gmail-reply-area').innerHTML = '<div style="padding:16px 24px;color:var(--sage);font-size:13px;font-weight:600;">Forwarded ✓</div>'; }
 }
 
