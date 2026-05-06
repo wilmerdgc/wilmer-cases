@@ -13320,18 +13320,34 @@ function renderToolsPage(){
 // ══════════════════════════════════════════════════
 
 const BOND_PREP_KEY = 'bond_prep_questions_v1';
+// Items are a flat ordered list. Each entry is {id, type, text} where type
+// is 'section' | 'subsection' | 'question'. A section "owns" every entry
+// below it until the next section; subsections own questions until the next
+// subsection or section. This positional model keeps reordering simple and
+// keeps question ids stable (so saved answers don't drift if the user
+// reshuffles the bank).
 let bondPrepQuestions = (function(){
-  try{ const raw = localStorage.getItem(BOND_PREP_KEY); if(raw) return JSON.parse(raw); }catch(e){}
-  // Default seed — common bond hearing questions; user can edit/delete/add.
+  try{
+    const raw = localStorage.getItem(BOND_PREP_KEY);
+    if(raw){
+      const arr = JSON.parse(raw);
+      // Backwards-compat: older saves stored bare question objects without a
+      // `type` field. Treat each as a question so they keep rendering.
+      return Array.isArray(arr) ? arr.map(q => q.type ? q : ({...q, type:'question'})) : [];
+    }
+  }catch(e){}
+  // Default seed — common bond hearing questions grouped under one section.
+  const t = Date.now();
   return [
-    { id: 'bp_'+Date.now()+'_1', text: 'How long has the client lived in the United States?' },
-    { id: 'bp_'+Date.now()+'_2', text: 'Does the client have any U.S. citizen or LPR family members? List names and relationships.' },
-    { id: 'bp_'+Date.now()+'_3', text: 'Does the client have stable housing if released? Address and who lives there.' },
-    { id: 'bp_'+Date.now()+'_4', text: 'Does the client have a job offer or employment history? Employer + length.' },
-    { id: 'bp_'+Date.now()+'_5', text: 'Any prior criminal history? List arrests and dispositions.' },
-    { id: 'bp_'+Date.now()+'_6', text: 'Any community ties — church, school, volunteer organizations?' },
-    { id: 'bp_'+Date.now()+'_7', text: 'Any prior immigration violations or removals?' },
-    { id: 'bp_'+Date.now()+'_8', text: 'Does the client have a sponsor willing to pay bond? Name and relationship.' },
+    { id: 'bp_'+t+'_s1', type:'section',  text: 'General' },
+    { id: 'bp_'+t+'_1',  type:'question', text: 'How long has the client lived in the United States?' },
+    { id: 'bp_'+t+'_2',  type:'question', text: 'Does the client have any U.S. citizen or LPR family members? List names and relationships.' },
+    { id: 'bp_'+t+'_3',  type:'question', text: 'Does the client have stable housing if released? Address and who lives there.' },
+    { id: 'bp_'+t+'_4',  type:'question', text: 'Does the client have a job offer or employment history? Employer + length.' },
+    { id: 'bp_'+t+'_5',  type:'question', text: 'Any prior criminal history? List arrests and dispositions.' },
+    { id: 'bp_'+t+'_6',  type:'question', text: 'Any community ties — church, school, volunteer organizations?' },
+    { id: 'bp_'+t+'_7',  type:'question', text: 'Any prior immigration violations or removals?' },
+    { id: 'bp_'+t+'_8',  type:'question', text: 'Does the client have a sponsor willing to pay bond? Name and relationship.' },
   ];
 })();
 
@@ -13363,9 +13379,13 @@ function renderBondPrep(){
         </div>
         <div id="bp-questions-list" style="max-height:540px;overflow-y:auto;"></div>
         <div style="padding:12px 16px;border-top:1px solid var(--cream-dark);background:var(--cream);">
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <input id="bp-new-q" type="text" placeholder="Type new section / subsection / question…" style="flex:1;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;background:#fff;outline:none;box-sizing:border-box;" onkeydown="if(event.key==='Enter'){_bondPrepAddItem('question');event.preventDefault();}"/>
+          </div>
           <div style="display:flex;gap:6px;">
-            <input id="bp-new-q" type="text" placeholder="Add a new question…" style="flex:1;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;background:#fff;outline:none;box-sizing:border-box;" onkeydown="if(event.key==='Enter'){_bondPrepAddQuestion();event.preventDefault();}"/>
-            <button onclick="_bondPrepAddQuestion()" style="font-size:11px;font-weight:600;padding:7px 14px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">+ Add</button>
+            <button onclick="_bondPrepAddItem('section')"    title="Add as a section header"    style="flex:1;font-size:11px;font-weight:600;padding:7px 8px;border:1px solid var(--ink);border-radius:var(--radius-sm);background:var(--ink);color:#fff;cursor:pointer;font-family:inherit;">＋ Section</button>
+            <button onclick="_bondPrepAddItem('subsection')" title="Add as a subsection header" style="flex:1;font-size:11px;font-weight:600;padding:7px 8px;border:1px solid var(--slate);border-radius:var(--radius-sm);background:var(--slate);color:#fff;cursor:pointer;font-family:inherit;">＋ Subsection</button>
+            <button onclick="_bondPrepAddItem('question')"   title="Add as a question (default — Enter)" style="flex:1;font-size:11px;font-weight:600;padding:7px 8px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">＋ Question</button>
           </div>
         </div>
       </div>
@@ -13392,19 +13412,41 @@ function _renderBondPrepQuestions(){
   const list = document.getElementById('bp-questions-list');
   const cnt  = document.getElementById('bp-count');
   if(!list) return;
-  if(cnt) cnt.textContent = bondPrepQuestions.length + (bondPrepQuestions.length===1?' question':' questions');
+  const qCount = bondPrepQuestions.filter(x => (x.type||'question')==='question').length;
+  if(cnt) cnt.textContent = qCount + (qCount===1?' question':' questions');
   if(!bondPrepQuestions.length){
-    list.innerHTML = '<div style="padding:22px 16px;text-align:center;color:var(--ink-faint);font-size:11px;">No questions yet. Add one below.</div>';
+    list.innerHTML = '<div style="padding:22px 16px;text-align:center;color:var(--ink-faint);font-size:11px;">No items yet. Add a section, subsection, or question below.</div>';
     return;
   }
-  list.innerHTML = bondPrepQuestions.map((q, i) => {
-    const idEsc = escHtml(q.id);
-    const txtEsc = escHtml(q.text||'');
-    return '<div data-bpq="' + idEsc + '" style="padding:10px 16px;border-bottom:1px solid var(--cream-dark);display:flex;align-items:flex-start;gap:8px;">'
-      + '<span style="font-size:10px;font-weight:700;color:var(--ink-faint);min-width:18px;padding-top:2px;">' + (i+1) + '.</span>'
-      + '<span class="bpq-text" style="flex:1;font-size:12px;line-height:1.5;color:var(--ink);">' + txtEsc + '</span>'
-      + '<button data-act="edit" title="Edit question" style="height:24px;font-size:10px;padding:0 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;flex-shrink:0;">✏</button>'
-      + '<button data-act="delete" title="Delete question" style="height:24px;font-size:10px;padding:0 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--rose);cursor:pointer;font-family:inherit;flex-shrink:0;">🗑</button>'
+  // Walk through the flat list, numbering only questions (resets per section).
+  let qN = 0;
+  list.innerHTML = bondPrepQuestions.map((item, idx) => {
+    const idEsc = escHtml(item.id);
+    const txtEsc = escHtml(item.text||'');
+    const t = item.type || 'question';
+    let rowStyle = '', leftCol = '', textStyle = '';
+    if(t==='section'){
+      qN = 0;
+      rowStyle = 'padding:10px 16px;border-bottom:1px solid var(--cream-dark);display:flex;align-items:center;gap:8px;background:var(--cream);';
+      leftCol = '<span style="font-size:10px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em;min-width:18px;">§</span>';
+      textStyle = 'flex:1;font-size:13px;font-weight:700;color:var(--ink);text-transform:uppercase;letter-spacing:.04em;';
+    } else if(t==='subsection'){
+      rowStyle = 'padding:8px 16px 8px 28px;border-bottom:1px solid var(--cream-dark);display:flex;align-items:center;gap:8px;background:#FAF7F2;';
+      leftCol = '<span style="font-size:10px;font-weight:600;color:var(--slate);min-width:14px;">›</span>';
+      textStyle = 'flex:1;font-size:12px;font-weight:700;color:var(--ink);';
+    } else {
+      qN++;
+      rowStyle = 'padding:9px 16px 9px 32px;border-bottom:1px solid var(--cream-dark);display:flex;align-items:flex-start;gap:8px;';
+      leftCol = '<span style="font-size:10px;font-weight:700;color:var(--ink-faint);min-width:18px;padding-top:2px;">' + qN + '.</span>';
+      textStyle = 'flex:1;font-size:12px;line-height:1.5;color:var(--ink);';
+    }
+    return '<div data-bpq="' + idEsc + '" data-bptype="' + t + '" style="' + rowStyle + '">'
+      + leftCol
+      + '<span class="bpq-text" style="' + textStyle + '">' + txtEsc + '</span>'
+      + '<button data-act="up"     title="Move up"   style="height:22px;width:22px;font-size:10px;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;flex-shrink:0;"' + (idx===0?' disabled style="opacity:.3;cursor:default;height:22px;width:22px;font-size:10px;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);font-family:inherit;flex-shrink:0;"':'') + '>↑</button>'
+      + '<button data-act="down"   title="Move down" style="height:22px;width:22px;font-size:10px;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;flex-shrink:0;"' + (idx===bondPrepQuestions.length-1?' disabled style="opacity:.3;cursor:default;height:22px;width:22px;font-size:10px;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);font-family:inherit;flex-shrink:0;"':'') + '>↓</button>'
+      + '<button data-act="edit"   title="Rename"   style="height:22px;font-size:10px;padding:0 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;flex-shrink:0;">✏</button>'
+      + '<button data-act="delete" title="Delete"   style="height:22px;font-size:10px;padding:0 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--rose);cursor:pointer;font-family:inherit;flex-shrink:0;">🗑</button>'
       + '</div>';
   }).join('');
   // One delegated handler — survives every re-render.
@@ -13414,19 +13456,39 @@ function _renderBondPrepQuestions(){
     const row = btn.closest('[data-bpq]');
     if(!row) return;
     const qid = row.getAttribute('data-bpq');
-    if(btn.getAttribute('data-act')==='edit') _bondPrepStartEdit(qid, row);
-    else if(btn.getAttribute('data-act')==='delete') _bondPrepDelete(qid);
+    const act = btn.getAttribute('data-act');
+    if(act==='edit')        _bondPrepStartEdit(qid, row);
+    else if(act==='delete') _bondPrepDelete(qid);
+    else if(act==='up')     _bondPrepMove(qid, -1);
+    else if(act==='down')   _bondPrepMove(qid, +1);
   };
 }
 
-function _bondPrepAddQuestion(){
+function _bondPrepAddItem(type){
   const inp = document.getElementById('bp-new-q');
   if(!inp) return;
   const text = (inp.value||'').trim();
   if(!text){ inp.focus(); return; }
-  bondPrepQuestions.push({ id: 'bp_'+Date.now()+'_'+Math.random().toString(36).slice(2,6), text });
+  const allowed = ['section','subsection','question'];
+  const t = allowed.includes(type) ? type : 'question';
+  bondPrepQuestions.push({ id: 'bp_'+Date.now()+'_'+Math.random().toString(36).slice(2,6), type:t, text });
   _saveBondPrepQuestions();
   inp.value = '';
+  _renderBondPrepQuestions();
+  _renderBondPrepAnswers();
+}
+// Backwards-compat alias for any older callers / muscle memory.
+function _bondPrepAddQuestion(){ _bondPrepAddItem('question'); }
+
+function _bondPrepMove(qid, delta){
+  const i = bondPrepQuestions.findIndex(x => x.id===qid);
+  if(i < 0) return;
+  const j = i + delta;
+  if(j < 0 || j >= bondPrepQuestions.length) return;
+  const tmp = bondPrepQuestions[i];
+  bondPrepQuestions[i] = bondPrepQuestions[j];
+  bondPrepQuestions[j] = tmp;
+  _saveBondPrepQuestions();
   _renderBondPrepQuestions();
   _renderBondPrepAnswers();
 }
@@ -13462,7 +13524,11 @@ function _bondPrepStartEdit(qid, row){
 function _bondPrepDelete(qid){
   const q = bondPrepQuestions.find(x => x.id===qid);
   if(!q) return;
-  if(!confirm('Delete this question?\n\n"' + (q.text||'') + '"\n\nExisting answers for this question will remain on each case but will no longer be displayed.')) return;
+  const label = (q.type==='section'?'section':q.type==='subsection'?'subsection':'question');
+  const note = q.type==='question'
+    ? '\n\nExisting answers for this question will remain on each case but will no longer be displayed.'
+    : '';
+  if(!confirm('Delete this ' + label + '?\n\n"' + (q.text||'') + '"' + note)) return;
   bondPrepQuestions = bondPrepQuestions.filter(x => x.id!==qid);
   _saveBondPrepQuestions();
   _renderBondPrepQuestions();
@@ -13510,28 +13576,43 @@ function _bondPrepCaseSearch(q){
 function _renderBondPrepAnswers(){
   const host = document.getElementById('bp-answers-host');
   if(!host) return;
-  if(!_bondPrepActiveClid){
-    host.innerHTML = '<div style="padding:36px 20px;text-align:center;color:var(--ink-faint);font-size:12px;">Pick a case above to record answers.</div>';
-    return;
-  }
   if(!bondPrepQuestions.length){
     host.innerHTML = '<div style="padding:36px 20px;text-align:center;color:var(--ink-faint);font-size:12px;">No questions yet — add some on the left.</div>';
     return;
   }
-  const meta = caseMeta[_bondPrepActiveClid] || (caseMeta[_bondPrepActiveClid] = {});
-  const answers = meta.bondPrepAnswers || (meta.bondPrepAnswers = {});
-  host.innerHTML = bondPrepQuestions.map((q, i) => {
-    const idEsc = escHtml(q.id);
-    const txtEsc = escHtml(q.text||'');
-    const ansEsc = escHtml(answers[q.id]||'');
-    return '<div style="margin-bottom:14px;">'
-      + '<div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:5px;line-height:1.4;"><span style="color:var(--ink-faint);">' + (i+1) + '.</span> ' + txtEsc + '</div>'
-      + '<textarea data-bpa="' + idEsc + '" rows="2" placeholder="Type the client\'s answer…" '
-        + 'oninput="_bondPrepAnswerInput(this)" '
-        + 'style="width:100%;font-size:12px;line-height:1.6;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;box-sizing:border-box;outline:none;resize:vertical;min-height:48px;background:#fff;" '
-        + 'onfocus="this.style.borderColor=\'var(--sage)\'" onblur="this.style.borderColor=\'var(--border)\'">' + ansEsc + '</textarea>'
-      + '</div>';
-  }).join('') + '<div style="font-size:10px;color:var(--ink-faint);font-style:italic;margin-top:6px;">Answers save automatically as you type.</div>';
+  const hasCase = !!_bondPrepActiveClid;
+  // When no case is selected we still render the full structure so the user
+  // can review or design the form — textareas are read-only with a "Pick a
+  // case to type answers" hint, and section / subsection headers are shown.
+  const meta = hasCase ? (caseMeta[_bondPrepActiveClid] || (caseMeta[_bondPrepActiveClid] = {})) : null;
+  const answers = hasCase ? (meta.bondPrepAnswers || (meta.bondPrepAnswers = {})) : {};
+  let qN = 0;
+  let html = '';
+  bondPrepQuestions.forEach((item) => {
+    const t = item.type || 'question';
+    const txtEsc = escHtml(item.text||'');
+    if(t==='section'){
+      qN = 0;
+      html += '<div style="margin:18px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--ink);font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--ink);text-transform:uppercase;letter-spacing:.04em;">' + txtEsc + '</div>';
+    } else if(t==='subsection'){
+      html += '<div style="margin:14px 0 8px;font-size:12px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.04em;border-left:3px solid var(--slate);padding-left:8px;">' + txtEsc + '</div>';
+    } else {
+      qN++;
+      const idEsc = escHtml(item.id);
+      const ansEsc = escHtml(answers[item.id]||'');
+      html += '<div style="margin-bottom:12px;">'
+        + '<div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:5px;line-height:1.4;"><span style="color:var(--ink-faint);">' + qN + '.</span> ' + txtEsc + '</div>'
+        + '<textarea data-bpa="' + idEsc + '" rows="2" '
+          + 'placeholder="' + (hasCase ? "Type the client's answer…" : 'Pick a case above to type answers') + '" '
+          + (hasCase ? '' : 'readonly ')
+          + 'oninput="_bondPrepAnswerInput(this)" '
+          + 'style="width:100%;font-size:12px;line-height:1.6;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;box-sizing:border-box;outline:none;resize:vertical;min-height:48px;background:' + (hasCase?'#fff':'var(--cream)') + ';' + (hasCase?'':'color:var(--ink-faint);cursor:not-allowed;') + '" '
+          + 'onfocus="this.style.borderColor=\'var(--sage)\'" onblur="this.style.borderColor=\'var(--border)\'">' + ansEsc + '</textarea>'
+        + '</div>';
+    }
+  });
+  html += '<div style="font-size:10px;color:var(--ink-faint);font-style:italic;margin-top:6px;">' + (hasCase ? 'Answers save automatically as you type.' : 'Pick a case above to type answers — sections and questions are visible to anyone managing the bank.') + '</div>';
+  host.innerHTML = html;
 }
 
 function _bondPrepAnswerInput(ta){
