@@ -5450,13 +5450,12 @@ async function gmailOpenManageLabels(){
   function rowHtml(l){
     const idEsc = escHtml(l.id);
     const nameEsc = escHtml(l.name||'');
-    const nameJson = JSON.stringify(l.name||'');
-    return '<div data-row-id="' + idEsc + '" style="padding:9px 22px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--cream-dark);">'
+    return '<div data-row-id="' + idEsc + '" data-row-name="' + nameEsc + '" style="padding:9px 22px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--cream-dark);">'
       + '<span style="font-size:14px;flex-shrink:0;">🏷</span>'
       + '<span class="gml-name" style="flex:1;font-size:13px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + nameEsc + '</span>'
-      + '<button onclick="_gmlStartRename(' + JSON.stringify(l.id) + ',' + nameJson + ',this)" title="Rename label" style="height:26px;font-size:11px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" onmouseenter="this.style.background=\'var(--cream-dark)\'" onmouseleave="this.style.background=\'#fff\'">✏ Rename</button>'
-      + '<button onclick="_gmlStartMerge(' + JSON.stringify(l.id) + ',' + nameJson + ',this)" title="Move every email under this label into another label, then delete this one" style="height:26px;font-size:11px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--slate);cursor:pointer;font-family:inherit;" onmouseenter="this.style.background=\'var(--slate-light)\'" onmouseleave="this.style.background=\'#fff\'">↔ Merge</button>'
-      + '<button onclick="_gmlConfirmDelete(' + JSON.stringify(l.id) + ',' + nameJson + ',this)" title="Delete this label (emails are kept)" style="height:26px;font-size:11px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--rose);cursor:pointer;font-family:inherit;" onmouseenter="this.style.background=\'var(--rose-light)\';this.style.borderColor=\'var(--rose)\'" onmouseleave="this.style.background=\'#fff\';this.style.borderColor=\'var(--border)\'">🗑</button>'
+      + '<button data-act="rename" title="Rename label" style="height:26px;font-size:11px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">✏ Rename</button>'
+      + '<button data-act="merge" title="Move every email under this label into another label, then delete this one" style="height:26px;font-size:11px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--slate);cursor:pointer;font-family:inherit;">↔ Merge</button>'
+      + '<button data-act="delete" title="Delete this label (emails are kept)" style="height:26px;font-size:11px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--rose);cursor:pointer;font-family:inherit;">🗑</button>'
       + '</div>';
   }
   function render(filter){
@@ -5474,6 +5473,21 @@ async function gmailOpenManageLabels(){
   // Stash the userLabels list so the merge picker can reuse it without
   // refetching.
   window._gmlUserLabels = userLabels;
+  // Single delegated click handler — survives every re-render and avoids the
+  // attribute-quoting pitfalls of inline onclick when label names or ids
+  // contain double quotes / spaces / non-ASCII characters.
+  listEl.onclick = (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if(!btn) return;
+    const row = btn.closest('[data-row-id]');
+    if(!row) return;
+    const id = row.getAttribute('data-row-id');
+    const name = row.getAttribute('data-row-name');
+    const act = btn.getAttribute('data-act');
+    if(act==='rename') _gmlStartRename(id, name, btn);
+    else if(act==='merge') _gmlStartMerge(id, name, btn);
+    else if(act==='delete') _gmlConfirmDelete(id, name, btn);
+  };
 }
 
 // Inline rename — replace the row's name span with an input + Save/Cancel.
