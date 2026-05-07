@@ -13412,12 +13412,13 @@ function renderBondPrep(){
         <div id="bp-questions-list" style="max-height:540px;overflow-y:auto;"></div>
         <div style="padding:12px 16px;border-top:1px solid var(--cream-dark);background:var(--cream);">
           <div style="display:flex;gap:6px;margin-bottom:6px;">
-            <input id="bp-new-q" type="text" placeholder="Type new section / subsection / question…" style="flex:1;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;background:#fff;outline:none;box-sizing:border-box;" onkeydown="if(event.key==='Enter'){_bondPrepAddItem('question');event.preventDefault();}"/>
+            <input id="bp-new-q" type="text" placeholder="Type new section / subsection / question / checklist item…" style="flex:1;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;background:#fff;outline:none;box-sizing:border-box;" onkeydown="if(event.key==='Enter'){_bondPrepAddItem('question');event.preventDefault();}"/>
           </div>
-          <div style="display:flex;gap:6px;">
-            <button onclick="_bondPrepAddItem('section')"    title="Add as a section header"    style="flex:1;font-size:11px;font-weight:600;padding:7px 8px;border:1px solid var(--ink);border-radius:var(--radius-sm);background:var(--ink);color:#fff;cursor:pointer;font-family:inherit;">＋ Section</button>
-            <button onclick="_bondPrepAddItem('subsection')" title="Add as a subsection header" style="flex:1;font-size:11px;font-weight:600;padding:7px 8px;border:1px solid var(--slate);border-radius:var(--radius-sm);background:var(--slate);color:#fff;cursor:pointer;font-family:inherit;">＋ Subsection</button>
-            <button onclick="_bondPrepAddItem('question')"   title="Add as a question (default — Enter)" style="flex:1;font-size:11px;font-weight:600;padding:7px 8px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">＋ Question</button>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <button onclick="_bondPrepAddItem('section')"    title="Add as a section header"            style="font-size:11px;font-weight:600;padding:7px 8px;border:1px solid var(--ink);border-radius:var(--radius-sm);background:var(--ink);color:#fff;cursor:pointer;font-family:inherit;">＋ Section</button>
+            <button onclick="_bondPrepAddItem('subsection')" title="Add as a subsection header"         style="font-size:11px;font-weight:600;padding:7px 8px;border:1px solid var(--slate);border-radius:var(--radius-sm);background:var(--slate);color:#fff;cursor:pointer;font-family:inherit;">＋ Subsection</button>
+            <button onclick="_bondPrepAddItem('question')"   title="Add as a question (default — Enter)" style="font-size:11px;font-weight:600;padding:7px 8px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">＋ Question</button>
+            <button onclick="_bondPrepAddItem('checklist')"  title="Add as a checkbox item"             style="font-size:11px;font-weight:600;padding:7px 8px;border:none;border-radius:var(--radius-sm);background:#C9823A;color:#fff;cursor:pointer;font-family:inherit;">☑ Checklist</button>
           </div>
         </div>
       </div>
@@ -13466,6 +13467,10 @@ function _renderBondPrepQuestions(){
       rowStyle = 'padding:8px 16px 8px 28px;border-bottom:1px solid var(--cream-dark);display:flex;align-items:center;gap:8px;background:#FAF7F2;';
       leftCol = '<span style="font-size:10px;font-weight:600;color:var(--slate);min-width:14px;">›</span>';
       textStyle = 'flex:1;font-size:12px;font-weight:700;color:var(--ink);';
+    } else if(t==='checklist'){
+      rowStyle = 'padding:8px 16px 8px 32px;border-bottom:1px solid var(--cream-dark);display:flex;align-items:flex-start;gap:8px;';
+      leftCol = '<span style="font-size:13px;color:#C9823A;min-width:18px;padding-top:1px;">☑</span>';
+      textStyle = 'flex:1;font-size:12px;line-height:1.5;color:var(--ink);';
     } else {
       qN++;
       rowStyle = 'padding:9px 16px 9px 32px;border-bottom:1px solid var(--cream-dark);display:flex;align-items:flex-start;gap:8px;';
@@ -13501,7 +13506,7 @@ function _bondPrepAddItem(type){
   if(!inp) return;
   const text = (inp.value||'').trim();
   if(!text){ inp.focus(); return; }
-  const allowed = ['section','subsection','question'];
+  const allowed = ['section','subsection','question','checklist'];
   const t = allowed.includes(type) ? type : 'question';
   bondPrepQuestions.push({ id: 'bp_'+Date.now()+'_'+Math.random().toString(36).slice(2,6), type:t, text });
   _saveBondPrepQuestions();
@@ -13556,9 +13561,9 @@ function _bondPrepStartEdit(qid, row){
 function _bondPrepDelete(qid){
   const q = bondPrepQuestions.find(x => x.id===qid);
   if(!q) return;
-  const label = (q.type==='section'?'section':q.type==='subsection'?'subsection':'question');
-  const note = q.type==='question'
-    ? '\n\nExisting answers for this question will remain on each case but will no longer be displayed.'
+  const label = (q.type==='section'?'section':q.type==='subsection'?'subsection':q.type==='checklist'?'checklist item':'question');
+  const note = (q.type==='question' || q.type==='checklist')
+    ? '\n\nExisting answers / checks for this item will remain on each case but will no longer be displayed.'
     : '';
   if(!confirm('Delete this ' + label + '?\n\n"' + (q.text||'') + '"' + note)) return;
   bondPrepQuestions = bondPrepQuestions.filter(x => x.id!==qid);
@@ -13628,6 +13633,14 @@ function _renderBondPrepAnswers(){
       html += '<div style="margin:18px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--ink);font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--ink);text-transform:uppercase;letter-spacing:.04em;">' + txtEsc + '</div>';
     } else if(t==='subsection'){
       html += '<div style="margin:14px 0 8px;font-size:12px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.04em;border-left:3px solid var(--slate);padding-left:8px;">' + txtEsc + '</div>';
+    } else if(t==='checklist'){
+      const idEsc = escHtml(item.id);
+      const checked = !!answers[item.id];
+      html += '<label style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;cursor:' + (hasCase?'pointer':'default') + ';margin-bottom:2px;">'
+        + '<input type="checkbox" data-bpc="' + idEsc + '" ' + (checked?'checked ':'') + (hasCase?'':'disabled ') + 'onchange="_bondPrepCheckChange(this)" '
+          + 'style="margin-top:3px;width:14px;height:14px;cursor:' + (hasCase?'pointer':'not-allowed') + ';accent-color:var(--sage);flex-shrink:0;"/>'
+        + '<span style="font-size:12px;line-height:1.5;color:' + (hasCase?'var(--ink)':'var(--ink-faint)') + ';' + (checked?'text-decoration:line-through;color:var(--ink-faint);':'') + '">' + txtEsc + '</span>'
+        + '</label>';
     } else {
       qN++;
       const idEsc = escHtml(item.id);
@@ -13654,6 +13667,26 @@ function _bondPrepAnswerInput(ta){
   const meta = caseMeta[_bondPrepActiveClid] || (caseMeta[_bondPrepActiveClid] = {});
   const answers = meta.bondPrepAnswers || (meta.bondPrepAnswers = {});
   answers[qid] = ta.value;
+  if(typeof markUnsaved==='function') markUnsaved();
+}
+
+// Checklist toggle handler. Stores `true` for checked items so the same
+// `caseMeta[clid].bondPrepAnswers` map round-trips both textareas (string
+// answers) and checkboxes (boolean checks) without a separate field.
+function _bondPrepCheckChange(cb){
+  if(!_bondPrepActiveClid) return;
+  const qid = cb.getAttribute('data-bpc');
+  if(!qid) return;
+  const meta = caseMeta[_bondPrepActiveClid] || (caseMeta[_bondPrepActiveClid] = {});
+  const answers = meta.bondPrepAnswers || (meta.bondPrepAnswers = {});
+  if(cb.checked) answers[qid] = true;
+  else delete answers[qid];
+  // Strike-through the label inline without a full re-render.
+  const lbl = cb.parentElement && cb.parentElement.querySelector('span');
+  if(lbl){
+    if(cb.checked){ lbl.style.textDecoration='line-through'; lbl.style.color='var(--ink-faint)'; }
+    else          { lbl.style.textDecoration='';            lbl.style.color='var(--ink)'; }
+  }
   if(typeof markUnsaved==='function') markUnsaved();
 }
 
