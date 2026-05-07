@@ -5164,18 +5164,18 @@ function _calSig(r){
   return [r.event,r.type,r.client,r.clid,r.anum,r.atty,r.assigned,r.date,r.timeStart,r.timeEnd,r.notes,r.hearingMode].map(v=>v==null?'':String(v)).join('|');
 }
 function _isAutoSyncAccount(){
-  return !!(_gmailAccessToken && _gmailUserEmail && _gmailUserEmail.toLowerCase() === CALENDAR_AUTO_SYNC_EMAIL.toLowerCase());
+  return !!(_gmailAccessToken && _gmailUserEmail);
 }
 function _updateCalAutoSyncIndicator(){
   const el = document.getElementById('cal-sync-btn');
   if(!el) return;
   if(_isAutoSyncAccount()){
-    el.title = 'Auto-sync ON — events push to '+CALENDAR_AUTO_SYNC_EMAIL+' automatically. Click to sync now.';
+    el.title = 'Auto-sync ON — events push to '+_gmailUserEmail+' automatically. Click to sync now.';
     el.style.borderColor = 'var(--sage)';
     el.style.color = 'var(--sage)';
     el.textContent = '📅 Auto-sync ON';
   } else {
-    el.title = 'Auto-sync only runs when signed in as '+CALENDAR_AUTO_SYNC_EMAIL+'. Click to sync manually with the current account.';
+    el.title = 'Sign in with Google to sync events to your Calendar.';
     el.style.borderColor = 'var(--slate)';
     el.style.color = 'var(--slate)';
     el.textContent = '📅 Sync to Calendar';
@@ -5243,7 +5243,11 @@ async function calendarSyncAll(){
   const batchSize = 5;
   for(let i=0; i<targets.length; i+=batchSize){
     const batch = targets.slice(i, i+batchSize);
-    const results = await Promise.all(batch.map(r => _upsertRecordToCalendar(r).catch(e => ({ok:false, err:String(e)}))));
+    const results = await Promise.all(batch.map(async r => {
+      const res = await _upsertRecordToCalendar(r).catch(e => ({ok:false, err:String(e)}));
+      if(res && res.ok) r._gcalSig = _calSig(r);
+      return res;
+    }));
     results.forEach(res => {
       if(res.ok){ if(res.created) created++; if(res.updated) updated++; }
       else failed++;
