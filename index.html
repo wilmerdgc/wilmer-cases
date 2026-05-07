@@ -2319,10 +2319,12 @@ function hideExcelRestorePrompt(){}
 </div>
 <!-- SETTINGS -->
 <div id="pane-settings" style="display:none">
-  <div id="settings-save-bar">
-    <div class="settings-unsaved-msg">&#9679; You have unsaved changes</div>
-    <div style="display:flex;gap:8px"><button onclick="discardSettingsChanges()" style="font-size:12px;padding:5px 16px">Discard</button><button class="btn-primary" onclick="saveSettingsChanges()" style="font-size:12px;padding:5px 16px">Save changes</button></div>
-  </div>
+  <!-- Settings now auto-save through markUnsaved() on every edit, just like
+       the rest of the app — the explicit Save / Discard bar that used to
+       live here was retired because it sometimes caused changes to be lost
+       (the debounced write hadn't completed by the time the toast claimed
+       it had). -->
+  <div id="settings-save-bar" style="display:none !important;"></div>
   <div class="settings-section">
     <div class="settings-section-title"><span>Visible columns</span><button class="btn-sm" onclick="toggleAddColForm()">+ Add column</button></div>
     <div id="col-vis-list"></div>
@@ -3301,43 +3303,37 @@ let _settingsDirty=false;
 function snapshotSettings(){_settingsDirty=false;}
 function settingsAreDirty(){return _settingsDirty;}
 function _markSettingsDirty(){_settingsDirty=true;}
-function updateSettingsSaveBar(){_settingsDirty=true;const bar=document.getElementById('settings-save-bar');if(bar)bar.classList.add('visible');}
-function _hideSettingsSaveBar(){_settingsDirty=false;const bar=document.getElementById('settings-save-bar');if(bar)bar.classList.remove('visible');}
-// Save settings synchronously. Bug fix: previously this called markUnsaved()
-// which debounces the actual write by 1 second, so a refresh within that
-// window silently dropped the change. Now we cancel the pending debounce,
-// flush saveAllData() right away, and only then hide the bar / toast — so
-// "Settings saved ✓" is true the moment it appears.
+// Settings now auto-save the same way every other edit does: via the
+// debounced markUnsaved() pipeline. The legacy Save / Discard bar is gone,
+// but a number of pre-existing settings handlers still call this function
+// after mutating state, so we route those through markUnsaved() to make sure
+// the auto-save fires (some of those callers never called markUnsaved()
+// directly, which is why their changes used to need the explicit Save).
+function updateSettingsSaveBar(){
+  _settingsDirty=true;
+  if(typeof markUnsaved==='function'){
+    try{ markUnsaved(); }catch(e){}
+  }
+}
+// Kept as no-ops so legacy onclick="saveSettingsChanges()" / "discardSettingsChanges()"
+// references in other places don't blow up. Saving is handled by markUnsaved
+// + the beforeunload flush, and "discarding" no longer makes sense without
+// a transient buffer.
+function _hideSettingsSaveBar(){ _settingsDirty=false; }
 function saveSettingsChanges(){
-  try{ clearTimeout(window._autoSaveTimer); }catch(e){}
-  // Mirror what markUnsaved() does for the top-bar dot, then write through
-  // immediately rather than scheduling a debounced save.
-  const dot = document.getElementById('unsaved-dot'); if(dot) dot.style.display='inline-block';
-  const sb  = document.getElementById('btn-save');    if(sb)  sb.classList.add('unsaved');
-  try{ saveAllData(); }catch(e){ console.error('saveSettingsChanges', e); showToast('Save failed — try again'); return; }
+  // Force-flush any pending debounced write so we have a hard guarantee
+  // that the persisted snapshot is current.
+  try{ clearTimeout(window._autoSaveTimer); window._autoSaveTimer=null; saveAllData(); }catch(e){}
   _hideSettingsSaveBar();
   showToast('Settings saved ✓');
 }
-function discardSettingsChanges(){
-  if(!_settingsDirty){ _hideSettingsSaveBar(); return; }
-  // Re-load from the most recent persisted snapshot so any in-memory edits
-  // are reverted (renderSettings alone wasn't doing that).
-  try{ if(typeof loadSavedData==='function') loadSavedData(); }catch(e){}
-  _hideSettingsSaveBar();
-  renderSettings(); renderAll();
-  showToast('Changes discarded');
-}
+function discardSettingsChanges(){ /* no-op — settings auto-save now */ }
 // Belt-and-suspenders guard: if the user closes / refreshes the tab while a
-// debounced save is still pending, flush it first and warn before unloading
-// so they can confirm before losing in-flight settings edits.
-window.addEventListener('beforeunload', (e) => {
+// debounced save is still pending, flush it first so the in-memory edits
+// land in localStorage / Firestore before the page goes away.
+window.addEventListener('beforeunload', () => {
   if(window._autoSaveTimer){
     try{ clearTimeout(window._autoSaveTimer); window._autoSaveTimer = null; saveAllData(); }catch(err){}
-  }
-  if(_settingsDirty){
-    e.preventDefault();
-    e.returnValue = 'You have unsaved settings — leave anyway?';
-    return e.returnValue;
   }
 });
 function switchTab(t){currentTab=t;
