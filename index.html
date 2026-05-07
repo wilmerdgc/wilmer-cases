@@ -12156,7 +12156,7 @@ async function _writeAutoBackup(){
   _autoBackupWriting = true;
   _setAutoBackupDot('writing');
   try{
-    const payload = {records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta};
+    const payload = {records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,bondPrepQuestions};
     const json = JSON.stringify(payload, null, 2);
     const writable = await _autoBackupHandle.createWritable();
     await writable.write(json);
@@ -12256,7 +12256,8 @@ function saveFileWithTimestamp(){
 
   // Capture full state including preferences
   const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,
-    caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes};
+    caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,
+    customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,bondPrepQuestions};
   const payloadJSON=JSON.stringify(payload);
 
   // Bootstrap block: auto-seeds localStorage on any device
@@ -12278,7 +12279,7 @@ function saveFileWithTimestamp(){
   if(btn){const p=btn.textContent;btn.textContent='✓';setTimeout(()=>{btn.textContent=p||'💾';},1800);}
   showToast('Saved: Wilmer '+label+'.html ✓');
 }
-function backupData(){const payload={records,paralegals,eventTypes,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);const d=new Date();a.download='romero_cases_backup_'+d.toISOString().slice(0,10)+'.json';a.click();setLastBackupLabel('Backup');showToast('Backup downloaded ✓');}
+function backupData(){const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,bondPrepQuestions};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);const d=new Date();a.download='romero_cases_backup_'+d.toISOString().slice(0,10)+'.json';a.click();setLastBackupLabel('Backup');showToast('Backup downloaded ✓');}
 // ── All Events: Download Template & Import ──────────────────
 function downloadEventTemplate(){
   const baseHeaders = [
@@ -12478,6 +12479,16 @@ function restoreData(event){const file=event.target.files[0];if(!file)return;con
     if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);
     if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);
     if(p.customColumns){const existKeys=new Set(customColumns.map(c=>c.key));p.customColumns.forEach(c=>{if(!existKeys.has(c.key))customColumns.push(c);});}
+    if(p.callUpTypes&&Array.isArray(p.callUpTypes))callUpTypes=[...new Set([...callUpTypes,...p.callUpTypes])];
+    if(p.judges&&Array.isArray(p.judges)){const exJ=new Set(judges.map(j=>j.id||j.name));p.judges.forEach(j=>{if(!exJ.has(j.id||j.name))judges.push(j);});saveJudgesData();}
+    if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes))caseIssueTypes=[...new Set([...caseIssueTypes,...p.caseIssueTypes])];
+    if(p.customChecklists&&Array.isArray(p.customChecklists)){const exC=new Set(customChecklists.map(c=>c.id||c.name));p.customChecklists.forEach(c=>{if(!exC.has(c.id||c.name))customChecklists.push(c);});saveCustomChecklists();}
+    if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);
+    if(p.attorneys&&Array.isArray(p.attorneys)){attorneys=[...new Set([...attorneys,...p.attorneys])];saveAttorneys();}
+    if(p.attorneyEmails){Object.assign(attorneyEmails,p.attorneyEmails);saveAttorneyEmails();}
+    if(p.venues&&Array.isArray(p.venues))venues=[...new Set([...venues,...p.venues])];
+    if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);
+    if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){const exB=new Set(bondPrepQuestions.map(q=>q.id));p.bondPrepQuestions.forEach(q=>{if(!exB.has(q.id))bondPrepQuestions.push(q);});_saveBondPrepQuestions();}
     showToast('Merged '+newRecs.length+' new records ✓');
   } else {
     // REPLACE mode
@@ -12492,6 +12503,16 @@ function restoreData(event){const file=event.target.files[0];if(!file)return;con
     if(p.customColumns)customColumns=p.customColumns;
     if(p.colVis)Object.assign(colVis,p.colVis);
     if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);
+    if(p.callUpTypes&&Array.isArray(p.callUpTypes)){callUpTypes=p.callUpTypes;saveCallUpTypes();}
+    if(p.judges&&Array.isArray(p.judges)){judges=p.judges;saveJudgesData();}
+    if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}
+    if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}
+    if(p.paralegalEmails){Object.keys(paralegalEmails).forEach(k=>delete paralegalEmails[k]);Object.assign(paralegalEmails,p.paralegalEmails);}
+    if(p.attorneys&&Array.isArray(p.attorneys)){attorneys=p.attorneys;saveAttorneys();}
+    if(p.attorneyEmails){Object.keys(attorneyEmails).forEach(k=>delete attorneyEmails[k]);Object.assign(attorneyEmails,p.attorneyEmails);saveAttorneyEmails();}
+    if(p.venues&&Array.isArray(p.venues))venues=p.venues;
+    if(p.firmInfo){Object.keys(firmInfo).forEach(k=>delete firmInfo[k]);Object.assign(firmInfo,p.firmInfo);}
+    if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}
     showToast('Data replaced ✓');
   }
   // Invalidate all caches on data reload
@@ -18318,8 +18339,11 @@ function applyPayload(p){
   if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}
   if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}
   if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);
+  if(p.attorneys&&Array.isArray(p.attorneys)){attorneys=p.attorneys;saveAttorneys();}
+  if(p.attorneyEmails){Object.assign(attorneyEmails,p.attorneyEmails);saveAttorneyEmails();}
   if(p.venues&&Array.isArray(p.venues))venues=p.venues;
   if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);
+  if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}
 }
 // ══════════════════════════════════════════════════
 // CLOUD SYNC — localStorage is always source of truth
@@ -18419,7 +18443,7 @@ function forcePullFromCloud(){
       _dataInitialized=true; // explicit pull permits saves again
       try{
         const _now=Date.now();
-        const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
+        const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,bondPrepQuestions,_savedAt:_now};
         localStorage.setItem('casetracker_v1',JSON.stringify(payload));
         localStorage.setItem('wilmer_save_epoch',String(cloudData._savedAt||_now));
       }catch(e){}
@@ -18774,7 +18798,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         _dataInitialized=true; // cloud was applied — safe to autosave
         try{
           const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
+          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,bondPrepQuestions,_savedAt:_now};
           localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
@@ -18799,7 +18823,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         // re-push to Firestore and cause an infinite ping-pong loop
         try{
           const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
+          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,bondPrepQuestions,_savedAt:_now};
           localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
@@ -19238,7 +19262,7 @@ function bkSave(){
 function bkTakeSnapshot(label, type){
   bkLoad();
   type = type || 'auto';
-  const payload = JSON.stringify({records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta});
+  const payload = JSON.stringify({records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,bondPrepQuestions});
   const entry = {id:'bk'+Date.now(), label: label||'Auto-save', ts: Date.now(), type, size: payload.length, payload};
   _bkVersions.unshift(entry);
   // Prune
@@ -19303,6 +19327,16 @@ function bkDoRestore(id){
     if(p.customColumns) customColumns=p.customColumns;
     if(p.colVis) Object.assign(colVis,p.colVis);
     if(p.caseMeta) Object.assign(caseMeta,p.caseMeta);
+    if(p.callUpTypes&&Array.isArray(p.callUpTypes)){callUpTypes=p.callUpTypes;saveCallUpTypes();}
+    if(p.judges&&Array.isArray(p.judges)){judges=p.judges;saveJudgesData();}
+    if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}
+    if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}
+    if(p.paralegalEmails){Object.keys(paralegalEmails).forEach(k=>delete paralegalEmails[k]);Object.assign(paralegalEmails,p.paralegalEmails);}
+    if(p.attorneys&&Array.isArray(p.attorneys)){attorneys=p.attorneys;saveAttorneys();}
+    if(p.attorneyEmails){Object.keys(attorneyEmails).forEach(k=>delete attorneyEmails[k]);Object.assign(attorneyEmails,p.attorneyEmails);saveAttorneyEmails();}
+    if(p.venues&&Array.isArray(p.venues)) venues=p.venues;
+    if(p.firmInfo){Object.keys(firmInfo).forEach(k=>delete firmInfo[k]);Object.assign(firmInfo,p.firmInfo);}
+    if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}
     Object.keys(_pdCache).forEach(k=>delete _pdCache[k]);
     _invalidateCasesCache(); dirtyFilterOpts(); saveAllData();
     showToast('Restored to: '+v.label+' \u2713');
