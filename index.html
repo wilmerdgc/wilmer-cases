@@ -3302,8 +3302,44 @@ function snapshotSettings(){_settingsDirty=false;}
 function settingsAreDirty(){return _settingsDirty;}
 function _markSettingsDirty(){_settingsDirty=true;}
 function updateSettingsSaveBar(){_settingsDirty=true;const bar=document.getElementById('settings-save-bar');if(bar)bar.classList.add('visible');}
-function saveSettingsChanges(){_settingsDirty=false;updateSettingsSaveBar();markUnsaved();showToast('Settings saved ✓');}
-function discardSettingsChanges(){if(!_settingsDirty)return;_settingsDirty=false;updateSettingsSaveBar();renderSettings();renderAll();showToast('Changes discarded');}
+function _hideSettingsSaveBar(){_settingsDirty=false;const bar=document.getElementById('settings-save-bar');if(bar)bar.classList.remove('visible');}
+// Save settings synchronously. Bug fix: previously this called markUnsaved()
+// which debounces the actual write by 1 second, so a refresh within that
+// window silently dropped the change. Now we cancel the pending debounce,
+// flush saveAllData() right away, and only then hide the bar / toast — so
+// "Settings saved ✓" is true the moment it appears.
+function saveSettingsChanges(){
+  try{ clearTimeout(window._autoSaveTimer); }catch(e){}
+  // Mirror what markUnsaved() does for the top-bar dot, then write through
+  // immediately rather than scheduling a debounced save.
+  const dot = document.getElementById('unsaved-dot'); if(dot) dot.style.display='inline-block';
+  const sb  = document.getElementById('btn-save');    if(sb)  sb.classList.add('unsaved');
+  try{ saveAllData(); }catch(e){ console.error('saveSettingsChanges', e); showToast('Save failed — try again'); return; }
+  _hideSettingsSaveBar();
+  showToast('Settings saved ✓');
+}
+function discardSettingsChanges(){
+  if(!_settingsDirty){ _hideSettingsSaveBar(); return; }
+  // Re-load from the most recent persisted snapshot so any in-memory edits
+  // are reverted (renderSettings alone wasn't doing that).
+  try{ if(typeof loadSavedData==='function') loadSavedData(); }catch(e){}
+  _hideSettingsSaveBar();
+  renderSettings(); renderAll();
+  showToast('Changes discarded');
+}
+// Belt-and-suspenders guard: if the user closes / refreshes the tab while a
+// debounced save is still pending, flush it first and warn before unloading
+// so they can confirm before losing in-flight settings edits.
+window.addEventListener('beforeunload', (e) => {
+  if(window._autoSaveTimer){
+    try{ clearTimeout(window._autoSaveTimer); window._autoSaveTimer = null; saveAllData(); }catch(err){}
+  }
+  if(_settingsDirty){
+    e.preventDefault();
+    e.returnValue = 'You have unsaved settings — leave anyway?';
+    return e.returnValue;
+  }
+});
 function switchTab(t){currentTab=t;
   document.getElementById('pane-dashboard').style.display=t==='dashboard'?'':'none';
   document.getElementById('pane-cases').style.display=t==='cases'?'':'none';
