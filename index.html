@@ -12683,7 +12683,9 @@ function renderCases(){
     const membersHtml=respondents.length
       ? `<div style="font-size:11px;color:#9E9186;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">+ ${respondents.map(r=>`<span style="color:#6B7FA3;font-weight:500;">${r.name}</span>`+(r.relationship?` <span style="color:#C4BAB0">(${r.relationship})</span>`:'')).join(' &middot; ')}</div>`
       : '';
-    card.innerHTML=`<div class="case-card-left" style="min-width:0;flex:1;overflow:hidden;"><div class="case-card-name">${c.client||'—'}</div>${membersHtml}<div class="case-card-meta">${c.type||'—'}${c.atty?' · '+c.atty:''}${c.anum?' · A# '+c.anum:''}</div></div><div class="case-card-right">${sb}${cuChip}<span style="font-size:11px;color:#C4BAB0">${activeRecs.length} active · ${c.records.length} total</span>${c.clid?'<span style="font-size:11px;color:#C4BAB0">ID '+c.clid+'</span>':''}</div>`;
+    const _isPersonalCase=!!((caseMeta[c.clid||c.client]||{}).isPersonal);
+    const personalChip=_isPersonalCase?'<span style="font-size:9px;font-weight:700;letter-spacing:.06em;padding:2px 7px;border-radius:6px;background:#FAF0E6;color:#C9823A;margin-right:6px;">PERSONAL</span>':'';
+    card.innerHTML=`<div class="case-card-left" style="min-width:0;flex:1;overflow:hidden;"><div class="case-card-name">${personalChip}${c.client||'—'}</div>${membersHtml}<div class="case-card-meta">${c.type||'—'}${c.atty?' · '+c.atty:''}${c.anum?' · A# '+c.anum:''}</div></div><div class="case-card-right">${sb}${cuChip}<span style="font-size:11px;color:#C4BAB0">${activeRecs.length} active · ${c.records.length} total</span>${c.clid?'<span style="font-size:11px;color:#C4BAB0">ID '+c.clid+'</span>':''}</div>`;
     frag.appendChild(card);
   });
   list.appendChild(frag);
@@ -14909,6 +14911,7 @@ function openCaseDetail(clid){
     // only appear while the user is editing case information.
     if(typeof renderCaseDetailPhoto === 'function') renderCaseDetailPhoto(clid, isEditing);
     const isConsolidated=!!caseMeta[clid].consolidated;
+    const isPersonal=!!caseMeta[clid].isPersonal;
     const isSJC=(base.type||'').includes('Special Juvenile');
 
     // Build unified client list: lead first, then respondents
@@ -14986,6 +14989,19 @@ function openCaseDetail(clid){
       const consItem=document.createElement('div');consItem.className='case-info-item';
       const consLbl2=document.createElement('div');consLbl2.className='case-info-label';consLbl2.textContent='Consolidated case';consItem.appendChild(consLbl2);
       const v2=document.createElement('div');v2.className='case-info-value';v2.textContent='Yes';v2.style.cssText='color:#6B7FA3;font-weight:600;';consItem.appendChild(v2);L1.appendChild(consItem);
+    }
+
+    // Personal case
+    if(isEditing){
+      const persItem=document.createElement('div');persItem.className='case-info-item';persItem.style.cssText='background:#fff;border:1px solid #DDD5CA;';
+      const persLbl=document.createElement('div');persLbl.className='case-info-label';persLbl.textContent='Personal case';persItem.appendChild(persLbl);
+      const cbP=document.createElement('input');cbP.type='checkbox';cbP.checked=isPersonal;cbP.style.cssText='width:14px;height:14px;accent-color:#6A8C6E;cursor:pointer;margin-top:4px;';
+      cbP.onchange=()=>{caseMeta[clid].isPersonal=cbP.checked;markUnsaved();renderAll2();renderCases&&renderCases();};
+      persItem.appendChild(cbP);L1.appendChild(persItem);
+    } else if(isPersonal){
+      const persItem=document.createElement('div');persItem.className='case-info-item';
+      const persLbl=document.createElement('div');persLbl.className='case-info-label';persLbl.textContent='Personal case';persItem.appendChild(persLbl);
+      const vP=document.createElement('div');vP.className='case-info-value';vP.textContent='Yes';vP.style.cssText='color:#C9823A;font-weight:600;';persItem.appendChild(vP);L1.appendChild(persItem);
     }
     infoBody.appendChild(L1);
 
