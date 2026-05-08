@@ -2238,6 +2238,13 @@ function hideExcelRestorePrompt(){}
     </div>
     <div style="max-width:640px;">
 
+      <!-- Personal case toggle -->
+      <div style="background:#FDFAF7;border:1px solid #EDE8E0;border-radius:14px;padding:14px 22px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+        <input id="ncp-isPersonal" type="checkbox" style="width:15px;height:15px;accent-color:#C9823A;cursor:pointer;" onchange="_ncpTogglePersonal(this.checked)"/>
+        <label for="ncp-isPersonal" style="font-size:13px;font-weight:600;color:#5C5148;cursor:pointer;">Personal case</label>
+        <span style="font-size:11px;color:#9E9186;">— skip the Client ID</span>
+      </div>
+
       <!-- Identity card -->
       <div style="background:#FDFAF7;border:1px solid #EDE8E0;border-radius:14px;padding:20px 22px;margin-bottom:16px;">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;margin-bottom:14px;">Client Identity</div>
@@ -2255,8 +2262,8 @@ function hideExcelRestorePrompt(){}
           <label class="nc-label">Middle Name</label>
           <input id="ncp-middleName" type="text" placeholder="Middle name (one word, optional)…" class="nc-input"/>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px;">
-          <div>
+        <div id="ncp-clid-anum-row" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px;">
+          <div id="ncp-clid-cell">
             <label class="nc-label">Client ID</label>
             <input id="ncp-clid" type="text" placeholder="e.g. 22900" class="nc-input"/>
           </div>
@@ -18079,6 +18086,14 @@ function renderQueue(){
 }
 
 // ── New Case Modal ──
+function _ncpTogglePersonal(on){
+  const cell=document.getElementById('ncp-clid-cell');
+  const row=document.getElementById('ncp-clid-anum-row');
+  if(cell) cell.style.display=on?'none':'';
+  if(row) row.style.gridTemplateColumns=on?'1fr':'1fr 1fr';
+  if(on){const c=document.getElementById('ncp-clid'); if(c) c.value='';}
+}
+
 function openAddCasePage(){
   // Hide other views
   document.getElementById('cases-list-view').style.display='none';
@@ -18087,6 +18102,8 @@ function openAddCasePage(){
   document.getElementById('cases-subtab-sij').style.display='none';
   document.getElementById('cases-sub-nav').style.display='none';
   document.getElementById('cases-add-view').style.display='';
+  // Reset Personal toggle to off so the Client ID row is shown by default
+  const persCb=document.getElementById('ncp-isPersonal'); if(persCb){persCb.checked=false;_ncpTogglePersonal(false);}
 
   // Populate case type
   const typeEl=document.getElementById('ncp-type');
@@ -18205,6 +18222,8 @@ function saveAddCasePage(){
   caseMeta[caseId].clientFirstName=firstName;
   if(middleName) caseMeta[caseId].clientMiddleName=middleName;
   if(email) caseMeta[caseId].clientEmail=email;
+  const _ncpPers=document.getElementById('ncp-isPersonal');
+  if(_ncpPers&&_ncpPers.checked) caseMeta[caseId].isPersonal=true;
 
   if(type&&!caseTypes.includes(type)) caseTypes.push(type);
   if(atty&&!paralegals.includes(atty)) paralegals.push(atty);
