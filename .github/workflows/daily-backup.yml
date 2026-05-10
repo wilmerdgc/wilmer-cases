@@ -18,12 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "20"
 
@@ -34,7 +34,7 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          set -eu
+          set -eux
           if [ -z "${FIREBASE_SERVICE_ACCOUNT}" ]; then
             echo "::error::FIREBASE_SERVICE_ACCOUNT secret is missing. Add it in Settings → Secrets and variables → Actions."
             exit 1
@@ -54,12 +54,14 @@ jobs:
               if(!snap.exists){console.error('No wilmer/data document');process.exit(1);}
               const data=snap.data();
               const date='${DATE}';
+              // Strip volatile fields so that two runs on the same day with
+              // unchanged data produce a byte-identical file (no spurious commit).
+              delete data._savedAt;
               fs.writeFileSync('backups/'+date+'.json', JSON.stringify(data));
               const recs=Array.isArray(data.records)?data.records.length:0;
               const clients=recs?new Set(data.records.map(r=>r.clid||r.id)).size:0;
-              const savedAt=data._savedAt?new Date(data._savedAt).toISOString():'n/a';
-              fs.writeFileSync('backups/.meta', JSON.stringify({date,records:recs,clients,savedAt}));
-              console.log('records:',recs,'| clients:',clients,'| savedAt:',savedAt);
+              fs.writeFileSync('backups/.meta', JSON.stringify({date,records:recs,clients}));
+              console.log('records:',recs,'| clients:',clients);
             })().catch(e=>{console.error(e);process.exit(1);});
           "
           # Never keep the credential on disk longer than needed
@@ -85,7 +87,7 @@ jobs:
 
       - name: Commit and push if changed
         run: |
-          set -eu
+          set -eux
           git config user.name  "wilmer-cases-backup-bot"
           git config user.email "backup-bot@users.noreply.github.com"
           git add backups/
@@ -99,4 +101,17 @@ jobs:
           rm -f backups/.meta
           git add backups/
           git commit -m "backup: $DATE daily snapshot ($RECS records)"
-          git push
+          # Push with retry. If main moved (race with another commit), pull
+          # --rebase brings us up to date and we try again. Up to 4 attempts
+          # with exponential backoff handles transient network errors too.
+          for i in 1 2 3 4; do
+            if git push; then
+              echo "Pushed on attempt $i."
+              exit 0
+            fi
+            echo "Push attempt $i failed; rebasing on origin/main and retrying…"
+            git pull --rebase origin main || true
+            sleep $((i * 2))
+          done
+          echo "::error::git push failed after 4 attempts."
+          exit 1
