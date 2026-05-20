@@ -1841,6 +1841,27 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 <body>
 <script>
 function hideExcelRestorePrompt(){}
+
+// Auto-grow notes textareas so the full content is visible without internal scrolling.
+const NOTES_AUTOGROW_SEL = '#dv-day-notes,#ncp-notes,#inbox-note-text,#jm-master,#jm-individual,#jm-bond,#jm-motion,#jm-notes,#fc-notes,#fc-history-note,#nt-notes,#nc-notes,.case-notes-textarea,.notes-autogrow';
+function autoGrowNotes(el){
+  if(!el || el.tagName!=='TEXTAREA') return;
+  el.style.height='auto';
+  el.style.height=(el.scrollHeight+2)+'px';
+  el.style.overflowY='hidden';
+}
+function autoGrowAllNotes(root){
+  (root||document).querySelectorAll(NOTES_AUTOGROW_SEL).forEach(autoGrowNotes);
+}
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(t && t.tagName==='TEXTAREA' && (t.matches&&t.matches(NOTES_AUTOGROW_SEL))) autoGrowNotes(t);
+},true);
+document.addEventListener('focusin',e=>{
+  const t=e.target;
+  if(t && t.tagName==='TEXTAREA' && (t.matches&&t.matches(NOTES_AUTOGROW_SEL))) autoGrowNotes(t);
+},true);
+window.addEventListener('load',()=>autoGrowAllNotes());
 </script>
 
 <!-- MULTI-TAB WARNING BANNER -->
@@ -11058,7 +11079,7 @@ function openCaseFromModal(){
   goToCase(clid);
 }
 function openAdd(){editingId=null;pendingStatus=null;document.getElementById('modal-title').textContent='Add event';const ocb=document.getElementById('modal-open-case-btn');if(ocb)ocb.style.display='none';document.getElementById('modal-status-section').style.display='none';document.getElementById('modal-reminder-section').style.display='block';['fc-clid','fc-client','fc-anum','fc-date','fc-notes'].forEach(id=>document.getElementById(id).value='');const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=false;document.getElementById('time-range-panel').classList.remove('open');document.getElementById('fc-time-start').value='';document.getElementById('fc-time-end').value='';document.getElementById('fc-time-display').textContent='';pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetVirtualHearingDetails();const _icp0=document.getElementById('individual-callup-panel');if(_icp0)_icp0.style.display='none';resetFcSubevents();const _fcs0=document.getElementById('fc-subevents-panel');if(_fcs0)_fcs0.style.display='none';populateModalDropdowns();resetDateCalc();setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _m0=document.getElementById('modal');_m0.classList.remove('readonly-mode');_m0.style.display='flex';}
-function openEdit(id){const r=records.find(x=>x.id===id);if(!r)return;editingId=id;pendingStatus=null;document.getElementById('modal-title').textContent='Edit event';const _ocb=document.getElementById('modal-open-case-btn');if(_ocb){_ocb.style.display=(r.clid||r.client)?'inline':'none';}document.getElementById('modal-status-section').style.display='block';document.getElementById('modal-reminder-section').style.display='block';pendingReminders=[];if(r){records.forEach(rx=>{if(rx.id===id)return;const isLinked=rx._parentId===id||(!rx._parentId&&(rx.clid||rx.client)===(r.clid||r.client));if(isLinked&&rx.notes&&rx.notes.startsWith('⏰ REMINDER')&&rx.date&&r.date){const diff=Math.round((new Date(r.date.replace(/-/g,'/'))-new Date(rx.date.replace(/-/g,'/')))/(1000*60*60*24));if(diff>0&&!pendingReminders.includes(diff))pendingReminders.push(diff);}});}renderReminderChips();document.getElementById('fc-clid').value=r.clid||'';document.getElementById('fc-client').value=r.client||'';document.getElementById('fc-anum').value=r.anum||'';document.getElementById('fc-date').value=r.date||'';document.getElementById('fc-notes').value=r.notes||'';const hasTime=!!(r.timeStart||r.timeEnd);const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=hasTime;document.getElementById('fc-time-start').value=r.timeStart||'';document.getElementById('fc-time-end').value=r.timeEnd||'';if(hasTime)document.getElementById('time-range-panel').classList.add('open');else document.getElementById('time-range-panel').classList.remove('open');updateTimeDisplay();document.getElementById('fc-history-note').value='';document.getElementById('fc-reschedule-date').value='';document.getElementById('reschedule-panel').classList.remove('open');document.getElementById('reschedule-extras').style.display='none';if(document.getElementById('rs-time-toggle'))document.getElementById('rs-time-toggle').checked=false;document.getElementById('rs-time-range-panel').classList.remove('open');if(document.getElementById('rs-time-start'))document.getElementById('rs-time-start').value='';if(document.getElementById('rs-time-end'))document.getElementById('rs-time-end').value='';document.getElementById('rs-time-display').textContent='';rsReminders=[];renderRsReminderChips();['attended','completed','cancelled','rescheduled','deleted'].forEach(k=>{const el=document.getElementById('sbtn-'+k);if(el)el.classList.remove('sel');});if(r.attendedStatus){const ab=document.getElementById('sbtn-attended');if(ab)ab.classList.add('sel');}resetSoAttachmentPanel();resetFcSubevents();populateModalDropdowns();document.getElementById('fc-casetype').value=r.type||'';document.getElementById('fc-paralegal').value=r.atty||'';document.getElementById('fc-eventtype').value=r.event||'';onEventTypeChange(r.event||'');setHearingMode(r.hearingMode||'');setVirtualHearingDetails(r.hearingJudgeId||'',r.virtualLink||'');const sid=document.getElementById('so-issue-date');if(sid)sid.value=r.soIssueDate||'';document.getElementById('fc-assigned').value=r.assigned||'';customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);if(el)el.value=r[c.key]||'';});renderHistoryLog(r.history||[]);loadModalChecklistDocs(r);resetDateCalc(r.date||'');document.getElementById('modal').style.display='flex';enterReadOnlyMode(r);}
+function openEdit(id){const r=records.find(x=>x.id===id);if(!r)return;editingId=id;pendingStatus=null;document.getElementById('modal-title').textContent='Edit event';const _ocb=document.getElementById('modal-open-case-btn');if(_ocb){_ocb.style.display=(r.clid||r.client)?'inline':'none';}document.getElementById('modal-status-section').style.display='block';document.getElementById('modal-reminder-section').style.display='block';pendingReminders=[];if(r){records.forEach(rx=>{if(rx.id===id)return;const isLinked=rx._parentId===id||(!rx._parentId&&(rx.clid||rx.client)===(r.clid||r.client));if(isLinked&&rx.notes&&rx.notes.startsWith('⏰ REMINDER')&&rx.date&&r.date){const diff=Math.round((new Date(r.date.replace(/-/g,'/'))-new Date(rx.date.replace(/-/g,'/')))/(1000*60*60*24));if(diff>0&&!pendingReminders.includes(diff))pendingReminders.push(diff);}});}renderReminderChips();document.getElementById('fc-clid').value=r.clid||'';document.getElementById('fc-client').value=r.client||'';document.getElementById('fc-anum').value=r.anum||'';document.getElementById('fc-date').value=r.date||'';document.getElementById('fc-notes').value=r.notes||'';const hasTime=!!(r.timeStart||r.timeEnd);const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=hasTime;document.getElementById('fc-time-start').value=r.timeStart||'';document.getElementById('fc-time-end').value=r.timeEnd||'';if(hasTime)document.getElementById('time-range-panel').classList.add('open');else document.getElementById('time-range-panel').classList.remove('open');updateTimeDisplay();document.getElementById('fc-history-note').value='';document.getElementById('fc-reschedule-date').value='';document.getElementById('reschedule-panel').classList.remove('open');document.getElementById('reschedule-extras').style.display='none';if(document.getElementById('rs-time-toggle'))document.getElementById('rs-time-toggle').checked=false;document.getElementById('rs-time-range-panel').classList.remove('open');if(document.getElementById('rs-time-start'))document.getElementById('rs-time-start').value='';if(document.getElementById('rs-time-end'))document.getElementById('rs-time-end').value='';document.getElementById('rs-time-display').textContent='';rsReminders=[];renderRsReminderChips();['attended','completed','cancelled','rescheduled','deleted'].forEach(k=>{const el=document.getElementById('sbtn-'+k);if(el)el.classList.remove('sel');});if(r.attendedStatus){const ab=document.getElementById('sbtn-attended');if(ab)ab.classList.add('sel');}resetSoAttachmentPanel();resetFcSubevents();populateModalDropdowns();document.getElementById('fc-casetype').value=r.type||'';document.getElementById('fc-paralegal').value=r.atty||'';document.getElementById('fc-eventtype').value=r.event||'';onEventTypeChange(r.event||'');setHearingMode(r.hearingMode||'');setVirtualHearingDetails(r.hearingJudgeId||'',r.virtualLink||'');const sid=document.getElementById('so-issue-date');if(sid)sid.value=r.soIssueDate||'';document.getElementById('fc-assigned').value=r.assigned||'';customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);if(el)el.value=r[c.key]||'';});renderHistoryLog(r.history||[]);loadModalChecklistDocs(r);resetDateCalc(r.date||'');document.getElementById('modal').style.display='flex';enterReadOnlyMode(r);requestAnimationFrame(()=>autoGrowAllNotes(document.getElementById('modal')));}
 // ── Read-only view / inline edit mode for event modal ──
 function enterEditMode(focusId){
   const m=document.getElementById('modal'); if(!m) return;
@@ -11354,6 +11375,7 @@ function openJudgeModal(id){
   document.getElementById('jm-motion').value=j?j.motion:'';
   document.getElementById('jm-notes').value=j?j.notes:'';
   document.getElementById('judge-modal').style.display='flex';
+  requestAnimationFrame(()=>autoGrowAllNotes(document.getElementById('judge-modal')));
 }
 function closeJudgeModal(){document.getElementById('judge-modal').style.display='none';editingJudgeId=null;}
 function saveJudge(){
@@ -15547,9 +15569,11 @@ function openCaseDetail(clid){
           e.stopPropagation();
           const inp=document.createElement('textarea');
           inp.value=n.text;
-          inp.style.cssText='flex:1;font-size:12px;line-height:1.4;padding:4px 6px;border:1px solid #B4CCAD;border-radius:4px;color:#2C2620;background:#fff;outline:none;font-family:inherit;resize:vertical;min-height:28px;width:100%;box-sizing:border-box;';
-          inp.rows=Math.min(6,Math.max(1,Math.ceil(n.text.length/80)));
+          inp.className='notes-autogrow';
+          inp.style.cssText='flex:1;font-size:12px;line-height:1.4;padding:4px 6px;border:1px solid #B4CCAD;border-radius:4px;color:#2C2620;background:#fff;outline:none;font-family:inherit;resize:vertical;min-height:28px;width:100%;box-sizing:border-box;overflow:hidden;';
+          inp.rows=1;
           textEl.replaceWith(inp);inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);
+          autoGrowNotes(inp);
           const save=()=>{const v=inp.value.trim();if(v){n.text=v;markUnsaved();}renderCaseNotesList();};
           inp.onblur=save;inp.onkeydown=(ev)=>{if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();save();}if(ev.key==='Escape')renderCaseNotesList();};
         };
@@ -18827,7 +18851,7 @@ db.collection('wilmer_daynotes').doc(dnKey).onSnapshot(
     try{localStorage.setItem(dnKey,JSON.stringify(d));}catch{}
     const active=document.activeElement?document.activeElement.id:'';
     ['dv-priority-1','dv-priority-2','dv-priority-3'].forEach((id,i)=>{ if(active!==id){const el=document.getElementById(id);if(el)el.value=d['p'+(i+1)]||'';} });
-    if(active!=='dv-day-notes'){const el=document.getElementById('dv-day-notes');if(el)el.value=d.notes||'';}
+    if(active!=='dv-day-notes'){const el=document.getElementById('dv-day-notes');if(el){el.value=d.notes||'';autoGrowNotes(el);}}
   },
   ()=>{}
 );
