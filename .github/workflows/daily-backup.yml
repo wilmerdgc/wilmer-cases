@@ -20,7 +20,8 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          # Full history so we can rebase onto an advanced main before pushing
+          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -99,4 +100,17 @@ jobs:
           rm -f backups/.meta
           git add backups/
           git commit -m "backup: $DATE daily snapshot ($RECS records)"
-          git push
+          # Push with retry: if main advanced since checkout, rebase and retry
+          # so a moved-ahead branch self-heals instead of failing the run.
+          for i in 1 2 3 4 5; do
+            if git push; then
+              echo "Pushed on attempt $i."
+              exit 0
+            fi
+            echo "Push attempt $i rejected; fetching and rebasing onto latest main…"
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort; true; }
+            sleep $((i * 3))
+          done
+          echo "::error::Failed to push backup after 5 attempts. If the log shows 'protected branch hook declined', allow wilmer-cases-backup-bot to push in Settings → Branches/Rules."
+          exit 1
