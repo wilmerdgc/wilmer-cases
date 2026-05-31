@@ -16,6 +16,14 @@ firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
 let _fbOnline=false;
 let _lastLocalSave=0;
+// Highest cloud `_savedAt` this device has either observed via a Firestore
+// snapshot or successfully written itself. Used as the optimistic-concurrency
+// token for cross-device sync: if, at write time, the cloud doc has a newer
+// _savedAt from a different device, we know another device pushed while we
+// were stale — we abort the write and pull instead, so a stale tab can't
+// silently overwrite fresh work from another device.
+let _lastSeenCloudEpoch=(function(){try{return parseInt(localStorage.getItem('wilmer_save_epoch')||'0')||0;}catch(e){return 0;}})();
+let _hasPendingEdits=false;
 // Persist _deviceId so it stays stable across reloads/tabs on the same device.
 // A fresh-per-load random ID made the cloud-snapshot listener treat every
 // post-reload snapshot as "from another device" and overwrite local edits.
@@ -12031,8 +12039,8 @@ function restoreRecord(id){const r=records.find(x=>x.id===id);if(!r)return;delet
 
 // ── Persistence ──
 const STORAGE_KEY='casetracker_v1';
-function markUnsaved(){document.getElementById('unsaved-dot').style.display='inline-block';document.getElementById('btn-save').classList.add('unsaved');}
-function markSaved(){document.getElementById('unsaved-dot').style.display='none';document.getElementById('btn-save').classList.remove('unsaved');}
+function markUnsaved(){_hasPendingEdits=true;document.getElementById('unsaved-dot').style.display='inline-block';document.getElementById('btn-save').classList.add('unsaved');}
+function markSaved(){_hasPendingEdits=false;document.getElementById('unsaved-dot').style.display='none';document.getElementById('btn-save').classList.remove('unsaved');}
 // ══════════════════════════════════════════════════
 // AUTO-BACKUP TO FILE (File System Access API)
 // ══════════════════════════════════════════════════
@@ -18394,15 +18402,53 @@ function _syncToFirestore(savedAt){
       customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,
       _savedAt:savedAt||Date.now(),_deviceId:_deviceId
     }));
-    db.collection('wilmer').doc('data').set(payload)
+    // Optimistic-concurrency transaction: refuse to overwrite the cloud doc
+    // when it has been advanced by another device since we last observed it.
+    // Without this guard, a stale tab (Device B sitting on hours-old data)
+    // can blow away fresh work just pushed from Device A simply by autosaving.
+    const _ref=db.collection('wilmer').doc('data');
+    db.runTransaction(async (tx)=>{
+      const snap=await tx.get(_ref);
+      if(snap.exists){
+        const cur=snap.data()||{};
+        const curEpoch=cur._savedAt||0;
+        const curDevice=cur._deviceId||'';
+        if(curDevice && curDevice!==_deviceId && curEpoch>_lastSeenCloudEpoch){
+          const conflict=new Error('cloud-newer');
+          conflict.code='STALE_WRITE';
+          conflict.cloud=cur;
+          throw conflict;
+        }
+      }
+      tx.set(_ref,payload);
+    })
       .then(()=>{
         _fbOnline=true; _offlineReason=''; updateCloudIndicator();
+        _lastSeenCloudEpoch=payload._savedAt||_lastSeenCloudEpoch;
         if(_syncFailStreak>0){
           _syncFailStreak=0;
           if(typeof showToast==='function') showToast('☁ Cloud sync recovered ✓');
         }
       })
       .catch(err=>{
+        if(err && err.code==='STALE_WRITE'){
+          // Cloud was advanced by another device while we held a stale view.
+          // Apply the fresh cloud state so we don't keep clobbering it.
+          try{
+            applyPayload(err.cloud);
+            _lastSeenCloudEpoch=err.cloud._savedAt||_lastSeenCloudEpoch;
+            const _now=Date.now();
+            const _lpayload=JSON.parse(JSON.stringify({records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,_savedAt:err.cloud._savedAt||_now}));
+            localStorage.setItem(STORAGE_KEY,JSON.stringify(_lpayload));
+            localStorage.setItem('wilmer_save_epoch',String(err.cloud._savedAt||_now));
+            _lastLocalSave=_now;
+            markSaved();
+            if(typeof renderAll==='function') renderAll();
+          }catch(e){console.warn('[cloud-sync] applyPayload after conflict failed:',e);}
+          if(typeof showToast==='function') showToast('☁ Another device updated this data — pulled fresh copy. Re-apply your last edit if needed.');
+          _fbOnline=true; _offlineReason=''; updateCloudIndicator();
+          return;
+        }
         _fbOnline=false;
         const reason=err.code||err.message||'unknown';
         _offlineReason=reason;
@@ -18452,12 +18498,14 @@ function forcePullFromCloud(){
       const cloudData=doc.data();
       applyPayload(cloudData);
       _dataInitialized=true; // explicit pull permits saves again
+      _lastSeenCloudEpoch=cloudData._savedAt||_lastSeenCloudEpoch;
       try{
         const _now=Date.now();
         const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
         localStorage.setItem('casetracker_v1',JSON.stringify(payload));
         localStorage.setItem('wilmer_save_epoch',String(cloudData._savedAt||_now));
       }catch(e){}
+      markSaved();
       renderAll();
       showToast('☁ Pulled from cloud ✓');
       if(btn){ btn.textContent='✓'; setTimeout(()=>{ btn.textContent='↓'; },1800); }
@@ -18801,6 +18849,10 @@ db.collection('wilmer').doc('data').onSnapshot(
     const cloudEpoch=cloudData._savedAt||0;
     const localEpoch=parseInt(localStorage.getItem('wilmer_save_epoch')||'0');
     const fromThisDevice=cloudData._deviceId&&cloudData._deviceId===_deviceId;
+    // Track the freshest cloud epoch we've ever seen — even if we don't apply
+    // this snapshot (own-device echo, stale snapshot), it becomes the floor
+    // for the conflict check in _syncToFirestore.
+    if(cloudEpoch>_lastSeenCloudEpoch) _lastSeenCloudEpoch=cloudEpoch;
     if(!_booted){
       _booted=true;
       // On first snapshot: only use cloud if it's newer than local
@@ -18851,6 +18903,42 @@ db.collection('wilmer').doc('data').onSnapshot(
     updateCloudIndicator();
   }
 );
+
+// Step 2b: When the tab becomes visible again (the classic "switch back to
+// Device B after working on Device A for hours" case), force a single fetch
+// from Firestore. Background tabs can have their realtime channel paused, so
+// without this nudge the user could resume typing on the stale view and
+// trigger a stale-write conflict on the very next save. Pulling fresh state
+// up front avoids that round-trip entirely.
+function _refreshFromCloudIfStale(){
+  if(!_fbAuthReady) return;
+  if(_hasPendingEdits) return; // don't trample local edits the user hasn't saved
+  db.collection('wilmer').doc('data').get()
+    .then((doc)=>{
+      if(!doc.exists) return;
+      const cloud=doc.data();
+      const cloudEpoch=cloud._savedAt||0;
+      const fromThisDevice=cloud._deviceId&&cloud._deviceId===_deviceId;
+      if(fromThisDevice) return;
+      if(cloudEpoch<=_lastSeenCloudEpoch) return;
+      applyPayload(cloud);
+      _lastSeenCloudEpoch=cloudEpoch;
+      _dataInitialized=true;
+      try{
+        const _now=Date.now();
+        const lpayload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,_savedAt:cloudEpoch};
+        localStorage.setItem('casetracker_v1',JSON.stringify(lpayload));
+        localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
+        _lastLocalSave=_now;
+      }catch(e){}
+      markSaved();
+      if(typeof renderAll==='function') renderAll();
+      if(typeof showToast==='function') showToast('☁ Refreshed from cloud — picked up another device’s changes');
+    })
+    .catch((err)=>{console.warn('[cloud-sync] visibility refresh failed:',err);});
+}
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') _refreshFromCloudIfStale(); });
+window.addEventListener('focus',_refreshFromCloudIfStale);
 
 // Step 3: Listen to day notes from other devices
 const dnKey=dayNotesKey();
