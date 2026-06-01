@@ -18619,30 +18619,41 @@ function _syncToFirestore(savedAt){
       const snap = await tx.get(ref);
       const cloudData = snap.exists ? snap.data() : null;
       const merged = _mergePayloads(cloudData, localPayload);
-      // Defensive clean before the write:
-      //   1. JSON round-trip strips any `undefined` values that came back
-      //      from a quirky cloud doc — Firestore rejects undefined and
-      //      throws invalid-argument when it sees them.
-      //   2. Strip fileData / mimeType from caseMeta on the off-chance a
-      //      previous version of the doc still has them attached (base64
-      //      PDFs can push the doc over the 1 MB Firestore limit).
-      let writable;
+      // Defensive whitelist write — Firestore rejects the whole document
+      // with `invalid-argument` if any field is undefined, contains an
+      // array-of-arrays, has a key starting with `__`, etc. Rather than
+      // round-tripping the whole merged blob (which can carry unknown
+      // fields from older versions of the doc forward), we copy only the
+      // known top-level keys into a fresh object.
+      const _KNOWN_TOP_FIELDS = [
+        'records','paralegals','eventTypes','eventTypeMeta',
+        'caseTypes','caseTypeDocLists','caseTypeStages',
+        'customColumns','colVis','caseMeta','callUpTypes','judges','caseIssueTypes',
+        'customChecklists','paralegalEmails','attorneys','attorneyEmails','venues','firmInfo','bondPrepQuestions',
+        '_savedAt','_deviceId'
+      ];
+      const writable = {};
+      _KNOWN_TOP_FIELDS.forEach(f => { if(merged[f] !== undefined) writable[f] = merged[f]; });
+      // JSON round-trip to strip nested `undefined` values that survived
+      // from cloudData, then sweep any lingering fileData/mimeType in
+      // caseMeta (older doc versions may still have base64 attachments).
+      let cleaned;
       try{
-        writable = JSON.parse(JSON.stringify(merged));
+        cleaned = JSON.parse(JSON.stringify(writable));
       }catch(e){
-        console.warn('[cloud-sync] merge JSON clean failed', e);
-        writable = merged;
+        console.warn('[cloud-sync] writable JSON clean failed', e);
+        cleaned = writable;
       }
-      if(writable && writable.caseMeta){
-        Object.values(writable.caseMeta).forEach(m=>{
+      if(cleaned && cleaned.caseMeta){
+        Object.values(cleaned.caseMeta).forEach(m=>{
           if(!m) return;
           (m.docSections||[]).forEach(sec=>{
             (sec.docs||[]).forEach(d=>{ delete d.fileData; delete d.mimeType; });
           });
         });
       }
-      tx.set(ref, writable);
-      return writable;
+      tx.set(ref, cleaned);
+      return cleaned;
     })
       .then((merged)=>{
         _fbOnline=true; _offlineReason=''; updateCloudIndicator();
@@ -18677,7 +18688,16 @@ function _syncToFirestore(savedAt){
         _offlineReason=reason;
         updateCloudIndicator();
         _syncFailStreak++;
-        console.warn('[cloud-sync] save failed:', reason, err);
+        // Full error to the console so the exact Firestore complaint is
+        // visible (the offline banner only has room for the short code).
+        try{
+          console.error('[cloud-sync] save failed:', {
+            code: err.code,
+            name: err.name,
+            message: err.message,
+            stack: err.stack
+          });
+        }catch(e){}
         // First failure: quiet toast. Three in a row: louder warning.
         if(typeof showToast==='function'){
           if(_syncFailStreak===1) showToast('☁ Cloud save failed: '+reason);
