@@ -18615,35 +18615,22 @@ function _syncToFirestore(savedAt){
     // window, so concurrent edits from two devices fold together
     // instead of overwriting.
     const ref = db.collection('wilmer').doc('data');
-    db.runTransaction(async (tx)=>{
-      const snap = await tx.get(ref);
-      const cloudData = snap.exists ? snap.data() : null;
-      const merged = _mergePayloads(cloudData, localPayload);
-      // Defensive whitelist write — Firestore rejects the whole document
-      // with `invalid-argument` if any field is undefined, contains an
-      // array-of-arrays, has a key starting with `__`, etc. Rather than
-      // round-tripping the whole merged blob (which can carry unknown
-      // fields from older versions of the doc forward), we copy only the
-      // known top-level keys into a fresh object.
-      const _KNOWN_TOP_FIELDS = [
-        'records','paralegals','eventTypes','eventTypeMeta',
-        'caseTypes','caseTypeDocLists','caseTypeStages',
-        'customColumns','colVis','caseMeta','callUpTypes','judges','caseIssueTypes',
-        'customChecklists','paralegalEmails','attorneys','attorneyEmails','venues','firmInfo','bondPrepQuestions',
-        '_savedAt','_deviceId'
-      ];
-      const writable = {};
-      _KNOWN_TOP_FIELDS.forEach(f => { if(merged[f] !== undefined) writable[f] = merged[f]; });
-      // JSON round-trip to strip nested `undefined` values that survived
-      // from cloudData, then sweep any lingering fileData/mimeType in
-      // caseMeta (older doc versions may still have base64 attachments).
+    const _KNOWN_TOP_FIELDS = [
+      'records','paralegals','eventTypes','eventTypeMeta',
+      'caseTypes','caseTypeDocLists','caseTypeStages',
+      'customColumns','colVis','caseMeta','callUpTypes','judges','caseIssueTypes',
+      'customChecklists','paralegalEmails','attorneys','attorneyEmails','venues','firmInfo','bondPrepQuestions',
+      '_savedAt','_deviceId'
+    ];
+    function _buildWritable(merged){
+      // Defensive whitelist + clean. Firestore rejects undefined values,
+      // array-of-arrays, keys starting with `__`, etc. so we copy only the
+      // known top-level keys and JSON round-trip to strip nested undefineds.
+      const w = {};
+      _KNOWN_TOP_FIELDS.forEach(f => { if(merged[f] !== undefined) w[f] = merged[f]; });
       let cleaned;
-      try{
-        cleaned = JSON.parse(JSON.stringify(writable));
-      }catch(e){
-        console.warn('[cloud-sync] writable JSON clean failed', e);
-        cleaned = writable;
-      }
+      try{ cleaned = JSON.parse(JSON.stringify(w)); }
+      catch(e){ console.warn('[cloud-sync] writable JSON clean failed', e); cleaned = w; }
       if(cleaned && cleaned.caseMeta){
         Object.values(cleaned.caseMeta).forEach(m=>{
           if(!m) return;
@@ -18652,6 +18639,21 @@ function _syncToFirestore(savedAt){
           });
         });
       }
+      return cleaned;
+    }
+    db.runTransaction(async (tx)=>{
+      const snap = await tx.get(ref);
+      const cloudData = snap.exists ? snap.data() : null;
+      const merged = _mergePayloads(cloudData, localPayload);
+      const cleaned = _buildWritable(merged);
+      // Surface the byte-size of the write — Firestore caps documents at
+      // 1,048,576 bytes and the error code for "too big" is also
+      // invalid-argument, so this is the first thing to check if writes
+      // start failing.
+      try{
+        const bytes = (new TextEncoder()).encode(JSON.stringify(cleaned||{})).length;
+        if(bytes > 950000) console.warn('[cloud-sync] doc near 1MB Firestore limit:', bytes, 'bytes');
+      }catch(e){}
       tx.set(ref, cleaned);
       return cleaned;
     })
@@ -18683,26 +18685,43 @@ function _syncToFirestore(savedAt){
         }
       })
       .catch(err=>{
-        _fbOnline=false;
-        const reason=err.code||err.message||'unknown';
-        _offlineReason=reason;
-        updateCloudIndicator();
-        _syncFailStreak++;
         // Full error to the console so the exact Firestore complaint is
         // visible (the offline banner only has room for the short code).
         try{
-          console.error('[cloud-sync] save failed:', {
+          console.error('[cloud-sync] transaction failed:', {
             code: err.code,
             name: err.name,
             message: err.message,
             stack: err.stack
           });
         }catch(e){}
-        // First failure: quiet toast. Three in a row: louder warning.
-        if(typeof showToast==='function'){
-          if(_syncFailStreak===1) showToast('☁ Cloud save failed: '+reason);
-          else if(_syncFailStreak===3) showToast('☁ Cloud still failing — check connection or Firestore rules');
-        }
+        // Fallback: if the transactional read-merge-write keeps failing
+        // (e.g. the merged doc is too large, or the cloud doc has data
+        // shaped in a way we can't round-trip), fall back to a plain
+        // .set() of the local payload — same behavior the app had before
+        // the merge logic was added. That keeps cross-device sync limping
+        // along (last-write-wins) instead of a hard offline state.
+        const fallbackWritable = _buildWritable(localPayload);
+        return ref.set(fallbackWritable).then(()=>{
+          _fbOnline=true; _offlineReason=''; updateCloudIndicator();
+          if(typeof showToast==='function') showToast('☁ Saved (merge skipped: '+(err.code||err.message||'error')+')');
+          try{ _refreshSavedHashes(); }catch(e){}
+        }).catch(err2=>{
+          _fbOnline=false;
+          const reason=err2.code||err2.message||err.code||err.message||'unknown';
+          _offlineReason=reason;
+          updateCloudIndicator();
+          _syncFailStreak++;
+          try{
+            console.error('[cloud-sync] fallback save failed:', {
+              code: err2.code, name: err2.name, message: err2.message, stack: err2.stack
+            });
+          }catch(e){}
+          if(typeof showToast==='function'){
+            if(_syncFailStreak===1) showToast('☁ Cloud save failed: '+reason);
+            else if(_syncFailStreak===3) showToast('☁ Cloud still failing — check connection or Firestore rules');
+          }
+        });
       });
   },1000);
 }
