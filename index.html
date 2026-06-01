@@ -18619,8 +18619,30 @@ function _syncToFirestore(savedAt){
       const snap = await tx.get(ref);
       const cloudData = snap.exists ? snap.data() : null;
       const merged = _mergePayloads(cloudData, localPayload);
-      tx.set(ref, merged);
-      return merged;
+      // Defensive clean before the write:
+      //   1. JSON round-trip strips any `undefined` values that came back
+      //      from a quirky cloud doc — Firestore rejects undefined and
+      //      throws invalid-argument when it sees them.
+      //   2. Strip fileData / mimeType from caseMeta on the off-chance a
+      //      previous version of the doc still has them attached (base64
+      //      PDFs can push the doc over the 1 MB Firestore limit).
+      let writable;
+      try{
+        writable = JSON.parse(JSON.stringify(merged));
+      }catch(e){
+        console.warn('[cloud-sync] merge JSON clean failed', e);
+        writable = merged;
+      }
+      if(writable && writable.caseMeta){
+        Object.values(writable.caseMeta).forEach(m=>{
+          if(!m) return;
+          (m.docSections||[]).forEach(sec=>{
+            (sec.docs||[]).forEach(d=>{ delete d.fileData; delete d.mimeType; });
+          });
+        });
+      }
+      tx.set(ref, writable);
+      return writable;
     })
       .then((merged)=>{
         _fbOnline=true; _offlineReason=''; updateCloudIndicator();
