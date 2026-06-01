@@ -18422,13 +18422,160 @@ function applyPayload(p){
   if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);
   if(p.venues&&Array.isArray(p.venues))venues=p.venues;
   if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);
+  // Re-seed the saved-hash maps so the next save's dirty check is
+  // relative to this freshly-applied state (otherwise every record
+  // would look "dirty" and we'd bump every _updatedAt every save).
+  try{ if(typeof _refreshSavedHashes==='function') _refreshSavedHashes(); }catch(e){}
 }
 // ══════════════════════════════════════════════════
 // CLOUD SYNC — localStorage is always source of truth
 // Firestore is used only for cross-device sync
+//
+// MULTI-DEVICE SAFETY
+// ────────────────────────────────────────────────────
+// The classic data-loss bug with two devices: device A edits record X
+// while device B (still on yesterday's data) edits record Y; whichever
+// device hits .set() last overwrites the other's edit. To eliminate
+// that race we do three things:
+//
+//   (1) Per-record / per-clid `_updatedAt` stamps. At save time we
+//       content-hash each record and caseMeta entry and bump
+//       `_updatedAt` on entries whose hash changed since last save —
+//       so we don't need to touch every mutation site to mark dirty.
+//
+//   (2) _mergePayloads(cloud, local) — instead of last-write-wins on
+//       the whole doc, we merge records[] by id and caseMeta{} by
+//       clid, keeping whichever side has the newer `_updatedAt`.
+//       Other top-level fields (eventTypes, paralegals, …) still go
+//       last-write-wins, scoped by doc `_savedAt`.
+//
+//   (3) Firestore runTransaction(read → merge → write). Concurrent
+//       writes from two devices cannot clobber each other — the
+//       transaction retries until it lands on the latest snapshot,
+//       so whichever change came first is folded into the second
+//       write rather than overwritten.
+//
+// The onSnapshot listener uses the same merge logic so a remote
+// edit lands without flattening a local pending one.
 // ══════════════════════════════════════════════════
 let _offlineReason='';
 let _syncTimer=null;
+
+// Content-hash maps so we can detect which records / caseMeta entries
+// actually changed since the last successful save without sprinkling a
+// `touchRecord(...)` call at every mutation site. Cleared on hydrate +
+// after each successful sync.
+const _lastSavedRecordHashes = new Map();
+const _lastSavedMetaHashes = new Map();
+function _recordContentHash(r){
+  // Stable JSON of the record's own fields, excluding _updatedAt itself
+  // (otherwise stamping the timestamp would immediately re-dirty the row).
+  if(!r) return '';
+  const keys = Object.keys(r).filter(k => k !== '_updatedAt').sort();
+  const compact = {};
+  keys.forEach(k => { compact[k] = r[k]; });
+  try{ return JSON.stringify(compact); }catch(e){ return String(Math.random()); }
+}
+function _metaContentHash(m){
+  if(!m) return '';
+  const keys = Object.keys(m).filter(k => k !== '_updatedAt').sort();
+  const compact = {};
+  keys.forEach(k => { compact[k] = m[k]; });
+  try{ return JSON.stringify(compact); }catch(e){ return String(Math.random()); }
+}
+// Walk current state, bump _updatedAt on anything whose content hash
+// changed vs last save. Called once per sync, just before the merge.
+function _stampUpdatedTimestamps(){
+  const now = Date.now();
+  (records||[]).forEach(r => {
+    if(!r || !r.id) return;
+    const h = _recordContentHash(r);
+    if(_lastSavedRecordHashes.get(r.id) !== h){
+      r._updatedAt = now;
+    }
+  });
+  Object.keys(caseMeta||{}).forEach(clid => {
+    const m = caseMeta[clid];
+    if(!m) return;
+    const h = _metaContentHash(m);
+    if(_lastSavedMetaHashes.get(clid) !== h){
+      m._updatedAt = now;
+    }
+  });
+}
+// Refresh the saved-hash maps after a successful sync so the next dirty
+// check starts from this exact state.
+function _refreshSavedHashes(){
+  _lastSavedRecordHashes.clear();
+  (records||[]).forEach(r => { if(r && r.id) _lastSavedRecordHashes.set(r.id, _recordContentHash(r)); });
+  _lastSavedMetaHashes.clear();
+  Object.keys(caseMeta||{}).forEach(clid => {
+    const m = caseMeta[clid];
+    if(m) _lastSavedMetaHashes.set(clid, _metaContentHash(m));
+  });
+}
+// Merge a cloud payload with the local one, item-by-item.
+// - records[] merge by id, prefer newer _updatedAt
+// - caseMeta{} merge by clid (object key), prefer newer _updatedAt
+// - All other top-level fields: pick from whichever side has the newer
+//   _savedAt (typically local since we just edited).
+function _mergePayloads(cloudData, localData){
+  if(!cloudData) return localData;
+  if(!localData) return cloudData;
+  const merged = Object.assign({}, cloudData);
+  // ── Records: union by id, newer _updatedAt wins ──
+  const cloudRecs = Array.isArray(cloudData.records) ? cloudData.records : [];
+  const localRecs = Array.isArray(localData.records) ? localData.records : [];
+  const byId = new Map();
+  cloudRecs.forEach(r => { if(r && r.id) byId.set(r.id, r); });
+  localRecs.forEach(r => {
+    if(!r || !r.id) return;
+    const existing = byId.get(r.id);
+    if(!existing){ byId.set(r.id, r); return; }
+    const cu = existing._updatedAt || 0;
+    const lu = r._updatedAt || 0;
+    // Tie: prefer local (we just edited).
+    if(lu >= cu) byId.set(r.id, r);
+  });
+  merged.records = Array.from(byId.values());
+  // ── caseMeta: per-clid merge ──
+  const mergedMeta = Object.assign({}, cloudData.caseMeta || {});
+  const localMeta = localData.caseMeta || {};
+  Object.keys(localMeta).forEach(clid => {
+    const lm = localMeta[clid];
+    const cm = mergedMeta[clid];
+    if(!cm){ mergedMeta[clid] = lm; return; }
+    const cu = cm._updatedAt || 0;
+    const lu = lm._updatedAt || 0;
+    if(lu >= cu) mergedMeta[clid] = lm;
+  });
+  merged.caseMeta = mergedMeta;
+  // ── Other top-level config: pick from whichever doc has the newer
+  // overall _savedAt. Local typically wins because we set it = now just
+  // before merge, but the cloud side can win if it has data the local
+  // doc never loaded (e.g. fresh install).
+  const cloudEpoch = cloudData._savedAt || 0;
+  const localEpoch = localData._savedAt || 0;
+  const fields = ['paralegals','eventTypes','eventTypeMeta','caseTypes','caseTypeDocLists','caseTypeStages',
+                  'customColumns','colVis','callUpTypes','judges','caseIssueTypes','customChecklists',
+                  'paralegalEmails','attorneys','attorneyEmails','venues','firmInfo','bondPrepQuestions'];
+  fields.forEach(f => {
+    const lv = localData[f];
+    const cv = cloudData[f];
+    if(localEpoch >= cloudEpoch){
+      if(lv !== undefined) merged[f] = lv;
+      else if(cv !== undefined) merged[f] = cv;
+    } else {
+      if(cv !== undefined) merged[f] = cv;
+      else if(lv !== undefined) merged[f] = lv;
+    }
+  });
+  merged._savedAt = Math.max(cloudEpoch, localEpoch);
+  // Stamp the writing device's id so its own snapshot echo can be
+  // recognised and skipped by the onSnapshot listener.
+  merged._deviceId = localData._deviceId || _deviceId;
+  return merged;
+}
 
 let _syncFailStreak=0;
 function _syncToFirestore(savedAt){
@@ -18443,7 +18590,12 @@ function _syncToFirestore(savedAt){
   // Debounce — wait 1s after last call before sending
   clearTimeout(_syncTimer);
   _syncTimer=setTimeout(()=>{
-    // Strip fileData from caseMeta so base64 PDFs never go to Firestore
+    // Step 1: stamp _updatedAt on every record / caseMeta entry whose
+    // content changed since the last successful save. This is what makes
+    // the per-record / per-clid merge work.
+    try{ _stampUpdatedTimestamps(); }catch(e){ console.warn('[cloud-sync] stamp failed', e); }
+    // Step 2: build a clean local payload (strip fileData so base64 PDFs
+    // never leave the device).
     const caseMetaClean=JSON.parse(JSON.stringify(caseMeta||{}));
     Object.values(caseMetaClean).forEach(meta=>{
       if(!meta)return;
@@ -18451,19 +18603,47 @@ function _syncToFirestore(savedAt){
         (sec.docs||[]).forEach(d=>{delete d.fileData;delete d.mimeType;});
       });
     });
-    const payload=JSON.parse(JSON.stringify({
+    const localPayload=JSON.parse(JSON.stringify({
       records,paralegals,eventTypes,eventTypeMeta,
       caseTypes,caseTypeDocLists,caseTypeStages,
       customColumns,colVis,caseMeta:caseMetaClean,callUpTypes,judges,caseIssueTypes,
-      // These three used to be local-only, so a wipe of localStorage lost
-      // them permanently and they were absent from cloud snapshots. Now they
-      // ride along so the nightly GitHub Actions backup captures 100% of state.
-      customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,
+      customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,bondPrepQuestions,
       _savedAt:savedAt||Date.now(),_deviceId:_deviceId
     }));
-    db.collection('wilmer').doc('data').set(payload)
-      .then(()=>{
+    // Step 3: read-merge-write inside a Firestore transaction. The SDK
+    // retries the transaction if cloud changes during the read→write
+    // window, so concurrent edits from two devices fold together
+    // instead of overwriting.
+    const ref = db.collection('wilmer').doc('data');
+    db.runTransaction(async (tx)=>{
+      const snap = await tx.get(ref);
+      const cloudData = snap.exists ? snap.data() : null;
+      const merged = _mergePayloads(cloudData, localPayload);
+      tx.set(ref, merged);
+      return merged;
+    })
+      .then((merged)=>{
         _fbOnline=true; _offlineReason=''; updateCloudIndicator();
+        // If the transaction folded in remote changes we didn't have yet,
+        // adopt them locally so this device matches what just got written.
+        try{
+          if(merged && typeof applyPayload==='function'){
+            // Only re-apply if the merged copy has more records or different
+            // caseMeta than what we just had, to avoid pointless re-renders.
+            const localRecCount = (records||[]).length;
+            const mergedRecCount = (merged.records||[]).length;
+            if(mergedRecCount !== localRecCount){
+              applyPayload(merged);
+              try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(merged)); }catch(e){}
+              try{ localStorage.setItem('wilmer_save_epoch', String(merged._savedAt||Date.now())); }catch(e){}
+              if(typeof renderAll==='function') try{ renderAll(); }catch(e){}
+              if(typeof showToast==='function') showToast('☁ Merged with another device ✓');
+            }
+          }
+        }catch(e){ console.warn('[cloud-sync] post-merge apply failed', e); }
+        // Step 4: refresh the saved-hash maps so the next save's dirty
+        // check is relative to this freshly-persisted state.
+        try{ _refreshSavedHashes(); }catch(e){}
         if(_syncFailStreak>0){
           _syncFailStreak=0;
           if(typeof showToast==='function') showToast('☁ Cloud sync recovered ✓');
@@ -18889,25 +19069,47 @@ db.collection('wilmer').doc('data').onSnapshot(
       // the gate now decides whether to prompt the user.
       try{ window._onFirstCloudSnapshot && window._onFirstCloudSnapshot(doc.exists); }catch(e){}
     } else {
-      // Subsequent snapshots: only apply if from a different device AND the
-      // cloud copy is strictly newer than what we have locally. Without the
-      // epoch check, a stale snapshot (from another tab still on yesterday's
-      // data, or a slow second write echoing back) would overwrite the
-      // user's just-added case while it sat in the markUnsaved → saveAllData
-      // → _syncToFirestore debounce window.
-      if(!fromThisDevice && cloudEpoch > localEpoch && cloudEpoch > _lastLocalSave){
-        applyPayload(cloudData);
-        // Save to localStorage only — do NOT call saveAllData() which would
-        // re-push to Firestore and cause an infinite ping-pong loop
-        try{
-          const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
-          localStorage.setItem('casetracker_v1',JSON.stringify(payload));
-          localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
-          _lastLocalSave=_now;
-        }catch(e){}
-        renderAll();
-        showToast('☁ Synced from another device ✓');
+      // Subsequent snapshots from a different device: merge instead of
+      // bulk-overwrite so any in-flight local edits aren't blown away by
+      // a remote change to a different record.
+      if(!fromThisDevice){
+        // Build a snapshot of the current local state (caseMeta deep-copied
+        // so the merge can't mutate live references).
+        const localPayload = {
+          records, paralegals, eventTypes, eventTypeMeta,
+          caseTypes, caseTypeDocLists, caseTypeStages,
+          customColumns, colVis,
+          caseMeta: JSON.parse(JSON.stringify(caseMeta||{})),
+          callUpTypes, judges, caseIssueTypes, customChecklists,
+          paralegalEmails, attorneys, attorneyEmails, venues, firmInfo, bondPrepQuestions,
+          _savedAt: _lastLocalSave || localEpoch || 0,
+          _deviceId
+        };
+        const merged = _mergePayloads(cloudData, localPayload);
+        // Detect whether the merge actually pulled anything new from cloud —
+        // if not, skip the re-render to keep the UI quiet.
+        const beforeRecCount = (records||[]).length;
+        const afterRecCount = (merged.records||[]).length;
+        const beforeMetaKeys = Object.keys(caseMeta||{}).length;
+        const afterMetaKeys = Object.keys(merged.caseMeta||{}).length;
+        const changed = beforeRecCount !== afterRecCount
+          || beforeMetaKeys !== afterMetaKeys
+          || cloudEpoch > localEpoch;
+        if(changed){
+          applyPayload(merged);
+          // Save to localStorage only — do NOT call saveAllData() which would
+          // re-push to Firestore and cause an infinite ping-pong loop.
+          try{
+            const _now=Date.now();
+            const persistPayload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
+            localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
+            localStorage.setItem('wilmer_save_epoch',String(Math.max(cloudEpoch, _now)));
+            _lastLocalSave=_now;
+            _refreshSavedHashes();
+          }catch(e){}
+          renderAll();
+          showToast('☁ Synced from another device ✓');
+        }
       }
     }
   },
