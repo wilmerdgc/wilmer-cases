@@ -1,0 +1,1480 @@
+{
+  "records": [
+    {
+      "timeStart": "",
+      "timeEnd": "",
+      "notes": "",
+      "client": "Rafaela Capellan",
+      "virtualLink": "",
+      "checklist": [],
+      "event": "MASTER",
+      "atty": "Luis Daniel Altuve",
+      "hearingJudgeId": "",
+      "date": "2026-07-28",
+      "soIssueDate": "",
+      "clid": "23288",
+      "type": "Adjustment of Status",
+      "hearingMode": "",
+      "id": "case_1779247691947",
+      "history": [
+        {
+          "type": "note",
+          "note": "Case created",
+          "date": "May 19, 2026"
+        }
+      ],
+      "assigned": "",
+      "anum": "087-145-775",
+      "custom_country_1777164093280": "",
+      "custom_address_1775582040709": "",
+      "docs": []
+    },
+    {
+      "client": "Kimberly CUSPA",
+      "notes": "WEBEX IS OK.\nPRESENCE OF THE CHILD IS WAIVED. NO ES NECESARIO QUE KIMBERLY ESTE EN LA PROX AUDIENCIA.",
+      "timeStart": "",
+      "timeEnd": "",
+      "virtualLink": "",
+      "atty": "Katya Baltodano",
+      "event": "MASTER",
+      "checklist": [],
+      "hearingJudgeId": "",
+      "date": "2026-06-22",
+      "soIssueDate": "",
+      "type": "Special Juvenile in Immigration Court",
+      "clid": "23606",
+      "hearingMode": "",
+      "history": [],
+      "assigned": "",
+      "id": "r1779286481410sbem",
+      "anum": "220-174-119",
+      "custom_country_1777164093280": "",
+      "docs": [],
+      "custom_address_1775582040709": ""
+    },
+    {
+      "id": "r17792864814102fb9",
+      "history": [],
+      "assigned": "",
+      "hearingMode": "",
+      "type": "Special Juvenile in Immigration Court",
+      "clid": "23606",
+      "docs": [],
+      "anum": "220-174-119",
+      "timeEnd": "",
+      "timeStart": "",
+      "notes": "MOTION TO TERMINATE WITH RECEIPT OF TVPRA",
+      "client": "Kimberly CUSPA",
+      "_parentId": "r1779286481410sbem",
+      "date": "2026-06-03",
+      "event": "TASK",
+      "checklist": [],
+      "atty": "Katya Baltodano"
+    },
+    {
+      "docs": [],
+      "custom_address_1775582040709": "",
+      "custom_country_1777164093280": "",
+      "anum": "098-569-181",
+      "history": [],
+      "assigned": "Eunice Arce",
+      "id": "r1779290800551vvi5",
+      "hearingMode": "",
+      "type": "BIA Appeal",
+      "clid": "5391",
+      "soIssueDate": "",
+      "date": "2026-05-22",
+      "hearingJudgeId": "",
+      "atty": "Eunice Arce",
+      "event": "TASK",
+      "checklist": [],
+      "virtualLink": "",
+      "client": "Mercedes Cajamarca",
+      "notes": "If paper case\nEnviar pronto — si lo rechazan hay chance de re-enviar.\n\nCover letter\nTabs\nEOIR-26 — datos del cliente (argumentos los lleno yo)\nEOIR-27 — firmado por Anibal\nCertificate of service\nPago del filing fee por el portal de EOIR\nICE eService antes de mandar por correo",
+      "timeStart": "",
+      "timeEnd": ""
+    },
+    {
+      "event": "TASK",
+      "checklist": [],
+      "atty": "Katya Baltodano",
+      "soIssueDate": "",
+      "date": "2026-05-20",
+      "hearingJudgeId": "",
+      "virtualLink": "",
+      "timeEnd": "",
+      "timeStart": "",
+      "notes": "Katya, puedes corregir esto y enviarmelo hoy.\n\nThis document was returned to you by the court. Please refile a new document.\n\nReturn Reason: The SCR Request features errors which must be corrected. The address history of: \"Sinthia A Quispillo Suica\" features gaps from 7/23 to 6/23 and 5/21 to 3/21. Please correct these errors and resubmit for proper filing. Thank you.\n\nOriginal Document: 7 - SCR REQUEST",
+      "client": "Kimberly CUSPA",
+      "custom_country_1777164093280": "",
+      "anum": "220-174-119",
+      "docs": [],
+      "custom_address_1775582040709": "",
+      "finishedStatus": "completed",
+      "type": "Special Juvenile in Immigration Court",
+      "clid": "23606",
+      "id": "r1779291584754klid",
+      "assigned": "Katya Baltodano",
+      "history": [
+        {
+          "note": "sent on 5 22",
+          "date": "May 22, 2026",
+          "type": "completed"
+        }
+      ],
+      "hearingMode": ""
+    },
+    {
+      "timeStart": "",
+      "timeEnd": "",
+      "notes": "CARLOS SACA SACA\n23388\nFIRMAR WITHDRAW. HACER CARTA.",
+      "client": "",
+      "event": "TASK",
+      "atty": "Maria Miller",
+      "date": "2026-05-20",
+      "clid": "",
+      "type": "",
+      "id": "t1779293220293co19",
+      "assigned": "Maria Miller",
+      "history": [
+        {
+          "type": "note",
+          "note": "Task created",
+          "date": "May 20, 2026"
+        }
+      ],
+      "anum": ""
+    },
+    {
+      "client": "",
+      "timeStart": "",
+      "notes": "23713. IMPRIMER ECAS DOCS, BUSCAR I589. VER SI ES MUY VIEJA, VER QUE DIJO, SI TIENE DEFECTO O ES MUY VIEJA HAY QUE HACER UNA NUEVA",
+      "timeEnd": "",
+      "atty": "Maria Miller",
+      "event": "TASK",
+      "date": "2026-05-20",
+      "type": "",
+      "clid": "",
+      "assigned": "Maria Miller",
+      "history": [
+        {
+          "note": "Task created",
+          "date": "May 20, 2026",
+          "type": "note"
+        }
+      ],
+      "id": "t1779293341316ldub",
+      "anum": ""
+    },
+    {
+      "type": "",
+      "clid": "",
+      "assigned": "Jessica Vicuna",
+      "history": [
+        {
+          "note": "Task created",
+          "date": "May 20, 2026",
+          "type": "note"
+        }
+      ],
+      "id": "t17792963139228aib",
+      "anum": "",
+      "client": "",
+      "notes": "send 360 approval notice and initial payment",
+      "timeEnd": "",
+      "timeStart": "",
+      "atty": "Jessica Vicuna",
+      "event": "TASK",
+      "date": "2026-05-20"
+    },
+    {
+      "date": "2026-06-01",
+      "_parentId": "case_1777178677893",
+      "checklist": [],
+      "event": "FC SERVICE",
+      "atty": "Katya Baltodano",
+      "timeEnd": "",
+      "timeStart": "",
+      "notes": "Have waiver signed File #: Docket #: 304652 G-11740-26 ",
+      "client": "Kimberly CUSPA",
+      "docs": [],
+      "anum": "220-174-119",
+      "hearingMode": "",
+      "id": "r1779296637348ofsg",
+      "assigned": "Katya Baltodano",
+      "history": [],
+      "type": "Special Juvenile in Immigration Court",
+      "clid": "23606"
+    },
+    {
+      "date": "2026-06-03",
+      "_parentId": "case_1777178677893",
+      "event": "FC TASK",
+      "checklist": [],
+      "atty": "Katya Baltodano",
+      "timeEnd": "",
+      "timeStart": "",
+      "notes": "have ready  SIJ motion; proposed order;  affidavits ",
+      "client": "Kimberly CUSPA",
+      "docs": [],
+      "anum": "220-174-119",
+      "hearingMode": "",
+      "id": "r1779296637348c2yx",
+      "history": [],
+      "assigned": "Katya Baltodano",
+      "type": "Special Juvenile in Immigration Court",
+      "clid": "23606"
+    },
+    {
+      "docs": [],
+      "anum": "087-145-775",
+      "hearingMode": "",
+      "id": "r1779384736496p1oc",
+      "assigned": "",
+      "history": [],
+      "clid": "23288",
+      "type": "Adjustment of Status",
+      "date": "2026-05-25",
+      "_parentId": "case_1779247691947",
+      "event": "TASK",
+      "checklist": [],
+      "atty": "Luis Daniel Altuve",
+      "timeStart": "",
+      "timeEnd": "",
+      "notes": "USCIS FOIA. Ver si llegaron los resultados.",
+      "client": "Rafaela Capellan"
+    },
+    {
+      "timeEnd": "",
+      "timeStart": "",
+      "notes": "EIOR Foia. Insist",
+      "client": "Rafaela Capellan",
+      "checklist": [],
+      "event": "TASK",
+      "atty": "Luis Daniel Altuve",
+      "date": "2026-05-25",
+      "_parentId": "case_1779247691947",
+      "type": "Adjustment of Status",
+      "clid": "23288",
+      "hearingMode": "",
+      "id": "r1779384736496m5x5",
+      "history": [],
+      "assigned": "",
+      "anum": "087-145-775",
+      "docs": []
+    },
+    {
+      "docs": [],
+      "anum": "087-145-775",
+      "assigned": "",
+      "history": [],
+      "id": "r177938473649653bh",
+      "hearingMode": "",
+      "type": "Adjustment of Status",
+      "clid": "23288",
+      "_parentId": "case_1779247691947",
+      "date": "2026-05-25",
+      "atty": "Luis Daniel Altuve",
+      "checklist": [],
+      "event": "TASK",
+      "client": "Rafaela Capellan",
+      "notes": "Call the client to see what are we going to do.",
+      "timeStart": "",
+      "timeEnd": ""
+    },
+    {
+      "client": "Rafaela Capellan",
+      "notes": "master on 07/28",
+      "timeStart": "",
+      "timeEnd": "",
+      "date": "2026-07-06",
+      "atty": "Luis Daniel Altuve",
+      "checklist": [],
+      "event": "MASTER PREP",
+      "history": [],
+      "assigned": "",
+      "id": "r1779384736496n5ev",
+      "hearingMode": "",
+      "type": "Adjustment of Status",
+      "clid": "23288",
+      "docs": [],
+      "anum": "087-145-775"
+    },
+    {
+      "date": "2026-05-26",
+      "hearingJudgeId": "",
+      "soIssueDate": "",
+      "atty": "Jessica Vicuna",
+      "checklist": [],
+      "event": "MASTER",
+      "client": "Rodrigo Rivas Quintanilla",
+      "notes": "",
+      "attendedStatus": "attended",
+      "timeEnd": "",
+      "timeStart": "09:00",
+      "virtualLink": "",
+      "finishedStatus": "attended",
+      "custom_address_1775582040709": "",
+      "docs": [],
+      "anum": "246851492",
+      "custom_country_1777164093280": "",
+      "hearingMode": "virtual",
+      "history": [
+        {
+          "date": "May 26, 2026",
+          "type": "attended"
+        }
+      ],
+      "assigned": "Jessica Vicuna",
+      "id": "r177946151966867nu",
+      "type": "Special Juvenile in Court",
+      "clid": "20811"
+    },
+    {
+      "virtualLink": "",
+      "client": "Rodrigo Rivas Quintanilla",
+      "timeEnd": "",
+      "timeStart": "",
+      "notes": "SEND DEFERRED ACTIOPN FORM",
+      "soIssueDate": "",
+      "date": "2026-05-29",
+      "hearingJudgeId": "",
+      "atty": "Jessica Vicuna",
+      "checklist": [],
+      "event": "TASK",
+      "assigned": "Me",
+      "history": [
+        {
+          "type": "note",
+          "date": "May 22, 2026",
+          "note": "Task created"
+        }
+      ],
+      "id": "t1779461580826mm8l",
+      "hearingMode": "",
+      "clid": "20811",
+      "type": "Special Juvenile in Court",
+      "docs": [],
+      "custom_address_1775582040709": "",
+      "custom_country_1777164093280": "",
+      "anum": "246851492"
+    },
+    {
+      "notes": "send i589 (there is none in ECAS",
+      "timeEnd": "",
+      "timeStart": "",
+      "client": "",
+      "date": "2026-05-22",
+      "event": "TASK",
+      "atty": "",
+      "id": "t17794773553866vtv",
+      "history": [
+        {
+          "type": "note",
+          "date": "May 22, 2026",
+          "note": "Task created"
+        }
+      ],
+      "assigned": "Me",
+      "type": "",
+      "clid": "",
+      "anum": ""
+    },
+    {
+      "client": "Leidis ROJAS",
+      "notes": "",
+      "timeStart": "08:30",
+      "timeEnd": "",
+      "virtualLink": "",
+      "date": "2026-05-27",
+      "hearingJudgeId": "",
+      "soIssueDate": "",
+      "atty": "Katya Baltodano",
+      "event": "MASTER",
+      "checklist": [],
+      "hearingMode": "virtual",
+      "assigned": "",
+      "history": [
+        {
+          "type": "note",
+          "note": "Case created",
+          "date": "May 22, 2026"
+        },
+        {
+          "type": "attended",
+          "date": "May 27, 2026"
+        }
+      ],
+      "id": "case_1779477530997",
+      "type": "Defensive Asylum",
+      "clid": "23785",
+      "docs": [],
+      "custom_address_1775582040709": "",
+      "anum": "213-526-066",
+      "custom_country_1777164093280": "",
+      "attendedStatus": "attended",
+      "finishedStatus": "attended"
+    },
+    {
+      "checklist": [],
+      "event": "MASTER PREP",
+      "atty": "Katya Baltodano",
+      "date": "2026-05-26",
+      "timeEnd": "",
+      "timeStart": "",
+      "notes": "JUDGE HAS NO LINK",
+      "client": "Leidis ROJAS",
+      "anum": "213-526-066",
+      "docs": [],
+      "clid": "23785",
+      "type": "Defensive Asylum",
+      "id": "r1779477885888lbjx",
+      "history": [
+        {
+          "type": "attended",
+          "date": "May 27, 2026",
+          "note": "Attended to Master hearing"
+        }
+      ],
+      "assigned": "",
+      "hearingMode": "",
+      "hearingJudgeId": "",
+      "virtualLink": "",
+      "soIssueDate": "",
+      "custom_address_1775582040709": "",
+      "custom_country_1777164093280": "",
+      "attendedStatus": "attended",
+      "finishedStatus": "attended"
+    },
+    {
+      "type": "Special Juvenile in Court",
+      "clid": "20811",
+      "hearingMode": "",
+      "assigned": "Jessica Vicuna",
+      "history": [],
+      "id": "r1779804728487hxgv",
+      "anum": "246851492",
+      "docs": [],
+      "client": "Rodrigo Rivas Quintanilla",
+      "notes": "",
+      "timeStart": "",
+      "timeEnd": "",
+      "atty": "Jessica Vicuna",
+      "event": "90-DAY DEADLINE",
+      "checklist": [],
+      "date": "2028-01-31",
+      "soIssueDate": ""
+    },
+    {
+      "docs": [],
+      "anum": "246851492",
+      "hearingMode": "",
+      "id": "r1779804728932bk7q",
+      "assigned": "Jessica Vicuna",
+      "history": [],
+      "type": "Special Juvenile in Court",
+      "clid": "20811",
+      "date": "2028-02-28",
+      "soIssueDate": "",
+      "event": "60-DAY DEADLINE",
+      "checklist": [],
+      "atty": "Jessica Vicuna",
+      "notes": "",
+      "timeEnd": "",
+      "timeStart": "",
+      "client": "Rodrigo Rivas Quintanilla"
+    },
+    {
+      "docs": [],
+      "anum": "246851492",
+      "id": "r177980472946105cq",
+      "assigned": "Jessica Vicuna",
+      "history": [],
+      "hearingMode": "",
+      "type": "Special Juvenile in Court",
+      "clid": "20811",
+      "soIssueDate": "",
+      "date": "2028-04-03",
+      "checklist": [],
+      "event": "30-DAY DEADLINE",
+      "atty": "Jessica Vicuna",
+      "timeEnd": "",
+      "notes": "",
+      "timeStart": "",
+      "client": "Rodrigo Rivas Quintanilla"
+    },
+    {
+      "client": "Rodrigo Rivas Quintanilla",
+      "timeEnd": "",
+      "notes": "",
+      "timeStart": "",
+      "soIssueDate": "",
+      "date": "2028-04-17",
+      "atty": "Jessica Vicuna",
+      "event": "INDIVIDUAL PREP",
+      "checklist": [],
+      "assigned": "Jessica Vicuna",
+      "history": [],
+      "id": "r17798047304830t0x",
+      "hearingMode": "",
+      "type": "Special Juvenile in Court",
+      "clid": "20811",
+      "docs": [],
+      "anum": "246851492"
+    },
+    {
+      "date": "2028-05-01",
+      "soIssueDate": "",
+      "checklist": [],
+      "event": "CALL UP DEADLINE",
+      "atty": "Jessica Vicuna",
+      "timeStart": "",
+      "notes": "",
+      "timeEnd": "",
+      "client": "Rodrigo Rivas Quintanilla",
+      "docs": [],
+      "anum": "246851492",
+      "hearingMode": "",
+      "id": "r17798049663080ywu",
+      "assigned": "Jessica Vicuna",
+      "history": [],
+      "clid": "20811",
+      "type": "Special Juvenile in Court"
+    },
+    {
+      "assigned": "Jessica Vicuna",
+      "history": [],
+      "id": "r1779804980924etai",
+      "hearingMode": "",
+      "clid": "20811",
+      "type": "Special Juvenile in Court",
+      "docs": [],
+      "anum": "246851492",
+      "client": "Rodrigo Rivas Quintanilla",
+      "timeStart": "",
+      "timeEnd": "",
+      "notes": "",
+      "soIssueDate": "",
+      "date": "2028-04-17",
+      "atty": "Jessica Vicuna",
+      "checklist": [],
+      "event": "INDIVIDUAL PREP"
+    },
+    {
+      "client": "Rodrigo Rivas Quintanilla",
+      "timeEnd": "",
+      "notes": "",
+      "timeStart": "",
+      "atty": "Jessica Vicuna",
+      "checklist": [],
+      "event": "30-DAY DEADLINE",
+      "soIssueDate": "",
+      "date": "2028-04-03",
+      "clid": "20811",
+      "type": "Special Juvenile in Court",
+      "history": [],
+      "assigned": "Jessica Vicuna",
+      "id": "r177980498151696bx",
+      "hearingMode": "",
+      "anum": "246851492",
+      "docs": []
+    },
+    {
+      "docs": [],
+      "anum": "246851492",
+      "hearingMode": "",
+      "history": [],
+      "assigned": "Jessica Vicuna",
+      "id": "r1779804982029cwe3",
+      "clid": "20811",
+      "type": "Special Juvenile in Court",
+      "date": "2028-02-28",
+      "soIssueDate": "",
+      "atty": "Jessica Vicuna",
+      "event": "60-DAY DEADLINE",
+      "checklist": [],
+      "client": "Rodrigo Rivas Quintanilla",
+      "timeEnd": "",
+      "notes": "",
+      "timeStart": ""
+    },
+    {
+      "id": "r17798049828199wys",
+      "history": [],
+      "assigned": "Jessica Vicuna",
+      "hearingMode": "",
+      "clid": "20811",
+      "type": "Special Juvenile in Court",
+      "docs": [],
+      "anum": "246851492",
+      "notes": "",
+      "timeStart": "",
+      "timeEnd": "",
+      "client": "Rodrigo Rivas Quintanilla",
+      "soIssueDate": "",
+      "date": "2028-01-31",
+      "event": "90-DAY DEADLINE",
+      "checklist": [],
+      "atty": "Jessica Vicuna"
+    },
+    {
+      "custom_address_1775582040709": "",
+      "docs": [],
+      "custom_country_1777164093280": "",
+      "anum": "246851492",
+      "assigned": "Jessica Vicuna",
+      "history": [],
+      "id": "r17798050384048u4t",
+      "hearingMode": "",
+      "type": "Special Juvenile in Court",
+      "clid": "20811",
+      "soIssueDate": "",
+      "date": "2028-05-04",
+      "hearingJudgeId": "",
+      "atty": "Jessica Vicuna",
+      "checklist": [],
+      "event": "INDIVIDUAL",
+      "virtualLink": "",
+      "client": "Rodrigo Rivas Quintanilla",
+      "timeEnd": "",
+      "timeStart": "",
+      "notes": "(Personal Stament due by May 10, 2028. The office should send it May 02, 2028.)"
+    },
+    {
+      "id": "r1779806439359ketu",
+      "clid": "12720",
+      "client": "Miguel DOTA",
+      "type": "Special Juvenile in Immigration Court",
+      "anum": "216-848-226",
+      "atty": "Eunice Arce",
+      "event": "TASK",
+      "date": "2026-05-29",
+      "timeStart": "",
+      "timeEnd": "",
+      "assigned": "",
+      "notes": "Have ready for review the I-325A.",
+      "hearingMode": "",
+      "hearingJudgeId": "",
+      "virtualLink": "",
+      "checklist": [],
+      "docs": [],
+      "soIssueDate": "",
+      "custom_address_1775582040709": "",
+      "custom_country_1777164093280": "",
+      "history": []
+    },
+    {
+      "id": "case_1779808078431",
+      "clid": "23755",
+      "client": "Oscar CURIMILMA",
+      "type": "HABEAS/BOND/MASTER",
+      "anum": "222-516-626",
+      "atty": "Luis Daniel Altuve",
+      "assigned": "",
+      "event": "MASTER",
+      "date": "2026-05-27",
+      "timeStart": "09:00",
+      "timeEnd": "",
+      "notes": "",
+      "history": [
+        {
+          "type": "note",
+          "date": "May 26, 2026",
+          "note": "Case created"
+        },
+        {
+          "type": "rescheduled",
+          "date": "May 27, 2026",
+          "prevDate": "2026-05-26",
+          "newDate": "2026-05-27",
+          "note": "Moved in week view"
+        },
+        {
+          "type": "attended",
+          "date": "May 27, 2026"
+        }
+      ],
+      "custom_address_1775582040709": "",
+      "custom_country_1777164093280": "",
+      "hearingMode": "in-person",
+      "hearingJudgeId": "",
+      "virtualLink": "",
+      "checklist": [],
+      "docs": [],
+      "soIssueDate": "",
+      "finishedStatus": "attended",
+      "attendedStatus": "attended"
+    },
+    {
+      "id": "r17799122032823c2s",
+      "clid": "23785",
+      "client": "Leidis ROJAS",
+      "type": "Defensive Asylum",
+      "anum": "213-526-066",
+      "atty": "Katya Baltodano",
+      "event": "90-DAY DEADLINE",
+      "date": "2026-10-12",
+      "timeStart": "",
+      "timeEnd": "",
+      "assigned": "",
+      "notes": "",
+      "hearingMode": "",
+      "checklist": [],
+      "docs": [],
+      "soIssueDate": "",
+      "history": []
+    },
+    {
+      "id": "r17799122103530un8",
+      "clid": "23785",
+      "client": "Leidis ROJAS",
+      "type": "Defensive Asylum",
+      "anum": "213-526-066",
+      "atty": "Katya Baltodano",
+      "event": "60-DAY DEADLINE",
+      "date": "2026-11-09",
+      "timeStart": "",
+      "timeEnd": "",
+      "assigned": "",
+      "notes": "",
+      "hearingMode": "",
+      "checklist": [],
+      "docs": [],
+      "soIssueDate": "",
+      "history": []
+    },
+    {
+      "id": "r17799122239781vcj",
+      "clid": "23785",
+      "client": "Leidis ROJAS",
+      "type": "Defensive Asylum",
+      "anum": "213-526-066",
+      "atty": "Katya Baltodano",
+      "event": "30-DAY DEADLINE",
+      "date": "2026-12-07",
+      "timeStart": "",
+      "timeEnd": "",
+      "assigned": "",
+      "notes": "",
+      "hearingMode": "",
+      "checklist": [],
+      "docs": [],
+      "soIssueDate": "",
+      "history": []
+    },
+    {
+      "id": "r1779912234986dtgb",
+      "clid": "23785",
+      "client": "Leidis ROJAS",
+      "type": "Defensive Asylum",
+      "anum": "213-526-066",
+      "atty": "Katya Baltodano",
+      "event": "INDIVIDUAL PREP",
+      "date": "2026-12-29",
+      "timeStart": "",
+      "timeEnd": "",
+      "assigned": "",
+      "notes": "",
+      "hearingMode": "",
+      "checklist": [],
+      "docs": [],
+      "soIssueDate": "",
+      "history": []
+    },
+    {
+      "id": "r1779912267368tflx",
+      "clid": "23785",
+      "client": "Leidis ROJAS",
+      "type": "Defensive Asylum",
+      "anum": "213-526-066",
+      "atty": "Katya Baltodano",
+      "event": "INDIVIDUAL",
+      "date": "2027-01-12",
+      "timeStart": "10:00",
+      "timeEnd": "11:00",
+      "assigned": "",
+      "notes": "30 days call-up",
+      "hearingMode": "",
+      "hearingJudgeId": "",
+      "virtualLink": "",
+      "checklist": [],
+      "docs": [],
+      "soIssueDate": "",
+      "custom_address_1775582040709": "",
+      "custom_country_1777164093280": "",
+      "history": []
+    },
+    {
+      "id": "r177991309179976kj",
+      "clid": "23755",
+      "client": "Oscar CURIMILMA",
+      "type": "HABEAS/BOND/MASTER",
+      "anum": "222-516-626",
+      "atty": "Luis Daniel Altuve",
+      "event": "30-DAY DEADLINE",
+      "date": "2027-02-01",
+      "timeStart": "",
+      "timeEnd": "",
+      "assigned": "",
+      "notes": "",
+      "hearingMode": "",
+      "checklist": [],
+      "docs": [],
+      "soIssueDate": "",
+      "history": []
+    },
+    {
+      "id": "r1779913095590zopo",
+      "clid": "23755",
+      "client": "Oscar CURIMILMA",
+      "type": "HABEAS/BOND/MASTER",
+      "anum": "222-516-626",
+      "atty": "Luis Daniel Altuve",
+      "event": "60-DAY DEADLINE",
+      "date": "2027-01-04",
+      "timeStart": "",
+      "timeEnd": "",
+      "assigned": "",
+      "notes": "JUDGE CONROY:\nMemo of detailed analysis of PSG and cognazability. ONE YEAR ISSUE BRIEF. COUNTRY CONDITIONS HIGHLIGHTED YELLOW. OR PRAGPRAH IN THE TABLE OF CONTENT. LIMIT OF 50 PAGES LIMITS OF BACKGROUD. IT DOES NOT INCLUDE THE COUNTRY CONDITIONS.",
+      "hearingMode": "",
+      "checklist": [],
+      "docs": [],
+      "soIssueDate": "",
+      "history": [],
+      "hearingJudgeId": "",
+      "virtualLink": "",
+      "custom_address_1775582040709": "",
+      "custom_country_1777164093280": ""
+    },
+    {
+      "id": "r1779913099206we8b",
+      "clid": "23755",
+      "client": "Oscar CURIMILMA",
+      "type": "HABEAS/BOND/MASTER",
+      "anum": "222-516-626",
+      "atty": "Luis Daniel Altuve",
+      "event": "90-DAY DEADLINE",
+      "date": "2026-12-07",
+      "timeStart": "",
+      "timeEnd": "",
+      "assigned": "",
+      "notes": "",
+      "hearingMode": "",
+      "checklist": [],
+      "docs": [],
+      "soIssueDate": "",
+      "history": []
+    },
+    {
+      "id": "r1779913109333uwa5",
+      "clid": "23755",
+      "client": "Oscar CURIMILMA",
+      "type": "HABEAS/BOND/MASTER",
+      "anum": "222-516-626",
+      "atty": "Luis Daniel Altuve",
+      "event": "INDIVIDUAL PREP",
+      "date": "2027-02-22",
+      "timeStart": "",
+      "timeEnd": "",
+      "assigned": "",
+      "notes": "",
+      "hearingMode": "",
+      "checklist": [],
+      "docs": [],
+      "soIssueDate": "",
+      "history": []
+    },
+    {
+      "id": "r1779913144305h7kx",
+      "clid": "23755",
+      "client": "Oscar CURIMILMA",
+      "type": "HABEAS/BOND/MASTER",
+      "anum": "222-516-626",
+      "atty": "Luis Daniel Altuve",
+      "event": "INDIVIDUAL",
+      "date": "2027-03-09",
+      "timeStart": "10:00",
+      "timeEnd": "00:00",
+      "assigned": "",
+      "notes": "IN PERSON. Judge Conroy, Charles R.",
+      "hearingMode": "",
+      "hearingJudgeId": "",
+      "virtualLink": "",
+      "checklist": [],
+      "docs": [],
+      "soIssueDate": "",
+      "custom_address_1775582040709": "",
+      "custom_country_1777164093280": "",
+      "history": []
+    },
+    {
+      "id": "r1779914607731w7xb",
+      "clid": "23755",
+      "client": "Oscar CURIMILMA",
+      "type": "HABEAS/BOND/MASTER",
+      "anum": "222-516-626",
+      "atty": "Luis Daniel Altuve",
+      "event": "90-DAY DEADLINE",
+      "date": "2027-01-11",
+      "timeStart": "",
+      "timeEnd": "",
+      "assigned": "",
+      "notes": "JUDGE CONROY:\nMemo of detailed analysis of PSG and cognazability. ONE YEAR ISSUE BRIEF. COUNTRY CONDITIONS HIGHLIGHTED YELLOW. OR PRAGPRAH IN THE TABLE OF CONTENT. LIMIT OF 50 PAGES LIMITS OF BACKGROUD. IT DOES NOT INCLUDE THE COUNTRY CONDITIONS.",
+      "hearingMode": "",
+      "hearingJudgeId": "",
+      "virtualLink": "",
+      "checklist": [],
+      "docs": [],
+      "soIssueDate": "",
+      "custom_address_1775582040709": "",
+      "custom_country_1777164093280": "",
+      "history": []
+    },
+    {
+      "id": "t1779977545946ue5d",
+      "clid": "23606",
+      "client": "Kimberly CUSPA",
+      "anum": "220-174-119",
+      "type": "Special Juvenile in Immigration Court",
+      "atty": "Katya Baltodano",
+      "event": "TASK",
+      "date": "2026-05-29",
+      "timeStart": "",
+      "timeEnd": "",
+      "assigned": "Katya Baltodano",
+      "notes": "Kimberly Cus`pa, send new I589",
+      "history": [
+        {
+          "type": "note",
+          "date": "May 28, 2026",
+          "note": "Task created"
+        }
+      ]
+    }
+  ],
+  "caseMeta": {
+    "23288": {
+      "clientFirstName": "Rafaela",
+      "clientCountry": "",
+      "clientZip": "",
+      "clientLastName": "CAPELLAN",
+      "caseNotesList": [],
+      "clientEmail": "rafaelacapellan36@gmail.com",
+      "clientStreet": "",
+      "respondents": [],
+      "clientApt": "",
+      "clientCity": "",
+      "clientState": "",
+      "procMilestones": [],
+      "clientPhone": "",
+      "clientMiddleName": "",
+      "clientDob": "",
+      "docSections": [],
+      "caseIssues": {},
+      "clientCountryOfBirth": ""
+    },
+    "23627": {
+      "procMilestones": [
+        {
+          "title": "NTA",
+          "date": "2025-01-04"
+        },
+        {
+          "date": "2025-02-14",
+          "title": "E-33 (806M)"
+        },
+        {
+          "date": "2025-02-14",
+          "title": "I-589"
+        },
+        {
+          "date": "2025-03-10",
+          "title": "E-33 (825)"
+        },
+        {
+          "date": "2025-03-10",
+          "title": "E-33 (825)"
+        },
+        {
+          "date": "2025-04-17",
+          "title": "Rejection notice (Motion to change venue lack of service)"
+        },
+        {
+          "title": "Fee receipt",
+          "date": "2025-10-20"
+        },
+        {
+          "date": "2026-04-21",
+          "title": "E-28 Anibal"
+        },
+        {
+          "title": "E-28 WG",
+          "date": "2026-05-15"
+        },
+        {
+          "date": "2025-01-04",
+          "title": "Entry"
+        }
+      ],
+      "clientEmail": "stefhantabares01@gmail.com",
+      "caseNotesList": [],
+      "storyOfPersecution": "\"Yes, my family and I have been threatened and persecuted in my country by a criminal gang that operates from a Colombian prison and calls themselves \"Negro Over\" in Colombia. My partner Zuly Ester Iglesia was an administrator in a company and had a good position and at the end of 2003 she began to receive harassment through phone calls and they threatened her so that she would pay them money. She filed a complaint because they stole all the money from our bank account and those people told her that they knew everything about us. Their boss was also extorted by the same people and the police did nothing to protect us. And that scared us a lot, because that gang killed people who did not agree to the extortion. We fear for our lives and we run away. This is a short summary of my claim that I prepared at a pro-se clinic: I may supplement it at a later date.\" I589 p 1Yes, I am very afraid to return because the people who threatened us are very dangerous and carry out murders and kidnappings from prison. In Colombia the police and the government do not protect me and my life and that of my family are in danger.\nThis is a short summary of my claim that I prepared at a pro-se clinic: I may supplement it at a later date. (I589 p 6)",
+      "clientFirstName": "Stefhan",
+      "clientLastName": "TABARES",
+      "respondents": [],
+      "docSections": [
+        {
+          "sectionName": "Identity & Entry",
+          "docs": [
+            {
+              "name": "Passport (all pages)",
+              "checked": false
+            },
+            {
+              "checked": false,
+              "name": "Birth Certificate + certified translation"
+            },
+            {
+              "checked": false,
+              "name": "National ID card"
+            },
+            {
+              "checked": false,
+              "name": "I-94 Arrival/Departure Record"
+            },
+            {
+              "name": "Visa / Entry documents",
+              "checked": false
+            }
+          ]
+        },
+        {
+          "sectionName": "Application",
+          "docs": [
+            {
+              "checked": false,
+              "name": "I-589 (signed, filed copy)"
+            },
+            {
+              "name": "I-589 Amendments (if any)",
+              "checked": false
+            },
+            {
+              "checked": false,
+              "name": "Proof of service on DHS counsel"
+            }
+          ]
+        },
+        {
+          "docs": [
+            {
+              "checked": false,
+              "name": "Notice to Appear (NTA)"
+            },
+            {
+              "checked": false,
+              "name": "Prior immigration court orders"
+            },
+            {
+              "checked": false,
+              "name": "Hearing notice / scheduling order"
+            }
+          ],
+          "sectionName": "Court Documents"
+        },
+        {
+          "docs": [
+            {
+              "checked": false,
+              "name": "Personal declaration (respondent)"
+            },
+            {
+              "checked": false,
+              "name": "Witness declarations"
+            },
+            {
+              "name": "Medical / psychological evaluation",
+              "checked": false
+            },
+            {
+              "name": "Police reports from home country",
+              "checked": false
+            },
+            {
+              "name": "Court documents from home country",
+              "checked": false
+            },
+            {
+              "checked": false,
+              "name": "Arrest warrants / threatening communications"
+            },
+            {
+              "checked": false,
+              "name": "Photos of injuries or harm"
+            }
+          ],
+          "sectionName": "Respondent's Evidence"
+        },
+        {
+          "sectionName": "Country Conditions",
+          "docs": [
+            {
+              "name": "State Department Human Rights Report",
+              "checked": false
+            },
+            {
+              "name": "UNHCR country guidance",
+              "checked": false
+            },
+            {
+              "checked": false,
+              "name": "Human Rights Watch / Amnesty International reports"
+            },
+            {
+              "checked": false,
+              "name": "Expert witness report (if applicable)"
+            },
+            {
+              "checked": false,
+              "name": "News articles supporting the claim"
+            }
+          ]
+        },
+        {
+          "docs": [
+            {
+              "checked": false,
+              "name": "Exhibit list (tabbed and paginated)"
+            },
+            {
+              "checked": false,
+              "name": "Witness list (submitted to court)"
+            },
+            {
+              "name": "Interpreter confirmation (if private)",
+              "checked": false
+            },
+            {
+              "name": "Copies for judge, DHS counsel, and respondent",
+              "checked": false
+            }
+          ],
+          "sectionName": "Hearing Day"
+        },
+        {
+          "sectionName": "Financial",
+          "docs": [
+            {
+              "checked": false,
+              "name": "Tax returns (last 3 years)"
+            }
+          ]
+        },
+        {
+          "sectionName": "Supporting / Optional",
+          "docs": [
+            {
+              "name": "Letters of support (community, religious, employer)",
+              "checked": false
+            },
+            {
+              "name": "Evidence of U.S. ties",
+              "checked": false
+            },
+            {
+              "checked": false,
+              "name": "Prior asylum denial in third country (if applicable)"
+            }
+          ]
+        }
+      ],
+      "caseIssues": {
+        "iss2": {
+          "note": "On 01/04/2025 Respondent entered the US. I-589 \"On my journey tp the USA, I traveled by plane to Mexico until my CBP1 appointment was granted. ",
+          "checked": false
+        }
+      }
+    },
+    "23785": {
+      "respondents": [],
+      "clientLastName": "ROJAS",
+      "caseIssues": {},
+      "docSections": [
+        {
+          "docs": [
+            {
+              "checked": false,
+              "name": "Passport (all pages)"
+            },
+            {
+              "name": "Birth Certificate + certified translation",
+              "checked": false
+            },
+            {
+              "checked": false,
+              "name": "National ID card"
+            },
+            {
+              "name": "I-94 Arrival/Departure Record",
+              "checked": false
+            },
+            {
+              "checked": false,
+              "name": "Visa / Entry documents"
+            }
+          ],
+          "sectionName": "Identity & Entry"
+        },
+        {
+          "docs": [
+            {
+              "checked": false,
+              "name": "I-589 (signed, filed copy)"
+            },
+            {
+              "name": "I-589 Amendments (if any)",
+              "checked": false
+            },
+            {
+              "checked": false,
+              "name": "Proof of service on DHS counsel"
+            }
+          ],
+          "sectionName": "Application"
+        },
+        {
+          "docs": [
+            {
+              "name": "Notice to Appear (NTA)",
+              "checked": false
+            },
+            {
+              "checked": false,
+              "name": "Prior immigration court orders"
+            },
+            {
+              "name": "Hearing notice / scheduling order",
+              "checked": false
+            }
+          ],
+          "sectionName": "Court Documents"
+        },
+        {
+          "sectionName": "Respondent's Evidence",
+          "docs": [
+            {
+              "name": "Personal declaration (respondent)",
+              "checked": false
+            },
+            {
+              "name": "Witness declarations",
+              "checked": false
+            },
+            {
+              "name": "Medical / psychological evaluation",
+              "checked": false
+            },
+            {
+              "checked": false,
+              "name": "Police reports from home country"
+            },
+            {
+              "name": "Court documents from home country",
+              "checked": false
+            },
+            {
+              "name": "Arrest warrants / threatening communications",
+              "checked": false
+            },
+            {
+              "checked": false,
+              "name": "Photos of injuries or harm"
+            }
+          ]
+        },
+        {
+          "sectionName": "Country Conditions",
+          "docs": [
+            {
+              "checked": false,
+              "name": "State Department Human Rights Report"
+            },
+            {
+              "checked": false,
+              "name": "UNHCR country guidance"
+            },
+            {
+              "checked": false,
+              "name": "Human Rights Watch / Amnesty International reports"
+            },
+            {
+              "name": "Expert witness report (if applicable)",
+              "checked": false
+            },
+            {
+              "name": "News articles supporting the claim",
+              "checked": false
+            }
+          ]
+        },
+        {
+          "docs": [
+            {
+              "name": "Exhibit list (tabbed and paginated)",
+              "checked": false
+            },
+            {
+              "name": "Witness list (submitted to court)",
+              "checked": false
+            },
+            {
+              "name": "Interpreter confirmation (if private)",
+              "checked": false
+            },
+            {
+              "checked": false,
+              "name": "Copies for judge, DHS counsel, and respondent"
+            }
+          ],
+          "sectionName": "Hearing Day"
+        },
+        {
+          "sectionName": "Financial",
+          "docs": [
+            {
+              "checked": false,
+              "name": "Tax returns (last 3 years)"
+            }
+          ]
+        },
+        {
+          "sectionName": "Supporting / Optional",
+          "docs": [
+            {
+              "checked": false,
+              "name": "Letters of support (community, religious, employer)"
+            },
+            {
+              "checked": false,
+              "name": "Evidence of U.S. ties"
+            },
+            {
+              "name": "Prior asylum denial in third country (if applicable)",
+              "checked": false
+            }
+          ]
+        }
+      ],
+      "clientFirstName": "Leidis",
+      "clientEmail": "leidis902@gmail.com",
+      "caseNotesList": [],
+      "procMilestones": []
+    }
+  },
+  "paralegals": [
+    "Andrea Gonzalez",
+    "Jessica Vicuna",
+    "Katya Baltodano",
+    "Pablo Gonzalez",
+    "Fernando Sandoval",
+    "Abraham Alvarez",
+    "Maria Miller",
+    "Gaby",
+    "Jessica Mejia",
+    "Eunice Arce",
+    "Carlos Suarez (v)",
+    "Luis Daniel Altuve"
+  ],
+  "attorneys": [
+    "Eugenia Mendoza"
+  ],
+  "paralegalEmails": {
+    "Maria Miller": "mmiller@theromerofirm.com",
+    "Jessica Vicuna": "jvicuna@theromerofirm.com",
+    "Katya Baltodano": "kbaltodano@theromerofirm.com",
+    "Pablo Gonzalez": "pgonzalez@theromerofirm.com",
+    "Fernando Sandoval": "fsandoval@theromerofirm.com",
+    "Abraham Alvarez": "aalvarez@theromerofirm.com",
+    "Gaby": "gzuniga@theromerofirm.com",
+    "Andrea Gonzalez": "agonzalez@theromerofirm.com",
+    "Albertson Candelier": "acandelier@theromerofirm.com",
+    "Gabriela Zuniga": "azuniga@theromerofirm.com",
+    "Carlota Lopez": "clopez@theromerofirm.com",
+    "Jessica Mejia": "jmejia@theromerofirm.com",
+    "Eunice Arce": "earce@theromerofirm.com",
+    "Carlos Suarez (v)": "csuarez@theromerofirm.com",
+    "Litzy Cardenas (N)": "lcardenas@theromerofirm.com",
+    "Luis Altuve": "laltuve@theromerofirm.com",
+    "Luis Daniel Altuve": "laltuve@theromerofirm.com",
+    "Eugenia Mendoza": "emendoza@theromerofirm.com"
+  },
+  "attorneyEmails": {
+    "Eugenia Mendoza": "emendoza@theromerofirm.com"
+  },
+  "caseTypes": [
+    "Affirmative Asylum",
+    "Cancellation of Removal",
+    "Defensive Asylum",
+    "Special Juvenile in Court",
+    "Voluntary Departure",
+    "Withholding of Removal",
+    "Special Juvenile Not in Immigration Court",
+    "Special Juvenile in Immigration Court",
+    "Adjustment of Status",
+    "TVPRA Asylum",
+    "BIA Appeal",
+    "HABEAS/BOND/MASTER"
+  ],
+  "eventTypes": [
+    "30 CALL-UP DEADLINE",
+    "30-DAY DEADLINE",
+    "60 CALL-UP",
+    "60-DAY DEADLINE",
+    "90 CALL-UP",
+    "90-DAY DEADLINE",
+    "APPEAL DEADLINE",
+    "BOND HEARING",
+    "CALL UP DEADLINE",
+    "CALL-UP DEADLINE",
+    "CHECK IN WITH CLIENT 60 DAYS",
+    "FC HEARING",
+    "FC INITIAL PETITION",
+    "FC SERVICE",
+    "FC TASK",
+    "FC TRIAL",
+    "ICE APPOINTMENT",
+    "ICE Appointment",
+    "INDIVIDUAL",
+    "INDIVIDUAL PREP",
+    "MASTER",
+    "MASTER PREP",
+    "MASTER/BOND HEARING",
+    "OFFICE TASK",
+    "PERSONAL",
+    "PERSONAL TASK",
+    "PREP USCIS INTERVIEW",
+    "Priority Date Check",
+    "SCHEDULING ORDER",
+    "TASK",
+    "TASK FOR 30-D-D",
+    "TASK FOR 3DD",
+    "TASK FOR MASTER",
+    "TASK FOR SO",
+    "TASK GENERAL",
+    "Task",
+    "USICS INTERVIEW",
+    "WWPP"
+  ],
+  "venues": [
+    "26 FEDERAL PLAZA",
+    "290 BROADWAY",
+    "201 VARICK ST",
+    "KINGS Family Court",
+    "QUEENS Family Court",
+    "BRONX Family Court",
+    "NASSAU Family Court",
+    "SUFFOLK Family Court"
+  ],
+  "_recoveryNote": "Built from May 28, 2026 peak (496 recs / 120 cases) vs May 31, 2026 (473 / 117) — contains only records and cases missing from May 31.",
+  "_generatedAt": "2026-06-01T00:00:00.000Z"
+}
