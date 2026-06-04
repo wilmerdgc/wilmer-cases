@@ -3677,6 +3677,22 @@ async function loadCaseFolderHandle(clid){
     });
   }catch(e){ return null; }
 }
+// Drop the IndexedDB entry that links a case to a local OS folder. The
+// folder itself is not deleted — just the app's knowledge of where it is.
+// Use case: linked the wrong folder by accident, or rebuilt the folder
+// tree on disk and need to point the case somewhere else.
+async function unlinkCaseFolder(clid){
+  if(!clid) return false;
+  try{
+    const db = await _caseFolderDB();
+    return await new Promise((resolve) => {
+      const tx = db.transaction('folders', 'readwrite');
+      tx.objectStore('folders').delete(String(clid));
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  }catch(e){ return false; }
+}
 async function _verifyFolderPermission(handle, mode){
   if(!handle || typeof handle.queryPermission !== 'function') return false;
   const opts = { mode: mode || 'readwrite' };
@@ -15300,6 +15316,60 @@ function openCaseDetail(clid){
       mkInfoCell(addrGrid,'ZIP Code',_clAddr.clientZip||'',()=>clZipI);
       mkInfoCell(addrGrid,'Country',_clAddr.clientCountry||'',()=>clCountryI);
       addrSection.appendChild(addrGrid);L1.appendChild(addrSection);
+    }
+
+    // Linked folder management — edit mode only. Shows the current state
+    // of the case ↔ local-OS-folder link with one-click create / unlink /
+    // open actions. The IndexedDB lookup is async, so we mount a stub here
+    // and fill it in once the handle is loaded.
+    if(isEditing){
+      const folderSection=document.createElement('div');folderSection.style.cssText='grid-column:1/-1;margin-top:4px;';
+      const fLabel=document.createElement('div');fLabel.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;margin:4px 0 5px;';fLabel.textContent='Linked folder';folderSection.appendChild(fLabel);
+      const fRow=document.createElement('div');fRow.id='case-folder-edit-row-'+clid;fRow.style.cssText='display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border:1px solid #DDD5CA;border-radius:8px;background:#FDFAF7;min-height:32px;';
+      fRow.innerHTML='<span style="font-size:11px;color:#C4BAB0;font-style:italic;">Checking…</span>';
+      folderSection.appendChild(fRow);
+      L1.appendChild(folderSection);
+      // Async fill — handles the "linked" vs "not linked" branch.
+      const _renderFolderRow = async () => {
+        let handle = null;
+        try{ handle = await loadCaseFolderHandle(clid); }catch(e){}
+        fRow.innerHTML = '';
+        if(handle){
+          const nameSpan=document.createElement('span');nameSpan.style.cssText='font-size:12px;font-weight:600;color:#4F6A91;display:inline-flex;align-items:center;gap:6px;';
+          nameSpan.innerHTML = '📁 <span>' + escHtml(handle.name||'Folder') + '</span>';
+          fRow.appendChild(nameSpan);
+          const openBtn=document.createElement('button');openBtn.type='button';openBtn.textContent='📂 Open folder';openBtn.title='Open the linked folder in the in-app file viewer';
+          openBtn.style.cssText='font-size:11px;font-weight:600;padding:5px 12px;border:1px solid #B8C4DB;border-radius:14px;background:#EEF1F7;color:#4F6A91;cursor:pointer;font-family:inherit;';
+          openBtn.onmouseenter=()=>{openBtn.style.background='#4F6A91';openBtn.style.color='#fff';};
+          openBtn.onmouseleave=()=>{openBtn.style.background='#EEF1F7';openBtn.style.color='#4F6A91';};
+          openBtn.onclick=()=>{ if(typeof openCaseFolderViewer==='function') openCaseFolderViewer(clid); };
+          fRow.appendChild(openBtn);
+          const unlinkBtn=document.createElement('button');unlinkBtn.type='button';unlinkBtn.textContent='🔗 Unlink';unlinkBtn.title='Remove the link between this case and that folder (the folder itself is not deleted)';
+          unlinkBtn.style.cssText='font-size:11px;padding:5px 12px;border:1px solid #DDD5CA;border-radius:14px;background:#fff;color:#9E9186;cursor:pointer;font-family:inherit;';
+          unlinkBtn.onmouseenter=()=>{unlinkBtn.style.borderColor='#B85C5C';unlinkBtn.style.color='#B85C5C';};
+          unlinkBtn.onmouseleave=()=>{unlinkBtn.style.borderColor='#DDD5CA';unlinkBtn.style.color='#9E9186';};
+          unlinkBtn.onclick=async ()=>{
+            if(!confirm('Unlink folder "'+(handle.name||'Folder')+'" from this case?\n\nThe folder on disk is not deleted — only the link between the app and the folder is removed.')) return;
+            const ok = await unlinkCaseFolder(clid);
+            if(ok){ showToast('Folder unlinked ✓'); _renderFolderRow(); /* re-render the row */ }
+            else  { showToast('Could not unlink — try again'); }
+          };
+          fRow.appendChild(unlinkBtn);
+        } else {
+          const none=document.createElement('span');none.style.cssText='font-size:11px;color:#C4BAB0;font-style:italic;';none.textContent='No folder linked yet.';fRow.appendChild(none);
+          const createBtn=document.createElement('button');createBtn.type='button';createBtn.textContent='+ Create folder';createBtn.title='Pick a parent folder on this computer; a subfolder named after the client will be created and linked to this case';
+          createBtn.style.cssText='font-size:11px;font-weight:600;padding:5px 12px;border:1px solid #B4CCAD;border-radius:14px;background:#EBF1EB;color:#4A6B4E;cursor:pointer;font-family:inherit;';
+          createBtn.onmouseenter=()=>{createBtn.style.background='#4A6B4E';createBtn.style.color='#fff';};
+          createBtn.onmouseleave=()=>{createBtn.style.background='#EBF1EB';createBtn.style.color='#4A6B4E';};
+          createBtn.onclick=async ()=>{
+            if(typeof gmailCreateCaseFolder!=='function'){ showToast('Folder creation unavailable'); return; }
+            await gmailCreateCaseFolder(clid);
+            _renderFolderRow();
+          };
+          fRow.appendChild(createBtn);
+        }
+      };
+      _renderFolderRow();
     }
 
     // Consolidated
