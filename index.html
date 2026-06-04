@@ -15260,18 +15260,6 @@ function openCaseDetail(clid){
     // Paralegal
     const paraI=mkSel2(paralegals,base.atty);infoBody._paraInput=paraI;
     mkInfoCell(L1,'Paralegal',base.atty,()=>paraI);
-    // Client Name Fields (Last, First, Middle). In VIEW mode these are
-    // surfaced inside row 1 of the client list below — we still build the
-    // inputs here so edit mode can render them up top, but the cards only
-    // appear when isEditing is true.
-    const clLastI=mkText2((caseMeta[clid]||{}).clientLastName||'');infoBody._clLastInput=clLastI;
-    const clFirstI=mkText2((caseMeta[clid]||{}).clientFirstName||'');infoBody._clFirstInput=clFirstI;
-    const clMiddleI=mkText2((caseMeta[clid]||{}).clientMiddleName||'');infoBody._clMiddleInput=clMiddleI;
-    if(isEditing){
-      mkInfoCell(L1,'Family Name (Last Name)',(caseMeta[clid]||{}).clientLastName||'',()=>clLastI);
-      mkInfoCell(L1,'Given Name (First Name)',(caseMeta[clid]||{}).clientFirstName||'',()=>clFirstI);
-      mkInfoCell(L1,'Middle Name',(caseMeta[clid]||{}).clientMiddleName||'',()=>clMiddleI);
-    }
     // Client Email
     const clientEmailI=document.createElement('input');clientEmailI.type='email';clientEmailI.value=(caseMeta[clid]||{}).clientEmail||'';clientEmailI.placeholder='client@email.com';clientEmailI.style.cssText='width:100%;font-size:13px;font-weight:500;color:#2C2620;border:none;outline:none;background:transparent;padding:0;font-family:inherit;';
     infoBody._clientEmailInput=clientEmailI;
@@ -15279,17 +15267,17 @@ function openCaseDetail(clid){
     // Client Phone
     const clPhoneI=mkText2((caseMeta[clid]||{}).clientPhone||'');clPhoneI.placeholder='Phone…';infoBody._clPhoneInput=clPhoneI;
     mkInfoCell(L1,'Phone',(caseMeta[clid]||{}).clientPhone||'',()=>clPhoneI);
-    // Client DOB — also moved into the lead's row 1 in view mode; the
-    // input still gets built so edit mode renders the card.
-    const clDobI=document.createElement('input');clDobI.type='date';clDobI.value=(caseMeta[clid]||{}).clientDob||'';clDobI.style.cssText='width:100%;font-size:13px;font-weight:500;color:#2C2620;border:none;outline:none;background:transparent;padding:0;font-family:inherit;';infoBody._clDobInput=clDobI;
-    const dobVal=(caseMeta[clid]||{}).clientDob;
-    const dobDisplay=dobVal?fmtDate(dobVal)+(calculateAgeText(dobVal)?' ('+calculateAgeText(dobVal)+')':''):'';
-    if(isEditing){
-      mkInfoCell(L1,'Date of Birth',dobDisplay,()=>clDobI);
-    }
-    // Country of Birth
+    // Per-client fields — Family/Given/Middle Name, DOB, Country of Birth —
+    // are NOT rendered up top any more. They live inside each client's row
+    // below. We still build the inputs here so the existing save logic
+    // (which reads infoBody._clLastInput / _clFirstInput / etc.) keeps
+    // working without changes; the lead client's row mounts them into
+    // itself in edit mode and reads the stored values in view mode.
+    const clLastI=mkText2((caseMeta[clid]||{}).clientLastName||'');infoBody._clLastInput=clLastI;
+    const clFirstI=mkText2((caseMeta[clid]||{}).clientFirstName||'');infoBody._clFirstInput=clFirstI;
+    const clMiddleI=mkText2((caseMeta[clid]||{}).clientMiddleName||'');infoBody._clMiddleInput=clMiddleI;
+    const clDobI=document.createElement('input');clDobI.type='date';clDobI.value=(caseMeta[clid]||{}).clientDob||'';infoBody._clDobInput=clDobI;
     const clCobI=mkText2((caseMeta[clid]||{}).clientCountryOfBirth||'');clCobI.placeholder='Country of birth…';infoBody._clCobInput=clCobI;
-    mkInfoCell(L1,'Country of Birth',(caseMeta[clid]||{}).clientCountryOfBirth||'',()=>clCobI);
 
     // ── Client Address ──
     const _clAddr=caseMeta[clid]||{};
@@ -15371,17 +15359,32 @@ function openCaseDetail(clid){
         // All fields on ONE horizontal row
         const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:14px;flex-wrap:wrap;width:100%;';
 
-        // Name. In edit mode the name field is editable inline (and the
-        // structured first/middle/last cards up top stay visible). In view
-        // mode we now show the lead's full structured name too — it was
-        // previously hidden because the top board had Family Name + Given
-        // Name cards, but those moved into this row.
-        if(isEditing){const nI3=mkText2(cl.name);nI3.style.cssText='font-size:12px;font-weight:600;color:#2C2620;border:none;border-bottom:1px solid #DDD5CA;outline:none;background:transparent;padding:1px 0;min-width:100px;width:140px;';cl._nameInput=nI3;row.appendChild(nI3);}
+        // Name.
+        if(isEditing){
+          if(cl._isBase){
+            // Lead client: three separate inputs for the structured names
+            // (First / Middle / Last). Their save-side handles are bound to
+            // infoBody._clFirstInput / _clMiddleInput / _clLastInput up in
+            // the L1 builder, so we just mount them inline here.
+            const wrap = document.createElement('span');
+            wrap.style.cssText='display:inline-flex;align-items:baseline;gap:6px;flex-wrap:wrap;';
+            const styleField = 'font-size:12px;font-weight:600;color:#2C2620;border:none;border-bottom:1px solid #DDD5CA;outline:none;background:transparent;padding:1px 0;width:110px;font-family:inherit;';
+            clFirstI.placeholder = 'First';   clFirstI.style.cssText = styleField;
+            clMiddleI.placeholder = 'Middle'; clMiddleI.style.cssText = styleField + 'width:90px;color:#5C5148;font-weight:500;';
+            clLastI.placeholder = 'LAST';     clLastI.style.cssText = styleField;
+            wrap.appendChild(clFirstI);
+            wrap.appendChild(clMiddleI);
+            wrap.appendChild(clLastI);
+            row.appendChild(wrap);
+          } else {
+            // Rider: keep the single combined name input.
+            const nI3=mkText2(cl.name);nI3.style.cssText='font-size:12px;font-weight:600;color:#2C2620;border:none;border-bottom:1px solid #DDD5CA;outline:none;background:transparent;padding:1px 0;min-width:100px;width:140px;';cl._nameInput=nI3;row.appendChild(nI3);
+          }
+        }
         else {
-          // Build the display name. For the lead, prefer the structured
-          // First / Middle / Last fields (so format matches G-28 etc.);
-          // fall back to the legacy combined name. Riders keep their own
-          // .name as before.
+          // View mode: lead gets the structured "First Middle LAST" (last
+          // name uppercased) pulled from caseMeta; riders fall back to
+          // their .name field.
           let displayName = cl.name || '';
           if(cl._isBase){
             const m = caseMeta[clid] || {};
@@ -15409,14 +15412,41 @@ function openCaseDetail(clid){
         if(isEditing || dobCurrent){
           const dobLbl=document.createElement('span');dobLbl.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;';dobLbl.textContent=dobLabelText;row.appendChild(dobLbl);
           if(isEditing){
-            const dI=document.createElement('input');dI.type='date';dI.value=dobCurrent;dI.style.cssText='font-size:11px;color:#5C5148;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;cursor:pointer;font-family:inherit;';
-            cl._dobInput=dI;row.appendChild(dI);
+            let dI;
+            if(cl._isBase){
+              // Lead: reuse the input bound to infoBody._clDobInput so the
+              // existing save logic (caseMeta[clid].clientDob = …) keeps
+              // working without changes.
+              dI = clDobI;
+              dI.value = dobCurrent;
+              dI.style.cssText='font-size:11px;color:#5C5148;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;cursor:pointer;font-family:inherit;';
+            } else {
+              dI=document.createElement('input');dI.type='date';dI.value=dobCurrent;dI.style.cssText='font-size:11px;color:#5C5148;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;cursor:pointer;font-family:inherit;';
+              cl._dobInput=dI;
+            }
+            row.appendChild(dI);
           } else {
             const dSpan=document.createElement('span');dSpan.style.cssText='font-size:11px;color:#5C5148;white-space:nowrap;';
             const ageText=calculateAgeText(dobCurrent);
             const ageColor=ageText.includes('aged out')||/^\dm/.test(ageText)||/^<1m/.test(ageText)?'#B85C5C':/^1y/.test(ageText)?'#C9823A':'#6A8C6E';
             dSpan.innerHTML=fmtDate(dobCurrent)+(ageText?' <span style="color:'+ageColor+';font-weight:600;">('+ageText+')</span>':'');
             row.appendChild(dSpan);
+          }
+        }
+
+        // Country of Birth — lead only (riders don't track country yet).
+        if(cl._isBase){
+          const cobCurrent = (caseMeta[clid]||{}).clientCountryOfBirth||'';
+          if(isEditing || cobCurrent){
+            const cobLbl=document.createElement('span');cobLbl.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;';cobLbl.textContent='Born in';row.appendChild(cobLbl);
+            if(isEditing){
+              // Reuse the input bound to infoBody._clCobInput so the existing
+              // save logic (caseMeta[clid].clientCountryOfBirth = …) works.
+              clCobI.style.cssText='font-size:11px;color:#5C5148;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;width:140px;font-family:inherit;';
+              row.appendChild(clCobI);
+            } else {
+              const cobSpan=document.createElement('span');cobSpan.style.cssText='font-size:11px;color:#5C5148;white-space:nowrap;';cobSpan.textContent=cobCurrent;row.appendChild(cobSpan);
+            }
           }
         }
 
