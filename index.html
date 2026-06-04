@@ -13661,7 +13661,47 @@ function renderToolsPage(){
         <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Pick a daily-backup JSON (or recovery delta). Records and cases that exist locally are kept as-is — only ones that are missing get added back in. Nothing you've edited recently will be touched.</div>
         <input type="file" id="restore-backup-input" accept=".json,application/json" style="display:none;" onchange="restoreFromBackup(this);event.stopPropagation();"/>
       </div>
+      <div onclick="openExhibitPacketApp(event)" title="Click to open · Shift-click to change the URL" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
+        <div style="font-size:24px;margin-bottom:8px;">📑</div>
+        <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Exhibit Packet ↗</div>
+        <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Open the Exhibit Packet app in a new tab. Shift-click this tile to change the URL it points to.</div>
+      </div>
     </div>`;
+}
+
+// Open the (external) Exhibit Packet app in a new tab. The URL is stored
+// in localStorage so each device can point at its own deployment without
+// hard-coding anything in the source. First click prompts for the URL;
+// Shift-click on the tile re-prompts so the user can change it later.
+const EXHIBIT_PACKET_URL_KEY = 'wilmer_exhibit_packet_url';
+function openExhibitPacketApp(ev){
+  let url = '';
+  try{ url = localStorage.getItem(EXHIBIT_PACKET_URL_KEY) || ''; }catch(e){}
+  // Shift-click re-prompts so the user can update the saved URL.
+  if(ev && ev.shiftKey){
+    const next = window.prompt('Exhibit Packet app URL\n\n(Paste the link to your Exhibit Packet app. Leave blank and click OK to clear.)', url);
+    if(next === null) return; // cancelled
+    const trimmed = next.trim();
+    try{
+      if(trimmed) localStorage.setItem(EXHIBIT_PACKET_URL_KEY, trimmed);
+      else        localStorage.removeItem(EXHIBIT_PACKET_URL_KEY);
+    }catch(e){}
+    if(trimmed){ showToast('Exhibit Packet URL saved'); }
+    else       { showToast('Exhibit Packet URL cleared'); }
+    return;
+  }
+  if(!url){
+    const entered = window.prompt('Paste the URL of your Exhibit Packet app:\n\n(It will be saved for next time. Shift-click the tile to change it later.)','');
+    if(!entered) return;
+    const trimmed = entered.trim();
+    if(!trimmed) return;
+    try{ localStorage.setItem(EXHIBIT_PACKET_URL_KEY, trimmed); }catch(e){}
+    url = trimmed;
+  }
+  // Add scheme if the user pasted a bare domain.
+  if(!/^https?:\/\//i.test(url) && !/^file:\/\//i.test(url)) url = 'https://' + url;
+  try{ window.open(url, '_blank', 'noopener'); }
+  catch(e){ showToast('Could not open Exhibit Packet — check the URL'); }
 }
 
 // ══════════════════════════════════════════════════
