@@ -5101,10 +5101,51 @@ async function calendarApi(endpoint, opts={}){
   if(!res.ok){
     const txt = await res.text();
     console.error('Calendar API error', res.status, txt);
+    // 403 from Calendar almost always means the calendar.events scope
+    // wasn't granted (the cached token from a previous silent sign-in is
+    // gmail-only). Tell the user clearly and offer one-click re-auth.
+    // 404 from /calendars/primary can also mean Calendar API isn't
+    // enabled on the OAuth client.
+    if(res.status === 403){
+      _showCalendarReauthPrompt(txt);
+    } else if(res.status === 400 || res.status === 404){
+      // Surface a concise toast — full body is in the console.
+      try{
+        const parsed = JSON.parse(txt);
+        const msg = (parsed.error && parsed.error.message) || ('HTTP '+res.status);
+        showToast('📅 Calendar: ' + msg);
+      }catch(e){ showToast('📅 Calendar failed — see console'); }
+    }
     return { _error: res.status, _body: txt };
   }
   if(res.status === 204) return {};
   return res.json();
+}
+
+// One-click "we lost the calendar.events scope" prompt. Sign-out then
+// re-sign-in with the full scope list so the new OAuth consent screen
+// includes Calendar.
+let _calReauthPromptShown = false;
+function _showCalendarReauthPrompt(detail){
+  if(_calReauthPromptShown) return;
+  _calReauthPromptShown = true;
+  let banner = document.getElementById('cal-reauth-banner');
+  if(banner) banner.remove();
+  banner = document.createElement('div');
+  banner.id = 'cal-reauth-banner';
+  banner.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:10000;background:#fff;border:1px solid #E8C49A;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:18px 22px;max-width:380px;display:flex;align-items:center;gap:14px;animation:slideUp .25s ease;';
+  banner.innerHTML = `
+    <div style="font-size:28px;flex-shrink:0;">📅</div>
+    <div style="flex:1;">
+      <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Google Calendar permission needed</div>
+      <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Auto-sync to Google Calendar isn't granted yet. Re-authorize Google to push events to your Calendar.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button onclick="(function(){_calReauthPromptShown=false;gmailSignOut();setTimeout(gmailSignIn,200);document.getElementById('cal-reauth-banner').remove();})()" style="font-size:12px;font-weight:600;padding:7px 14px;border:none;border-radius:var(--radius-sm);background:#C9823A;color:#fff;cursor:pointer;font-family:inherit;">Re-authorize Google</button>
+        <button onclick="(function(){_setCalAutoSyncEnabled&&_setCalAutoSyncEnabled(false);_calReauthPromptShown=false;document.getElementById('cal-reauth-banner').remove();})()" style="font-size:12px;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Turn off Auto-sync</button>
+      </div>
+    </div>
+    <button onclick="(function(){_calReauthPromptShown=false;document.getElementById('cal-reauth-banner').remove();})()" style="border:none;background:transparent;font-size:16px;color:var(--ink-faint);cursor:pointer;padding:2px 4px;align-self:flex-start;line-height:1;">×</button>`;
+  document.body.appendChild(banner);
 }
 
 function _localTz(){
@@ -5301,14 +5342,21 @@ async function calendarSyncAll(){
   if(btn){ btn.disabled = true; btn.textContent = '📅 Syncing 0/'+targets.length; }
   showToast('📅 Syncing '+targets.length+' events to Google Calendar…');
   let created=0, updated=0, failed=0, done=0;
+  let firstErr = null;     // surface the first real error to the toast
+  let abortRest = false;   // 401/403 propagate — no point retrying every row
   // Process in small concurrency batches of 5 to stay under the write QPS
   const batchSize = 5;
   for(let i=0; i<targets.length; i+=batchSize){
+    if(abortRest) break;
     const batch = targets.slice(i, i+batchSize);
     const results = await Promise.all(batch.map(r => _upsertRecordToCalendar(r).catch(e => ({ok:false, err:String(e)}))));
     results.forEach(res => {
-      if(res.ok){ if(res.created) created++; if(res.updated) updated++; }
-      else failed++;
+      if(res && res.ok){ if(res.created) created++; if(res.updated) updated++; }
+      else {
+        failed++;
+        if(!firstErr) firstErr = (res && res.err) || 'unknown';
+        if(res && (res.err === 401 || res.err === 403)) abortRest = true;
+      }
     });
     done += batch.length;
     if(btn) btn.textContent = '📅 Syncing '+done+'/'+targets.length;
@@ -5320,8 +5368,15 @@ async function calendarSyncAll(){
   const parts = [];
   if(created) parts.push(created+' added');
   if(updated) parts.push(updated+' updated');
-  if(failed)  parts.push(failed+' failed');
-  showToast('📅 Calendar sync: '+(parts.join(', ')||'nothing changed'));
+  if(failed){
+    parts.push(failed+' failed');
+    // If every single attempt failed, the underlying error is the same
+    // for all of them — show it once instead of a useless count.
+    if(failed === done) showToast('📅 Calendar sync failed: ' + firstErr);
+    else                showToast('📅 Calendar sync: ' + parts.join(', ') + (firstErr?' ('+firstErr+')':''));
+  } else {
+    showToast('📅 Calendar sync: '+(parts.join(', ')||'nothing changed'));
+  }
 }
 
 // Which Gmail mailbox is currently shown in the list. 'inbox' or 'sent'.
