@@ -5186,23 +5186,62 @@ async function _upsertRecordToCalendar(r){
 function _calSig(r){
   return [r.event,r.type,r.client,r.clid,r.anum,r.atty,r.assigned,r.date,r.timeStart,r.timeEnd,r.notes,r.hearingMode].map(v=>v==null?'':String(v)).join('|');
 }
+// Per-device opt-out. Default is ON whenever Gmail is connected — the
+// sync writes to the signed-in account's *own* primary calendar, so each
+// device naturally targets the right calendar. Set the flag to disable.
+const CAL_AUTOSYNC_DISABLED_KEY = 'wilmer_calendar_autosync_disabled';
+function _calAutoSyncEnabled(){
+  try{ return localStorage.getItem(CAL_AUTOSYNC_DISABLED_KEY) !== '1'; }catch(e){ return true; }
+}
+function _setCalAutoSyncEnabled(on){
+  try{
+    if(on) localStorage.removeItem(CAL_AUTOSYNC_DISABLED_KEY);
+    else   localStorage.setItem(CAL_AUTOSYNC_DISABLED_KEY,'1');
+  }catch(e){}
+  try{ _updateCalAutoSyncIndicator&&_updateCalAutoSyncIndicator(); }catch(e){}
+  if(on){
+    showToast('📅 Auto-sync ON — events will push to '+(_gmailUserEmail||'your Google Calendar'));
+    try{ _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync(); }catch(e){}
+  } else {
+    showToast('📅 Auto-sync OFF');
+  }
+}
 function _isAutoSyncAccount(){
-  return !!(_gmailAccessToken && _gmailUserEmail && _gmailUserEmail.toLowerCase() === CALENDAR_AUTO_SYNC_EMAIL.toLowerCase());
+  // Whoever is signed into Gmail and hasn't opted out is the auto-sync
+  // target. The Calendar API writes to /calendars/primary/events under
+  // that exact user, so each signed-in device naturally syncs to its
+  // own Google Calendar — no hard-coded email gate any more.
+  return !!(_gmailAccessToken && _gmailUserEmail && _calAutoSyncEnabled());
 }
 function _updateCalAutoSyncIndicator(){
+  // The visible top-bar button was retired; the indicator is now a menu
+  // row in the Account dropdown (see gmailRenderConnected) which calls
+  // gmailToggleCalAutoSync() and updates its own label. This function is
+  // kept as a hook for any future indicator and as a no-op if the legacy
+  // cal-sync-btn ever comes back.
   const el = document.getElementById('cal-sync-btn');
   if(!el) return;
   if(_isAutoSyncAccount()){
-    el.title = 'Auto-sync ON — events push to '+CALENDAR_AUTO_SYNC_EMAIL+' automatically. Click to sync now.';
+    el.title = 'Auto-sync ON — events push to '+(_gmailUserEmail||'your Google Calendar')+' automatically.';
     el.style.borderColor = 'var(--sage)';
     el.style.color = 'var(--sage)';
     el.textContent = '📅 Auto-sync ON';
   } else {
-    el.title = 'Auto-sync only runs when signed in as '+CALENDAR_AUTO_SYNC_EMAIL+'. Click to sync manually with the current account.';
+    el.title = 'Click to enable auto-sync to '+(_gmailUserEmail||'Google Calendar')+'.';
     el.style.borderColor = 'var(--slate)';
     el.style.color = 'var(--slate)';
     el.textContent = '📅 Sync to Calendar';
   }
+}
+// Toggle handler for the Account dropdown row.
+function gmailToggleCalAutoSync(){
+  const next = !_calAutoSyncEnabled();
+  _setCalAutoSyncEnabled(next);
+  // Refresh the dropdown so the label reflects the new state.
+  const labelEl = document.getElementById('gmail-cal-autosync-label');
+  if(labelEl) labelEl.textContent = next ? 'Auto-sync ON' : 'Auto-sync OFF';
+  const dotEl = document.getElementById('gmail-cal-autosync-dot');
+  if(dotEl) dotEl.style.background = next ? 'var(--sage)' : 'var(--ink-faint)';
 }
 
 let _calAutoSyncTimer = null;
@@ -6049,10 +6088,15 @@ function gmailRenderConnected(){
           <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'" style="height:32px;font-size:11px;font-weight:500;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" title="Account" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">
             ${_gmailUserEmail ? _gmailUserEmail.split('@')[0] : 'Account'} ▾
           </button>
-          <div style="display:none;position:absolute;right:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:100;padding:8px 0;min-width:200px;">
+          <div style="display:none;position:absolute;right:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:100;padding:8px 0;min-width:230px;">
             <div style="padding:8px 14px;font-size:11px;color:var(--ink-muted);border-bottom:1px solid var(--cream-dark);">${_gmailUserEmail}</div>
             <div onclick="gmailFetchInbox();this.parentElement.style.display='none'" style="padding:8px 14px;font-size:12px;cursor:pointer;color:var(--ink);" onmouseenter="this.style.background='var(--cream)'" onmouseleave="this.style.background=''">Refresh Inbox</div>
-            <div onclick="gmailSignOut();this.parentElement.style.display='none'" style="padding:8px 14px;font-size:12px;cursor:pointer;color:var(--rose);" onmouseenter="this.style.background='var(--rose-light)'" onmouseleave="this.style.background=''">Disconnect</div>
+            <div onclick="event.stopPropagation();gmailToggleCalAutoSync();" style="padding:8px 14px;font-size:12px;cursor:pointer;color:var(--ink);display:flex;align-items:center;gap:8px;border-top:1px solid var(--cream-dark);" onmouseenter="this.style.background='var(--cream)'" onmouseleave="this.style.background=''" title="Push every scheduled event to the signed-in account's Google Calendar automatically">
+              <span id="gmail-cal-autosync-dot" style="width:8px;height:8px;border-radius:50%;background:${_calAutoSyncEnabled() ? 'var(--sage)' : 'var(--ink-faint)'};flex-shrink:0;"></span>
+              <span>📅 Calendar <span id="gmail-cal-autosync-label" style="color:var(--ink-muted);font-weight:500;">${_calAutoSyncEnabled() ? 'Auto-sync ON' : 'Auto-sync OFF'}</span></span>
+            </div>
+            <div onclick="event.stopPropagation();calendarSyncAll();this.parentElement.style.display='none'" style="padding:8px 14px;font-size:11px;cursor:pointer;color:var(--ink-muted);" onmouseenter="this.style.background='var(--cream)'" onmouseleave="this.style.background=''" title="Push every event right now, regardless of the auto-sync setting">↻ Sync calendar now</div>
+            <div onclick="gmailSignOut();this.parentElement.style.display='none'" style="padding:8px 14px;font-size:12px;cursor:pointer;color:var(--rose);border-top:1px solid var(--cream-dark);" onmouseenter="this.style.background='var(--rose-light)'" onmouseleave="this.style.background=''">Disconnect</div>
           </div>
         </div>
       </div>
