@@ -5002,6 +5002,10 @@ function gmailInit(){
         return;
       }
       _gmailAccessToken = resp.access_token;
+      // Stash the actually-granted scopes. Google's silent reconnect only
+      // hands back the previously-consented set, so the token can be
+      // missing calendar.events even though the request asked for it.
+      _gmailGrantedScopes = (resp.scope||'').split(/\s+/).filter(Boolean);
       try{ localStorage.setItem('gmail_connected_before','1'); }catch(e){}
       gmailGetProfile().then(()=>{
         gmailRenderConnected();
@@ -5014,6 +5018,12 @@ function gmailInit(){
           window._gmailQueueTimers = true;
           setInterval(()=>{ try{ _gmailProcessSnoozeQueue(); }catch(e){} }, 60000);
           setInterval(()=>{ try{ _gmailProcessScheduledSends(); }catch(e){} }, 60000);
+        }
+        // If the user expects auto-sync but the token doesn't carry the
+        // Calendar scope, surface the re-auth banner up front instead of
+        // waiting for the first 403 from the Calendar API to do it.
+        if(_calAutoSyncEnabled && _calAutoSyncEnabled() && !_gmailHasCalendarScope()){
+          _showCalendarReauthPrompt('Calendar scope not granted on silent reconnect');
         }
       });
     }
@@ -5032,9 +5042,28 @@ function gmailInit(){
   if(el) el.style.display = 'flex';
 }
 
-function gmailSignIn(){
-  if(!_gmailTokenClient){ gmailInit(); setTimeout(gmailSignIn, 500); return; }
-  _gmailTokenClient.requestAccessToken();
+// Track the scopes the current token actually carries. Empty until the
+// first successful sign-in. _gmailHasCalendarScope() is what the
+// Calendar code checks before assuming sync will work.
+let _gmailGrantedScopes = [];
+function _gmailHasCalendarScope(){
+  return _gmailGrantedScopes.indexOf('https://www.googleapis.com/auth/calendar.events') >= 0
+      || _gmailGrantedScopes.indexOf('https://www.googleapis.com/auth/calendar') >= 0;
+}
+
+// Default flow: let GIS pick (silent if it can). Pass {force:true} to
+// require a fresh consent screen — used by the "Grant calendar access"
+// button so the user sees the Calendar checkbox.
+function gmailSignIn(opts){
+  if(!_gmailTokenClient){ gmailInit(); setTimeout(()=>gmailSignIn(opts), 500); return; }
+  const force = opts && opts.force;
+  _gmailTokenClient.requestAccessToken(force ? { prompt: 'consent' } : {});
+}
+
+// Explicit "give the cached token Calendar access" path. Forces the
+// consent screen so the Calendar checkbox is presented for approval.
+function gmailGrantCalendarAccess(){
+  gmailSignIn({ force: true });
 }
 
 function gmailSignOut(){
@@ -5122,9 +5151,9 @@ async function calendarApi(endpoint, opts={}){
   return res.json();
 }
 
-// One-click "we lost the calendar.events scope" prompt. Sign-out then
-// re-sign-in with the full scope list so the new OAuth consent screen
-// includes Calendar.
+// "Grant Google Calendar access" prompt. Forces the OAuth consent
+// screen so the Calendar checkbox is actually presented (Google's
+// silent reconnect won't add new scopes — only consent re-shows them).
 let _calReauthPromptShown = false;
 function _showCalendarReauthPrompt(detail){
   if(_calReauthPromptShown) return;
@@ -5133,18 +5162,18 @@ function _showCalendarReauthPrompt(detail){
   if(banner) banner.remove();
   banner = document.createElement('div');
   banner.id = 'cal-reauth-banner';
-  banner.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:10000;background:#fff;border:1px solid #E8C49A;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:18px 22px;max-width:380px;display:flex;align-items:center;gap:14px;animation:slideUp .25s ease;';
+  banner.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:10000;background:#fff;border:1px solid #E8C49A;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:18px 22px;max-width:400px;display:flex;align-items:flex-start;gap:14px;animation:slideUp .25s ease;';
   banner.innerHTML = `
     <div style="font-size:28px;flex-shrink:0;">📅</div>
     <div style="flex:1;">
       <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Google Calendar permission needed</div>
-      <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Auto-sync to Google Calendar isn't granted yet. Re-authorize Google to push events to your Calendar.</div>
+      <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Google's silent reconnect skipped the Calendar permission. Click below to re-show the consent screen — make sure <b>"See, edit, share, and permanently delete all the calendars you can access using Google Calendar"</b> is ticked.</div>
       <div style="display:flex;gap:8px;margin-top:10px;">
-        <button onclick="(function(){_calReauthPromptShown=false;gmailSignOut();setTimeout(gmailSignIn,200);document.getElementById('cal-reauth-banner').remove();})()" style="font-size:12px;font-weight:600;padding:7px 14px;border:none;border-radius:var(--radius-sm);background:#C9823A;color:#fff;cursor:pointer;font-family:inherit;">Re-authorize Google</button>
+        <button onclick="(function(){_calReauthPromptShown=false;gmailGrantCalendarAccess();document.getElementById('cal-reauth-banner').remove();})()" style="font-size:12px;font-weight:600;padding:7px 14px;border:none;border-radius:var(--radius-sm);background:#C9823A;color:#fff;cursor:pointer;font-family:inherit;">Grant calendar access</button>
         <button onclick="(function(){_setCalAutoSyncEnabled&&_setCalAutoSyncEnabled(false);_calReauthPromptShown=false;document.getElementById('cal-reauth-banner').remove();})()" style="font-size:12px;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Turn off Auto-sync</button>
       </div>
     </div>
-    <button onclick="(function(){_calReauthPromptShown=false;document.getElementById('cal-reauth-banner').remove();})()" style="border:none;background:transparent;font-size:16px;color:var(--ink-faint);cursor:pointer;padding:2px 4px;align-self:flex-start;line-height:1;">×</button>`;
+    <button onclick="(function(){_calReauthPromptShown=false;document.getElementById('cal-reauth-banner').remove();})()" style="border:none;background:transparent;font-size:16px;color:var(--ink-faint);cursor:pointer;padding:2px 4px;line-height:1;">×</button>`;
   document.body.appendChild(banner);
 }
 
@@ -5289,12 +5318,23 @@ let _calAutoSyncTimer = null;
 let _calAutoSyncInFlight = false;
 function _scheduleCalendarAutoSync(){
   if(!_isAutoSyncAccount()) return;
+  // Don't queue work that's going to 403 anyway — surface the consent
+  // prompt right now and stop. Once the user grants the scope, the
+  // sign-in callback will reschedule.
+  if(!_gmailHasCalendarScope()){
+    _showCalendarReauthPrompt('Scheduled sync skipped — no calendar scope');
+    return;
+  }
   clearTimeout(_calAutoSyncTimer);
   _calAutoSyncTimer = setTimeout(_runCalendarAutoSync, 5000);
 }
 async function _runCalendarAutoSync(){
   if(_calAutoSyncInFlight || _calSyncRunning) return;
   if(!_isAutoSyncAccount()) return;
+  if(!_gmailHasCalendarScope()){
+    _showCalendarReauthPrompt('Auto-sync skipped — no calendar scope');
+    return;
+  }
   _calAutoSyncInFlight = true;
   try{
     // 1. Delete Calendar events for records that became deleted / finished /
@@ -5329,6 +5369,11 @@ let _calSyncRunning = false;
 async function calendarSyncAll(){
   if(_calSyncRunning){ showToast('Sync already running…'); return; }
   if(!_gmailAccessToken){ showToast('Sign in with Google first'); gmailSignIn(); return; }
+  if(!_gmailHasCalendarScope()){
+    showToast('📅 Calendar scope not granted — re-authorize to enable sync');
+    _showCalendarReauthPrompt('Manual sync requested without calendar scope');
+    return;
+  }
   _calSyncRunning = true;
   const btn = document.getElementById('cal-sync-btn');
   const origText = btn ? btn.textContent : '';
