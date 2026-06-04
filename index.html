@@ -72,6 +72,15 @@ const GMAIL_CLIENT_ID = '861569441296-88uroovr20c81vhiitj09i39mhnnlbp8.apps.goog
 const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar.events';
 // Auto-sync calendar target — only runs when signed in as this email.
 const CALENDAR_AUTO_SYNC_EMAIL = 'wilmerdgcolina@gmail.com';
+// Pinned target calendar — all auto-sync writes land here regardless of
+// which Gmail account is signed in. If the signed-in user is the calendar
+// owner this is identical to /calendars/primary/events; if they're signed
+// in as someone else, the calendar owner has to share the calendar with
+// "Make changes to events" permission for the writes to succeed.
+const CALENDAR_TARGET_ID = CALENDAR_AUTO_SYNC_EMAIL;
+function _calTargetPath(suffix){
+  return 'calendars/' + encodeURIComponent(CALENDAR_TARGET_ID) + '/events' + (suffix || '');
+}
 </script>
 <style>
 /* ═══════════════════════════════════════════════════
@@ -5228,7 +5237,7 @@ async function _upsertRecordToCalendar(r){
   const payload = _buildCalendarEventPayload(r);
   if(r._gcalEventId){
     // PATCH existing event
-    const res = await calendarApi('calendars/primary/events/' + encodeURIComponent(r._gcalEventId), {
+    const res = await calendarApi(_calTargetPath('/' + encodeURIComponent(r._gcalEventId)), {
       method:'PATCH', body: JSON.stringify(payload)
     });
     if(res && res._error){
@@ -5241,7 +5250,7 @@ async function _upsertRecordToCalendar(r){
     }
     return { ok:true, updated:true, id: r._gcalEventId };
   } else {
-    const res = await calendarApi('calendars/primary/events', {
+    const res = await calendarApi(_calTargetPath(), {
       method:'POST', body: JSON.stringify(payload)
     });
     if(!res || res._error) return { ok:false, err: (res&&res._error)||'network' };
@@ -5278,9 +5287,9 @@ function _setCalAutoSyncEnabled(on){
 }
 function _isAutoSyncAccount(){
   // Whoever is signed into Gmail and hasn't opted out is the auto-sync
-  // target. The Calendar API writes to /calendars/primary/events under
-  // that exact user, so each signed-in device naturally syncs to its
-  // own Google Calendar — no hard-coded email gate any more.
+  // target. The Calendar API writes to wilmerdgcolina@gmail.com's calendar
+  // specifically (CALENDAR_TARGET_ID), so the signed-in user either needs
+  // to *be* that account or have edit access to the shared calendar.
   return !!(_gmailAccessToken && _gmailUserEmail && _calAutoSyncEnabled());
 }
 function _updateCalAutoSyncIndicator(){
@@ -5342,7 +5351,7 @@ async function _runCalendarAutoSync(){
     const toDelete = records.filter(r => r._gcalEventId && !_isSyncableRecord(r));
     for(const r of toDelete){
       try{
-        await calendarApi('calendars/primary/events/'+encodeURIComponent(r._gcalEventId),{method:'DELETE'});
+        await calendarApi(_calTargetPath('/'+encodeURIComponent(r._gcalEventId)),{method:'DELETE'});
       }catch(e){}
       delete r._gcalEventId; delete r._gcalSig; delete r._gcalSyncedAt;
     }
