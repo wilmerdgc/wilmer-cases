@@ -15260,13 +15260,18 @@ function openCaseDetail(clid){
     // Paralegal
     const paraI=mkSel2(paralegals,base.atty);infoBody._paraInput=paraI;
     mkInfoCell(L1,'Paralegal',base.atty,()=>paraI);
-    // Client Name Fields (Last, First, Middle)
+    // Client Name Fields (Last, First, Middle). In VIEW mode these are
+    // surfaced inside row 1 of the client list below — we still build the
+    // inputs here so edit mode can render them up top, but the cards only
+    // appear when isEditing is true.
     const clLastI=mkText2((caseMeta[clid]||{}).clientLastName||'');infoBody._clLastInput=clLastI;
-    mkInfoCell(L1,'Family Name (Last Name)',(caseMeta[clid]||{}).clientLastName||'',()=>clLastI);
     const clFirstI=mkText2((caseMeta[clid]||{}).clientFirstName||'');infoBody._clFirstInput=clFirstI;
-    mkInfoCell(L1,'Given Name (First Name)',(caseMeta[clid]||{}).clientFirstName||'',()=>clFirstI);
     const clMiddleI=mkText2((caseMeta[clid]||{}).clientMiddleName||'');infoBody._clMiddleInput=clMiddleI;
-    mkInfoCell(L1,'Middle Name',(caseMeta[clid]||{}).clientMiddleName||'',()=>clMiddleI);
+    if(isEditing){
+      mkInfoCell(L1,'Family Name (Last Name)',(caseMeta[clid]||{}).clientLastName||'',()=>clLastI);
+      mkInfoCell(L1,'Given Name (First Name)',(caseMeta[clid]||{}).clientFirstName||'',()=>clFirstI);
+      mkInfoCell(L1,'Middle Name',(caseMeta[clid]||{}).clientMiddleName||'',()=>clMiddleI);
+    }
     // Client Email
     const clientEmailI=document.createElement('input');clientEmailI.type='email';clientEmailI.value=(caseMeta[clid]||{}).clientEmail||'';clientEmailI.placeholder='client@email.com';clientEmailI.style.cssText='width:100%;font-size:13px;font-weight:500;color:#2C2620;border:none;outline:none;background:transparent;padding:0;font-family:inherit;';
     infoBody._clientEmailInput=clientEmailI;
@@ -15274,11 +15279,14 @@ function openCaseDetail(clid){
     // Client Phone
     const clPhoneI=mkText2((caseMeta[clid]||{}).clientPhone||'');clPhoneI.placeholder='Phone…';infoBody._clPhoneInput=clPhoneI;
     mkInfoCell(L1,'Phone',(caseMeta[clid]||{}).clientPhone||'',()=>clPhoneI);
-    // Client DOB
+    // Client DOB — also moved into the lead's row 1 in view mode; the
+    // input still gets built so edit mode renders the card.
     const clDobI=document.createElement('input');clDobI.type='date';clDobI.value=(caseMeta[clid]||{}).clientDob||'';clDobI.style.cssText='width:100%;font-size:13px;font-weight:500;color:#2C2620;border:none;outline:none;background:transparent;padding:0;font-family:inherit;';infoBody._clDobInput=clDobI;
     const dobVal=(caseMeta[clid]||{}).clientDob;
     const dobDisplay=dobVal?fmtDate(dobVal)+(calculateAgeText(dobVal)?' ('+calculateAgeText(dobVal)+')':''):'';
-    mkInfoCell(L1,'Date of Birth',dobDisplay,()=>clDobI);
+    if(isEditing){
+      mkInfoCell(L1,'Date of Birth',dobDisplay,()=>clDobI);
+    }
     // Country of Birth
     const clCobI=mkText2((caseMeta[clid]||{}).clientCountryOfBirth||'');clCobI.placeholder='Country of birth…';infoBody._clCobInput=clCobI;
     mkInfoCell(L1,'Country of Birth',(caseMeta[clid]||{}).clientCountryOfBirth||'',()=>clCobI);
@@ -15363,9 +15371,33 @@ function openCaseDetail(clid){
         // All fields on ONE horizontal row
         const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:14px;flex-wrap:wrap;width:100%;';
 
-        // Name — in view mode, skip the lead client's name (it's already in Family/Given Name above)
+        // Name. In edit mode the name field is editable inline (and the
+        // structured first/middle/last cards up top stay visible). In view
+        // mode we now show the lead's full structured name too — it was
+        // previously hidden because the top board had Family Name + Given
+        // Name cards, but those moved into this row.
         if(isEditing){const nI3=mkText2(cl.name);nI3.style.cssText='font-size:12px;font-weight:600;color:#2C2620;border:none;border-bottom:1px solid #DDD5CA;outline:none;background:transparent;padding:1px 0;min-width:100px;width:140px;';cl._nameInput=nI3;row.appendChild(nI3);}
-        else if(!cl._isBase && cl.name){const n=document.createElement('span');n.style.cssText="font-size:12px;font-weight:600;color:#2C2620;font-family:'Lora',Georgia,serif;white-space:nowrap;";n.textContent=cl.name;row.appendChild(n);}
+        else {
+          // Build the display name. For the lead, prefer the structured
+          // First / Middle / Last fields (so format matches G-28 etc.);
+          // fall back to the legacy combined name. Riders keep their own
+          // .name as before.
+          let displayName = cl.name || '';
+          if(cl._isBase){
+            const m = caseMeta[clid] || {};
+            const f = (m.clientFirstName||'').trim();
+            const mi = (m.clientMiddleName||'').trim();
+            const l = (m.clientLastName||'').trim().toUpperCase();
+            const structured = [f, mi, l].filter(Boolean).join(' ');
+            if(structured) displayName = structured;
+          }
+          if(displayName){
+            const n=document.createElement('span');
+            n.style.cssText="font-size:13px;font-weight:600;color:#2C2620;font-family:'Lora',Georgia,serif;white-space:nowrap;";
+            n.textContent=displayName;
+            row.appendChild(n);
+          }
+        }
 
         // A#
         if(isEditing){const aI3=mkText2(cl.anum);aI3.placeholder='A#';aI3.style.cssText='font-size:11px;color:#9E9186;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;width:90px;';cl._anumInput=aI3;row.appendChild(aI3);}
