@@ -3887,6 +3887,38 @@ async function gmailCreateCaseFolder(clid){
     showToast('Could not create folder');
   }
 }
+// Link an EXISTING folder on disk to a case, as-is. Unlike
+// gmailCreateCaseFolder (which asks for a *parent* and creates a fresh
+// subfolder named after the client), this one asks for the actual folder
+// the user already keeps the case's files in — whatever it's named — and
+// stores that handle directly. Use when the user already has a "Julio
+// Pomavilla" folder on their Desktop and doesn't want a second one
+// auto-created next to it.
+async function gmailLinkExistingCaseFolder(clid){
+  if(!clid){ showToast('No case selected'); return; }
+  if(!('showDirectoryPicker' in window)){
+    showToast('Folder picking is not supported in this browser');
+    return;
+  }
+  try{
+    // Suggest starting in Desktop so the user is already where their case
+    // folders typically live. They can navigate anywhere from there.
+    const handle = await window.showDirectoryPicker({ mode:'readwrite', startIn:'desktop' });
+    try{ await saveCaseFolderHandle(clid, handle); }catch(e){}
+    showToast('Folder "' + (handle.name||'') + '" linked ✓');
+    if(typeof _gmailRefreshActionChipsState === 'function') _gmailRefreshActionChipsState();
+    const caseFolderBtn = document.querySelector('button[data-folder-for-clid="' + (''+clid).replace(/"/g,'\\"') + '"]');
+    if(caseFolderBtn){
+      caseFolderBtn.textContent = '📁 ' + (handle.name||'Folder');
+      caseFolderBtn.title = 'Open the linked folder';
+      caseFolderBtn.onclick = () => openCaseFolderViewer(clid);
+      caseFolderBtn.style.display = '';
+    }
+  }catch(e){
+    if(e && e.name === 'AbortError') return;
+    showToast('Could not link folder');
+  }
+}
 // Open the Add Event modal pre-filled for a specific case, optionally seeding
 // the notes field with the current email subject so context isn't lost.
 // If the doc viewer is currently open, side-by-side layout the two so the
@@ -15703,6 +15735,19 @@ function openCaseDetail(clid){
   folderUnlinkBtn.onmouseenter=()=>{ folderUnlinkBtn.style.color='#B85C5C'; folderUnlinkBtn.style.borderColor='#E6BDBD'; };
   folderUnlinkBtn.onmouseleave=()=>{ folderUnlinkBtn.style.color='#C4BAB0'; folderUnlinkBtn.style.borderColor='transparent'; };
   atRow.appendChild(folderUnlinkBtn);
+  // Discreet "link existing" chip — only when editing AND no folder is
+  // linked yet. Pairs with the primary "+ Create folder" button as the
+  // alternate path for users who already have a folder on disk and don't
+  // want a second one auto-created.
+  const folderLinkExistingBtn = document.createElement('button');
+  folderLinkExistingBtn.type='button';
+  folderLinkExistingBtn.style.cssText='display:none;font-size:10px;padding:2px 6px;border:1px solid transparent;border-radius:14px;background:transparent;color:#C4BAB0;cursor:pointer;margin-left:-2px;font-family:inherit;';
+  folderLinkExistingBtn.title='Link an existing folder you already keep this case in';
+  folderLinkExistingBtn.textContent='or link existing…';
+  folderLinkExistingBtn.onmouseenter=()=>{ folderLinkExistingBtn.style.color='#4F6A91'; folderLinkExistingBtn.style.borderColor='#B8C4DB'; };
+  folderLinkExistingBtn.onmouseleave=()=>{ folderLinkExistingBtn.style.color='#C4BAB0'; folderLinkExistingBtn.style.borderColor='transparent'; };
+  folderLinkExistingBtn.onclick=async ()=>{ await gmailLinkExistingCaseFolder(clid); renderAll2(); };
+  atRow.appendChild(folderLinkExistingBtn);
   if(typeof loadCaseFolderHandle === 'function'){
     loadCaseFolderHandle(clid).then(h => {
       if(h){
@@ -15746,6 +15791,9 @@ function openCaseDetail(clid){
         folderBtn.textContent = '📁 Create folder';
         folderBtn.title = 'Pick a parent folder; a subfolder named "' + name + '" will be created and linked to this case';
         folderBtn.onclick = async () => { await gmailCreateCaseFolder(clid); renderAll2(); };
+        if(isEditing){
+          folderLinkExistingBtn.style.display = '';
+        }
       }
       folderBtn.style.display = '';
     }).catch(()=>{});
