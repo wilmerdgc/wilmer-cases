@@ -13675,6 +13675,111 @@ function renderToolsPage(){
 // the override (falling back to the default).
 const EXHIBIT_PACKET_URL_KEY = 'wilmer_exhibit_packet_url';
 const EXHIBIT_PACKET_DEFAULT_URL = 'https://courageous-mermaid-708b91.netlify.app/';
+
+// Resolve the Exhibit Packet base URL (saved override or default) and
+// normalize a scheme onto bare domains. Shared by the tile launcher and
+// the per-case launcher.
+function _exhibitPacketBaseUrl(){
+  let saved = '';
+  try{ saved = localStorage.getItem(EXHIBIT_PACKET_URL_KEY) || ''; }catch(e){}
+  let url = saved || EXHIBIT_PACKET_DEFAULT_URL;
+  if(!/^https?:\/\//i.test(url) && !/^file:\/\//i.test(url)) url = 'https://' + url;
+  return url;
+}
+
+// Build the case payload + open the Exhibit Packet app with everything
+// the user might need to assemble exhibits — client name fields, A#, Cl
+// ID, DOB, country of birth, address, paralegal, case type, and the list
+// of events with their dates and notes. The payload is sent both as a
+// base64-encoded JSON blob (?data=…, full fidelity) and as individual
+// query params (?client=…&clid=…&anum=…, easy pre-fill).
+function openExhibitPacketForCase(clid){
+  if(!clid){ showToast('No case to send'); return; }
+  const meta = (caseMeta && caseMeta[clid]) || {};
+  const baseRec = (records||[]).find(r => (r.clid||r.client)===clid) || {};
+  const recs = (records||[]).filter(r => (r.clid||r.client)===clid);
+  // Compose first/middle/last → display name (last uppercased, matches
+  // the rest of the app's house style).
+  const first = (meta.clientFirstName||'').trim();
+  const mid   = (meta.clientMiddleName||'').trim();
+  const last  = (meta.clientLastName||'').trim().toUpperCase();
+  const displayName = [first, mid, last].filter(Boolean).join(' ') || baseRec.client || '';
+  const payload = {
+    source: 'wilmer-cases',
+    schemaVersion: 1,
+    case: {
+      clid,
+      caseType: baseRec.type || '',
+      paralegal: baseRec.atty || '',
+      attorney: meta.attorneyAssigned || '',
+      consolidated: !!meta.consolidated
+    },
+    client: {
+      firstName: first,
+      middleName: mid,
+      lastName: last,
+      fullName: displayName,
+      anum: baseRec.anum || '',
+      email: meta.clientEmail || '',
+      phone: meta.clientPhone || '',
+      dob: meta.clientDob || '',
+      countryOfBirth: meta.clientCountryOfBirth || '',
+      address: {
+        street: meta.clientStreet || '',
+        apt: meta.clientApt || '',
+        city: meta.clientCity || '',
+        state: meta.clientState || '',
+        zip: meta.clientZip || '',
+        country: meta.clientCountry || ''
+      }
+    },
+    respondents: Array.isArray(meta.respondents) ? meta.respondents.map(r => ({
+      name: r.name||'',
+      anum: r.anum||'',
+      dob: r.dob||'',
+      relationship: r.relationship||''
+    })) : [],
+    events: recs.map(r => ({
+      id: r.id,
+      event: r.event||'',
+      date: r.date||'',
+      timeStart: r.timeStart||'',
+      timeEnd: r.timeEnd||'',
+      notes: r.notes||'',
+      finishedStatus: r.finishedStatus||'',
+      deletedStatus: r.deletedStatus||''
+    }))
+  };
+  // base64-encode the JSON so it survives URL transport cleanly even if
+  // it contains accented characters in client names / notes. The receiver
+  // can decode with: JSON.parse(decodeURIComponent(escape(atob(data))))
+  let dataParam = '';
+  try{
+    const json = JSON.stringify(payload);
+    dataParam = btoa(unescape(encodeURIComponent(json)));
+  }catch(e){ console.warn('exhibit-packet encode failed', e); }
+  // Individual params for receivers that don't parse the JSON.
+  const q = new URLSearchParams();
+  if(dataParam) q.set('data', dataParam);
+  q.set('source','wilmer-cases');
+  q.set('clid', clid);
+  if(displayName) q.set('client', displayName);
+  if(first) q.set('firstName', first);
+  if(mid)   q.set('middleName', mid);
+  if(last)  q.set('lastName', last);
+  if(baseRec.anum) q.set('anum', baseRec.anum);
+  if(baseRec.type) q.set('caseType', baseRec.type);
+  if(baseRec.atty) q.set('paralegal', baseRec.atty);
+  if(meta.clientEmail) q.set('email', meta.clientEmail);
+  if(meta.clientPhone) q.set('phone', meta.clientPhone);
+  if(meta.clientDob)   q.set('dob', meta.clientDob);
+  if(meta.clientCountryOfBirth) q.set('countryOfBirth', meta.clientCountryOfBirth);
+  const base = _exhibitPacketBaseUrl();
+  const sep = base.indexOf('?') >= 0 ? '&' : (base.endsWith('/') ? '?' : '/?');
+  const url = base + sep + q.toString();
+  try{ window.open(url, '_blank', 'noopener'); showToast('📑 Opening Exhibit Packet with this case…'); }
+  catch(e){ showToast('Could not open Exhibit Packet'); }
+}
 function openExhibitPacketApp(ev){
   let saved = '';
   try{ saved = localStorage.getItem(EXHIBIT_PACKET_URL_KEY) || ''; }catch(e){}
@@ -13694,10 +13799,7 @@ function openExhibitPacketApp(ev){
     else                                                  showToast('Using default Exhibit Packet URL');
     return;
   }
-  let url = saved || EXHIBIT_PACKET_DEFAULT_URL;
-  // Add scheme if the user pasted a bare domain into the override.
-  if(!/^https?:\/\//i.test(url) && !/^file:\/\//i.test(url)) url = 'https://' + url;
-  try{ window.open(url, '_blank', 'noopener'); }
+  try{ window.open(_exhibitPacketBaseUrl(), '_blank', 'noopener'); }
   catch(e){ showToast('Could not open Exhibit Packet — check the URL'); }
 }
 
@@ -15751,6 +15853,18 @@ function openCaseDetail(clid){
     });
   };
   atRow.appendChild(emailCaseBtn);
+  // Exhibit Packet — opens the external Exhibit Packet app with this
+  // case's data encoded in the URL (?data=<base64-json>&client=…&clid=…&
+  // anum=…). The Exhibit Packet app can read either the structured JSON
+  // (preferred — has every field) or the individual params (fallback
+  // for simple form pre-fills).
+  const exhibitBtn=document.createElement('button');
+  exhibitBtn.className='btn-sm';
+  exhibitBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#C9823A;color:#C9823A;margin-left:4px;font-weight:600;';
+  exhibitBtn.textContent='📑 Exhibit Packet';
+  exhibitBtn.title='Open the Exhibit Packet app pre-filled with this case\'s data';
+  exhibitBtn.onclick=()=>openExhibitPacketForCase(clid);
+  atRow.appendChild(exhibitBtn);
   // Folder badge — when a directory is linked we show "📁 <Folder name>"
   // (click opens the in-app file viewer — best the browser can do for
   // "see where the folder is in Windows" since the File System Access API
