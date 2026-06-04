@@ -63,6 +63,7 @@ firebase.auth().signInAnonymously().then(()=>{
 <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
@@ -13667,7 +13668,279 @@ function renderToolsPage(){
         <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Exhibit Packet ↗</div>
         <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Open the Exhibit Packet app in a new tab. Shift-click this tile to change the URL it points to.</div>
       </div>
+      <div onclick="renderBriefGenerator()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
+        <div style="font-size:24px;margin-bottom:8px;">📝</div>
+        <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Motion for Webex Brief</div>
+        <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Pick a case and the app fills in the Motion for Video Appearance Word template — respondent, A#, judge, hearing date, attorney block — then downloads a ready-to-edit .docx.</div>
+      </div>
     </div>`;
+}
+
+// ══════════════════════════════════════════════════
+// BRIEF GENERATOR — fills a Word template (.docx) with case data
+//
+// The template at templates/motion-webex.docx is built around 20
+// content controls (SDTs) named Field1…Field20, each bound to a custom
+// XML data part. The displayed text lives inside each SDT's
+// <w:sdtContent> in document.xml. We replace those text runs with the
+// user's values, repack the docx with JSZip, and trigger a download.
+// ══════════════════════════════════════════════════
+// Map FieldN → friendly label + how to populate from a case + a UI hint.
+const _BRIEF_FIELDS = [
+  { key:'field2',  label:'Detention status',           hint:'NON-DETAINED / DETAINED' },
+  { key:'field3',  label:'Court name',                 hint:'e.g. IMMIGRATION COURT' },
+  { key:'field4',  label:'Court address',              hint:'Street, City, State Zip' },
+  { key:'field5',  label:'Respondent name',            hint:'LASTNAME, First Middle' },
+  { key:'field6',  label:'A-Number',                   hint:'e.g. 240-308-888' },
+  { key:'field7',  label:'Motion title',               hint:"e.g. RESPONDENT'S MOTION FOR VIDEO APPEARANCE" },
+  { key:'field14', label:'Judge',                      hint:'Last, First' },
+  { key:'field15', label:'Hearing date & time',        hint:'e.g. April 1, 2026, at 8:30 AM' },
+  { key:'field16', label:'Submission date & place',    hint:'e.g. 03/27/2026, Queens NY' },
+  { key:'field17', label:'Witnesses / other',          hint:'N/A if none' },
+  { key:'field18', label:'Checkbox',                   hint:'☐ or ☒' },
+  { key:'field20', label:'Attorney signature block',   hint:'Lines separated by Enter — name, role, EOIR #, firm, address, phone, email', multiline:true }
+];
+
+function _escXml(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+}
+
+// Pre-fill the brief fields from a case. Pulls structured client name,
+// A-number, paralegal, judge (IC > FC), the next upcoming hearing date,
+// venue, and the attorney signature block from firmInfo.
+function _briefValuesFromCase(clid){
+  if(!clid) return {};
+  const meta = (caseMeta && caseMeta[clid]) || {};
+  const baseRec = (records||[]).find(r => (r.clid||r.client)===clid) || {};
+  // Respondent — "LASTNAME, First Middle" matching the firm house style.
+  const first = (meta.clientFirstName||'').trim();
+  const mid   = (meta.clientMiddleName||'').trim();
+  const last  = (meta.clientLastName||'').trim().toUpperCase();
+  const respondent = last ? (last + ', ' + [first, mid].filter(Boolean).join(' ')) : (baseRec.client||'');
+  // Judge — prefer IC, fall back to FC.
+  let judgeName = '';
+  const jId = meta.judgeICId || meta.judgeFCId || meta.judgeId;
+  if(jId && Array.isArray(judges)){
+    const j = judges.find(x => x.id===jId);
+    if(j) judgeName = j.name || '';
+  }
+  // Next upcoming hearing (MASTER / INDIVIDUAL / MERITS) for this case.
+  const upcoming = (records||[])
+    .filter(r => (r.clid||r.client)===clid && r.date && !r.finishedStatus && !r.deletedStatus)
+    .filter(r => /MASTER|INDIVIDUAL|MERITS|BOND/i.test(r.event||''))
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''))[0];
+  let hearing = '';
+  if(upcoming){
+    const d = parseDate(upcoming.date);
+    if(d){
+      const dateStr = d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+      const timeStr = upcoming.timeStart ? (' at ' + fmtTime(upcoming.timeStart)) : '';
+      hearing = dateStr + timeStr;
+    }
+  }
+  // Submission date — today + venue city/state if available.
+  const todayD = new Date();
+  const submission = (todayD.getMonth()+1)+'/'+todayD.getDate()+'/'+todayD.getFullYear()
+                  + (meta.clientCity||meta.clientState ? ', ' + [meta.clientCity, meta.clientState].filter(Boolean).join(' ') : '');
+  // Attorney block — built from firmInfo.
+  const fi = (typeof firmInfo === 'object' && firmInfo) || {};
+  const atyName = [fi.firstName, fi.middleName, fi.lastName].filter(Boolean).join(' ') + (fi.barNumber?', Esq.':'');
+  const atyLines = [
+    atyName || '',
+    'Attorney for Respondent',
+    fi.barNumber ? ('EOIR # ' + fi.barNumber) : '',
+    fi.firmName || '',
+    [fi.street, fi.apt].filter(Boolean).join(' Ste '),
+    [fi.city, fi.state, fi.zip].filter(Boolean).join(', '),
+    fi.phone || fi.mobile || '',
+    fi.email || ''
+  ].filter(Boolean);
+  return {
+    field2: 'NON-DETAINED',
+    field3: 'IMMIGRATION COURT',
+    field4: '',
+    field5: respondent,
+    field6: (baseRec.anum||'').replace(/^A[- ]?/i,''),
+    field7: "RESPONDENT'S MOTION FOR VIDEO APPEARANCE",
+    field14: judgeName,
+    field15: hearing,
+    field16: submission,
+    field17: 'N/A',
+    field18: '☐',
+    field20: atyLines.join('\n')
+  };
+}
+
+function renderBriefGenerator(){
+  const el = document.getElementById('tools-content');
+  if(!el) return;
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <button onclick="renderToolsPage()" style="font-size:11px;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">← Back</button>
+      <div style="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);">📝 Motion for Webex Brief</div>
+    </div>
+    <div style="font-size:13px;color:var(--ink-muted);margin-bottom:18px;line-height:1.55;">Pick a case to auto-fill the fields from its data, edit anything that needs adjusting, then click Generate to download the .docx.</div>
+
+    <!-- Case picker -->
+    <div style="position:relative;margin-bottom:18px;">
+      <input id="bg-case-search" type="text" placeholder="Search client name, A#, or Cl ID…" autocomplete="off"
+        style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"
+        oninput="_briefCaseSearch(this.value)" onfocus="_briefCaseSearch(this.value)"/>
+      <div id="bg-case-drop" style="display:none;position:absolute;top:calc(100%+3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:200;max-height:240px;overflow-y:auto;"></div>
+      <div id="bg-case-selected" style="font-size:11px;color:var(--sage);font-weight:600;margin-top:6px;min-height:14px;"></div>
+    </div>
+
+    <!-- Field form -->
+    <div id="bg-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:20px;"></div>
+
+    <!-- Generate -->
+    <div style="display:flex;gap:10px;align-items:center;">
+      <button onclick="generateMotionWebex()" id="bg-generate-btn" style="font-size:13px;font-weight:600;padding:9px 22px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Generate .docx</button>
+      <span id="bg-generate-status" style="font-size:11px;color:var(--ink-muted);"></span>
+    </div>
+  `;
+  window._briefClid = null;
+  window._briefValues = {};
+  _briefRenderForm();
+}
+
+function _briefRenderForm(){
+  const wrap = document.getElementById('bg-form');
+  if(!wrap) return;
+  const v = window._briefValues || {};
+  wrap.innerHTML = _BRIEF_FIELDS.map(f => {
+    const val = v[f.key] != null ? v[f.key] : '';
+    if(f.multiline){
+      return '<div style="grid-column:1/-1;">'
+        + '<label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);margin-bottom:4px;">' + f.label + '</label>'
+        + '<textarea id="bg-' + f.key + '" rows="5" placeholder="' + f.hint + '" '
+        + 'oninput="window._briefValues[\'' + f.key + '\']=this.value" '
+        + 'style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;line-height:1.5;resize:vertical;">' + escHtml(val) + '</textarea>'
+        + '</div>';
+    }
+    return '<div>'
+      + '<label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);margin-bottom:4px;">' + f.label + '</label>'
+      + '<input id="bg-' + f.key + '" type="text" value="' + escHtml(val).replace(/"/g,'&quot;') + '" placeholder="' + f.hint + '" '
+      + 'oninput="window._briefValues[\'' + f.key + '\']=this.value" '
+      + 'style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>'
+      + '</div>';
+  }).join('');
+}
+
+function _briefCaseSearch(q){
+  const drop = document.getElementById('bg-case-drop');
+  if(!drop) return;
+  drop.innerHTML = '';
+  const query = String(q||'').toLowerCase();
+  if(!query){ drop.style.display='none'; return; }
+  const seen = new Set();
+  const matches = [];
+  (records||[]).forEach(r => {
+    const key = r.clid || r.client;
+    if(!key || seen.has(key)) return;
+    if(_isCaseClosed && _isCaseClosed(key)) return;
+    const hay = ((r.client||'') + ' ' + (r.clid||'') + ' ' + (r.anum||'')).toLowerCase();
+    if(hay.indexOf(query) < 0) return;
+    seen.add(key);
+    matches.push({ clid: key, client: r.client || key, anum: r.anum || '' });
+  });
+  if(!matches.length){ drop.style.display='none'; return; }
+  matches.slice(0,8).forEach(m => {
+    const it = document.createElement('div');
+    it.style.cssText = 'padding:7px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--cream-dark);';
+    it.innerHTML = '<span style="font-weight:600;color:var(--ink);">' + escHtml(m.client) + '</span>'
+      + (m.clid && m.clid!==m.client ? '<span style="font-size:11px;color:var(--ink-faint);margin-left:6px;">#' + escHtml(m.clid) + '</span>' : '')
+      + (m.anum ? '<span style="font-size:11px;color:var(--ink-faint);margin-left:6px;">A-' + escHtml(m.anum) + '</span>' : '');
+    it.onmouseenter = () => it.style.background = 'var(--cream)';
+    it.onmouseleave = () => it.style.background = '';
+    it.onclick = () => { _briefPickCase(m.clid, m.client); drop.style.display='none'; };
+    drop.appendChild(it);
+  });
+  drop.style.display = 'block';
+}
+
+function _briefPickCase(clid, displayName){
+  window._briefClid = clid;
+  window._briefValues = _briefValuesFromCase(clid);
+  const sel = document.getElementById('bg-case-selected');
+  if(sel) sel.textContent = '✓ ' + (displayName || clid) + ' — fields pre-filled below';
+  const search = document.getElementById('bg-case-search');
+  if(search) search.value = displayName || clid;
+  _briefRenderForm();
+}
+
+async function generateMotionWebex(){
+  const btn = document.getElementById('bg-generate-btn');
+  const status = document.getElementById('bg-generate-status');
+  if(typeof JSZip === 'undefined'){
+    if(status) status.textContent = 'JSZip not loaded — refresh the page and try again.';
+    return;
+  }
+  // Pull the latest values from the form (in case the user edited without
+  // triggering oninput on the last field, e.g. paste then click).
+  _BRIEF_FIELDS.forEach(f => {
+    const el = document.getElementById('bg-' + f.key);
+    if(el) window._briefValues[f.key] = el.value;
+  });
+  const values = window._briefValues || {};
+  // Need at least a respondent name so the filename + content aren't blank.
+  if(!values.field5 || !values.field5.trim()){
+    if(status){ status.textContent = 'Pick a case or type a respondent name first.'; status.style.color='#B85C5C'; }
+    return;
+  }
+  if(btn){ btn.disabled = true; btn.textContent = 'Generating…'; }
+  if(status){ status.textContent = ''; status.style.color=''; }
+  try{
+    // Load the template (committed under templates/motion-webex.docx).
+    const resp = await fetch('templates/motion-webex.docx', { cache:'no-cache' });
+    if(!resp.ok) throw new Error('Could not load template (' + resp.status + ')');
+    const buf = await resp.arrayBuffer();
+    const zip = await JSZip.loadAsync(buf);
+    let docXml = await zip.file('word/document.xml').async('string');
+    // For each FieldN, find every SDT bound to it and rewrite the text in
+    // its <w:sdtContent>. Multiple <w:t> runs inside an SDT consume
+    // successive lines of the value (separated by \n), so multi-line
+    // fields like the attorney block flow correctly through the existing
+    // paragraph structure.
+    Object.keys(values).forEach(k => {
+      const m = /^field(\d+)$/.exec(k);
+      if(!m) return;
+      const n = m[1];
+      const val = values[k];
+      if(val == null) return;
+      const lines = String(val).split('\n');
+      // Anchor on Field<N>[1]" exactly so Field2 doesn't accidentally match
+      // Field20 / Field21. The "[1]" suffix is what disambiguates.
+      const sdtRe = new RegExp(
+        '(<w:sdt><w:sdtPr>[\\s\\S]*?w:xpath="\\/ns0:DemoXMLNode\\[1\\]\\/ns0:Field' + n + '\\[1\\]"[\\s\\S]*?<w:sdtContent>)([\\s\\S]*?)(<\\/w:sdtContent>)',
+        'g'
+      );
+      docXml = docXml.replace(sdtRe, (match, before, content, after) => {
+        let i = 0;
+        const newContent = content.replace(/<w:t[^>]*>[^<]*<\/w:t>/g, () => {
+          const text = i < lines.length ? lines[i] : '';
+          i++;
+          return '<w:t xml:space="preserve">' + _escXml(text) + '</w:t>';
+        });
+        return before + newContent + after;
+      });
+    });
+    zip.file('word/document.xml', docXml);
+    const outBlob = await zip.generateAsync({ type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    // Filename: Motion Webex - <Respondent>.docx
+    const safeName = String(values.field5||'Brief').replace(/[\\/:*?"<>|]/g,'').trim() || 'Brief';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(outBlob);
+    a.download = 'Motion Webex - ' + safeName + '.docx';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 60000);
+    if(status){ status.textContent = '✓ Downloaded — open it in Word to review.'; status.style.color='var(--sage)'; }
+  }catch(e){
+    console.error('generateMotionWebex', e);
+    if(status){ status.textContent = 'Failed: ' + (e && e.message ? e.message : 'unknown error'); status.style.color='#B85C5C'; }
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = 'Generate .docx'; }
+  }
 }
 
 // Open the (external) Exhibit Packet app in a new tab. The default URL
