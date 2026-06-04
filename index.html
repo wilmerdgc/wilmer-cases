@@ -13669,36 +13669,33 @@ function renderToolsPage(){
     </div>`;
 }
 
-// Open the (external) Exhibit Packet app in a new tab. The URL is stored
-// in localStorage so each device can point at its own deployment without
-// hard-coding anything in the source. First click prompts for the URL;
-// Shift-click on the tile re-prompts so the user can change it later.
+// Open the (external) Exhibit Packet app in a new tab. The default URL
+// points at the firm's Netlify deployment; localStorage can override it
+// per-device, and Shift-clicking the tile lets the user change or clear
+// the override (falling back to the default).
 const EXHIBIT_PACKET_URL_KEY = 'wilmer_exhibit_packet_url';
+const EXHIBIT_PACKET_DEFAULT_URL = 'https://courageous-mermaid-708b91.netlify.app/';
 function openExhibitPacketApp(ev){
-  let url = '';
-  try{ url = localStorage.getItem(EXHIBIT_PACKET_URL_KEY) || ''; }catch(e){}
-  // Shift-click re-prompts so the user can update the saved URL.
+  let saved = '';
+  try{ saved = localStorage.getItem(EXHIBIT_PACKET_URL_KEY) || ''; }catch(e){}
+  // Shift-click re-prompts so the user can update or clear the saved URL.
   if(ev && ev.shiftKey){
-    const next = window.prompt('Exhibit Packet app URL\n\n(Paste the link to your Exhibit Packet app. Leave blank and click OK to clear.)', url);
+    const next = window.prompt(
+      'Exhibit Packet app URL\n\n(Paste the link to your Exhibit Packet app. Leave blank and click OK to fall back to the default — '+EXHIBIT_PACKET_DEFAULT_URL+'.)',
+      saved || EXHIBIT_PACKET_DEFAULT_URL
+    );
     if(next === null) return; // cancelled
     const trimmed = next.trim();
     try{
-      if(trimmed) localStorage.setItem(EXHIBIT_PACKET_URL_KEY, trimmed);
-      else        localStorage.removeItem(EXHIBIT_PACKET_URL_KEY);
+      if(trimmed && trimmed !== EXHIBIT_PACKET_DEFAULT_URL) localStorage.setItem(EXHIBIT_PACKET_URL_KEY, trimmed);
+      else localStorage.removeItem(EXHIBIT_PACKET_URL_KEY);
     }catch(e){}
-    if(trimmed){ showToast('Exhibit Packet URL saved'); }
-    else       { showToast('Exhibit Packet URL cleared'); }
+    if(trimmed && trimmed !== EXHIBIT_PACKET_DEFAULT_URL) showToast('Exhibit Packet URL saved');
+    else                                                  showToast('Using default Exhibit Packet URL');
     return;
   }
-  if(!url){
-    const entered = window.prompt('Paste the URL of your Exhibit Packet app:\n\n(It will be saved for next time. Shift-click the tile to change it later.)','');
-    if(!entered) return;
-    const trimmed = entered.trim();
-    if(!trimmed) return;
-    try{ localStorage.setItem(EXHIBIT_PACKET_URL_KEY, trimmed); }catch(e){}
-    url = trimmed;
-  }
-  // Add scheme if the user pasted a bare domain.
+  let url = saved || EXHIBIT_PACKET_DEFAULT_URL;
+  // Add scheme if the user pasted a bare domain into the override.
   if(!/^https?:\/\//i.test(url) && !/^file:\/\//i.test(url)) url = 'https://' + url;
   try{ window.open(url, '_blank', 'noopener'); }
   catch(e){ showToast('Could not open Exhibit Packet — check the URL'); }
