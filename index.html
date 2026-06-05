@@ -13722,6 +13722,35 @@ const _BRIEF_SERVICE_OPTIONS = [
   'Mail'
 ];
 
+// Pluralize "Respondent" → "Respondents" and the boilerplate phrases
+// the firm uses around it. Applied only when the motion has more than
+// one client (the user picks the lead + checks the riders on the
+// brief generator's respondent panel). Case + apostrophe placement
+// are preserved so:
+//   RESPONDENT'S      → RESPONDENTS'
+//   Respondent's      → Respondents'
+//   Attorney for Resp → Attorneys for Resp(s)
+//   plain Respondent  → Respondents
+// The bare-word replacements run last so they don't break the
+// possessive / attorney variants above them.
+function _briefPluralize(text){
+  if(!text) return text;
+  return String(text)
+    // Possessive forms: shift the apostrophe to after the s.
+    .replace(/\bRESPONDENT'S\b/g,  "RESPONDENTS'")
+    .replace(/\bRespondent's\b/g,  "Respondents'")
+    .replace(/\brespondent's\b/g,  "respondents'")
+    // "Attorney for Respondent" → "Attorneys for Respondents".
+    .replace(/\bAttorney for Respondent\b/g, 'Attorneys for Respondents')
+    .replace(/\battorney for respondent\b/g, 'attorneys for respondents')
+    .replace(/\bATTORNEY FOR RESPONDENT\b/g, 'ATTORNEYS FOR RESPONDENTS')
+    // Bare "Respondent" → "Respondents" — runs last so it doesn't
+    // mangle "Respondent's" already rewritten above.
+    .replace(/\bRESPONDENT\b/g, 'RESPONDENTS')
+    .replace(/\bRespondent\b/g, 'Respondents')
+    .replace(/\brespondent\b/g, 'respondents');
+}
+
 // Two-line court addresses used by Field 4. Keys are the same venue
 // names judge records carry (uppercased for lookup). Each value is a
 // [streetLine, cityStateZipLine] pair, ALL UPPERCASE because the firm
@@ -13924,13 +13953,20 @@ function _briefValuesFromCase(clid, chosen){
     ].filter(Boolean);
     signatureBlock = atyLines.join('\n');
   }
+  // Singular vs plural — driven by how many clients the user opted
+  // into the motion (the lead is always counted, riders are added
+  // when their Include checkbox is on).
+  const clientCount = 1 + includedOthers.length;
+  const plural = clientCount > 1;
   return {
     field2: 'NON-DETAINED',
     field3: 'IMMIGRATION COURT',
     field4: courtAddress,
     field5: respondent,
     field6: anumString,
-    field7: "RESPONDENT'S MOTION FOR VIDEO APPEARANCE",
+    field7: plural
+      ? "RESPONDENTS' MOTION FOR VIDEO APPEARANCE"
+      : "RESPONDENT'S MOTION FOR VIDEO APPEARANCE",
     field14: judgeName,
     field15: hearing,
     field16: submission,
@@ -13940,7 +13976,7 @@ function _briefValuesFromCase(clid, chosen){
     field18: (meta.filingSystem === 'paper') ? 'ICE eFiling System'
            : (meta.filingSystem === 'ECAS' || !meta.filingSystem) ? 'ECAS'
            : 'ECAS',
-    field20: signatureBlock
+    field20: plural ? _briefPluralize(signatureBlock) : signatureBlock
   };
 }
 
@@ -14033,17 +14069,26 @@ function _briefSuggestions(fieldKey){
   }
   if(fieldKey === 'field7'){
     // Most-used motion titles the firm files. The user can still type a
-    // custom one — these just cover the common cases in one click.
-    return [
-      { label:"RESPONDENT'S MOTION FOR VIDEO APPEARANCE",      value:"RESPONDENT'S MOTION FOR VIDEO APPEARANCE" },
-      { label:"RESPONDENT'S MOTION FOR CONTINUANCE",           value:"RESPONDENT'S MOTION FOR CONTINUANCE" },
-      { label:"RESPONDENT'S MOTION TO REOPEN",                 value:"RESPONDENT'S MOTION TO REOPEN" },
-      { label:"RESPONDENT'S MOTION TO TERMINATE",              value:"RESPONDENT'S MOTION TO TERMINATE" },
-      { label:"RESPONDENT'S MOTION TO PRETERMIT",              value:"RESPONDENT'S MOTION TO PRETERMIT" },
-      { label:"RESPONDENT'S MOTION TO CHANGE VENUE",           value:"RESPONDENT'S MOTION TO CHANGE VENUE" },
-      { label:"RESPONDENT'S MOTION TO SUPPRESS",               value:"RESPONDENT'S MOTION TO SUPPRESS" },
-      { label:"RESPONDENT'S MOTION TO DISMISS",                value:"RESPONDENT'S MOTION TO DISMISS" }
+    // custom one — these just cover the common cases in one click. When
+    // the brief has multiple respondents (lead + at least one rider
+    // included), the titles are pluralized so the dropdown matches the
+    // current Field 7 default.
+    const singularTitles = [
+      "RESPONDENT'S MOTION FOR VIDEO APPEARANCE",
+      "RESPONDENT'S MOTION FOR CONTINUANCE",
+      "RESPONDENT'S MOTION TO REOPEN",
+      "RESPONDENT'S MOTION TO TERMINATE",
+      "RESPONDENT'S MOTION TO PRETERMIT",
+      "RESPONDENT'S MOTION TO CHANGE VENUE",
+      "RESPONDENT'S MOTION TO SUPPRESS",
+      "RESPONDENT'S MOTION TO DISMISS"
     ];
+    const plural = !!(window._briefSelection
+      && (window._briefSelection.included && window._briefSelection.included.size > 1));
+    return singularTitles.map(t => {
+      const v = plural ? _briefPluralize(t) : t;
+      return { label: v, value: v };
+    });
   }
   if(fieldKey === 'field14'){
     // Every saved judge, sorted with the case's currently-linked court
@@ -14112,12 +14157,19 @@ function _briefSuggestions(fieldKey){
 // corresponding input so the user sees the change immediately.
 function _briefApplySuggestion(fieldKey, value){
   if(!window._briefValues) window._briefValues = {};
-  window._briefValues[fieldKey] = value;
+  // If the motion has multiple respondents, pluralize singular boilerplate
+  // ("RESPONDENT'S" / "Attorney for Respondent" / bare Respondent) before
+  // it lands in the field. Saved attorney signatures get the same
+  // treatment so a single "Attorney for Respondent" block reads as
+  // "Attorneys for Respondents" on a multi-client motion.
+  const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
+  const applied = plural ? _briefPluralize(value) : value;
+  window._briefValues[fieldKey] = applied;
   // Field 4 renders as two stacked uppercase inputs; split the joined
   // "L1\nL2" value back into the two inputs so the picker selection
   // appears in both rows.
   if(fieldKey === 'field4'){
-    const [l1, l2] = _briefSplitAddr(value);
+    const [l1, l2] = _briefSplitAddr(applied);
     const i1 = document.getElementById('bg-field4-l1');
     const i2 = document.getElementById('bg-field4-l2');
     if(i1) i1.value = l1;
@@ -14125,7 +14177,7 @@ function _briefApplySuggestion(fieldKey, value){
     return;
   }
   const inp = document.getElementById('bg-' + fieldKey);
-  if(inp) inp.value = value;
+  if(inp) inp.value = applied;
 }
 
 // Save the current Field 20 textarea content as a named attorney
@@ -14380,12 +14432,17 @@ function _briefToggleInclude(idx, on){
 function _briefRefreshFromSelection(){
   const clid = window._briefClid;
   if(!clid) return;
-  // Preserve any non-respondent edits the user already made; only update
-  // the fields driven by the multi-client selection (field5, field6).
+  // Update every field that depends on the singular/plural choice. We
+  // refresh field5 + field6 (respondent name / A-number lists) and
+  // field7 + field20 (motion title + attorney block — both carry the
+  // word "Respondent" so they need to flip with the count). All other
+  // fields keep whatever the user already typed.
   const fresh = _briefValuesFromCase(clid, window._briefSelection);
   if(!window._briefValues) window._briefValues = {};
-  window._briefValues.field5 = fresh.field5;
-  window._briefValues.field6 = fresh.field6;
+  window._briefValues.field5  = fresh.field5;
+  window._briefValues.field6  = fresh.field6;
+  window._briefValues.field7  = fresh.field7;
+  window._briefValues.field20 = fresh.field20;
   _briefRenderRespondentsPanel();
   _briefRenderForm();
 }
