@@ -13705,18 +13705,82 @@ function _escXml(s){
   return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
 }
 
+// Build a "LASTNAME, First Middle" display name for one client. Works
+// for both the lead (uses caseMeta's structured fields when available)
+// and a respondent (uses its own .name, which may already include the
+// last name — we split on the first space to fake it if not).
+function _briefFormatClientName(cl, meta){
+  if(cl._isLead){
+    const first = (meta.clientFirstName||'').trim();
+    const mid   = (meta.clientMiddleName||'').trim();
+    const last  = (meta.clientLastName||'').trim().toUpperCase();
+    if(last) return last + ', ' + [first, mid].filter(Boolean).join(' ').trim();
+    return cl.name || '';
+  }
+  // Respondent name — assume "First Middle LAST" or "First LAST" and flip
+  // to "LAST, First Middle". If we can't tell, just upper-case the whole.
+  const raw = (cl.name||'').trim();
+  if(!raw) return '';
+  const parts = raw.split(/\s+/);
+  if(parts.length < 2) return raw.toUpperCase();
+  const last = parts[parts.length-1].toUpperCase();
+  const rest = parts.slice(0,-1).join(' ');
+  return last + ', ' + rest;
+}
+
+// Return the full list of clients on a case (lead first, then respondents)
+// in a uniform shape so the picker UI doesn't have to special-case the
+// lead.
+function _briefAllClients(clid){
+  const meta = (caseMeta && caseMeta[clid]) || {};
+  const baseRec = (records||[]).find(r => (r.clid||r.client)===clid) || {};
+  const lead = {
+    _isLead: true,
+    idx: -1,
+    name: baseRec.client || '',
+    anum: baseRec.anum || '',
+    dob: meta.clientDob || '',
+    relationship: 'Lead'
+  };
+  const riders = Array.isArray(meta.respondents) ? meta.respondents.map((r, i) => ({
+    _isLead: false,
+    idx: i,
+    name: r.name || '',
+    anum: r.anum || '',
+    dob: r.dob || '',
+    relationship: r.relationship || 'Rider'
+  })) : [];
+  return [lead, ...riders];
+}
+
 // Pre-fill the brief fields from a case. Pulls structured client name,
 // A-number, paralegal, judge (IC > FC), the next upcoming hearing date,
 // venue, and the attorney signature block from firmInfo.
-function _briefValuesFromCase(clid){
+// `chosen` is optional: { leadIdx: -1|0|1|…, included: Set<idx> }
+// describing which client should be primary and which to also include.
+// If omitted, only the lead is included.
+function _briefValuesFromCase(clid, chosen){
   if(!clid) return {};
   const meta = (caseMeta && caseMeta[clid]) || {};
   const baseRec = (records||[]).find(r => (r.clid||r.client)===clid) || {};
-  // Respondent — "LASTNAME, First Middle" matching the firm house style.
-  const first = (meta.clientFirstName||'').trim();
-  const mid   = (meta.clientMiddleName||'').trim();
-  const last  = (meta.clientLastName||'').trim().toUpperCase();
-  const respondent = last ? (last + ', ' + [first, mid].filter(Boolean).join(' ')) : (baseRec.client||'');
+  const allClients = _briefAllClients(clid);
+  // Default selection: existing leadIdx (or -1 = base) is the lead;
+  // include only the lead.
+  const defaultLeadIdx = (meta.leadIdx !== undefined) ? meta.leadIdx : -1;
+  const sel = chosen || { leadIdx: defaultLeadIdx, included: new Set([defaultLeadIdx]) };
+  // Compose Field5 (Respondent name) — lead first, then any other
+  // included clients, separated by "; ". Single name is just the lead.
+  const leadCl = allClients.find(c => c.idx === sel.leadIdx) || allClients[0];
+  const includedOthers = allClients
+    .filter(c => c.idx !== sel.leadIdx && sel.included.has(c.idx));
+  const respondent = [leadCl, ...includedOthers]
+    .map(c => _briefFormatClientName(c, meta))
+    .filter(Boolean)
+    .join('; ');
+  const anumString = [leadCl, ...includedOthers]
+    .map(c => (c.anum||'').replace(/^A[- ]?/i,''))
+    .filter(Boolean)
+    .join('; ');
   // Judge — prefer IC, fall back to FC.
   let judgeName = '';
   const jId = meta.judgeICId || meta.judgeFCId || meta.judgeId;
@@ -13760,7 +13824,7 @@ function _briefValuesFromCase(clid){
     field3: 'IMMIGRATION COURT',
     field4: '',
     field5: respondent,
-    field6: (baseRec.anum||'').replace(/^A[- ]?/i,''),
+    field6: anumString,
     field7: "RESPONDENT'S MOTION FOR VIDEO APPEARANCE",
     field14: judgeName,
     field15: hearing,
@@ -13782,13 +13846,16 @@ function renderBriefGenerator(){
     <div style="font-size:13px;color:var(--ink-muted);margin-bottom:18px;line-height:1.55;">Pick a case to auto-fill the fields from its data, edit anything that needs adjusting, then click Generate to download the .docx.</div>
 
     <!-- Case picker -->
-    <div style="position:relative;margin-bottom:18px;">
+    <div style="position:relative;margin-bottom:14px;">
       <input id="bg-case-search" type="text" placeholder="Search client name, A#, or Cl ID…" autocomplete="off"
         style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"
         oninput="_briefCaseSearch(this.value)" onfocus="_briefCaseSearch(this.value)"/>
       <div id="bg-case-drop" style="display:none;position:absolute;top:calc(100%+3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:200;max-height:240px;overflow-y:auto;"></div>
       <div id="bg-case-selected" style="font-size:11px;color:var(--sage);font-weight:600;margin-top:6px;min-height:14px;"></div>
     </div>
+
+    <!-- Multi-respondent picker (only appears when a case has 2+ clients) -->
+    <div id="bg-respondents-panel" style="display:none;margin-bottom:18px;padding:12px 14px;background:#FAF0E6;border:1px solid #E8C49A;border-radius:8px;"></div>
 
     <!-- Field form -->
     <div id="bg-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:20px;"></div>
@@ -13861,11 +13928,88 @@ function _briefCaseSearch(q){
 
 function _briefPickCase(clid, displayName){
   window._briefClid = clid;
-  window._briefValues = _briefValuesFromCase(clid);
+  // Initialize the multi-client selection: default lead = current
+  // caseMeta.leadIdx (or -1 if not set), and only the lead included.
+  const meta = (caseMeta && caseMeta[clid]) || {};
+  const defaultLeadIdx = (meta.leadIdx !== undefined) ? meta.leadIdx : -1;
+  window._briefSelection = {
+    leadIdx: defaultLeadIdx,
+    included: new Set([defaultLeadIdx])
+  };
+  window._briefValues = _briefValuesFromCase(clid, window._briefSelection);
   const sel = document.getElementById('bg-case-selected');
   if(sel) sel.textContent = '✓ ' + (displayName || clid) + ' — fields pre-filled below';
   const search = document.getElementById('bg-case-search');
   if(search) search.value = displayName || clid;
+  _briefRenderRespondentsPanel();
+  _briefRenderForm();
+}
+
+// Show the multi-respondent picker if the case has 2+ clients. Each row
+// has a Lead radio button (which client is the primary in the caption /
+// signature line) and an Include checkbox (whether to list that client
+// alongside the lead in Field5 / Field6).
+function _briefRenderRespondentsPanel(){
+  const panel = document.getElementById('bg-respondents-panel');
+  if(!panel) return;
+  const clid = window._briefClid;
+  if(!clid){ panel.style.display = 'none'; return; }
+  const allClients = _briefAllClients(clid);
+  if(allClients.length < 2){ panel.style.display = 'none'; return; }
+  const meta = (caseMeta && caseMeta[clid]) || {};
+  const selSet = window._briefSelection.included;
+  const leadIdx = window._briefSelection.leadIdx;
+  let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">'
+    + '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#C9823A;">This case has ' + allClients.length + ' clients</div>'
+    + '<div style="font-size:11px;color:#9E9186;">Pick the lead · check the riders to include</div>'
+    + '</div>'
+    + '<div style="display:flex;flex-direction:column;gap:5px;">';
+  allClients.forEach(cl => {
+    const display = _briefFormatClientName(cl, meta) || cl.name || ('Client ' + (cl.idx+1));
+    const sub = [cl.anum ? ('A-' + (cl.anum||'').replace(/^A[- ]?/i,'')) : '', cl.relationship||''].filter(Boolean).join(' · ');
+    const isLead = leadIdx === cl.idx;
+    const isIncl = selSet.has(cl.idx) || isLead;
+    html += '<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid '+(isLead?'#C9823A':'var(--cream-dark)')+';border-radius:6px;background:#fff;cursor:pointer;font-size:12px;">'
+      + '<input type="radio" name="bg-lead" value="' + cl.idx + '" ' + (isLead?'checked':'') + ' onchange="_briefSetLead(' + cl.idx + ')" style="margin:0;cursor:pointer;accent-color:#C9823A;"/>'
+      + '<input type="checkbox" value="' + cl.idx + '" ' + (isIncl?'checked':'') + ' ' + (isLead?'disabled':'') + ' onchange="_briefToggleInclude(' + cl.idx + ', this.checked)" style="margin:0;cursor:pointer;accent-color:var(--sage);" title="' + (isLead?'The lead is always included':'Include this client in the motion') + '"/>'
+      + '<span style="flex:1;color:var(--ink);font-weight:' + (isLead?'600':'500') + ';">' + escHtml(display) + '</span>'
+      + (sub ? '<span style="font-size:10px;color:var(--ink-faint);">' + escHtml(sub) + '</span>' : '')
+      + (isLead ? '<span style="font-size:10px;font-weight:700;color:#C9823A;background:#FFF3DC;padding:2px 8px;border-radius:10px;">LEAD</span>' : '')
+      + '</label>';
+  });
+  html += '</div>';
+  panel.innerHTML = html;
+  panel.style.display = '';
+}
+
+function _briefSetLead(idx){
+  if(!window._briefSelection) return;
+  window._briefSelection.leadIdx = idx;
+  // Lead is always included.
+  window._briefSelection.included.add(idx);
+  _briefRefreshFromSelection();
+}
+
+function _briefToggleInclude(idx, on){
+  if(!window._briefSelection) return;
+  // The lead can't be unchecked — that's handled by the disabled attribute,
+  // but guard anyway.
+  if(idx === window._briefSelection.leadIdx) return;
+  if(on) window._briefSelection.included.add(idx);
+  else   window._briefSelection.included.delete(idx);
+  _briefRefreshFromSelection();
+}
+
+function _briefRefreshFromSelection(){
+  const clid = window._briefClid;
+  if(!clid) return;
+  // Preserve any non-respondent edits the user already made; only update
+  // the fields driven by the multi-client selection (field5, field6).
+  const fresh = _briefValuesFromCase(clid, window._briefSelection);
+  if(!window._briefValues) window._briefValues = {};
+  window._briefValues.field5 = fresh.field5;
+  window._briefValues.field6 = fresh.field6;
+  _briefRenderRespondentsPanel();
   _briefRenderForm();
 }
 
