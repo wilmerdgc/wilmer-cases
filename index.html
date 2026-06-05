@@ -2643,9 +2643,14 @@ window.addEventListener('load',()=>autoGrowAllNotes());
     <div style="font-family:'Lora',Georgia,serif;font-size:16px;font-weight:600;color:#2C2620;margin-bottom:18px;" id="judge-modal-title">Add Judge</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;">
       <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:600;color:#9E9186;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;">Full Name *</label><input id="jm-name" type="text" placeholder="e.g. Carrie Johnson-Papillo"/></div>
-      <div><label style="font-size:11px;font-weight:600;color:#9E9186;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;">Venue</label>
-        <input id="jm-venue" type="text" list="jm-venue-list" placeholder="Type or select venue..."/>
-        <datalist id="jm-venue-list"></datalist>
+      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:600;color:#9E9186;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;">Venue <span style="color:#C4BAB0;font-weight:500;text-transform:none;letter-spacing:0;">(line 1: street + floor; line 2: city, state ZIP — both upper-cased automatically)</span></label>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <input id="jm-venue" type="text" list="jm-venue-list" placeholder="STREET + FLOOR / ROOM (e.g. 290 BROADWAY, 15TH FLOOR)"
+            oninput="this.value=this.value.toUpperCase()" style="text-transform:uppercase;letter-spacing:.02em;"/>
+          <datalist id="jm-venue-list"></datalist>
+          <input id="jm-venue-city" type="text" placeholder="CITY, STATE  ZIP (e.g. NEW YORK, NY 10007)"
+            oninput="this.value=this.value.toUpperCase()" style="text-transform:uppercase;letter-spacing:.02em;"/>
+        </div>
       </div>
       <div><label style="font-size:11px;font-weight:600;color:#9E9186;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;">Role</label><input id="jm-role" type="text" placeholder="Judge / Referee / Clerk…"/></div>
       <div><label style="font-size:11px;font-weight:600;color:#9E9186;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;">Email</label><input id="jm-email" type="text" placeholder="name@usdoj.gov"/></div>
@@ -11643,7 +11648,7 @@ function renderJudges(){
         <div style="font-family:'Lora',Georgia,serif;font-size:13px;font-weight:600;color:#2C2620;">${j.name}</div>
         ${j.email?`<div style="font-size:11px;color:#6B7FA3;margin-top:1px;">${j.email}</div>`:''}
       </td>
-      <td style="padding:10px;vertical-align:top;font-size:12px;color:#9E9186;white-space:nowrap;">${j.venue||'—'}</td>
+      <td style="padding:10px;vertical-align:top;font-size:12px;color:#9E9186;white-space:nowrap;line-height:1.4;">${j.venue||'—'}${j.venueCity?'<br><span style="color:#C4BAB0;">'+j.venueCity+'</span>':''}</td>
       <td style="padding:10px;vertical-align:top;font-size:12px;color:#9E9186;white-space:nowrap;">${j.clerk||'—'}</td>
       <td style="padding:10px;vertical-align:top;">${webexBadge}</td>
       <td style="padding:10px;vertical-align:top;max-width:380px;line-height:1.6;">${notesHtml||'<span style="color:#C4BAB0;font-size:12px;">—</span>'}</td>
@@ -11665,7 +11670,8 @@ function openJudgeModal(id){
   // Populate venue datalist
   const vdl=document.getElementById('jm-venue-list');
   if(vdl){vdl.innerHTML='';venues.forEach(v=>{const o=document.createElement('option');o.value=v;vdl.appendChild(o);});}
-  document.getElementById('jm-venue').value=j?j.venue:'';
+  document.getElementById('jm-venue').value=(j? j.venue:'').toUpperCase();
+  document.getElementById('jm-venue-city').value=(j? (j.venueCity||''):'').toUpperCase();
   document.getElementById('jm-role').value=j?j.role:'';
   document.getElementById('jm-email').value=j?j.email:'';
   document.getElementById('jm-clerk').value=j?j.clerk:'';
@@ -11687,7 +11693,8 @@ function saveJudge(){
   const data={
     id:editingJudgeId||('j'+Date.now()),
     name,
-    venue:document.getElementById('jm-venue').value.trim(),
+    venue:document.getElementById('jm-venue').value.trim().toUpperCase(),
+    venueCity:document.getElementById('jm-venue-city').value.trim().toUpperCase(),
     role:document.getElementById('jm-role').value.trim(),
     email:document.getElementById('jm-email').value.trim(),
     clerk:document.getElementById('jm-clerk').value.trim(),
@@ -13830,12 +13837,14 @@ function _briefValuesFromCase(clid, chosen){
   // Field4 (Court address) lands on the right court automatically.
   let judgeName = '';
   let judgeVenue = '';
+  let judgeVenueCity = '';
   const jId = meta.judgeICId || meta.judgeFCId || meta.judgeId;
   if(jId && Array.isArray(judges)){
     const j = judges.find(x => x.id===jId);
     if(j){
-      judgeName  = j.name  || '';
-      judgeVenue = j.venue || '';
+      judgeName      = j.name      || '';
+      judgeVenue     = j.venue     || '';
+      judgeVenueCity = j.venueCity || '';
     }
   }
   // Map common venues to the two-line court address the firm uses on
@@ -13846,9 +13855,20 @@ function _briefValuesFromCase(clid, chosen){
   // string verbatim as line 1 with an empty line 2 — the user can fill
   // in the rest manually.
   const _COURT_ADDR = _briefCourtAddressTable();
-  const courtAddressTwoLine = judgeVenue
-    ? (_COURT_ADDR[judgeVenue.toUpperCase()] || [judgeVenue, ''])
-    : ['', ''];
+  // Priority order for the two-line court address:
+  //   1. judge.venue + judge.venueCity stored on the judge record itself
+  //      (the firm-edited per-judge value — preferred).
+  //   2. The shared lookup table by venue name (for legacy judges that
+  //      only have the single-line venue field filled in).
+  //   3. Just the venue as line 1, blank line 2 (last resort).
+  let courtAddressTwoLine;
+  if(judgeVenue && judgeVenueCity){
+    courtAddressTwoLine = [judgeVenue, judgeVenueCity];
+  } else if(judgeVenue){
+    courtAddressTwoLine = _COURT_ADDR[judgeVenue.toUpperCase()] || [judgeVenue, ''];
+  } else {
+    courtAddressTwoLine = ['', ''];
+  }
   // Field 4 holds the address as one string with a newline between the
   // two lines; the brief generator splits/joins it via _briefSplitAddr
   // / _briefJoinAddr helpers. Both lines are upper-cased to match firm
