@@ -3233,10 +3233,15 @@ function loadParalegalEmails(){ try{ const d=localStorage.getItem('casetracker_p
 // Attorneys (the lawyers in the firm) — same shape as paralegals.
 let attorneys=[];
 let attorneyEmails={};
+// Per-attorney signature blocks used by the brief generator's Field 20.
+// Shape: { "Wilmer Gonzalez": "Wilmer Gonzalez, Esq.\nAttorney for ..." }
+let attorneySignatures={};
 function saveAttorneys(){ try{ localStorage.setItem('casetracker_attorneys', JSON.stringify(attorneys)); }catch(e){} }
 function loadAttorneys(){ try{ const d=localStorage.getItem('casetracker_attorneys'); if(d) attorneys=JSON.parse(d); }catch(e){} }
 function saveAttorneyEmails(){ try{ localStorage.setItem('casetracker_attorney_emails', JSON.stringify(attorneyEmails)); }catch(e){} }
 function loadAttorneyEmails(){ try{ const d=localStorage.getItem('casetracker_attorney_emails'); if(d) attorneyEmails=JSON.parse(d); }catch(e){} }
+function saveAttorneySignatures(){ try{ localStorage.setItem('casetracker_attorney_signatures', JSON.stringify(attorneySignatures)); }catch(e){} }
+function loadAttorneySignatures(){ try{ const d=localStorage.getItem('casetracker_attorney_signatures'); if(d) attorneySignatures=JSON.parse(d); }catch(e){} }
 let eventTypeMeta={
   'SCHEDULING ORDER': {color:'#C9823A'},
   '90-DAY DEADLINE':  {color:'#6B7FA3'},
@@ -12508,12 +12513,12 @@ function saveAllData(){
   // that wiped a month of real data). See showWelcomeGate() for the
   // modal that sets _dataInitialized after the user picks a path.
   if(!_dataInitialized){ return; }
-  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,bondPrepQuestions,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
+  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();// Auto-push events to Google Calendar when signed in as the target email
 try{ _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync(); }catch(e){}
 }catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}return true;}catch(e){return false;}}
 // One pending-render flag, used by both the debounced timer and the global
 // focusout listener: if the user is mid-edit when the timer fires, we set
 // the flag and re-try after they blur, so we never yank focus mid-type.
@@ -14005,6 +14010,15 @@ function _briefSuggestions(fieldKey){
       { label:'☒ Checked',   value:'☒' }
     ];
   }
+  if(fieldKey === 'field20'){
+    // Saved per-attorney signature blocks. The user manages these via
+    // the "💾 Save as…" link rendered next to the textarea (see
+    // _briefRenderForm — field20 gets a small action row).
+    return Object.keys(attorneySignatures||{}).sort().map(name => ({
+      label: name + ' — ' + (attorneySignatures[name]||'').split('\n')[0],
+      value: attorneySignatures[name]||''
+    }));
+  }
   return [];
 }
 
@@ -14015,6 +14029,50 @@ function _briefApplySuggestion(fieldKey, value){
   window._briefValues[fieldKey] = value;
   const inp = document.getElementById('bg-' + fieldKey);
   if(inp) inp.value = value;
+}
+
+// Save the current Field 20 textarea content as a named attorney
+// signature. Persists via localStorage + cloud sync so the entry
+// shows up on other devices too.
+function _briefSaveAttorneySignature(){
+  const ta = document.getElementById('bg-field20');
+  const text = ta ? ta.value.trim() : '';
+  if(!text){ showToast('Type a signature block first, then click Save'); return; }
+  // Default to the first non-empty line so the user often just hits OK.
+  const guess = (text.split('\n').find(l => l.trim()) || '').replace(/,?\s*Esq\.?$/i,'').trim();
+  const name = window.prompt('Save this signature as…\n\n(Pick a short name — e.g. the attorney\'s name. Saving over an existing name replaces it.)', guess);
+  if(name === null) return; // cancelled
+  const key = name.trim();
+  if(!key){ showToast('Name cannot be empty'); return; }
+  if(attorneySignatures[key] && !confirm('A signature called "'+key+'" already exists. Replace it?')) return;
+  attorneySignatures[key] = text;
+  saveAttorneySignatures();
+  if(typeof markUnsaved==='function') markUnsaved();
+  showToast('Signature "'+key+'" saved ✓');
+  _briefRenderForm();
+}
+
+// Pop a small picker that lets the user delete one of the saved
+// signatures. Skips the prompt when only one exists.
+function _briefDeleteAttorneySignature(){
+  const names = Object.keys(attorneySignatures||{});
+  if(!names.length){ showToast('Nothing to delete'); return; }
+  let target = names[0];
+  if(names.length > 1){
+    const list = names.map((n,i) => (i+1)+'. '+n).join('\n');
+    const ans = window.prompt('Which saved signature do you want to delete?\n\n'+list+'\n\nType the number (or the exact name):');
+    if(ans === null) return;
+    const idx = parseInt(ans, 10);
+    if(!isNaN(idx) && idx >= 1 && idx <= names.length) target = names[idx-1];
+    else if(names.indexOf(ans.trim()) >= 0) target = ans.trim();
+    else { showToast('No saved signature matches that'); return; }
+  }
+  if(!confirm('Delete saved signature "'+target+'"? This only removes it from the saved list; the textarea content stays as-is.')) return;
+  delete attorneySignatures[target];
+  saveAttorneySignatures();
+  if(typeof markUnsaved==='function') markUnsaved();
+  showToast('Signature "'+target+'" deleted');
+  _briefRenderForm();
 }
 
 function _briefRenderForm(){
@@ -14035,7 +14093,8 @@ function _briefRenderForm(){
       field7:  '📄 Pick a motion title…',
       field14: '👤 Pick a judge…',
       field15: '📅 Pick from case events…',
-      field18: '☑ Pick option…'
+      field18: '☑ Pick option…',
+      field20: '✍ Pick a saved attorney signature…'
     }[f.key] || 'Pick…';
     let pickerHtml = '';
     if(suggestions.length){
@@ -14049,12 +14108,27 @@ function _briefRenderForm(){
         + '</div>';
     }
     if(f.multiline){
+      // Field 20 (Attorney signature block) gets a small action row
+      // under the textarea so the user can save the current value as a
+      // named signature, or delete one of the saved entries.
+      let actions = '';
+      if(f.key === 'field20'){
+        const savedNames = Object.keys(attorneySignatures||{});
+        actions = '<div style="display:flex;align-items:center;gap:10px;margin-top:6px;font-size:11px;">'
+          + '<button type="button" onclick="_briefSaveAttorneySignature()" style="font-size:11px;font-weight:600;padding:5px 12px;border:1px solid var(--sage);border-radius:var(--radius-sm);background:var(--sage-light);color:var(--sage);cursor:pointer;font-family:inherit;">💾 Save as new signature…</button>'
+          + (savedNames.length
+              ? '<button type="button" onclick="_briefDeleteAttorneySignature()" style="font-size:11px;padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">🗑 Delete a saved one…</button>'
+              + '<span style="color:var(--ink-faint);">' + savedNames.length + ' saved</span>'
+              : '<span style="color:var(--ink-faint);">No saved signatures yet — fill in the block and click "Save as new signature".</span>')
+          + '</div>';
+      }
       return '<div style="grid-column:1/-1;">'
         + '<label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);margin-bottom:4px;">' + f.label + '</label>'
         + pickerHtml
         + '<textarea id="bg-' + f.key + '" rows="5" placeholder="' + f.hint + '" '
         + 'oninput="window._briefValues[\'' + f.key + '\']=this.value" '
         + 'style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;line-height:1.5;resize:vertical;">' + escHtml(val) + '</textarea>'
+        + actions
         + '</div>';
     }
     return '<div>'
@@ -19552,6 +19626,9 @@ function applyPayload(p){
   if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}
   if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}
   if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);
+  if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;
+  if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);
+  if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);
   if(p.venues&&Array.isArray(p.venues))venues=p.venues;
   if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);
   // Re-seed the saved-hash maps so the next save's dirty check is
@@ -19690,7 +19767,7 @@ function _mergePayloads(cloudData, localData){
   const localEpoch = localData._savedAt || 0;
   const fields = ['paralegals','eventTypes','eventTypeMeta','caseTypes','caseTypeDocLists','caseTypeStages',
                   'customColumns','colVis','callUpTypes','judges','caseIssueTypes','customChecklists',
-                  'paralegalEmails','attorneys','attorneyEmails','venues','firmInfo','bondPrepQuestions'];
+                  'paralegalEmails','attorneys','attorneyEmails','attorneySignatures','venues','firmInfo','bondPrepQuestions'];
   fields.forEach(f => {
     const lv = localData[f];
     const cv = cloudData[f];
@@ -19739,7 +19816,7 @@ function _syncToFirestore(savedAt){
       records,paralegals,eventTypes,eventTypeMeta,
       caseTypes,caseTypeDocLists,caseTypeStages,
       customColumns,colVis,caseMeta:caseMetaClean,callUpTypes,judges,caseIssueTypes,
-      customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,firmInfo,bondPrepQuestions,
+      customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,
       _savedAt:savedAt||Date.now(),_deviceId:_deviceId
     }));
     // Step 3: read-merge-write inside a Firestore transaction. The SDK
@@ -19751,7 +19828,7 @@ function _syncToFirestore(savedAt){
       'records','paralegals','eventTypes','eventTypeMeta',
       'caseTypes','caseTypeDocLists','caseTypeStages',
       'customColumns','colVis','caseMeta','callUpTypes','judges','caseIssueTypes',
-      'customChecklists','paralegalEmails','attorneys','attorneyEmails','venues','firmInfo','bondPrepQuestions',
+      'customChecklists','paralegalEmails','attorneys','attorneyEmails','attorneySignatures','venues','firmInfo','bondPrepQuestions',
       '_savedAt','_deviceId'
     ];
     function _buildWritable(merged){
@@ -20127,6 +20204,7 @@ loadCustomChecklists();
 loadLastBackupLabel();
 loadAttorneys();
 loadAttorneyEmails();
+loadAttorneySignatures();
 // Kick off Gmail auto-connect at boot so the silent token refresh runs
 // before the user even clicks the Inbox tab. gmailInit is no-op if
 // already initialized; it safely defers if the GIS script hasn't loaded
@@ -20274,7 +20352,7 @@ db.collection('wilmer').doc('data').onSnapshot(
           customColumns, colVis,
           caseMeta: JSON.parse(JSON.stringify(caseMeta||{})),
           callUpTypes, judges, caseIssueTypes, customChecklists,
-          paralegalEmails, attorneys, attorneyEmails, venues, firmInfo, bondPrepQuestions,
+          paralegalEmails, attorneys, attorneyEmails, attorneySignatures, venues, firmInfo, bondPrepQuestions,
           _savedAt: _lastLocalSave || localEpoch || 0,
           _deviceId
         };
