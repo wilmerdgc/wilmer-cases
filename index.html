@@ -13781,13 +13781,33 @@ function _briefValuesFromCase(clid, chosen){
     .map(c => (c.anum||'').replace(/^A[- ]?/i,''))
     .filter(Boolean)
     .join('; ');
-  // Judge — prefer IC, fall back to FC.
+  // Judge — prefer IC, fall back to FC. Also grab the judge's venue so
+  // Field4 (Court address) lands on the right court automatically.
   let judgeName = '';
+  let judgeVenue = '';
   const jId = meta.judgeICId || meta.judgeFCId || meta.judgeId;
   if(jId && Array.isArray(judges)){
     const j = judges.find(x => x.id===jId);
-    if(j) judgeName = j.name || '';
+    if(j){
+      judgeName  = j.name  || '';
+      judgeVenue = j.venue || '';
+    }
   }
+  // Map common immigration-court venues to their full court addresses so
+  // the brief shows the real street/city/state/zip instead of the short
+  // venue name the judge record carries. Any unmapped venue falls back to
+  // the venue string verbatim — the user can edit it inline if needed.
+  const _COURT_ADDR = {
+    '26 FEDERAL PLAZA':       '26 Federal Plaza, New York, NY 10278',
+    '290 BROADWAY':           '290 Broadway, 15th Floor, New York, NY 10007',
+    '201 VARICK ST':          '201 Varick Street, New York, NY 10014',
+    'KINGS FAMILY COURT':     '330 Jay Street, Brooklyn, NY 11201',
+    'QUEENS FAMILY COURT':    '151-20 Jamaica Avenue, Jamaica, NY 11432',
+    'BRONX FAMILY COURT':     '900 Sheridan Avenue, Bronx, NY 10451',
+    'NASSAU FAMILY COURT':    '1200 Old Country Road, Westbury, NY 11590',
+    'SUFFOLK FAMILY COURT':   '400 Carleton Avenue, Central Islip, NY 11722'
+  };
+  const courtAddress = judgeVenue ? (_COURT_ADDR[judgeVenue.toUpperCase()] || judgeVenue) : '';
   // Next upcoming hearing (MASTER / INDIVIDUAL / MERITS) for this case.
   const upcoming = (records||[])
     .filter(r => (r.clid||r.client)===clid && r.date && !r.finishedStatus && !r.deletedStatus)
@@ -13822,7 +13842,7 @@ function _briefValuesFromCase(clid, chosen){
   return {
     field2: 'NON-DETAINED',
     field3: 'IMMIGRATION COURT',
-    field4: '',
+    field4: courtAddress,
     field5: respondent,
     field6: anumString,
     field7: "RESPONDENT'S MOTION FOR VIDEO APPEARANCE",
