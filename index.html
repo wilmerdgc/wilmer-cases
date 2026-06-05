@@ -13708,7 +13708,6 @@ const _BRIEF_FIELDS = [
   { key:'field14', label:'Judge',                      hint:'Last, First' },
   { key:'field15', label:'Hearing date & time',        hint:'e.g. April 1, 2026, at 8:30 AM' },
   { key:'field16', label:'Submission date & place',    hint:'e.g. 03/27/2026, Queens NY' },
-  { key:'field17', label:'Witnesses / other',          hint:'N/A if none' },
   { key:'field18', label:'Service',                    hint:'How the motion is served — ECAS, ICE eFiling, Personal, or Mail' },
   { key:'field20', label:'Attorney signature block',   hint:'Lines separated by Enter — name, role, EOIR #, firm, address, phone, email', multiline:true }
 ];
@@ -13892,19 +13891,39 @@ function _briefValuesFromCase(clid, chosen){
   const todayD = new Date();
   const submission = (todayD.getMonth()+1)+'/'+todayD.getDate()+'/'+todayD.getFullYear()
                   + (meta.clientCity||meta.clientState ? ', ' + [meta.clientCity, meta.clientState].filter(Boolean).join(' ') : '');
-  // Attorney block — built from firmInfo.
+  // Attorney block. Priority order:
+  //   1. A saved attorney signature whose name matches the firm owner
+  //      (firmInfo first + last) — so "Wilmer Gonzalez" lands by
+  //      default once the user saves a signature under that name.
+  //   2. The first / only saved signature, if there's exactly one in
+  //      the library — covers single-attorney firms with no name
+  //      match.
+  //   3. A block built on-the-fly from firmInfo as the last resort.
   const fi = (typeof firmInfo === 'object' && firmInfo) || {};
-  const atyName = [fi.firstName, fi.middleName, fi.lastName].filter(Boolean).join(' ') + (fi.barNumber?', Esq.':'');
-  const atyLines = [
-    atyName || '',
-    'Attorney for Respondent',
-    fi.barNumber ? ('EOIR # ' + fi.barNumber) : '',
-    fi.firmName || '',
-    [fi.street, fi.apt].filter(Boolean).join(' Ste '),
-    [fi.city, fi.state, fi.zip].filter(Boolean).join(', '),
-    fi.phone || fi.mobile || '',
-    fi.email || ''
-  ].filter(Boolean);
+  const _firmFullName = [fi.firstName, fi.lastName].filter(Boolean).join(' ').trim();
+  let signatureBlock = '';
+  if(typeof attorneySignatures === 'object' && attorneySignatures){
+    if(_firmFullName && attorneySignatures[_firmFullName]){
+      signatureBlock = attorneySignatures[_firmFullName];
+    } else {
+      const savedNames = Object.keys(attorneySignatures);
+      if(savedNames.length === 1) signatureBlock = attorneySignatures[savedNames[0]];
+    }
+  }
+  if(!signatureBlock){
+    const atyName = [fi.firstName, fi.middleName, fi.lastName].filter(Boolean).join(' ') + (fi.barNumber?', Esq.':'');
+    const atyLines = [
+      atyName || '',
+      'Attorney for Respondent',
+      fi.barNumber ? ('EOIR # ' + fi.barNumber) : '',
+      fi.firmName || '',
+      [fi.street, fi.apt].filter(Boolean).join(' Ste '),
+      [fi.city, fi.state, fi.zip].filter(Boolean).join(', '),
+      fi.phone || fi.mobile || '',
+      fi.email || ''
+    ].filter(Boolean);
+    signatureBlock = atyLines.join('\n');
+  }
   return {
     field2: 'NON-DETAINED',
     field3: 'IMMIGRATION COURT',
@@ -13915,14 +13934,13 @@ function _briefValuesFromCase(clid, chosen){
     field14: judgeName,
     field15: hearing,
     field16: submission,
-    field17: 'N/A',
     // Service default: ECAS for ECAS cases, ICE eFiling System for paper
     // files, ECAS otherwise (most common). The user can change it in the
     // form before generating.
     field18: (meta.filingSystem === 'paper') ? 'ICE eFiling System'
            : (meta.filingSystem === 'ECAS' || !meta.filingSystem) ? 'ECAS'
            : 'ECAS',
-    field20: atyLines.join('\n')
+    field20: signatureBlock
   };
 }
 
