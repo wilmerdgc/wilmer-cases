@@ -13891,15 +13891,100 @@ function renderBriefGenerator(){
   _briefRenderForm();
 }
 
-// Return suggestions for a field based on the currently picked case.
-// Field15 (Hearing date & time) gets one suggestion per upcoming hearing
-// on the case so the user can pick "MASTER — April 15, 2026 at 9:00 AM"
-// from a dropdown instead of typing it by hand. Other fields can be
-// added here later (e.g. Field4 court address from the venue list).
+// Return suggestions for a field — case-derived where it makes sense
+// (hearing date pulls from the case's events; judge / court address
+// pull from the global judges + venues lists). Every field that has a
+// fixed set of likely values also offers them so the user picks
+// instead of typing.
 function _briefSuggestions(fieldKey){
   const clid = window._briefClid;
-  if(!clid) return [];
+  // Shared address book — same map used to fill Field4 from the judge's
+  // venue. Falls back to the venue name verbatim if the venue isn't in
+  // the table.
+  const COURT_ADDR = {
+    '26 FEDERAL PLAZA':       '26 Federal Plaza, New York, NY 10278',
+    '290 BROADWAY':           '290 Broadway, 15th Floor, New York, NY 10007',
+    '201 VARICK ST':          '201 Varick Street, New York, NY 10014',
+    'KINGS FAMILY COURT':     '330 Jay Street, Brooklyn, NY 11201',
+    'QUEENS FAMILY COURT':    '151-20 Jamaica Avenue, Jamaica, NY 11432',
+    'BRONX FAMILY COURT':     '900 Sheridan Avenue, Bronx, NY 10451',
+    'NASSAU FAMILY COURT':    '1200 Old Country Road, Westbury, NY 11590',
+    'SUFFOLK FAMILY COURT':   '400 Carleton Avenue, Central Islip, NY 11722'
+  };
+
+  if(fieldKey === 'field2'){
+    return [
+      { label:'NON-DETAINED', value:'NON-DETAINED' },
+      { label:'DETAINED',     value:'DETAINED' }
+    ];
+  }
+  if(fieldKey === 'field3'){
+    return [
+      { label:'IMMIGRATION COURT', value:'IMMIGRATION COURT' },
+      { label:'FAMILY COURT',      value:'FAMILY COURT' },
+      { label:'CRIMINAL COURT',    value:'CRIMINAL COURT' },
+      { label:'SUPREME COURT',     value:'SUPREME COURT' }
+    ];
+  }
+  if(fieldKey === 'field4'){
+    // Each saved venue, mapped to its full address if known.
+    const list = Array.isArray(venues) ? venues : [];
+    const seen = new Set();
+    const out = [];
+    list.forEach(v => {
+      const key = String(v||'').trim();
+      if(!key || seen.has(key)) return;
+      seen.add(key);
+      const full = COURT_ADDR[key.toUpperCase()] || key;
+      out.push({ label: full === key ? key : (key + ' — ' + full), value: full });
+    });
+    return out;
+  }
+  if(fieldKey === 'field7'){
+    // Most-used motion titles the firm files. The user can still type a
+    // custom one — these just cover the common cases in one click.
+    return [
+      { label:"RESPONDENT'S MOTION FOR VIDEO APPEARANCE",      value:"RESPONDENT'S MOTION FOR VIDEO APPEARANCE" },
+      { label:"RESPONDENT'S MOTION FOR CONTINUANCE",           value:"RESPONDENT'S MOTION FOR CONTINUANCE" },
+      { label:"RESPONDENT'S MOTION TO REOPEN",                 value:"RESPONDENT'S MOTION TO REOPEN" },
+      { label:"RESPONDENT'S MOTION TO TERMINATE",              value:"RESPONDENT'S MOTION TO TERMINATE" },
+      { label:"RESPONDENT'S MOTION TO PRETERMIT",              value:"RESPONDENT'S MOTION TO PRETERMIT" },
+      { label:"RESPONDENT'S MOTION TO CHANGE VENUE",           value:"RESPONDENT'S MOTION TO CHANGE VENUE" },
+      { label:"RESPONDENT'S MOTION TO SUPPRESS",               value:"RESPONDENT'S MOTION TO SUPPRESS" },
+      { label:"RESPONDENT'S MOTION TO DISMISS",                value:"RESPONDENT'S MOTION TO DISMISS" }
+    ];
+  }
+  if(fieldKey === 'field14'){
+    // Every saved judge, sorted with the case's currently-linked court
+    // venue at the top so the most likely matches come first. If no
+    // case is picked, just alphabetize.
+    const list = Array.isArray(judges) ? judges.slice() : [];
+    let homeVenue = '';
+    if(clid){
+      const meta = caseMeta && caseMeta[clid] || {};
+      const jId = meta.judgeICId || meta.judgeFCId || meta.judgeId;
+      if(jId){
+        const j = list.find(x => x.id===jId);
+        if(j) homeVenue = (j.venue||'').toUpperCase();
+      }
+    }
+    list.sort((a, b) => {
+      const av = (a.venue||'').toUpperCase();
+      const bv = (b.venue||'').toUpperCase();
+      if(homeVenue){
+        const aHome = av === homeVenue;
+        const bHome = bv === homeVenue;
+        if(aHome !== bHome) return aHome ? -1 : 1;
+      }
+      return (a.name||'').localeCompare(b.name||'');
+    });
+    return list.map(j => ({
+      label: (j.name||'(unnamed)') + (j.venue ? ' — ' + j.venue : ''),
+      value: j.name||''
+    }));
+  }
   if(fieldKey === 'field15'){
+    if(!clid) return [];
     const list = (records||[])
       .filter(r => (r.clid||r.client)===clid && r.date && !r.finishedStatus && !r.deletedStatus)
       .filter(r => /MASTER|INDIVIDUAL|MERITS|BOND|HEARING|TRIAL/i.test(r.event||''))
@@ -13913,6 +13998,12 @@ function _briefSuggestions(fieldKey){
         value: dateStr + timeStr
       };
     });
+  }
+  if(fieldKey === 'field18'){
+    return [
+      { label:'☐ Unchecked', value:'☐' },
+      { label:'☒ Checked',   value:'☒' }
+    ];
   }
   return [];
 }
@@ -13932,16 +14023,26 @@ function _briefRenderForm(){
   const v = window._briefValues || {};
   wrap.innerHTML = _BRIEF_FIELDS.map(f => {
     const val = v[f.key] != null ? v[f.key] : '';
-    // Build the suggestion dropdown if this field has any case-derived
-    // options. The picker is hidden when there are none so the simple
-    // fields stay clean.
+    // Build the suggestion dropdown if this field has options. The
+    // picker is hidden when there are none so the simple fields stay
+    // clean. The placeholder text is tailored per-field so the dropdown
+    // reads naturally.
     const suggestions = _briefSuggestions(f.key);
+    const _pickerLabel = {
+      field2:  '🔒 Pick status…',
+      field3:  '⚖ Pick court type…',
+      field4:  '📍 Pick a venue…',
+      field7:  '📄 Pick a motion title…',
+      field14: '👤 Pick a judge…',
+      field15: '📅 Pick from case events…',
+      field18: '☑ Pick option…'
+    }[f.key] || 'Pick…';
     let pickerHtml = '';
     if(suggestions.length){
-      pickerHtml = '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:11px;">'
+      pickerHtml = '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:11px;flex-wrap:wrap;">'
         + '<select id="bg-pick-' + f.key + '" onchange="if(this.value){_briefApplySuggestion(\'' + f.key + '\', this.value);this.selectedIndex=0;}" '
         + 'style="font-size:11px;padding:4px 8px;border:1px solid #B8C4DB;border-radius:6px;background:#fff;color:#4F6A91;font-family:inherit;cursor:pointer;max-width:100%;">'
-        + '<option value="">📅 Pick from case events…</option>'
+        + '<option value="">' + _pickerLabel + '</option>'
         + suggestions.map(s => '<option value="' + escHtml(s.value).replace(/"/g,'&quot;') + '">' + escHtml(s.label) + '</option>').join('')
         + '</select>'
         + '<span style="color:var(--ink-faint);">or type below</span>'
