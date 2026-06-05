@@ -13702,8 +13702,18 @@ const _BRIEF_FIELDS = [
   { key:'field15', label:'Hearing date & time',        hint:'e.g. April 1, 2026, at 8:30 AM' },
   { key:'field16', label:'Submission date & place',    hint:'e.g. 03/27/2026, Queens NY' },
   { key:'field17', label:'Witnesses / other',          hint:'N/A if none' },
-  { key:'field18', label:'Checkbox',                   hint:'☐ or ☒' },
+  { key:'field18', label:'Service',                    hint:'How the motion is served — ECAS, ICE eFiling, Personal, or Mail' },
   { key:'field20', label:'Attorney signature block',   hint:'Lines separated by Enter — name, role, EOIR #, firm, address, phone, email', multiline:true }
+];
+
+// Service options for the brief's Field 18. Used both for the
+// dropdown choices and to map a case's filing system to the right
+// default.
+const _BRIEF_SERVICE_OPTIONS = [
+  'ECAS',
+  'ICE eFiling System',
+  'Personal Service',
+  'Mail'
 ];
 
 function _escXml(s){
@@ -13855,7 +13865,12 @@ function _briefValuesFromCase(clid, chosen){
     field15: hearing,
     field16: submission,
     field17: 'N/A',
-    field18: '☐',
+    // Service default: ECAS for ECAS cases, ICE eFiling System for paper
+    // files, ECAS otherwise (most common). The user can change it in the
+    // form before generating.
+    field18: (meta.filingSystem === 'paper') ? 'ICE eFiling System'
+           : (meta.filingSystem === 'ECAS' || !meta.filingSystem) ? 'ECAS'
+           : 'ECAS',
     field20: atyLines.join('\n')
   };
 }
@@ -13878,6 +13893,9 @@ function renderBriefGenerator(){
       <div id="bg-case-drop" style="display:none;position:absolute;top:calc(100%+3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:200;max-height:240px;overflow-y:auto;"></div>
       <div id="bg-case-selected" style="font-size:11px;color:var(--sage);font-weight:600;margin-top:6px;min-height:14px;"></div>
     </div>
+
+    <!-- Paper-file warning (only appears when the chosen case is flagged Paper File) -->
+    <div id="bg-paper-warn" style="display:none;margin-bottom:14px;padding:10px 14px;background:#FBF1F1;border:1px solid #E6BDBD;border-radius:8px;color:#7A3838;font-size:12px;line-height:1.5;"></div>
 
     <!-- Multi-respondent picker (only appears when a case has 2+ clients) -->
     <div id="bg-respondents-panel" style="display:none;margin-bottom:18px;padding:12px 14px;background:#FAF0E6;border:1px solid #E8C49A;border-radius:8px;"></div>
@@ -14005,10 +14023,10 @@ function _briefSuggestions(fieldKey){
     });
   }
   if(fieldKey === 'field18'){
-    return [
-      { label:'☐ Unchecked', value:'☐' },
-      { label:'☒ Checked',   value:'☒' }
-    ];
+    // Four service options. The case's filingSystem flag drives which
+    // one we default to in _briefValuesFromCase, but the user can pick
+    // any of these from the dropdown or type a custom value.
+    return _BRIEF_SERVICE_OPTIONS.map(o => ({ label: o, value: o }));
   }
   if(fieldKey === 'field20'){
     // Saved per-attorney signature blocks. The user manages these via
@@ -14093,7 +14111,7 @@ function _briefRenderForm(){
       field7:  '📄 Pick a motion title…',
       field14: '👤 Pick a judge…',
       field15: '📅 Pick from case events…',
-      field18: '☑ Pick option…',
+      field18: '📨 Pick service…',
       field20: '✍ Pick a saved attorney signature…'
     }[f.key] || 'Pick…';
     let pickerHtml = '';
@@ -14188,6 +14206,20 @@ function _briefPickCase(clid, displayName){
   if(sel) sel.textContent = '✓ ' + (displayName || clid) + ' — fields pre-filled below';
   const search = document.getElementById('bg-case-search');
   if(search) search.value = displayName || clid;
+  // Paper-file alert: prominent red-ish banner so the user notices that
+  // the case isn't on ECAS and the Service field should land on ICE
+  // eFiling (which it already does — this just makes the choice
+  // explicit so they can override if needed).
+  const paperBanner = document.getElementById('bg-paper-warn');
+  if(paperBanner){
+    if(meta.filingSystem === 'paper'){
+      paperBanner.innerHTML = '⚠ <b>This case is marked as a Paper File.</b> Service defaults to <b>ICE eFiling System</b>. Change it in the Service field below if you need a different method.';
+      paperBanner.style.display = '';
+    } else {
+      paperBanner.style.display = 'none';
+      paperBanner.textContent = '';
+    }
+  }
   _briefRenderRespondentsPanel();
   _briefRenderForm();
 }
@@ -16156,6 +16188,32 @@ function openCaseDetail(clid){
       addrSection.appendChild(addrGrid);L1.appendChild(addrSection);
     }
 
+    // Filing system marker — controls the Brief Generator's Service
+    // default (ECAS → ECAS, paper → ICE eFiling System) and powers the
+    // "⚠ Paper File" banner that appears when the case is opened in the
+    // brief generator.
+    const _filingNow = (caseMeta[clid] && caseMeta[clid].filingSystem) || '';
+    if(isEditing){
+      const fsItem=document.createElement('div');fsItem.className='case-info-item';fsItem.style.cssText='background:#fff;border:1px solid #DDD5CA;border-radius:8px;padding:6px 9px;';
+      const fsLbl=document.createElement('div');fsLbl.className='case-info-label';fsLbl.textContent='Filing system';fsItem.appendChild(fsLbl);
+      const fsSel=document.createElement('select');
+      fsSel.style.cssText='width:100%;font-size:13px;font-weight:500;color:#2C2620;border:none;outline:none;background:transparent;padding:0;font-family:inherit;cursor:pointer;';
+      [['','—'],['ECAS','ECAS'],['paper','Paper File']].forEach(([v,lbl])=>{
+        const o=document.createElement('option');o.value=v;o.textContent=lbl;if(v===_filingNow)o.selected=true;fsSel.appendChild(o);
+      });
+      fsSel.onchange=()=>{ if(!caseMeta[clid])caseMeta[clid]={}; caseMeta[clid].filingSystem=fsSel.value; markUnsaved(); };
+      fsItem.appendChild(fsSel);
+      L1.appendChild(fsItem);
+    } else if(_filingNow){
+      const fsItem=document.createElement('div');fsItem.className='case-info-item';
+      const fsLbl=document.createElement('div');fsLbl.className='case-info-label';fsLbl.textContent='Filing system';fsItem.appendChild(fsLbl);
+      const fsV=document.createElement('div');fsV.className='case-info-value';
+      const isPaper = _filingNow === 'paper';
+      fsV.innerHTML = isPaper
+        ? '<span style="color:#B85C5C;font-weight:600;">⚠ Paper File</span>'
+        : '<span style="color:#6B7FA3;font-weight:600;">ECAS</span>';
+      fsItem.appendChild(fsV);L1.appendChild(fsItem);
+    }
     // Consolidated
     if(isEditing){
       const consItem=document.createElement('div');consItem.className='case-info-item';consItem.style.cssText='background:#fff;border:1px solid #DDD5CA;';
