@@ -13716,6 +13716,36 @@ const _BRIEF_SERVICE_OPTIONS = [
   'Mail'
 ];
 
+// Two-line court addresses used by Field 4. Keys are the same venue
+// names judge records carry (uppercased for lookup). Each value is a
+// [streetLine, cityStateZipLine] pair, ALL UPPERCASE because the firm
+// types court addresses that way on every motion.
+function _briefCourtAddressTable(){
+  return {
+    '26 FEDERAL PLAZA':       ['26 FEDERAL PLAZA',          'NEW YORK, NY 10278'],
+    '290 BROADWAY':           ['290 BROADWAY, 15TH FLOOR',  'NEW YORK, NY 10007'],
+    '201 VARICK ST':          ['201 VARICK STREET',         'NEW YORK, NY 10014'],
+    'KINGS FAMILY COURT':     ['330 JAY STREET',            'BROOKLYN, NY 11201'],
+    'QUEENS FAMILY COURT':    ['151-20 JAMAICA AVENUE',     'JAMAICA, NY 11432'],
+    'BRONX FAMILY COURT':     ['900 SHERIDAN AVENUE',       'BRONX, NY 10451'],
+    'NASSAU FAMILY COURT':    ['1200 OLD COUNTRY ROAD',     'WESTBURY, NY 11590'],
+    'SUFFOLK FAMILY COURT':   ['400 CARLETON AVENUE',       'CENTRAL ISLIP, NY 11722']
+  };
+}
+// Field-4 helpers: split / join the two-line court address into a
+// single newline-separated string. The brief generator stores it as
+// one string in _briefValues.field4 so the existing per-field code
+// keeps working; the UI just renders two inputs and joins them.
+function _briefSplitAddr(s){
+  const parts = String(s||'').split('\n');
+  return [(parts[0]||'').toUpperCase(), (parts[1]||'').toUpperCase()];
+}
+function _briefJoinAddr(l1, l2){
+  const a = String(l1||'').toUpperCase();
+  const b = String(l2||'').toUpperCase();
+  return (a && b) ? (a + '\n' + b) : (a || b);
+}
+
 function _escXml(s){
   return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
 }
@@ -13808,21 +13838,22 @@ function _briefValuesFromCase(clid, chosen){
       judgeVenue = j.venue || '';
     }
   }
-  // Map common immigration-court venues to their full court addresses so
-  // the brief shows the real street/city/state/zip instead of the short
-  // venue name the judge record carries. Any unmapped venue falls back to
-  // the venue string verbatim — the user can edit it inline if needed.
-  const _COURT_ADDR = {
-    '26 FEDERAL PLAZA':       '26 Federal Plaza, New York, NY 10278',
-    '290 BROADWAY':           '290 Broadway, 15th Floor, New York, NY 10007',
-    '201 VARICK ST':          '201 Varick Street, New York, NY 10014',
-    'KINGS FAMILY COURT':     '330 Jay Street, Brooklyn, NY 11201',
-    'QUEENS FAMILY COURT':    '151-20 Jamaica Avenue, Jamaica, NY 11432',
-    'BRONX FAMILY COURT':     '900 Sheridan Avenue, Bronx, NY 10451',
-    'NASSAU FAMILY COURT':    '1200 Old Country Road, Westbury, NY 11590',
-    'SUFFOLK FAMILY COURT':   '400 Carleton Avenue, Central Islip, NY 11722'
-  };
-  const courtAddress = judgeVenue ? (_COURT_ADDR[judgeVenue.toUpperCase()] || judgeVenue) : '';
+  // Map common venues to the two-line court address the firm uses on
+  // motions: line 1 = street + floor/room, line 2 = city, state ZIP.
+  // Stored as an array so the brief generator can lay them out across
+  // two paragraphs (and so the auto-uppercase rule below applies to
+  // both lines independently). Unmapped venues fall back to the venue
+  // string verbatim as line 1 with an empty line 2 — the user can fill
+  // in the rest manually.
+  const _COURT_ADDR = _briefCourtAddressTable();
+  const courtAddressTwoLine = judgeVenue
+    ? (_COURT_ADDR[judgeVenue.toUpperCase()] || [judgeVenue, ''])
+    : ['', ''];
+  // Field 4 holds the address as one string with a newline between the
+  // two lines; the brief generator splits/joins it via _briefSplitAddr
+  // / _briefJoinAddr helpers. Both lines are upper-cased to match firm
+  // house style.
+  const courtAddress = _briefJoinAddr(courtAddressTwoLine[0], courtAddressTwoLine[1]);
   // Next upcoming hearing (MASTER / INDIVIDUAL / MERITS) for this case.
   const upcoming = (records||[])
     .filter(r => (r.clid||r.client)===clid && r.date && !r.finishedStatus && !r.deletedStatus)
@@ -13921,19 +13952,11 @@ function renderBriefGenerator(){
 // instead of typing.
 function _briefSuggestions(fieldKey){
   const clid = window._briefClid;
-  // Shared address book — same map used to fill Field4 from the judge's
-  // venue. Falls back to the venue name verbatim if the venue isn't in
-  // the table.
-  const COURT_ADDR = {
-    '26 FEDERAL PLAZA':       '26 Federal Plaza, New York, NY 10278',
-    '290 BROADWAY':           '290 Broadway, 15th Floor, New York, NY 10007',
-    '201 VARICK ST':          '201 Varick Street, New York, NY 10014',
-    'KINGS FAMILY COURT':     '330 Jay Street, Brooklyn, NY 11201',
-    'QUEENS FAMILY COURT':    '151-20 Jamaica Avenue, Jamaica, NY 11432',
-    'BRONX FAMILY COURT':     '900 Sheridan Avenue, Bronx, NY 10451',
-    'NASSAU FAMILY COURT':    '1200 Old Country Road, Westbury, NY 11590',
-    'SUFFOLK FAMILY COURT':   '400 Carleton Avenue, Central Islip, NY 11722'
-  };
+  // Shared two-line address book — same table used to fill Field4 from
+  // the judge's venue (street + floor/room on line 1, city/state/zip on
+  // line 2, ALL CAPS). Unmapped venues fall back to the venue name as
+  // line 1; the user can fill in line 2 manually.
+  const COURT_ADDR = _briefCourtAddressTable();
 
   if(fieldKey === 'field2'){
     return [
@@ -13950,7 +13973,9 @@ function _briefSuggestions(fieldKey){
     ];
   }
   if(fieldKey === 'field4'){
-    // Each saved venue, mapped to its full address if known.
+    // Each saved venue, mapped to its two-line address if known. The
+    // dropdown value is the newline-joined "LINE1\nLINE2" string; the
+    // UI renders that as two separate inputs below.
     const list = Array.isArray(venues) ? venues : [];
     const seen = new Set();
     const out = [];
@@ -13958,8 +13983,13 @@ function _briefSuggestions(fieldKey){
       const key = String(v||'').trim();
       if(!key || seen.has(key)) return;
       seen.add(key);
-      const full = COURT_ADDR[key.toUpperCase()] || key;
-      out.push({ label: full === key ? key : (key + ' — ' + full), value: full });
+      const pair = COURT_ADDR[key.toUpperCase()];
+      if(pair){
+        const joined = _briefJoinAddr(pair[0], pair[1]);
+        out.push({ label: key.toUpperCase() + ' — ' + pair[0] + ' / ' + pair[1], value: joined });
+      } else {
+        out.push({ label: key.toUpperCase(), value: key.toUpperCase() });
+      }
     });
     return out;
   }
@@ -14045,6 +14075,17 @@ function _briefSuggestions(fieldKey){
 function _briefApplySuggestion(fieldKey, value){
   if(!window._briefValues) window._briefValues = {};
   window._briefValues[fieldKey] = value;
+  // Field 4 renders as two stacked uppercase inputs; split the joined
+  // "L1\nL2" value back into the two inputs so the picker selection
+  // appears in both rows.
+  if(fieldKey === 'field4'){
+    const [l1, l2] = _briefSplitAddr(value);
+    const i1 = document.getElementById('bg-field4-l1');
+    const i2 = document.getElementById('bg-field4-l2');
+    if(i1) i1.value = l1;
+    if(i2) i2.value = l2;
+    return;
+  }
   const inp = document.getElementById('bg-' + fieldKey);
   if(inp) inp.value = value;
 }
@@ -14147,6 +14188,25 @@ function _briefRenderForm(){
         + 'oninput="window._briefValues[\'' + f.key + '\']=this.value" '
         + 'style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;line-height:1.5;resize:vertical;">' + escHtml(val) + '</textarea>'
         + actions
+        + '</div>';
+    }
+    // Field 4 — Court address — renders as TWO uppercase-locked inputs
+    // (street + floor/room on line 1, city/state/ZIP on line 2). They
+    // are joined into a single newline-separated value stored on
+    // _briefValues.field4 so the generator code stays unchanged.
+    if(f.key === 'field4'){
+      const [addrL1, addrL2] = _briefSplitAddr(val);
+      return '<div style="grid-column:1/-1;">'
+        + '<label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);margin-bottom:4px;">' + f.label + ' <span style="color:var(--ink-faint);font-weight:500;">(both lines auto-uppercased)</span></label>'
+        + pickerHtml
+        + '<div style="display:flex;flex-direction:column;gap:6px;">'
+        + '<input id="bg-field4-l1" type="text" value="' + escHtml(addrL1).replace(/"/g,'&quot;') + '" placeholder="STREET + FLOOR / ROOM" '
+        + 'oninput="this.value=this.value.toUpperCase();window._briefValues[\'field4\']=_briefJoinAddr(this.value,(document.getElementById(\'bg-field4-l2\')||{}).value||\'\')" '
+        + 'style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;text-transform:uppercase;letter-spacing:.02em;"/>'
+        + '<input id="bg-field4-l2" type="text" value="' + escHtml(addrL2).replace(/"/g,'&quot;') + '" placeholder="CITY, STATE  ZIP" '
+        + 'oninput="this.value=this.value.toUpperCase();window._briefValues[\'field4\']=_briefJoinAddr((document.getElementById(\'bg-field4-l1\')||{}).value||\'\',this.value)" '
+        + 'style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;text-transform:uppercase;letter-spacing:.02em;"/>'
+        + '</div>'
         + '</div>';
     }
     return '<div>'
@@ -14302,6 +14362,12 @@ async function generateMotionWebex(){
   // Pull the latest values from the form (in case the user edited without
   // triggering oninput on the last field, e.g. paste then click).
   _BRIEF_FIELDS.forEach(f => {
+    if(f.key === 'field4'){
+      const l1 = document.getElementById('bg-field4-l1');
+      const l2 = document.getElementById('bg-field4-l2');
+      if(l1 || l2) window._briefValues.field4 = _briefJoinAddr((l1||{}).value, (l2||{}).value);
+      return;
+    }
     const el = document.getElementById('bg-' + f.key);
     if(el) window._briefValues[f.key] = el.value;
   });
@@ -14339,11 +14405,26 @@ async function generateMotionWebex(){
         'g'
       );
       docXml = docXml.replace(sdtRe, (match, before, content, after) => {
+        // Count the text runs first so we know whether the value's
+        // newlines fit into separate runs (existing multi-paragraph
+        // SDTs like the attorney block) or have to be inlined as soft
+        // <w:br/> breaks within the last run (single-paragraph SDTs
+        // like the court address).
+        const totalRuns = (content.match(/<w:t[^>]*>[^<]*<\/w:t>/g) || []).length;
         let i = 0;
         const newContent = content.replace(/<w:t[^>]*>[^<]*<\/w:t>/g, () => {
-          const text = i < lines.length ? lines[i] : '';
+          let text;
+          if(i === totalRuns - 1 && lines.length > totalRuns){
+            // Last run + extra lines: pack the remainder into this run
+            // separated by <w:br/> so Word renders soft line breaks
+            // within the same paragraph.
+            const tail = lines.slice(i).map(l => _escXml(l));
+            text = tail.join('</w:t><w:br/><w:t xml:space="preserve">');
+          } else {
+            text = _escXml(i < lines.length ? lines[i] : '');
+          }
           i++;
-          return '<w:t xml:space="preserve">' + _escXml(text) + '</w:t>';
+          return '<w:t xml:space="preserve">' + text + '</w:t>';
         });
         return before + newContent + after;
       });
