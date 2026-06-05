@@ -14431,11 +14431,65 @@ async function generateMotionWebex(){
     });
     zip.file('word/document.xml', docXml);
     const outBlob = await zip.generateAsync({ type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-    // Filename: Motion Webex - <Respondent>.docx
-    const safeName = String(values.field5||'Brief').replace(/[\\/:*?"<>|]/g,'').trim() || 'Brief';
+    // Filename convention: "<Cl ID> <LASTNAME> <First name> <Motion title>.docx"
+    // — no commas / hyphens / apostrophes / dashes anywhere in the
+    // filename, only spaces between segments AND within segments, so
+    // the user can scan a folder of generated motions at a glance.
+    //
+    // Cleaning rules:
+    //   • Apostrophes ('  ’) and quotes  →  removed (so RESPONDENT'S
+    //     becomes RESPONDENTS, not "RESPONDENT S").
+    //   • Commas, hyphens, en/em dashes, slashes, colons, asterisks,
+    //     question marks, pipes, < >, double-quotes  →  replaced by a
+    //     space (so GARCIA-LOPEZ becomes GARCIA LOPEZ).
+    //   • Runs of whitespace collapse to a single space.
+    function clean(s){
+      return String(s||'')
+        .replace(/['’"”“]/g, '')
+        .replace(/[,\-–—\\/:*?<>|]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+    const fnameSegs = [];
+    // 1. Client ID — pulled from the picked case's clid (most reliable
+    //    source). Falls back to nothing if no case was picked.
+    if(window._briefClid) fnameSegs.push(clean(window._briefClid));
+    // 2. LASTNAME, then First name — taken from caseMeta's structured
+    //    fields when available, otherwise parsed out of the Field 5
+    //    respondent (which is formatted as "LASTNAME, First Middle" for
+    //    the lead). Riders/additional clients listed in Field 5 with
+    //    "; " separators get dropped — the filename uses just the lead.
+    let last = '', first = '';
+    if(window._briefClid && caseMeta[window._briefClid]){
+      const m = caseMeta[window._briefClid];
+      last  = (m.clientLastName||'').trim();
+      first = (m.clientFirstName||'').trim();
+    }
+    if(!last && !first){
+      const leadPart = String(values.field5||'').split(';')[0].trim();
+      const comma = leadPart.indexOf(',');
+      if(comma > 0){
+        last  = leadPart.slice(0, comma).trim();
+        first = leadPart.slice(comma+1).trim().split(/\s+/)[0] || '';
+      } else {
+        const parts = leadPart.split(/\s+/);
+        if(parts.length >= 2){ last = parts[parts.length-1]; first = parts.slice(0,-1).join(' '); }
+        else { last = leadPart; }
+      }
+    }
+    if(last)  fnameSegs.push(clean(last).toUpperCase());
+    if(first) fnameSegs.push(clean(first));
+    // 3. Motion title
+    const motion = clean(values.field7);
+    if(motion) fnameSegs.push(motion);
+    // Final cleanup: collapse double-spaces (in case any segment had
+    // them) and trim, then make sure we never end up with an empty
+    // filename.
+    let fname = fnameSegs.join(' ').replace(/\s+/g,' ').trim();
+    if(!fname) fname = 'Brief';
     const a = document.createElement('a');
     a.href = URL.createObjectURL(outBlob);
-    a.download = 'Motion Webex - ' + safeName + '.docx';
+    a.download = fname + '.docx';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(a.href), 60000);
     if(status){ status.textContent = '✓ Downloaded — open it in Word to review.'; status.style.color='var(--sage)'; }
