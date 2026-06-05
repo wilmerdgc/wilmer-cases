@@ -13891,15 +13891,66 @@ function renderBriefGenerator(){
   _briefRenderForm();
 }
 
+// Return suggestions for a field based on the currently picked case.
+// Field15 (Hearing date & time) gets one suggestion per upcoming hearing
+// on the case so the user can pick "MASTER — April 15, 2026 at 9:00 AM"
+// from a dropdown instead of typing it by hand. Other fields can be
+// added here later (e.g. Field4 court address from the venue list).
+function _briefSuggestions(fieldKey){
+  const clid = window._briefClid;
+  if(!clid) return [];
+  if(fieldKey === 'field15'){
+    const list = (records||[])
+      .filter(r => (r.clid||r.client)===clid && r.date && !r.finishedStatus && !r.deletedStatus)
+      .filter(r => /MASTER|INDIVIDUAL|MERITS|BOND|HEARING|TRIAL/i.test(r.event||''))
+      .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    return list.map(r => {
+      const d = parseDate(r.date);
+      const dateStr = d ? d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : r.date;
+      const timeStr = r.timeStart ? (' at ' + fmtTime(r.timeStart)) : '';
+      return {
+        label: (r.event||'Hearing') + ' — ' + dateStr + timeStr,
+        value: dateStr + timeStr
+      };
+    });
+  }
+  return [];
+}
+
+// Set a field's value from the suggestion dropdown and refresh the
+// corresponding input so the user sees the change immediately.
+function _briefApplySuggestion(fieldKey, value){
+  if(!window._briefValues) window._briefValues = {};
+  window._briefValues[fieldKey] = value;
+  const inp = document.getElementById('bg-' + fieldKey);
+  if(inp) inp.value = value;
+}
+
 function _briefRenderForm(){
   const wrap = document.getElementById('bg-form');
   if(!wrap) return;
   const v = window._briefValues || {};
   wrap.innerHTML = _BRIEF_FIELDS.map(f => {
     const val = v[f.key] != null ? v[f.key] : '';
+    // Build the suggestion dropdown if this field has any case-derived
+    // options. The picker is hidden when there are none so the simple
+    // fields stay clean.
+    const suggestions = _briefSuggestions(f.key);
+    let pickerHtml = '';
+    if(suggestions.length){
+      pickerHtml = '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:11px;">'
+        + '<select id="bg-pick-' + f.key + '" onchange="if(this.value){_briefApplySuggestion(\'' + f.key + '\', this.value);this.selectedIndex=0;}" '
+        + 'style="font-size:11px;padding:4px 8px;border:1px solid #B8C4DB;border-radius:6px;background:#fff;color:#4F6A91;font-family:inherit;cursor:pointer;max-width:100%;">'
+        + '<option value="">📅 Pick from case events…</option>'
+        + suggestions.map(s => '<option value="' + escHtml(s.value).replace(/"/g,'&quot;') + '">' + escHtml(s.label) + '</option>').join('')
+        + '</select>'
+        + '<span style="color:var(--ink-faint);">or type below</span>'
+        + '</div>';
+    }
     if(f.multiline){
       return '<div style="grid-column:1/-1;">'
         + '<label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);margin-bottom:4px;">' + f.label + '</label>'
+        + pickerHtml
         + '<textarea id="bg-' + f.key + '" rows="5" placeholder="' + f.hint + '" '
         + 'oninput="window._briefValues[\'' + f.key + '\']=this.value" '
         + 'style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;line-height:1.5;resize:vertical;">' + escHtml(val) + '</textarea>'
@@ -13907,6 +13958,7 @@ function _briefRenderForm(){
     }
     return '<div>'
       + '<label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);margin-bottom:4px;">' + f.label + '</label>'
+      + pickerHtml
       + '<input id="bg-' + f.key + '" type="text" value="' + escHtml(val).replace(/"/g,'&quot;') + '" placeholder="' + f.hint + '" '
       + 'oninput="window._briefValues[\'' + f.key + '\']=this.value" '
       + 'style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>'
