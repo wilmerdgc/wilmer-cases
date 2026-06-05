@@ -13722,33 +13722,62 @@ const _BRIEF_SERVICE_OPTIONS = [
   'Mail'
 ];
 
-// Pluralize "Respondent" → "Respondents" and the boilerplate phrases
-// the firm uses around it. Applied only when the motion has more than
-// one client (the user picks the lead + checks the riders on the
-// brief generator's respondent panel). Case + apostrophe placement
-// are preserved so:
-//   RESPONDENT'S      → RESPONDENTS'
-//   Respondent's      → Respondents'
-//   Attorney for Resp → Attorneys for Resp(s)
-//   plain Respondent  → Respondents
-// The bare-word replacements run last so they don't break the
-// possessive / attorney variants above them.
+// Pluralize / singularize "Respondent" throughout the brief boilerplate
+// based on how many clients the motion has. Both apostrophe styles —
+// straight (') and curly (’) — are matched. The template the firm uses
+// has "Respondent or Respondents" alternation phrases for headers /
+// labels; those collapse to whichever side is correct for this motion.
+//
+// Order matters: longer / more specific patterns are replaced first so
+// the bare-word patterns at the bottom don't mangle possessives or
+// attorney-for phrases already rewritten.
 function _briefPluralize(text){
   if(!text) return text;
   return String(text)
-    // Possessive forms: shift the apostrophe to after the s.
-    .replace(/\bRESPONDENT'S\b/g,  "RESPONDENTS'")
-    .replace(/\bRespondent's\b/g,  "Respondents'")
-    .replace(/\brespondent's\b/g,  "respondents'")
+    // Alternation boilerplate → plural choice.
+    .replace(/\bRespondent or Respondents\b/g, 'Respondents')
+    .replace(/\bRESPONDENT OR RESPONDENTS\b/g, 'RESPONDENTS')
+    // Possessive forms: shift the apostrophe to after the s (both
+    // straight and curly apostrophes).
+    .replace(/\bRESPONDENT[’']S\b/g, "RESPONDENTS’")
+    .replace(/\bRespondent[’']s\b/g, "Respondents’")
+    .replace(/\brespondent[’']s\b/g, "respondents’")
     // "Attorney for Respondent" → "Attorneys for Respondents".
     .replace(/\bAttorney for Respondent\b/g, 'Attorneys for Respondents')
     .replace(/\battorney for respondent\b/g, 'attorneys for respondents')
     .replace(/\bATTORNEY FOR RESPONDENT\b/g, 'ATTORNEYS FOR RESPONDENTS')
-    // Bare "Respondent" → "Respondents" — runs last so it doesn't
-    // mangle "Respondent's" already rewritten above.
+    // Bare "Respondent" → "Respondents".
     .replace(/\bRESPONDENT\b/g, 'RESPONDENTS')
     .replace(/\bRespondent\b/g, 'Respondents')
     .replace(/\brespondent\b/g, 'respondents');
+}
+
+// Mirror of _briefPluralize for single-client motions. Collapses the
+// alternation phrases and rolls "Respondents" boilerplate back to the
+// singular so the brief reads cleanly when only one client is on the
+// motion.
+function _briefSingularize(text){
+  if(!text) return text;
+  return String(text)
+    .replace(/\bRespondent or Respondents\b/g, 'Respondent')
+    .replace(/\bRESPONDENT OR RESPONDENTS\b/g, 'RESPONDENT')
+    // Possessive forms back to singular.
+    .replace(/\bRESPONDENTS[’']\b/g, "RESPONDENT’S")
+    .replace(/\bRespondents[’']\b/g, "Respondent’s")
+    .replace(/\brespondents[’']\b/g, "respondent’s")
+    // "Attorneys for Respondents" → "Attorney for Respondent".
+    .replace(/\bAttorneys for Respondents\b/g, 'Attorney for Respondent')
+    .replace(/\battorneys for respondents\b/g, 'attorney for respondent')
+    .replace(/\bATTORNEYS FOR RESPONDENTS\b/g, 'ATTORNEY FOR RESPONDENT')
+    // Bare "Respondents" → "Respondent".
+    .replace(/\bRESPONDENTS\b/g, 'RESPONDENT')
+    .replace(/\bRespondents\b/g, 'Respondent')
+    .replace(/\brespondents\b/g, 'respondent');
+}
+
+// Pick the right transformer for a given client count.
+function _briefAdaptCount(text, plural){
+  return plural ? _briefPluralize(text) : _briefSingularize(text);
 }
 
 // Two-line court addresses used by Field 4. Keys are the same venue
@@ -14523,6 +14552,23 @@ async function generateMotionWebex(){
         });
         return before + newContent + after;
       });
+    });
+    // Final body sweep: pluralize / singularize every <w:t> text run in
+    // the document based on the motion's client count so the boilerplate
+    // ("Respondent or Respondents:", "Attorney for Respondent",
+    // "Respondents, by and through undersigned …", etc.) matches the
+    // SDT-bound fields we already adapted above.
+    const clientCount = (window._briefSelection && window._briefSelection.included)
+      ? window._briefSelection.included.size : 1;
+    const plural = clientCount > 1;
+    docXml = docXml.replace(/(<w:t[^>]*>)([^<]*)(<\/w:t>)/g, (m, open, text, close) => {
+      if(!text) return m;
+      // Skip if no Respondent-family token appears at all — saves work
+      // on the vast majority of runs.
+      if(!/respondent/i.test(text)) return m;
+      const adapted = _briefAdaptCount(text, plural);
+      if(adapted === text) return m;
+      return open + _escXml(adapted) + close;
     });
     zip.file('word/document.xml', docXml);
     const outBlob = await zip.generateAsync({ type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
