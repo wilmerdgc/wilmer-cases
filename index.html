@@ -10654,7 +10654,23 @@ let pendingStatus=null,pendingReminders=[],rsReminders=[];
 let pendingSoAttachment = null; // {name, dataUrl, mimeType, uploadedAt}
 
 const MODAL_HEARING_TYPES=new Set(['MASTER','INDIVIDUAL','FAMILY COURT','FAMILY COURT TRIAL']);
-function isHearingEventType(val){return MODAL_HEARING_TYPES.has(val);}
+// Single source of truth for "is this event a hearing?". Match in this
+// order:
+//   1. Explicit hardcoded set above (legacy).
+//   2. eventTypeMeta[val].category === 'hearing' — set per type in
+//      Settings → Event Types when the user picks the hearing tag.
+//   3. Keyword scan over the type name: MASTER, INDIVIDUAL, MERITS,
+//      BOND, HEARING, TRIAL — catches user-added types like "MASTER
+//      CALENDAR HEARING", "BOND HEARING", "MERITS TRIAL", etc.
+// Used by the modal to auto-open the time picker, by saveEvent() to
+// require a time, and by the brief generator's hearing dropdown.
+function isHearingEventType(val){
+  if(!val) return false;
+  if(MODAL_HEARING_TYPES.has(val)) return true;
+  const meta = (typeof eventTypeMeta!=='undefined' && eventTypeMeta[val]) || {};
+  if(meta.category === 'hearing') return true;
+  return /\b(MASTER|INDIVIDUAL|MERITS|BOND|HEARING|TRIAL)\b/i.test(val);
+}
 function setHearingMode(mode){
   const r1=document.getElementById('hm-virtual');
   const r2=document.getElementById('hm-inperson');
@@ -10983,13 +10999,12 @@ function onEventTypeChange(val){
   }
   const icp=document.getElementById('individual-callup-panel');
   if(icp){icp.style.display=(val==='INDIVIDUAL')?'':'none';if(val==='INDIVIDUAL'){const fcD=document.getElementById('fc-date').value;const ri=document.getElementById('icp-ref-input');if(ri){ri.value=fcD||'';}refreshIndividualCallupPanel(false);}}
-  // If the chosen event type is classified as a hearing, auto-open the time range
-  // panel so the user is prompted for the hearing time.
-  const _cat=(eventTypeMeta[val]||{}).category||'';
-  if(_cat==='hearing'){
+  // If the chosen event type is a hearing, force-open the time range
+  // panel so the user is prompted for the hearing time. The save
+  // validation below also rejects hearings that leave the time empty.
+  if(isHearingEventType(val)){
     const tt=document.getElementById('fc-time-toggle');
     const panel2=document.getElementById('time-range-panel');
-    const tsLabel=document.querySelector('label[for="fc-time-toggle"]')||null;
     if(tt){ tt.checked=true; }
     if(panel2){
       panel2.classList.add('open');
@@ -11001,7 +11016,7 @@ function onEventTypeChange(val){
         const h=document.createElement('div');
         h.id='fc-time-hearing-hint';
         h.style.cssText='font-size:11px;font-weight:600;color:#C9823A;margin-bottom:6px;';
-        h.textContent='⏰ Please set the hearing time';
+        h.textContent='⏰ Hearings always need a time — please set the start time below.';
         panel2.prepend(h);
       }
       const ts=document.getElementById('fc-time-start');
@@ -11754,6 +11769,21 @@ window.saveEvent=function(){
   if(!_isStandalone){
     if(!client){alert('Client name is required.');return;}
     if(!type){alert('Case type is required.');return;}
+  }
+  // Hearings always need a time — surface a clear alert and bounce the
+  // user back to the time picker if they tried to save without one.
+  if(isHearingEventType(_evt)){
+    const _tt=document.getElementById('fc-time-toggle');
+    const _tsEl=document.getElementById('fc-time-start');
+    const _ts=(_tsEl&&_tsEl.value||'').trim();
+    if(!_tt || !_tt.checked || !_ts){
+      alert('Hearings always need a time.\n\nPick a start time for this hearing — turn the Time toggle on and set the start (and end, if you have it).');
+      if(_tt) _tt.checked = true;
+      const _panel=document.getElementById('time-range-panel');
+      if(_panel){ _panel.classList.add('open'); _panel.style.background='#FAF0E6'; _panel.style.borderColor='#E8C49A'; }
+      if(_tsEl){ try{ _tsEl.scrollIntoView({block:'center',behavior:'smooth'}); _tsEl.focus(); }catch(e){} }
+      return;
+    }
   }
   const historyNote=document.getElementById('fc-history-note').value.trim();
   if(['completed','cancelled','deleted'].includes(pendingStatus)&&!historyNote){const labels={completed:'completion',cancelled:'cancellation',deleted:'deletion'};alert(`A reason is required when marking as ${pendingStatus}.`);document.getElementById('fc-history-note').focus();document.getElementById('fc-history-note').style.borderColor='#B85C5C';return;}
