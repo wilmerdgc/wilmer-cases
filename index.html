@@ -2643,12 +2643,12 @@ window.addEventListener('load',()=>autoGrowAllNotes());
     <div style="font-family:'Lora',Georgia,serif;font-size:16px;font-weight:600;color:#2C2620;margin-bottom:18px;" id="judge-modal-title">Add Judge</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;">
       <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:600;color:#9E9186;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;">Full Name *</label><input id="jm-name" type="text" placeholder="e.g. Carrie Johnson-Papillo"/></div>
-      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:600;color:#9E9186;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;">Venue <span style="color:#C4BAB0;font-weight:500;text-transform:none;letter-spacing:0;">(line 1: street + floor; line 2: city, state ZIP — both upper-cased automatically)</span></label>
+      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:600;color:#9E9186;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;">Venue <span style="color:#C4BAB0;font-weight:500;text-transform:none;letter-spacing:0;">(line 1: street + floor; line 2: city, state ZIP — both upper-cased; line 2 auto-fills for NYC immigration courts)</span></label>
         <div style="display:flex;flex-direction:column;gap:6px;">
           <input id="jm-venue" type="text" list="jm-venue-list" placeholder="STREET + FLOOR / ROOM (e.g. 290 BROADWAY, 15TH FLOOR)"
-            oninput="this.value=this.value.toUpperCase()" style="text-transform:uppercase;letter-spacing:.02em;"/>
+            oninput="this.value=this.value.toUpperCase();_jmAutofillVenueCity(this.value);" style="text-transform:uppercase;letter-spacing:.02em;"/>
           <datalist id="jm-venue-list"></datalist>
-          <input id="jm-venue-city" type="text" placeholder="CITY, STATE  ZIP (e.g. NEW YORK, NY 10007)"
+          <input id="jm-venue-city" type="text" placeholder="CITY, STATE  ZIP (e.g. NEW YORK, NEW YORK)"
             oninput="this.value=this.value.toUpperCase()" style="text-transform:uppercase;letter-spacing:.02em;"/>
         </div>
       </div>
@@ -11702,6 +11702,32 @@ function openJudgeModal(id){
   requestAnimationFrame(()=>autoGrowAllNotes(document.getElementById('judge-modal')));
 }
 function closeJudgeModal(){document.getElementById('judge-modal').style.display='none';editingJudgeId=null;}
+// When the user types or picks a venue in line 1, auto-fill line 2
+// with the matching city/state line from the firm's courthouse table —
+// but only when line 2 is currently empty, so we don't blow away
+// anything the user typed themselves. The match runs against several
+// keys at once so common shorthand still hits:
+//   "26 FEDERAL PLAZA" / "26 FED PLAZA" / "FEDERAL PLAZA"  → NEW YORK, NEW YORK
+//   "290 BROADWAY" / "BROADWAY"                            → NEW YORK, NEW YORK
+//   "201 VARICK ST" / "201 VARICK STREET" / "VARICK"       → NEW YORK, NEW YORK
+function _jmAutofillVenueCity(line1){
+  const cityInput = document.getElementById('jm-venue-city');
+  if(!cityInput) return;
+  if(cityInput.value.trim()) return; // user already filled it — don't overwrite
+  const v = String(line1||'').toUpperCase();
+  if(!v) return;
+  // Direct lookup first.
+  const table = (typeof _briefCourtAddressTable==='function') ? _briefCourtAddressTable() : {};
+  if(table[v]){ cityInput.value = table[v][1]; return; }
+  // Keyword fallback: any of the three NYC immigration courts → NEW YORK.
+  if(/\b(FEDERAL PLAZA|BROADWAY|VARICK)\b/.test(v)){ cityInput.value = 'NEW YORK, NEW YORK'; return; }
+  // Family courts — match the borough name.
+  if(/\bKINGS\b/.test(v))    { cityInput.value = 'BROOKLYN, NY 11201'; return; }
+  if(/\bQUEENS\b/.test(v))   { cityInput.value = 'JAMAICA, NY 11432'; return; }
+  if(/\bBRONX\b/.test(v))    { cityInput.value = 'BRONX, NY 10451'; return; }
+  if(/\bNASSAU\b/.test(v))   { cityInput.value = 'WESTBURY, NY 11590'; return; }
+  if(/\bSUFFOLK\b/.test(v))  { cityInput.value = 'CENTRAL ISLIP, NY 11722'; return; }
+}
 function saveJudge(){
   const name=document.getElementById('jm-name').value.trim();
   if(!name){alert('Name is required.');return;}
@@ -13815,10 +13841,14 @@ function _briefAdaptCount(text, plural){
 // [streetLine, cityStateZipLine] pair, ALL UPPERCASE because the firm
 // types court addresses that way on every motion.
 function _briefCourtAddressTable(){
+  // Firm convention: the three Manhattan immigration courts all carry
+  // the same "NEW YORK, NEW YORK" city line (state name spelled out,
+  // no ZIP). Other venues keep their "City, NY ZIP" formatting because
+  // there's only one of each.
   return {
-    '26 FEDERAL PLAZA':       ['26 FEDERAL PLAZA',          'NEW YORK, NY 10278'],
-    '290 BROADWAY':           ['290 BROADWAY, 15TH FLOOR',  'NEW YORK, NY 10007'],
-    '201 VARICK ST':          ['201 VARICK STREET',         'NEW YORK, NY 10014'],
+    '26 FEDERAL PLAZA':       ['26 FEDERAL PLAZA',          'NEW YORK, NEW YORK'],
+    '290 BROADWAY':           ['290 BROADWAY, 15TH FLOOR',  'NEW YORK, NEW YORK'],
+    '201 VARICK ST':          ['201 VARICK STREET',         'NEW YORK, NEW YORK'],
     'KINGS FAMILY COURT':     ['330 JAY STREET',            'BROOKLYN, NY 11201'],
     'QUEENS FAMILY COURT':    ['151-20 JAMAICA AVENUE',     'JAMAICA, NY 11432'],
     'BRONX FAMILY COURT':     ['900 SHERIDAN AVENUE',       'BRONX, NY 10451'],
