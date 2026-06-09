@@ -14265,8 +14265,49 @@ function _briefApplySuggestion(fieldKey, value){
     if(i2) i2.value = l2;
     return;
   }
+  // Field 14 (Judge): when the user picks a judge from the dropdown,
+  // also push that judge's two-line venue into Field 4 (Court address)
+  // — line 1 from judge.venue, line 2 from judge.venueCity, with the
+  // shared courthouse lookup as a fallback when the judge record only
+  // has the single-line venue field filled in. The user can still edit
+  // either Court-address input manually after; we only overwrite when
+  // the picker fires.
+  if(fieldKey === 'field14'){
+    const inp14 = document.getElementById('bg-field14');
+    if(inp14) inp14.value = applied;
+    _briefAutofillCourtFromJudgeName(applied);
+    return;
+  }
   const inp = document.getElementById('bg-' + fieldKey);
   if(inp) inp.value = applied;
+}
+
+// Look the judge up by exact name in the global judges[] list, then
+// copy its venue + venueCity into Field 4. Falls back to the shared
+// courthouse lookup table if the judge only has the single-line venue
+// filled in.
+function _briefAutofillCourtFromJudgeName(judgeName){
+  const name = String(judgeName||'').trim();
+  if(!name || !Array.isArray(judges)) return;
+  const j = judges.find(x => (x.name||'').trim() === name);
+  if(!j) return;
+  let l1 = (j.venue||'').trim();
+  let l2 = (j.venueCity||'').trim();
+  if(!l2 && l1){
+    const tab = _briefCourtAddressTable();
+    const lookup = tab[l1.toUpperCase()];
+    if(lookup){ l1 = lookup[0]; l2 = lookup[1]; }
+  }
+  // Don't blow away a perfectly-typed manual address if neither field
+  // pulled anything useful out of the judge record.
+  if(!l1 && !l2) return;
+  const joined = _briefJoinAddr(l1, l2);
+  if(!window._briefValues) window._briefValues = {};
+  window._briefValues.field4 = joined;
+  const i1 = document.getElementById('bg-field4-l1');
+  const i2 = document.getElementById('bg-field4-l2');
+  if(i1) i1.value = l1.toUpperCase();
+  if(i2) i2.value = l2.toUpperCase();
 }
 
 // Save the current Field 20 textarea content as a named attorney
