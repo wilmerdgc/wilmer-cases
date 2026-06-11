@@ -2889,25 +2889,25 @@ window.addEventListener('load',()=>autoGrowAllNotes());
             </label>
           </div>
         </div>
-        <!-- Virtual hearing details: judge picker + Webex link, only shown when "Virtual" is selected -->
+        <!-- Hearing details: judge (always, for any hearing format) + Webex link (virtual only) -->
         <div id="modal-virtual-details" style="display:none;margin-top:10px;padding:12px 14px;background:#EEF1F7;border:1px solid #CBD5E8;border-radius:var(--radius-sm);">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:9px;">
+          <div id="vh-virtual-label" style="display:flex;align-items:center;gap:6px;margin-bottom:9px;">
             <span style="font-size:13px;">📡</span>
             <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6B7FA3;">Virtual hearing details</span>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
             <div style="flex:1;min-width:180px;">
-              <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;margin-bottom:3px;">Judge</label>
+              <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;margin-bottom:3px;">Judge <span style="color:#B85C5C">*</span></label>
               <select id="vh-judge" onchange="onVirtualJudgeChange()" style="width:100%;font-size:12px;padding:7px 10px;border:1px solid #CBD5E8;border-radius:6px;font-family:inherit;background:#fff;color:#2C2620;">
                 <option value="">— Select judge —</option>
               </select>
             </div>
-            <div style="flex:2;min-width:240px;">
+            <div id="vh-link-wrap" style="flex:2;min-width:240px;">
               <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;margin-bottom:3px;">Webex link</label>
               <input id="vh-link" type="url" placeholder="https://usdoj.webex.com/meet/…" style="width:100%;font-size:12px;padding:7px 10px;border:1px solid #CBD5E8;border-radius:6px;font-family:inherit;box-sizing:border-box;background:#fff;color:#2C2620;"/>
             </div>
           </div>
-          <div style="font-size:10px;color:#9E9186;margin-top:6px;line-height:1.4;">Picking a judge fills in their saved Webex link. Edit it to override for this event only.</div>
+          <div id="vh-virtual-hint" style="font-size:10px;color:#9E9186;margin-top:6px;line-height:1.4;">Picking a judge fills in their saved Webex link. Edit it to override for this event only.</div>
         </div>
       </div>
       <div id="modal-master-prep-section" style="display:none;margin-top:10px;padding:12px 14px;background:#EBF1EB;border:1px solid #B4CCAD;border-radius:var(--radius-sm);">
@@ -10742,10 +10742,15 @@ function onHearingModeChange(){
     lbl.style.color=sel?s.color:'var(--ink-soft)';
     lbl.style.fontWeight=sel?'600':'400';
   });
-  // Show/hide the virtual hearing details (judge + Webex link)
+  // Show the hearing-details panel for ANY chosen format so the judge is
+  // always asked. The Webex link + "virtual" labels stay virtual-only.
+  const _isHearingMode=(mode==='virtual'||mode==='in-person');
   const vd=document.getElementById('modal-virtual-details');
-  if(vd) vd.style.display=(mode==='virtual')?'block':'none';
-  if(mode==='virtual') populateVirtualJudgeDropdown();
+  if(vd) vd.style.display=_isHearingMode?'block':'none';
+  if(_isHearingMode) populateVirtualJudgeDropdown();
+  const _vlabel=document.getElementById('vh-virtual-label'); if(_vlabel) _vlabel.style.display=(mode==='virtual')?'flex':'none';
+  const _vlink=document.getElementById('vh-link-wrap'); if(_vlink) _vlink.style.display=(mode==='virtual')?'block':'none';
+  const _vhint=document.getElementById('vh-virtual-hint'); if(_vhint) _vhint.style.display=(mode==='virtual')?'block':'none';
 }
 // ── Virtual hearing details ──
 function populateVirtualJudgeDropdown(){
@@ -11879,9 +11884,31 @@ window.saveEvent=function(){
     if(!client){alert('Client name is required.');return;}
     if(!type){alert('Case type is required.');return;}
   }
+  // Skip the hearing field requirements when the user is just closing the
+  // event out (a status change or the compact finish dialog) — those fields
+  // are hidden there and aren't needed to mark a hearing done.
+  const _finishing = !!pendingStatus || !!(document.getElementById('modal') && document.getElementById('modal').classList.contains('finish-only'));
+  // Hearings always need a format (Virtual / In Person) and a judge.
+  if(isHearingEventType(_evt) && !_finishing){
+    const _hm=getHearingMode();
+    if(_hm!=='virtual' && _hm!=='in-person'){
+      alert('Hearings always need a format.\n\nChoose Virtual or In Person for this hearing.');
+      const _hmsEl=document.getElementById('modal-hearing-mode-section');
+      if(_hmsEl){ try{ _hmsEl.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
+      return;
+    }
+    const _jsel=document.getElementById('vh-judge');
+    if(!_jsel || !_jsel.value){
+      alert('Hearings always need a judge.\n\nSelect the judge for this hearing.');
+      const _vd=document.getElementById('modal-virtual-details');
+      if(_vd){ try{ _vd.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
+      if(_jsel){ try{ _jsel.focus(); }catch(e){} }
+      return;
+    }
+  }
   // Hearings always need a time — surface a clear alert and bounce the
   // user back to the time picker if they tried to save without one.
-  if(isHearingEventType(_evt)){
+  if(isHearingEventType(_evt) && !_finishing){
     const _tt=document.getElementById('fc-time-toggle');
     const _tsEl=document.getElementById('fc-time-start');
     const _ts=(_tsEl&&_tsEl.value||'').trim();
@@ -11899,7 +11926,8 @@ window.saveEvent=function(){
   const tOn=document.getElementById('fc-time-toggle')&&document.getElementById('fc-time-toggle').checked;
   const hearingMode=getHearingMode();
   const _isHearingEvt=isHearingEventType(document.getElementById('fc-eventtype').value);
-  const _vhd=(_isHearingEvt&&hearingMode==='virtual')?getVirtualHearingDetails():{hearingJudgeId:'',virtualLink:''};
+  let _vhd={hearingJudgeId:'',virtualLink:''};
+  if(_isHearingEvt&&(hearingMode==='virtual'||hearingMode==='in-person')){const _d=getVirtualHearingDetails();_vhd.hearingJudgeId=_d.hearingJudgeId;_vhd.virtualLink=(hearingMode==='virtual')?_d.virtualLink:'';}
   const data={clid:document.getElementById('fc-clid').value.trim(),client,type,anum:document.getElementById('fc-anum').value.trim(),atty:document.getElementById('fc-paralegal').value,event:document.getElementById('fc-eventtype').value,date:document.getElementById('fc-date').value,timeStart:tOn?document.getElementById('fc-time-start').value:'',timeEnd:tOn?document.getElementById('fc-time-end').value:'',assigned:document.getElementById('fc-assigned').value,notes:document.getElementById('fc-notes').value.trim(),hearingMode:_isHearingEvt?hearingMode:'',hearingJudgeId:_vhd.hearingJudgeId,virtualLink:_vhd.virtualLink,checklist:modalChecklist.filter(x=>x.trim()),docs:modalDocs.filter(x=>(x.name||x||'').trim()),soIssueDate:(document.getElementById('fc-eventtype').value==='SCHEDULING ORDER'?(document.getElementById('so-issue-date')||{}).value||'':'')};  customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);data[c.key]=el?el.value:'';});
   if(editingId){
     const idx=records.findIndex(r=>r.id===editingId);
