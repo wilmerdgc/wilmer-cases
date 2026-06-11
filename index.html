@@ -18033,14 +18033,14 @@ function renderChecklistsList(){
         let nameEl;
         if(isEv){
           nameEl=document.createElement('select');
-          nameEl.style.cssText='font-size:11px;color:'+_dotColor+';font-family:inherit;border:none;background:transparent;outline:none;cursor:pointer;padding:1px 2px;border-radius:4px;flex:0 1 auto;min-width:60px;max-width:75%;';
+          nameEl.style.cssText='font-size:11px;color:'+_dotColor+';font-family:inherit;border:none;background:transparent;outline:none;cursor:pointer;padding:1px 2px;border-radius:4px;flex:1 1 auto;min-width:0;';
           const ph=document.createElement('option');ph.value='';ph.textContent='— event type —';nameEl.appendChild(ph);
           eventTypes.forEach(ev=>{const o=document.createElement('option');o.value=ev;o.textContent=ev;if(ev===it.value)o.selected=true;nameEl.appendChild(o);});
           if(it.value && !eventTypes.includes(it.value)){const o=document.createElement('option');o.value=it.value;o.textContent=it.value;o.selected=true;nameEl.appendChild(o);}
           nameEl.onchange=()=>{it.value=nameEl.value;persist();renderRows();};
         } else {
           nameEl=document.createElement('input');nameEl.type='text';nameEl.placeholder='Item name…';nameEl.value=it.value||'';
-          nameEl.style.cssText='font-size:11px;color:#5C5148;font-family:inherit;border:none;background:transparent;outline:none;padding:1px 2px;border-radius:4px;flex:0 1 auto;min-width:60px;max-width:75%;';
+          nameEl.style.cssText='font-size:11px;color:#5C5148;font-family:inherit;border:none;background:transparent;outline:none;padding:1px 2px;border-radius:4px;flex:1 1 auto;min-width:0;';
           nameEl.onfocus=()=>{nameEl.style.background='var(--cream-dark)';};
           nameEl.onblur=()=>{nameEl.style.background='transparent';persist();};
           nameEl.oninput=()=>{it.value=nameEl.value;};
@@ -18070,7 +18070,6 @@ function renderChecklistsList(){
 
         row.appendChild(num);
         row.appendChild(nameEl);
-        row.appendChild(_makeDashedLine());
         row.appendChild(typeBtn);
         row.appendChild(asg);
         row.appendChild(rmBtn);
