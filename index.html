@@ -14750,6 +14750,25 @@ async function generateMotionWebex(){
         'g'
       );
       docXml = docXml.replace(sdtRe, (match, before, content, after) => {
+        // Court address (Field 4): map each line of the value to its OWN
+        // paragraph, so the street line and the city/state line always land on
+        // separate lines — no matter how many text runs the template splits a
+        // paragraph into. (One template has 1 run per paragraph; another has
+        // several, which used to cram both lines into the first paragraph.)
+        if(n === '4' && /<w:p\b/.test(content)){
+          let pIdx = 0;
+          const newContent = content.replace(/<w:p\b[\s\S]*?<\/w:p>/g, (pMatch) => {
+            const lineForPara = pIdx < lines.length ? lines[pIdx] : '';
+            pIdx++;
+            let firstDone = false;
+            return pMatch.replace(/<w:t[^>]*>[^<]*<\/w:t>/g, () => {
+              const t = firstDone ? '' : _escXml(lineForPara);
+              firstDone = true;
+              return '<w:t xml:space="preserve">' + t + '</w:t>';
+            });
+          });
+          return before + newContent + after;
+        }
         // Count the text runs first so we know whether the value's
         // newlines fit into separate runs (existing multi-paragraph
         // SDTs like the attorney block) or have to be inlined as soft
