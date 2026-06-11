@@ -51,16 +51,26 @@ jobs:
             admin.initializeApp({credential:admin.credential.cert(require('./sa.json'))});
             const db=admin.firestore();
             (async()=>{
-              const snap=await db.collection('wilmer').doc('data').get();
-              if(!snap.exists){console.error('No wilmer/data document');process.exit(1);}
-              const data=snap.data();
+              // caseMeta now lives in wilmer/cm_* shards; records + config stay
+              // in wilmer/data. Read the whole collection and reassemble a single
+              // combined object (with a top-level caseMeta) so the backup format
+              // and the in-app restore stay unchanged.
+              const qs=await db.collection('wilmer').get();
+              let data=null; const caseMeta={};
+              qs.forEach(doc=>{
+                const id=doc.id, d=doc.data()||{};
+                if(id==='data'){ data=d; if(d.caseMeta) Object.assign(caseMeta, d.caseMeta); }
+                else if(id.indexOf('cm_')===0){ if(d.caseMeta) Object.assign(caseMeta, d.caseMeta); }
+              });
+              if(!data){console.error('No wilmer/data document');process.exit(1);}
+              data.caseMeta=caseMeta;
               const date='${DATE}';
               fs.writeFileSync('backups/'+date+'.json', JSON.stringify(data));
               const recs=Array.isArray(data.records)?data.records.length:0;
               const clients=recs?new Set(data.records.map(r=>r.clid||r.id)).size:0;
               const savedAt=data._savedAt?new Date(data._savedAt).toISOString():'n/a';
               fs.writeFileSync('backups/.meta', JSON.stringify({date,records:recs,clients,savedAt}));
-              console.log('records:',recs,'| clients:',clients,'| savedAt:',savedAt);
+              console.log('records:',recs,'| clients:',clients,'| caseMeta:',Object.keys(caseMeta).length,'| savedAt:',savedAt);
             })().catch(e=>{console.error(e);process.exit(1);});
           "
           # Never keep the credential on disk longer than needed

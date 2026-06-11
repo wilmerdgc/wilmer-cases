@@ -1027,6 +1027,11 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .history-action { font-size: 12px; font-weight: 600; }
 .history-meta { font-size: 11px; color: var(--ink-muted); margin-top: 1px; }
 .history-note-text { font-size: 11px; color: var(--ink-soft); margin-top: 3px; font-style: italic; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; }
+.history-changes { list-style: none; margin: 4px 0 0; padding: 0; }
+.history-changes li { font-size: 11px; color: var(--ink-soft); margin-top: 2px; line-height: 1.4; word-wrap: break-word; overflow-wrap: anywhere; }
+.history-changes .hc-field { font-weight: 600; color: var(--ink-muted); }
+.history-changes .hc-from { color: var(--ink-muted); text-decoration: line-through; }
+.history-changes .hc-to { color: var(--ink); font-weight: 500; }
 
 /* ── Add col form ──────────────────────────────── */
 .add-col-form { display: none; background: var(--cream-dark); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; margin-top: 14px; }
@@ -11358,7 +11363,37 @@ function renderRsReminderChips(){const el=document.getElementById('rs-reminder-c
 function addRsReminder(days){days=parseInt(days);if(isNaN(days)||days<1)return;if(!rsReminders.includes(days))rsReminders.push(days);renderRsReminderChips();}
 function addRsReminderCustom(){addRsReminder(parseInt(document.getElementById('rs-reminder-custom').value));document.getElementById('rs-reminder-custom').value='';}
 function removeRsReminder(days){rsReminders=rsReminders.filter(d=>d!==days);renderRsReminderChips();}
-function renderHistoryLog(history){const wrap=document.getElementById('modal-history-wrap'),log=document.getElementById('modal-history-log');if(!history||!history.length){wrap.style.display='none';return;}wrap.style.display='block';log.innerHTML='';[...history].reverse().forEach(h=>{const entry=document.createElement('div');entry.className='history-entry';const dotClass=h.type==='note'?'note':h.type;let actionText='';if(h.type==='completed')actionText='Marked as Completed';else if(h.type==='attended')actionText='Marked as Attended';else if(h.type==='cancelled')actionText='Marked as Cancelled';else if(h.type==='deleted')actionText='Marked as Deleted';else if(h.type==='rescheduled')actionText=`Rescheduled → ${h.newDate?fmtDate(h.newDate):'(no date)'}${h.prevDate?' (was '+fmtDate(h.prevDate)+')':''}`;else if(h.type==='note')actionText='Note added';entry.innerHTML=`<div class="history-dot ${dotClass}"></div><div class="history-body"><div class="history-action">${actionText}</div><div class="history-meta">${h.date}</div>${h.note?`<div class="history-note-text">${h.note}</div>`:''}</div>`;log.appendChild(entry);});}
+// ── Audit history helpers ──────────────────────────────────────────
+// "A record is any change made": every edit is captured field-by-field
+// (old → new) along with the timestamp and the device that made it, and
+// appended to the record's history array (which already syncs to cloud).
+function _fmtAuditVal(field,val){
+  if(val===undefined||val===null||val==='') return '';
+  if(field==='date'||field==='soIssueDate'){ try{ return fmtDate(val); }catch(e){ return String(val); } }
+  if(field==='timeStart'||field==='timeEnd'){ try{ return fmtTime(val); }catch(e){ return String(val); } }
+  return String(val);
+}
+function _diffRecord(existing,data,pendingStatus){
+  const fields=[['clid','Client ID'],['client','Client'],['anum','A-number'],['type','Case type'],['atty','Paralegal'],['event','Event type'],['date','Deadline'],['timeStart','Start time'],['timeEnd','End time'],['assigned','Assigned to'],['notes','Notes'],['hearingMode','Hearing mode'],['hearingJudgeId','Hearing judge'],['virtualLink','Virtual link'],['soIssueDate','SO issue date']];
+  (customColumns||[]).forEach(c=>{ if(c&&c.key) fields.push([c.key,c.label||c.key]); });
+  const out=[];
+  fields.forEach(([f,label])=>{
+    if(f==='date'&&pendingStatus==='rescheduled') return; // already captured by the reschedule entry
+    const a=existing[f],b=data[f];
+    if(String(a==null?'':a)!==String(b==null?'':b)) out.push({field:f,label,from:_fmtAuditVal(f,a),to:_fmtAuditVal(f,b)});
+  });
+  const _sig=arr=>JSON.stringify((arr||[]).map(x=>typeof x==='string'?x:((x&&x.name)||'')));
+  if(_sig(existing.checklist)!==_sig(data.checklist)) out.push({field:'checklist',label:'Checklist',from:(existing.checklist||[]).length+' item(s)',to:(data.checklist||[]).length+' item(s)'});
+  if(_sig(existing.docs)!==_sig(data.docs)) out.push({field:'docs',label:'Documents',from:(existing.docs||[]).length+' file(s)',to:(data.docs||[]).length+' file(s)'});
+  return out;
+}
+function _histMeta(h){
+  let s=h.date||'';
+  if(h.at){ try{ const t=new Date(h.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); s=(h.date||'')+' · '+t; }catch(e){} }
+  if(h.by){ s+=' · '+(typeof _deviceId!=='undefined'&&h.by===_deviceId?'this device':String(h.by).replace(/^dev-/,'device ')); }
+  return _escHtml(s);
+}
+function renderHistoryLog(history){const wrap=document.getElementById('modal-history-wrap'),log=document.getElementById('modal-history-log');if(!history||!history.length){wrap.style.display='none';return;}wrap.style.display='block';log.innerHTML='';[...history].reverse().forEach(h=>{const entry=document.createElement('div');entry.className='history-entry';const dotClass=(h.type==='note'||h.type==='edit')?'note':h.type;let actionText='';if(h.type==='completed')actionText='Marked as Completed';else if(h.type==='attended')actionText='Marked as Attended';else if(h.type==='cancelled')actionText='Marked as Cancelled';else if(h.type==='deleted')actionText='Marked as Deleted';else if(h.type==='rescheduled')actionText=`Rescheduled → ${h.newDate?fmtDate(h.newDate):'(no date)'}${h.prevDate?' (was '+fmtDate(h.prevDate)+')':''}`;else if(h.type==='note')actionText='Note added';else if(h.type==='edit')actionText='Edited';let changesHtml='';if(h.type==='edit'&&h.changes&&h.changes.length){changesHtml='<ul class="history-changes">'+h.changes.map(c=>`<li><span class="hc-field">${_escHtml(c.label)}:</span> <span class="hc-from">${_escHtml(c.from||'(empty)')}</span> → <span class="hc-to">${_escHtml(c.to||'(empty)')}</span></li>`).join('')+'</ul>';}entry.innerHTML=`<div class="history-dot ${dotClass}"></div><div class="history-body"><div class="history-action">${actionText}</div><div class="history-meta">${_histMeta(h)}</div>${changesHtml}${h.note?`<div class="history-note-text">${_escHtml(h.note)}</div>`:''}</div>`;log.appendChild(entry);});}
 function renderReminderChips(){
   const el=document.getElementById('reminder-chips');
   el.innerHTML='';
@@ -11406,6 +11441,24 @@ function openEdit(id){const r=records.find(x=>x.id===id);if(!r)return;editingId=
 // ── Read-only view / inline edit mode for event modal ──
 function enterEditMode(focusId){
   const m=document.getElementById('modal'); if(!m) return;
+  // A "change" is being initiated here (viewing the record is lock-free).
+  // Acquire the per-record edit lock first; if another device is already
+  // editing this record, block and keep the user in read-only view.
+  if(editingId && _heldLockId!==editingId){
+    const cur=(typeof _recordLocks!=='undefined')?_recordLocks[editingId]:null;
+    if(cur&&typeof _lockIsActive==='function'&&cur.device!==_deviceId&&_lockIsActive(cur)){ _showLockBlocked(cur); return; }
+    if(typeof _acquireLock==='function'){
+      _acquireLock(editingId).then(function(res){
+        if(!res.ok){ _showLockBlocked(res.lock); return; }
+        _startLockHeartbeat(editingId);
+        _doEnterEditMode(m,focusId);
+      });
+      return;
+    }
+  }
+  _doEnterEditMode(m,focusId);
+}
+function _doEnterEditMode(m,focusId){
   m.classList.remove('readonly-mode');
   document.getElementById('modal-title').textContent='Edit event';
   if(focusId){
@@ -11781,7 +11834,7 @@ function applyDateCalc(){
     setTimeout(()=>res.style.color='#6A8C6E',800);
   }
 }
-function closeModal(){if(typeof _exitPreviewSplitMode==='function')_exitPreviewSplitMode();const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetVirtualHearingDetails();resetFcSubevents();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _fcs1=document.getElementById('fc-subevents-panel');if(_fcs1)_fcs1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';}
+function closeModal(){if(typeof _exitPreviewSplitMode==='function')_exitPreviewSplitMode();const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetVirtualHearingDetails();resetFcSubevents();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _fcs1=document.getElementById('fc-subevents-panel');if(_fcs1)_fcs1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';if(typeof _heldLockId!=='undefined'&&_heldLockId){_releaseLock(_heldLockId);}if(typeof _stopLockHeartbeat==='function')_stopLockHeartbeat();}
 function handleBackdropClick(e){if(e.target===document.getElementById('modal'))closeModal();}
 
 // ── saveEvent ──
@@ -11823,10 +11876,12 @@ window.saveEvent=function(){
     if(idx>-1){
       const existing=records[idx],history=[...(existing.history||[])];
       if(pendingStatus){
-        const entry={type:pendingStatus,date:todayStr()};
+        const entry={type:pendingStatus,date:todayStr(),at:Date.now(),by:(typeof _deviceId!=='undefined'?_deviceId:null)};
         if(pendingStatus==='rescheduled'){const nd=document.getElementById('fc-reschedule-date').value;if(!nd){alert('Please pick a new date.');return;}entry.prevDate=existing.date||'';entry.newDate=nd;data.date=nd;data.finishedStatus=null;const rsOn=document.getElementById('rs-time-toggle')&&document.getElementById('rs-time-toggle').checked;if(rsOn){data.timeStart=document.getElementById('rs-time-start').value;data.timeEnd=document.getElementById('rs-time-end').value;}}else if(pendingStatus==='deleted'){data.deletedStatus='deleted';data.deletedDate=todayStr();data.finishedStatus=null;}else if(pendingStatus==='attended'){data.attendedStatus='attended';data.finishedStatus='attended';}else{data.finishedStatus=pendingStatus;}
         if(historyNote)entry.note=historyNote;history.push(entry);
-      }else if(historyNote){history.push({type:'note',date:todayStr(),note:historyNote});}
+      }else if(historyNote){history.push({type:'note',date:todayStr(),at:Date.now(),by:(typeof _deviceId!=='undefined'?_deviceId:null),note:historyNote});}
+      const _editChanges=_diffRecord(existing,data,pendingStatus);
+      if(_editChanges.length)history.push({type:'edit',date:todayStr(),at:Date.now(),by:(typeof _deviceId!=='undefined'?_deviceId:null),changes:_editChanges});
       records[idx]={...existing,...data,history};
       if(pendingStatus!=='rescheduled'){const old2=[];records.forEach((rx,ri)=>{if(rx.id===editingId)return;if(rx._parentId===editingId&&rx.notes&&rx.notes.startsWith('⏰ REMINDER'))old2.push(ri);});for(let i=old2.length-1;i>=0;i--)records.splice(old2[i],1);if(pendingReminders.length&&data.date){pendingReminders.forEach(days=>{const rd=addDateDays(data.date,-days);records.push({id:uid(),...data,event:'⏰ Reminder',date:rd,notes:'⏰ REMINDER: Task due by '+fmtDate(data.date)+(data.notes?' — '+data.notes:''),_parentId:editingId,history:[]});});}}
       if(pendingStatus==='rescheduled'&&rsReminders.length&&data.date){rsReminders.forEach(days=>{const rd=addDateDays(data.date,-days);records.push({id:uid(),...data,event:'⏰ Reminder',date:rd,notes:'⏰ REMINDER: Task due by '+fmtDate(data.date)+(data.notes?' — '+data.notes:''),_parentId:editingId,history:[]});});}
@@ -20158,6 +20213,93 @@ function _refreshSavedHashes(){
     if(m) _lastSavedMetaHashes.set(clid, _metaContentHash(m));
   });
 }
+// Order-independent signature of record + caseMeta state, keyed on each
+// item's _updatedAt (which is bumped on any content change just before a
+// save). Used to tell whether an incoming merge actually changes what this
+// device is showing — robust to field-level edits that don't change counts.
+function _stateSig(recs, meta){
+  const parts=[];
+  (recs||[]).forEach(r=>{ if(r&&r.id) parts.push(r.id+':'+(r._updatedAt||0)); });
+  parts.sort();
+  const metaParts=[];
+  Object.keys(meta||{}).forEach(k=>{ const m=meta[k]; metaParts.push(k+':'+((m&&m._updatedAt)||0)); });
+  metaParts.sort();
+  return parts.join('|')+'#'+metaParts.join('|');
+}
+// ─── caseMeta sharding ──────────────────────────────────────────────
+// caseMeta (the per-case files) was ~75% of the single wilmer/data doc and
+// pushed it past Firestore's 1MB per-document limit, which made writes fail
+// and the fallback clobber records. We now keep records + config in
+// wilmer/data and spread caseMeta across N small docs (wilmer/cm_0..N-1),
+// bucketed by a stable hash of the clid. Each shard stays well under 1MB and
+// only dirty shards are rewritten on save. Migration is automatic: existing
+// devices already hold the full caseMeta locally, so the first save writes it
+// into the shards and stops writing it into wilmer/data (it drops out of the
+// main doc on the next write).
+const _CM_SHARD_COUNT = 16;
+function _cmShardIndex(clid){
+  const s=String(clid||''); let h=5381;
+  for(let i=0;i<s.length;i++){ h=(((h<<5)+h) ^ s.charCodeAt(i))>>>0; }
+  return h % _CM_SHARD_COUNT;
+}
+function _cmShardDocId(i){ return 'cm_'+i; }
+// Deep-copy caseMeta with base64 file payloads stripped (same rule the main
+// doc used) so big attachments never leave the device.
+function _cleanCaseMeta(cm){
+  let out;
+  try{ out=JSON.parse(JSON.stringify(cm||{})); }catch(e){ out={}; }
+  Object.values(out).forEach(m=>{ if(!m)return; (m.docSections||[]).forEach(sec=>{ (sec.docs||[]).forEach(d=>{ delete d.fileData; delete d.mimeType; }); }); });
+  return out;
+}
+// Merge incoming caseMeta into target by clid, newer _updatedAt wins, never
+// dropping a clid that exists on either side.
+function _mergeCaseMetaInto(target, incoming){
+  Object.keys(incoming||{}).forEach(clid=>{
+    const im=incoming[clid], ex=target[clid];
+    if(!ex){ target[clid]=im; return; }
+    if(((im&&im._updatedAt)||0) >= ((ex&&ex._updatedAt)||0)) target[clid]=im;
+  });
+  return target;
+}
+// Which cm shards contain a case file whose content changed since last save.
+function _dirtyCmShards(){
+  const dirty=new Set();
+  Object.keys(caseMeta||{}).forEach(clid=>{
+    const h=_metaContentHash(caseMeta[clid]);
+    if(_lastSavedMetaHashes.get(clid)!==h) dirty.add(_cmShardIndex(clid));
+  });
+  return dirty;
+}
+// Write the dirty caseMeta shards. Each shard is a read-merge-write
+// transaction so two devices editing different cases can't clobber each
+// other. Fire-and-forget; failures surface in the console + cloud indicator.
+function _syncCaseMetaShards(savedAt){
+  let dirty;
+  try{ dirty=_dirtyCmShards(); }catch(e){ dirty=new Set(); }
+  if(!dirty.size) return Promise.resolve();
+  const cleanCM=_cleanCaseMeta(caseMeta);
+  const buckets={};
+  Object.keys(cleanCM).forEach(clid=>{ const i=_cmShardIndex(clid); (buckets[i]||(buckets[i]={}))[clid]=cleanCM[clid]; });
+  const proms=[];
+  dirty.forEach(i=>{
+    const ref=db.collection('wilmer').doc(_cmShardDocId(i));
+    const localShardMeta=buckets[i]||{};
+    proms.push(db.runTransaction(async(tx)=>{
+      const snap=await tx.get(ref);
+      const cloud=(snap.exists?snap.data():{})||{};
+      const mergedMeta=Object.assign({}, cloud.caseMeta||{});
+      _mergeCaseMetaInto(mergedMeta, localShardMeta);
+      let cleaned;
+      try{ cleaned=JSON.parse(JSON.stringify({caseMeta:mergedMeta,_savedAt:savedAt||Date.now(),_deviceId:_deviceId})); }
+      catch(e){ cleaned={caseMeta:mergedMeta,_savedAt:savedAt||Date.now(),_deviceId:_deviceId}; }
+      tx.set(ref, cleaned);
+      return cleaned;
+    }).then(()=>{ _fbOnline=true; _offlineReason=''; updateCloudIndicator(); })
+      .catch(err=>{ try{ console.error('[cloud-sync] cm shard '+i+' failed:', err.code||err.message, err); }catch(e){} }));
+  });
+  // allSettled so the caller's main-doc write proceeds even if a shard fails.
+  return Promise.all(proms.map(p=>p.catch(e=>e)));
+}
 // Merge a cloud payload with the local one, item-by-item.
 // - records[] merge by id, prefer newer _updatedAt
 // - caseMeta{} merge by clid (object key), prefer newer _updatedAt
@@ -20254,6 +20396,15 @@ function _syncToFirestore(savedAt){
       customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,
       _savedAt:savedAt||Date.now(),_deviceId:_deviceId
     }));
+    // Step 2b: write caseMeta out to its own sharded docs (wilmer/cm_*).
+    // caseMeta is intentionally NOT in the main doc's whitelist below, so the
+    // main wilmer/data doc carries only records + config and stays small. We
+    // wait for the shard writes to settle BEFORE the main-doc write below,
+    // because the main write strips caseMeta out of wilmer/data — so the
+    // shards must have it first (migration safety).
+    let _cmDone;
+    try{ _cmDone=_syncCaseMetaShards(savedAt||Date.now()); }catch(e){ console.warn('[cloud-sync] cm shard write failed', e); }
+    if(!_cmDone || typeof _cmDone.then!=='function') _cmDone=Promise.resolve();
     // Step 3: read-merge-write inside a Firestore transaction. The SDK
     // retries the transaction if cloud changes during the read→write
     // window, so concurrent edits from two devices fold together
@@ -20262,7 +20413,7 @@ function _syncToFirestore(savedAt){
     const _KNOWN_TOP_FIELDS = [
       'records','paralegals','eventTypes','eventTypeMeta',
       'caseTypes','caseTypeDocLists','caseTypeStages',
-      'customColumns','colVis','caseMeta','callUpTypes','judges','caseIssueTypes',
+      'customColumns','colVis','callUpTypes','judges','caseIssueTypes',
       'customChecklists','paralegalEmails','attorneys','attorneyEmails','attorneySignatures','venues','firmInfo','bondPrepQuestions',
       '_savedAt','_deviceId'
     ];
@@ -20285,7 +20436,7 @@ function _syncToFirestore(savedAt){
       }
       return cleaned;
     }
-    db.runTransaction(async (tx)=>{
+    _cmDone.then(()=> db.runTransaction(async (tx)=>{
       const snap = await tx.get(ref);
       const cloudData = snap.exists ? snap.data() : null;
       const merged = _mergePayloads(cloudData, localPayload);
@@ -20300,7 +20451,7 @@ function _syncToFirestore(savedAt){
       }catch(e){}
       tx.set(ref, cleaned);
       return cleaned;
-    })
+    }))
       .then((merged)=>{
         _fbOnline=true; _offlineReason=''; updateCloudIndicator();
         // If the transaction folded in remote changes we didn't have yet,
@@ -20398,17 +20549,27 @@ function forcePullFromCloud(){
   const btn=document.getElementById('pull-cloud-label');
   if(btn)btn.textContent='⏳';
   showToast('↓ Pulling from cloud…');
-  db.collection('wilmer').doc('data').get()
-    .then((doc)=>{
-      if(!doc.exists){ showToast('No cloud data found'); if(btn)btn.textContent='↓'; return; }
-      const cloudData=doc.data();
-      applyPayload(cloudData);
+  // Pull the main doc (records + config) AND every caseMeta shard, then
+  // reassemble caseMeta from the shards (plus any legacy caseMeta still in
+  // the main doc during migration).
+  db.collection('wilmer').get()
+    .then((qs)=>{
+      let cloudData=null; const cm={};
+      qs.forEach(doc=>{
+        const id=doc.id, d=doc.data()||{};
+        if(id==='data'){ cloudData=d; if(d.caseMeta) _mergeCaseMetaInto(cm, d.caseMeta); }
+        else if(id.indexOf('cm_')===0){ if(d.caseMeta) _mergeCaseMetaInto(cm, d.caseMeta); }
+      });
+      if(!cloudData && !Object.keys(cm).length){ showToast('No cloud data found'); if(btn)btn.textContent='↓'; return; }
+      const payload=Object.assign({}, cloudData||{});
+      payload.caseMeta=cm;
+      applyPayload(payload);
       _dataInitialized=true; // explicit pull permits saves again
       try{
         const _now=Date.now();
-        const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
-        localStorage.setItem('casetracker_v1',JSON.stringify(payload));
-        localStorage.setItem('wilmer_save_epoch',String(cloudData._savedAt||_now));
+        const lp={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
+        localStorage.setItem('casetracker_v1',JSON.stringify(lp));
+        localStorage.setItem('wilmer_save_epoch',String((cloudData&&cloudData._savedAt)||_now));
       }catch(e){}
       renderAll();
       showToast('☁ Pulled from cloud ✓');
@@ -20792,15 +20953,15 @@ db.collection('wilmer').doc('data').onSnapshot(
           _deviceId
         };
         const merged = _mergePayloads(cloudData, localPayload);
-        // Detect whether the merge actually pulled anything new from cloud —
-        // if not, skip the re-render to keep the UI quiet.
-        const beforeRecCount = (records||[]).length;
-        const afterRecCount = (merged.records||[]).length;
-        const beforeMetaKeys = Object.keys(caseMeta||{}).length;
-        const afterMetaKeys = Object.keys(merged.caseMeta||{}).length;
-        const changed = beforeRecCount !== afterRecCount
-          || beforeMetaKeys !== afterMetaKeys
-          || cloudEpoch > localEpoch;
+        // Detect whether the merge actually changed our local state. Counting
+        // records / meta keys only catches adds & deletes — a remote EDIT to
+        // an existing record leaves the counts identical, so a count+epoch
+        // gate would silently drop it and leave the two devices diverged.
+        // Compare a per-record / per-clid _updatedAt signature instead, which
+        // moves whenever any record's content changes (it's stamped on save).
+        const changed = _stateSig(merged.records, merged.caseMeta)
+                        !== _stateSig(records, caseMeta)
+                        || cloudEpoch > localEpoch;
         if(changed){
           applyPayload(merged);
           // Save to localStorage only — do NOT call saveAllData() which would
@@ -20826,6 +20987,83 @@ db.collection('wilmer').doc('data').onSnapshot(
     updateCloudIndicator();
   }
 );
+
+// ─── caseMeta shard listener ────────────────────────────────────────
+// caseMeta lives in wilmer/cm_* docs (see _syncCaseMetaShards). Subscribe to
+// the whole wilmer collection and fold in any cm_* doc written by ANOTHER
+// device, merging per-clid (newer _updatedAt wins). The initial snapshot
+// delivers every cm_* doc, which is how this device first loads case files
+// from the cloud. data / locks docs are handled by their own listeners.
+db.collection('wilmer').onSnapshot(
+  {includeMetadataChanges:false},
+  (snap)=>{
+    let touched=false;
+    snap.docChanges().forEach(ch=>{
+      const id=ch.doc.id;
+      if(!id || id.indexOf('cm_')!==0) return;      // only caseMeta shards
+      if(ch.type==='removed') return;
+      const d=ch.doc.data()||{};
+      if(d._deviceId && d._deviceId===_deviceId) return; // our own write
+      if(d.caseMeta){ _mergeCaseMetaInto(caseMeta, d.caseMeta); touched=true; }
+    });
+    if(touched){
+      try{
+        const _now=Date.now();
+        const persistPayload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,_savedAt:_now};
+        localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
+        _lastLocalSave=_now;
+        _refreshSavedHashes();
+      }catch(e){}
+      try{ renderAll(); }catch(e){}
+      // If a case detail view is open, refresh it so the synced case shows.
+      try{ if(activeCaseClid && document.getElementById('cases-detail-view') && document.getElementById('cases-detail-view').style.display!=='none') openCaseDetail(activeCaseClid); }catch(e){}
+      showToast('☁ Case files synced ✓');
+    }
+  },
+  (err)=>{ try{ console.warn('[cloud-sync] cm listener error', err.code||err.message); }catch(e){} }
+);
+
+// ─── Per-record edit locks ──────────────────────────────────────────
+// While one device is editing a record, every other device is hard-blocked
+// from opening that same record until the edit is saved or closed. Locks
+// live in a small dedicated doc (wilmer/locks) so they sync in real time
+// without rewriting the heavy main data doc. Each lock is {device, at}; a
+// lock older than _LOCK_TTL_MS with no heartbeat is treated as stale (covers
+// crashed tabs / closed laptops) so records can never get stuck locked.
+var _LOCK_TTL_MS=90000;          // 90s idle → lock auto-expires
+var _LOCK_HEARTBEAT_MS=30000;    // refresh the held lock every 30s
+var _recordLocks={};
+var _heldLockId=null;
+var _lockHeartbeatTimer=null;
+var _locksRef=db.collection('wilmer').doc('locks');
+_locksRef.onSnapshot({includeMetadataChanges:false},function(doc){
+  _recordLocks=(doc.exists?doc.data():{})||{};
+},function(err){ /* offline: acquire fails open below, so editing still works */ });
+function _lockIsActive(l){ return !!(l&&l.at&&(Date.now()-l.at)<_LOCK_TTL_MS); }
+function _acquireLock(id){
+  // No auth yet / offline → fail open so the user is never trapped.
+  if(!_fbAuthReady) return Promise.resolve({ok:true,failOpen:true});
+  return db.runTransaction(async function(tx){
+    var snap=await tx.get(_locksRef);
+    var locks=(snap.exists?snap.data():{})||{};
+    var cur=locks[id];
+    if(cur&&cur.device!==_deviceId&&_lockIsActive(cur)) return {ok:false,lock:cur};
+    locks[id]={device:_deviceId,at:Date.now()};
+    tx.set(_locksRef,locks);
+    return {ok:true};
+  }).then(function(res){ if(res.ok)_heldLockId=id; return res; })
+    .catch(function(e){ console.warn('[lock] acquire failed — opening anyway',e); _heldLockId=id; return {ok:true,failOpen:true}; });
+}
+function _refreshLock(id){ if(!_fbAuthReady||!id) return; var u={}; u[id]={device:_deviceId,at:Date.now()}; _locksRef.set(u,{merge:true}).catch(function(){}); }
+function _releaseLock(id){ if(!id) return; if(_heldLockId===id)_heldLockId=null; if(!_fbAuthReady) return; var u={}; u[id]=firebase.firestore.FieldValue.delete(); _locksRef.update(u).catch(function(){}); }
+function _startLockHeartbeat(id){ _stopLockHeartbeat(); _lockHeartbeatTimer=setInterval(function(){_refreshLock(id);},_LOCK_HEARTBEAT_MS); }
+function _stopLockHeartbeat(){ if(_lockHeartbeatTimer){clearInterval(_lockHeartbeatTimer);_lockHeartbeatTimer=null;} }
+function _showLockBlocked(lock){
+  var ago='';
+  if(lock&&lock.at){ var s=Math.max(0,Math.round((Date.now()-lock.at)/1000)); ago=s<60?(s+'s ago'):(Math.round(s/60)+'m ago'); }
+  alert('This record is being edited on another device right now'+(ago?' (started '+ago+')':'')+'.\n\nYou can’t open it until that edit is saved or closed. If the other session was left open by mistake, it unlocks automatically after a short idle period.');
+}
+window.addEventListener('beforeunload',function(){ if(_heldLockId)_releaseLock(_heldLockId); });
 
 // Step 3: Listen to day notes from other devices
 const dnKey=dayNotesKey();
