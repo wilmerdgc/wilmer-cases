@@ -18045,18 +18045,18 @@ function renderChecklistsList(){
       asg.onchange=()=>{ it.assignedTo=asg.value; asg.style.color=asg.value?'var(--ink-muted)':'var(--ink-faint)'; asg.style.opacity=asg.value?'1':'0.5'; persist(); };
       const _hasNote=(it.notes!=null&&it.notes!=='');
       const noteBtn=document.createElement('button');noteBtn.type='button';noteBtn.textContent='📝';noteBtn.title='Add a note';
-      noteBtn.style.cssText='border:none;background:transparent;cursor:pointer;font-size:11px;padding:0 2px;flex-shrink:0;opacity:'+(_hasNote?'0.85':'0')+';transition:opacity .12s;';
+      noteBtn.style.cssText='border:none;background:transparent;cursor:pointer;font-size:11px;padding:0 2px;flex-shrink:0;opacity:'+(_hasNote?'0.9':'0.5')+';transition:opacity .12s;';
       const subBtn=document.createElement('button');subBtn.type='button';subBtn.textContent='↳+';subBtn.title='Add a sub-item';
-      subBtn.style.cssText='border:none;background:transparent;cursor:pointer;font-size:12px;color:var(--sage);padding:0 2px;flex-shrink:0;opacity:0;transition:opacity .12s;';
+      subBtn.style.cssText='border:none;background:transparent;cursor:pointer;font-size:12px;color:var(--sage);padding:0 2px;flex-shrink:0;opacity:0.6;transition:opacity .12s;';
       subBtn.onclick=()=>{ it.subitems.push({type:'task',value:'',assignedTo:''}); persist(); refreshCount(); renderRows(); };
       const rmBtn=document.createElement('button');rmBtn.type='button';rmBtn.textContent='✕';
-      rmBtn.style.cssText='border:none;background:transparent;color:var(--ink-faint);cursor:pointer;font-size:11px;padding:0 4px;flex-shrink:0;opacity:0;transition:opacity .12s;';
-      rmBtn.title='Delete';
-      rmBtn.onmouseenter=()=>{rmBtn.style.color='var(--rose)';};
-      rmBtn.onmouseleave=()=>{rmBtn.style.color='var(--ink-faint)';};
-      rmBtn.onclick=()=>{ items.splice(i,1); persist(); refreshCount(); renderRows(); };
-      row.onmouseenter=()=>{ row.style.background='var(--cream)'; rmBtn.style.opacity='1'; typeBtn.style.opacity='1'; asg.style.opacity='1'; noteBtn.style.opacity='0.85'; subBtn.style.opacity='1'; };
-      row.onmouseleave=()=>{ row.style.background=''; rmBtn.style.opacity='0'; subBtn.style.opacity='0'; noteBtn.style.opacity=(it.notes!=null&&it.notes!=='')?'0.85':'0'; typeBtn.style.opacity=isEv?'0.7':'0.5'; asg.style.opacity=it.assignedTo?'1':'0.5'; };
+      rmBtn.style.cssText='border:none;background:transparent;color:var(--ink-faint);cursor:pointer;font-size:12px;padding:0 4px;flex-shrink:0;opacity:0.55;transition:opacity .12s;';
+      rmBtn.title='Delete item';
+      rmBtn.onmouseenter=()=>{rmBtn.style.color='var(--rose)';rmBtn.style.opacity='1';};
+      rmBtn.onmouseleave=()=>{rmBtn.style.color='var(--ink-faint)';rmBtn.style.opacity='0.55';};
+      rmBtn.onclick=()=>{ if(!confirm('Delete this item'+(it.subitems&&it.subitems.length?' and its '+it.subitems.length+' sub-item(s)':'')+'?'))return; items.splice(i,1); persist(); refreshCount(); renderRows(); };
+      row.onmouseenter=()=>{ row.style.background='var(--cream)'; rmBtn.style.opacity='1'; typeBtn.style.opacity='1'; asg.style.opacity='1'; noteBtn.style.opacity='0.9'; subBtn.style.opacity='1'; };
+      row.onmouseleave=()=>{ row.style.background=''; rmBtn.style.opacity='0.55'; subBtn.style.opacity='0.6'; noteBtn.style.opacity=(it.notes!=null&&it.notes!=='')?'0.9':'0.5'; typeBtn.style.opacity=isEv?'0.85':'0.6'; asg.style.opacity=it.assignedTo?'1':'0.6'; };
       row.appendChild(num);row.appendChild(nameEl);row.appendChild(noteBtn);row.appendChild(subBtn);row.appendChild(typeBtn);row.appendChild(asg);row.appendChild(rmBtn);
       wrap.appendChild(row);
       // Note input
@@ -18066,7 +18066,7 @@ function renderChecklistsList(){
       const ta=document.createElement('textarea');ta.rows=2;ta.placeholder='Note…';ta.value=it.notes||'';
       ta.style.cssText='width:100%;box-sizing:border-box;font-size:11px;color:#5C5148;font-family:inherit;border:1px solid var(--cream-dark);border-radius:6px;background:#fff;outline:none;padding:5px 8px;resize:vertical;';
       ta.oninput=()=>{ it.notes=ta.value; };
-      ta.onblur=()=>{ persist(); noteBtn.style.opacity=(it.notes!=null&&it.notes!=='')?'0.85':'0'; };
+      ta.onblur=()=>{ persist(); noteBtn.style.opacity=(it.notes!=null&&it.notes!=='')?'0.9':'0.5'; };
       noteWrap.appendChild(ta);
       wrap.appendChild(noteWrap);
       noteBtn.onclick=()=>{ _noteOpen=!_noteOpen; if(_noteOpen&&it.notes==null)it.notes=''; noteWrap.style.display=_noteOpen?'block':'none'; if(_noteOpen){try{ta.focus();}catch(e){}} };
