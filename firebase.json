@@ -1,18 +1,5 @@
 {
   "firestore": {
     "rules": "firestore.rules"
-  },
-  "hosting": {
-    "public": ".",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**",
-      "backups/**",
-      "recovery/**",
-      "firestore.rules",
-      "*.md",
-      "sa.json"
-    ]
   }
 }
