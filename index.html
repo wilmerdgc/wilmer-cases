@@ -17908,11 +17908,11 @@ function renderChecklistsList(){
 
     // ── Simple card: thin border, no tinted header, no dashed leaders ──
     const card=document.createElement('div');
-    card.style.cssText='border:1px solid var(--border);border-radius:10px;background:#fff;margin-bottom:12px;overflow:hidden;';
+    card.style.cssText='border-bottom:1px solid #EDE8E0;margin-bottom:6px;padding-bottom:6px;';
 
     // ── Header row (compact, no big amber band) ──
     const hdr=document.createElement('div');
-    hdr.style.cssText='display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--cream-dark);cursor:pointer;user-select:none;';
+    hdr.style.cssText='display:flex;align-items:center;gap:8px;padding:5px 2px;cursor:pointer;user-select:none;transition:background .12s;';
     hdr.onclick=(e)=>{
       if(e.target.closest('input,select,button')) return;
       const nowOpen=body.style.display==='none';
@@ -17926,11 +17926,11 @@ function renderChecklistsList(){
     caret.style.cssText='font-size:10px;color:var(--ink-faint);flex-shrink:0;width:10px;';
 
     const hdrTitleWrap=document.createElement('div');
-    hdrTitleWrap.style.cssText='flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;';
+    hdrTitleWrap.style.cssText='flex:0 1 auto;min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;';
 
     const nameIn=document.createElement('input');
     nameIn.type='text';nameIn.value=cl.name;nameIn.placeholder='Checklist name…';
-    nameIn.style.cssText="font-size:13px;font-weight:600;color:var(--ink);font-family:inherit;border:none;background:transparent;padding:1px 4px;outline:none;border-radius:4px;flex:0 1 auto;min-width:160px;";
+    nameIn.style.cssText="font-size:12px;font-weight:600;color:#2C2620;font-family:'Lora',Georgia,serif;border:none;background:transparent;padding:1px 4px;outline:none;border-radius:4px;flex:0 1 auto;min-width:140px;";
     nameIn.size = Math.max(12, (cl.name||'').length+1);
     nameIn.onfocus=()=>{nameIn.style.background='var(--cream)';};
     nameIn.onblur=()=>{nameIn.style.background='transparent';const v=nameIn.value.trim();if(v&&v!==cl.name){cl.name=v;persist();}else if(!v){nameIn.value=cl.name;}};
@@ -17967,8 +17967,11 @@ function renderChecklistsList(){
     delBtn.onmouseleave=()=>{delBtn.style.color='var(--ink-faint)';delBtn.style.background='transparent';};
     delBtn.onclick=(e)=>{e.stopPropagation();if(!confirm('Delete checklist "'+cl.name+'"?'))return;customChecklists.splice(idx,1);delete window._checklistOpen[cl.id];persist();renderChecklistsList();};
 
+    const clDot=document.createElement('span');clDot.style.cssText='width:8px;height:8px;border-radius:50%;background:#9E9186;flex-shrink:0;';
     hdr.appendChild(caret);
+    hdr.appendChild(clDot);
     hdr.appendChild(hdrTitleWrap);
+    hdr.appendChild(_makeDashedLine());
     hdr.appendChild(countChip);
     hdr.appendChild(delBtn);
     card.appendChild(hdr);
@@ -17999,7 +18002,7 @@ function renderChecklistsList(){
 
     // ── Body: clean numbered list ──
     const body=document.createElement('div');
-    body.style.cssText='padding:6px 0 4px;display:'+(isOpen?'block':'none')+';';
+    body.style.cssText='padding:2px 0 4px 15px;border-left:2px solid #EDE8E0;margin-left:3px;display:'+(isOpen?'block':'none')+';';
 
     const itemsWrap=document.createElement('div');
     body.appendChild(itemsWrap);
@@ -18020,23 +18023,24 @@ function renderChecklistsList(){
         row.onmouseenter=()=>{ row.style.background='var(--cream)'; rmBtn.style.opacity='1'; typeBtn.style.opacity='1'; asg.style.opacity='1'; };
         row.onmouseleave=()=>{ row.style.background=''; rmBtn.style.opacity='0'; typeBtn.style.opacity = isEv ? '0.7' : '0.5'; asg.style.opacity = it.assignedTo ? '1' : '0.5'; };
 
-        // Simple number prefix instead of colored dot
+        // Colored dot (event color for events, sage for tasks)
+        const _es2=isEv?getEventStyle(it.value||''):{};
+        const _dotColor=isEv?(_es2.color||'#6B7FA3'):'#6A8C6E';
         const num=document.createElement('span');
-        num.style.cssText='font-size:11px;color:var(--ink-faint);flex-shrink:0;min-width:18px;text-align:right;';
-        num.textContent = (i+1)+'.';
+        num.style.cssText='width:5px;height:5px;border-radius:50%;flex-shrink:0;background:'+_dotColor+';margin:0 6px 0 2px;';
 
         // Name — plain sans-serif input/select
         let nameEl;
         if(isEv){
           nameEl=document.createElement('select');
-          nameEl.style.cssText='font-size:12px;color:var(--ink);font-family:inherit;border:none;background:transparent;outline:none;cursor:pointer;padding:2px 4px;border-radius:4px;flex:1;min-width:0;';
+          nameEl.style.cssText='font-size:11px;color:'+_dotColor+';font-family:inherit;border:none;background:transparent;outline:none;cursor:pointer;padding:1px 2px;border-radius:4px;flex:0 1 auto;min-width:60px;max-width:75%;';
           const ph=document.createElement('option');ph.value='';ph.textContent='— event type —';nameEl.appendChild(ph);
           eventTypes.forEach(ev=>{const o=document.createElement('option');o.value=ev;o.textContent=ev;if(ev===it.value)o.selected=true;nameEl.appendChild(o);});
           if(it.value && !eventTypes.includes(it.value)){const o=document.createElement('option');o.value=it.value;o.textContent=it.value;o.selected=true;nameEl.appendChild(o);}
-          nameEl.onchange=()=>{it.value=nameEl.value;persist();};
+          nameEl.onchange=()=>{it.value=nameEl.value;persist();renderRows();};
         } else {
           nameEl=document.createElement('input');nameEl.type='text';nameEl.placeholder='Item name…';nameEl.value=it.value||'';
-          nameEl.style.cssText='font-size:12px;color:var(--ink);font-family:inherit;border:none;background:transparent;outline:none;padding:2px 4px;border-radius:4px;flex:1;min-width:0;';
+          nameEl.style.cssText='font-size:11px;color:#5C5148;font-family:inherit;border:none;background:transparent;outline:none;padding:1px 2px;border-radius:4px;flex:0 1 auto;min-width:60px;max-width:75%;';
           nameEl.onfocus=()=>{nameEl.style.background='var(--cream-dark)';};
           nameEl.onblur=()=>{nameEl.style.background='transparent';persist();};
           nameEl.oninput=()=>{it.value=nameEl.value;};
@@ -18066,6 +18070,7 @@ function renderChecklistsList(){
 
         row.appendChild(num);
         row.appendChild(nameEl);
+        row.appendChild(_makeDashedLine());
         row.appendChild(typeBtn);
         row.appendChild(asg);
         row.appendChild(rmBtn);
