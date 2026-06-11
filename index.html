@@ -524,6 +524,25 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .modal-backdrop.readonly-mode .modal-save-btn { display: none !important; }
 .modal-backdrop.readonly-mode #modal-readonly-view { display: block; }
 #modal-readonly-view { display: none; }
+/* ── Finish-only mode: checking a task's box shows just the status buttons + reason ── */
+.modal-backdrop.finish-only .form-row,
+.modal-backdrop.finish-only #so-attachment-panel,
+.modal-backdrop.finish-only #individual-callup-panel,
+.modal-backdrop.finish-only #fc-subevents-panel,
+.modal-backdrop.finish-only #modal-custom-fields,
+.modal-backdrop.finish-only #modal-reminder-section,
+.modal-backdrop.finish-only #modal-time-row,
+.modal-backdrop.finish-only #modal-date-calc,
+.modal-backdrop.finish-only #modal-copy-btn,
+.modal-backdrop.finish-only #modal-readonly-view,
+.modal-backdrop.finish-only #modal-history-wrap,
+.modal-backdrop.finish-only #modal-preview-attach,
+.modal-backdrop.finish-only #modal-open-case-btn,
+.modal-backdrop.finish-only #modal-hearing-mode-section,
+.modal-backdrop.finish-only #modal-master-prep-section { display: none !important; }
+.modal-backdrop.finish-only #modal-status-section { display: block !important; }
+.modal-backdrop.finish-only #modal-status-section .form-row { display: block !important; }
+.modal-backdrop.finish-only #modal-status-section > .section-divider:first-child { display: none; }
 .ro-grid { display: grid; grid-template-columns: 96px 1fr; gap: 2px 10px; margin-bottom: 14px; }
 .ro-row { display: contents; }
 .ro-row .ro-label { font-size: 10px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; padding: 7px 0 7px 0; align-self: center; }
@@ -8796,7 +8815,7 @@ function renderWeek() {
         if(isTask){
           // Tasks: no "TASK" label — lead with the note, client beneath.
           // Clicking the box opens the finish window (the status buttons).
-          t.innerHTML = `<span class="task-check" data-rid="${r.id}" title="Finish this task" style="position:absolute;left:4px;top:6px;width:14px;height:14px;border:2px solid #C4BAB0;border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;transition:all .12s;background:#fff;">&check;</span><div style="font-size:11px;color:var(--ink);font-weight:500;line-height:1.3;">${r.notes||'(no description)'}</div>${r.client?`<div class="week-client">${r.client}</div>`:''}${timeBadge}`;
+          t.innerHTML = `<span class="task-check" data-rid="${r.id}" title="Finish this task" style="position:absolute;left:4px;top:6px;width:14px;height:14px;border:2px solid #C4BAB0;border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;transition:all .12s;background:#fff;">&check;</span><div class="week-event" style="white-space:normal;line-height:1.3;">${r.notes||'(no description)'}</div>${r.client?`<div class="week-client">${r.client}</div>`:''}${timeBadge}`;
           const chk=t.querySelector('.task-check');
           if(chk){
             chk.onmouseenter=()=>{chk.style.borderColor='#6A8C6E';chk.style.color='#6A8C6E';};
@@ -11836,7 +11855,7 @@ function applyDateCalc(){
     setTimeout(()=>res.style.color='#6A8C6E',800);
   }
 }
-function closeModal(){if(typeof _exitPreviewSplitMode==='function')_exitPreviewSplitMode();const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetVirtualHearingDetails();resetFcSubevents();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _fcs1=document.getElementById('fc-subevents-panel');if(_fcs1)_fcs1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';if(typeof _heldLockId!=='undefined'&&_heldLockId){_releaseLock(_heldLockId);}if(typeof _stopLockHeartbeat==='function')_stopLockHeartbeat();}
+function closeModal(){if(typeof _exitPreviewSplitMode==='function')_exitPreviewSplitMode();const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetVirtualHearingDetails();resetFcSubevents();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _fcs1=document.getElementById('fc-subevents-panel');if(_fcs1)_fcs1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';_mm.classList.remove('finish-only');if(typeof _heldLockId!=='undefined'&&_heldLockId){_releaseLock(_heldLockId);}if(typeof _stopLockHeartbeat==='function')_stopLockHeartbeat();}
 function handleBackdropClick(e){if(e.target===document.getElementById('modal'))closeModal();}
 
 // ── saveEvent ──
@@ -11846,7 +11865,7 @@ window.saveEvent=function(){
   // they don't belong to a client or a case file, so client + case type are
   // optional for these two event types only.
   const _evt=(document.getElementById('fc-eventtype')||{}).value||'';
-  const _isStandalone=(_evt==='PERSONAL TASK'||_evt==='OFFICE TASK');
+  const _isStandalone=(_evt==='PERSONAL TASK'||_evt==='OFFICE TASK'||_evt==='TASK');
   if(!_isStandalone){
     if(!client){alert('Client name is required.');return;}
     if(!type){alert('Case type is required.');return;}
@@ -16962,7 +16981,27 @@ function openCaseDetail(clid){
   const sharedSave=document.createElement('button');sharedSave.textContent='Save';sharedSave.style.cssText='font-size:12px;font-weight:600;padding:7px 22px;border-radius:8px;background:#2C2620;color:#F7F3ED;border:none;cursor:pointer;font-family:inherit;';
   sharedSave.onclick=()=>{doSaveAll();isEditing=false;editToggle.textContent='Edit';renderAll2();sharedActRow.style.display='none';};
   rightCluster.appendChild(sharedCancel);rightCluster.appendChild(sharedSave);
-  sharedActRow.appendChild(sharedDelete);sharedActRow.appendChild(rightCluster);
+  // Close case — archive as Closed (keeps the case + its events, hidden from
+  // active lists; still visible in All Events under a "Case Closed" badge).
+  const sharedClose=document.createElement('button');sharedClose.textContent='📦 Close case';sharedClose.title='Archive this case as Closed — keeps it and its events, hidden from active lists';sharedClose.style.cssText='font-size:12px;font-weight:600;padding:7px 16px;border:1px solid #C9B79A;border-radius:8px;background:#FBF4E9;color:#9A7B3F;cursor:pointer;font-family:inherit;';
+  sharedClose.onmouseenter=()=>{sharedClose.style.background='#C9823A';sharedClose.style.color='#fff';};
+  sharedClose.onmouseleave=()=>{sharedClose.style.background='#FBF4E9';sharedClose.style.color='#9A7B3F';};
+  sharedClose.onclick=()=>{
+    const name=base.client||clid;
+    const victims=records.filter(r=>(r.clid||r.client)===clid);
+    if(!confirm('Close case "'+name+'"?\n\nThe case and its '+victims.length+' event(s) will be archived as Closed — hidden from the Cases tab and active lists, and kept in All Events under a "Case Closed" badge.')) return;
+    const today=todayStr();
+    victims.forEach(r=>{ if(!r.deletedStatus && !r.finishedStatus){ r.deletedStatus='deleted'; if(!r.deletedDate)r.deletedDate=today; } r.closedWithCase=true; });
+    if(!caseMeta[clid]) caseMeta[clid]={};
+    caseMeta[clid].caseClosed={date:today, reason:'closed'};
+    _invalidateCasesCache();
+    markUnsaved();
+    showToast('Case archived as closed — '+name);
+    closeCaseDetail();
+  };
+  const leftCluster=document.createElement('div');leftCluster.style.cssText='display:flex;gap:8px;';
+  leftCluster.appendChild(sharedDelete);leftCluster.appendChild(sharedClose);
+  sharedActRow.appendChild(leftCluster);sharedActRow.appendChild(rightCluster);
   body.appendChild(sharedActRow);
 
   // Active events
@@ -18981,9 +19020,24 @@ function addMiniCell(frag, dayNum, ds, extraClass, todayStr, selStr, eventDates,
 // buttons (Completed / Attended / Cancelled / Rescheduled / Deleted) are
 // visible right away, instead of the read-only view.
 function _openTaskFinish(id){
-  openEdit(id);
-  if(typeof enterEditMode==='function') enterEditMode();
-  setTimeout(()=>{ const ss=document.getElementById('modal-status-section'); if(ss){ try{ ss.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} } }, 220);
+  openEdit(id); // populates the modal + sets editingId (opens read-only)
+  const proceed=()=>{
+    const m=document.getElementById('modal'); if(!m) return;
+    m.classList.remove('readonly-mode');
+    m.classList.add('finish-only');
+    const ss=document.getElementById('modal-status-section'); if(ss) ss.style.display='block';
+    const t=document.getElementById('modal-title'); if(t) t.textContent='Finish task';
+  };
+  // Acquire the per-record edit lock first (same gate as enterEditMode).
+  if(editingId && typeof _heldLockId!=='undefined' && _heldLockId!==editingId){
+    const cur=(typeof _recordLocks!=='undefined')?_recordLocks[editingId]:null;
+    if(cur && typeof _lockIsActive==='function' && cur.device!==_deviceId && _lockIsActive(cur)){ _showLockBlocked(cur); return; }
+    if(typeof _acquireLock==='function'){
+      _acquireLock(editingId).then(res=>{ if(!res.ok){ _showLockBlocked(res.lock); return; } if(typeof _startLockHeartbeat==='function')_startLockHeartbeat(editingId); proceed(); });
+      return;
+    }
+  }
+  proceed();
 }
 function renderDayTaskList(){
   const selStr = toDateStr(dayViewDate);
@@ -19054,7 +19108,7 @@ function renderDayTaskList(){
       body.appendChild(noteLine);
       if(r.client){
         const clientLine = document.createElement('div');
-        clientLine.style.cssText = "font-size:11px;color:#9E9186;font-family:'Lora',Georgia,serif;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
+        clientLine.style.cssText = "font-size:11px;color:#9E9186;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
         clientLine.textContent = r.client;
         body.appendChild(clientLine);
       }
@@ -19807,7 +19861,7 @@ function renderQueue(){
       const esQ=getEventStyle(r.event||'');
       if(isTaskRec){
         // Tasks: lead with the note instead of the "TASK" label.
-        eventEl.style.cssText = 'font-size:12px;color:#2C2620;font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        eventEl.style.cssText = 'font-size:12px;color:#2C2620;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         eventEl.textContent = r.notes || '(no description)';
       } else {
         eventEl.style.cssText = 'font-size:12px;color:#2C2620;font-weight:600;white-space:nowrap;flex-shrink:0;';
