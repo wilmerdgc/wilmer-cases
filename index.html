@@ -18975,6 +18975,14 @@ function addMiniCell(frag, dayNum, ds, extraClass, todayStr, selStr, eventDates,
 }
 
 // ── Task checklist (left sidebar) ──
+// Checking a task's box opens the event modal in edit mode so the finish
+// buttons (Completed / Attended / Cancelled / Rescheduled / Deleted) are
+// visible right away, instead of the read-only view.
+function _openTaskFinish(id){
+  openEdit(id);
+  if(typeof enterEditMode==='function') enterEditMode();
+  setTimeout(()=>{ const ss=document.getElementById('modal-status-section'); if(ss){ try{ ss.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} } }, 220);
+}
 function renderDayTaskList(){
   const selStr = toDateStr(dayViewDate);
   const isToday = selStr === toDateStr(TODAY);
@@ -19031,6 +19039,26 @@ function renderDayTaskList(){
     const body = document.createElement('div');
     body.className = 'day-task-body';
 
+    const isTaskRec = (r.event==='TASK' || r.event==='OFFICE TASK' || r.event==='PERSONAL TASK');
+    if(isTaskRec){
+      // Task rows: hide the redundant "TASK" title — lead with the note, with
+      // the client name beneath it. Checking the box opens the finish window
+      // (the status buttons) for that task.
+      cb.onclick = e => { e.stopPropagation(); _openTaskFinish(r.id); };
+      const noteLine = document.createElement('div');
+      noteLine.className = 'day-task-name';
+      noteLine.style.whiteSpace = 'normal';
+      noteLine.textContent = r.notes ? r.notes : '(no description)';
+      body.appendChild(noteLine);
+      if(r.client){
+        const clientLine = document.createElement('div');
+        clientLine.style.cssText = "font-size:11px;color:#9E9186;font-family:'Lora',Georgia,serif;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
+        clientLine.textContent = r.client;
+        body.appendChild(clientLine);
+      }
+      row.appendChild(cb);
+      row.appendChild(body);
+    } else {
     const name = document.createElement('div');
     name.className = 'day-task-name';
     const taskLabel = r.event ? r.event : r.type || 'Task';
@@ -19074,6 +19102,7 @@ function renderDayTaskList(){
       badge.style.cssText = 'background:#EBF1EB;color:#6A8C6E;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;flex-shrink:0;margin-top:1px;white-space:nowrap;';
       badge.textContent = r.atty.split(' ')[0];
       row.appendChild(badge);
+    }
     }
 
     dtFrag.appendChild(row);
