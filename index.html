@@ -8794,12 +8794,14 @@ function renderWeek() {
           cdHtml=`<div style="font-size:9px;font-weight:700;color:${cdColor};background:${cdColor}18;padding:1px 5px;border-radius:4px;display:inline-block;margin-top:2px;">${cdText}</div>`;
         }
         if(isTask){
-          t.innerHTML = `<span class="task-check" data-rid="${r.id}" title="Double-click to mark complete" style="position:absolute;left:4px;top:6px;width:14px;height:14px;border:2px solid #C4BAB0;border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;transition:all .12s;background:#fff;">&check;</span><div class="week-event"${evColor?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div>${timeBadge}${r.notes ? `<div class="wk-notes" style="color:var(--ink-faint);margin-top:1px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
+          // Tasks: no "TASK" label — lead with the note, client beneath.
+          // Clicking the box opens the finish window (the status buttons).
+          t.innerHTML = `<span class="task-check" data-rid="${r.id}" title="Finish this task" style="position:absolute;left:4px;top:6px;width:14px;height:14px;border:2px solid #C4BAB0;border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;transition:all .12s;background:#fff;">&check;</span><div style="font-size:11px;color:var(--ink);font-weight:500;line-height:1.3;">${r.notes||'(no description)'}</div>${r.client?`<div class="week-client">${r.client}</div>`:''}${timeBadge}`;
           const chk=t.querySelector('.task-check');
           if(chk){
             chk.onmouseenter=()=>{chk.style.borderColor='#6A8C6E';chk.style.color='#6A8C6E';};
             chk.onmouseleave=()=>{chk.style.borderColor='#C4BAB0';chk.style.color='transparent';};
-            chk.ondblclick=(e)=>{e.stopPropagation();const rec=records.find(x=>x.id===r.id);if(!rec)return;rec.finishedStatus='completed';const hist=rec.history||(rec.history=[]);hist.push({type:'completed',date:todayStr(),note:'Marked done from week view'});_invalidateCasesCache();markUnsaved();showToast('✓ Task completed');renderWeek();};
+            chk.onclick=(e)=>{e.stopPropagation();_openTaskFinish(r.id);};
           }
         } else {
           t.innerHTML = `<div class="week-event"${evColor?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div><div class="week-clid">#${r.clid || '—'}</div>${timeBadge}${cdHtml}${r.notes ? `<div class="wk-notes" style="font-size:10px;color:var(--ink-faint);margin-top:2px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
@@ -18975,6 +18977,14 @@ function addMiniCell(frag, dayNum, ds, extraClass, todayStr, selStr, eventDates,
 }
 
 // ── Task checklist (left sidebar) ──
+// Checking a task's box opens the event modal in edit mode so the finish
+// buttons (Completed / Attended / Cancelled / Rescheduled / Deleted) are
+// visible right away, instead of the read-only view.
+function _openTaskFinish(id){
+  openEdit(id);
+  if(typeof enterEditMode==='function') enterEditMode();
+  setTimeout(()=>{ const ss=document.getElementById('modal-status-section'); if(ss){ try{ ss.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} } }, 220);
+}
 function renderDayTaskList(){
   const selStr = toDateStr(dayViewDate);
   const isToday = selStr === toDateStr(TODAY);
@@ -19031,6 +19041,26 @@ function renderDayTaskList(){
     const body = document.createElement('div');
     body.className = 'day-task-body';
 
+    const isTaskRec = isTaskKindEvent(r.event);
+    if(isTaskRec){
+      // Task rows: hide the redundant "TASK" title — lead with the note, with
+      // the client name beneath it. Checking the box opens the finish window
+      // (the status buttons) for that task.
+      cb.onclick = e => { e.stopPropagation(); _openTaskFinish(r.id); };
+      const noteLine = document.createElement('div');
+      noteLine.className = 'day-task-name';
+      noteLine.style.whiteSpace = 'normal';
+      noteLine.textContent = r.notes ? r.notes : '(no description)';
+      body.appendChild(noteLine);
+      if(r.client){
+        const clientLine = document.createElement('div');
+        clientLine.style.cssText = "font-size:11px;color:#9E9186;font-family:'Lora',Georgia,serif;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
+        clientLine.textContent = r.client;
+        body.appendChild(clientLine);
+      }
+      row.appendChild(cb);
+      row.appendChild(body);
+    } else {
     const name = document.createElement('div');
     name.className = 'day-task-name';
     const taskLabel = r.event ? r.event : r.type || 'Task';
@@ -19074,6 +19104,7 @@ function renderDayTaskList(){
       badge.style.cssText = 'background:#EBF1EB;color:#6A8C6E;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;flex-shrink:0;margin-top:1px;white-space:nowrap;';
       badge.textContent = r.atty.split(' ')[0];
       row.appendChild(badge);
+    }
     }
 
     dtFrag.appendChild(row);
@@ -19753,8 +19784,17 @@ function renderQueue(){
       row.onmouseleave = ()=>row.style.background='transparent';
       row.onclick = ()=>openEdit(r.id);
 
+      const isTaskRec = isTaskKindEvent(r.event);
       const dot = document.createElement('span');
-      dot.style.cssText = `width:6px;height:6px;border-radius:50%;background:${dotColor};flex-shrink:0;margin-right:8px;margin-top:4px;`;
+      if(isTaskRec){
+        // Tasks get a checkbox; clicking it opens the finish window.
+        dot.className='day-task-cb';
+        dot.style.cssText='margin-right:8px;margin-top:1px;cursor:pointer;';
+        dot.title='Finish this task';
+        dot.onclick=e=>{e.stopPropagation();_openTaskFinish(r.id);};
+      } else {
+        dot.style.cssText = `width:6px;height:6px;border-radius:50%;background:${dotColor};flex-shrink:0;margin-right:8px;margin-top:4px;`;
+      }
 
       const textBlock = document.createElement('div');
       textBlock.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;';
@@ -19764,10 +19804,16 @@ function renderQueue(){
       line1.style.cssText = 'display:flex;align-items:center;';
 
       const eventEl = document.createElement('span');
-      eventEl.style.cssText = 'font-size:12px;color:#2C2620;font-weight:600;white-space:nowrap;flex-shrink:0;';
       const esQ=getEventStyle(r.event||'');
-      if(esQ.color)eventEl.style.color=esQ.color;
-      eventEl.textContent = (esQ.icon?esQ.icon+' ':'')+(r.event || r.type || '—');
+      if(isTaskRec){
+        // Tasks: lead with the note instead of the "TASK" label.
+        eventEl.style.cssText = 'font-size:12px;color:#2C2620;font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        eventEl.textContent = r.notes || '(no description)';
+      } else {
+        eventEl.style.cssText = 'font-size:12px;color:#2C2620;font-weight:600;white-space:nowrap;flex-shrink:0;';
+        if(esQ.color)eventEl.style.color=esQ.color;
+        eventEl.textContent = (esQ.icon?esQ.icon+' ':'')+(r.event || r.type || '—');
+      }
 
       const dashedLine = _makeDashedLine();
 
@@ -19803,7 +19849,7 @@ function renderQueue(){
         rightWrap.appendChild(tag);
       }
 
-      line1.appendChild(eventEl); line1.appendChild(dashedLine); line1.appendChild(rightWrap);
+      line1.appendChild(eventEl); if(!isTaskRec) line1.appendChild(dashedLine); line1.appendChild(rightWrap);
 
       // Line 2: notes
       const notesEl = document.createElement('div');
@@ -19816,7 +19862,7 @@ function renderQueue(){
       clientEl.textContent = r.client + (r.clid ? ' · #'+r.clid : '');
 
       textBlock.appendChild(line1);
-      if(r.notes) textBlock.appendChild(notesEl);
+      if(r.notes && !isTaskRec) textBlock.appendChild(notesEl);
       textBlock.appendChild(clientEl);
       appendSoMeta(textBlock, r, '#C9823A');
 
