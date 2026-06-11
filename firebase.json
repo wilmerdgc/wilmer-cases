@@ -3,11 +3,16 @@
     "rules": "firestore.rules"
   },
   "hosting": {
-    "public": "cp ~/Downloads/index.html ~/Desktop/wilmer-cases/index.html",
+    "public": ".",
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "backups/**",
+      "recovery/**",
+      "firestore.rules",
+      "*.md",
+      "sa.json"
     ]
   }
 }
