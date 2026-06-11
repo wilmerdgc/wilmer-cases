@@ -20213,6 +20213,19 @@ function _refreshSavedHashes(){
     if(m) _lastSavedMetaHashes.set(clid, _metaContentHash(m));
   });
 }
+// Order-independent signature of record + caseMeta state, keyed on each
+// item's _updatedAt (which is bumped on any content change just before a
+// save). Used to tell whether an incoming merge actually changes what this
+// device is showing — robust to field-level edits that don't change counts.
+function _stateSig(recs, meta){
+  const parts=[];
+  (recs||[]).forEach(r=>{ if(r&&r.id) parts.push(r.id+':'+(r._updatedAt||0)); });
+  parts.sort();
+  const metaParts=[];
+  Object.keys(meta||{}).forEach(k=>{ const m=meta[k]; metaParts.push(k+':'+((m&&m._updatedAt)||0)); });
+  metaParts.sort();
+  return parts.join('|')+'#'+metaParts.join('|');
+}
 // Merge a cloud payload with the local one, item-by-item.
 // - records[] merge by id, prefer newer _updatedAt
 // - caseMeta{} merge by clid (object key), prefer newer _updatedAt
@@ -20847,15 +20860,15 @@ db.collection('wilmer').doc('data').onSnapshot(
           _deviceId
         };
         const merged = _mergePayloads(cloudData, localPayload);
-        // Detect whether the merge actually pulled anything new from cloud —
-        // if not, skip the re-render to keep the UI quiet.
-        const beforeRecCount = (records||[]).length;
-        const afterRecCount = (merged.records||[]).length;
-        const beforeMetaKeys = Object.keys(caseMeta||{}).length;
-        const afterMetaKeys = Object.keys(merged.caseMeta||{}).length;
-        const changed = beforeRecCount !== afterRecCount
-          || beforeMetaKeys !== afterMetaKeys
-          || cloudEpoch > localEpoch;
+        // Detect whether the merge actually changed our local state. Counting
+        // records / meta keys only catches adds & deletes — a remote EDIT to
+        // an existing record leaves the counts identical, so a count+epoch
+        // gate would silently drop it and leave the two devices diverged.
+        // Compare a per-record / per-clid _updatedAt signature instead, which
+        // moves whenever any record's content changes (it's stamped on save).
+        const changed = _stateSig(merged.records, merged.caseMeta)
+                        !== _stateSig(records, caseMeta)
+                        || cloudEpoch > localEpoch;
         if(changed){
           applyPayload(merged);
           // Save to localStorage only — do NOT call saveAllData() which would
