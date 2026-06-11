@@ -1,0 +1,5 @@
+# Block public web access to committed data snapshots, which contain client
+# information. The trailing "!" forces the rule to win even though the files
+# exist in the deploy, so the JSON is never served — requests get a 404.
+/backups/*     /404.html     404!
+/recovery/*    /404.html     404!
