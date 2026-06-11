@@ -14283,7 +14283,8 @@ function _briefSuggestions(fieldKey){
       "RESPONDENT'S MOTION TO PRETERMIT",
       "RESPONDENT'S MOTION TO CHANGE VENUE",
       "RESPONDENT'S MOTION TO SUPPRESS",
-      "RESPONDENT'S MOTION TO DISMISS"
+      "RESPONDENT'S MOTION TO DISMISS",
+      "RESPONDENT'S WRITTEN PLEADINGS"
     ];
     const plural = !!(window._briefSelection
       && (window._briefSelection.included && window._briefSelection.included.size > 1));
@@ -14718,8 +14719,14 @@ async function generateMotionWebex(){
   if(btn){ btn.disabled = true; btn.textContent = 'Generating…'; }
   if(status){ status.textContent = ''; status.style.color=''; }
   try{
-    // Load the template (committed under templates/motion-webex.docx).
-    const resp = await fetch('templates/motion-webex.docx', { cache:'no-cache' });
+    // Pick the template by the chosen title: "Written Pleadings" uses its own
+    // template (same field structure, different body); everything else uses the
+    // motion template. Both live under templates/.
+    const _tplTitle = String(values.field7 || '').toUpperCase();
+    const _tplPath = /WRITTEN\s+PLEADING/.test(_tplTitle)
+      ? 'templates/written-pleadings.docx'
+      : 'templates/motion-webex.docx';
+    const resp = await fetch(_tplPath, { cache:'no-cache' });
     if(!resp.ok) throw new Error('Could not load template (' + resp.status + ')');
     const buf = await resp.arrayBuffer();
     const zip = await JSZip.loadAsync(buf);
