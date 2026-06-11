@@ -20226,6 +20226,80 @@ function _stateSig(recs, meta){
   metaParts.sort();
   return parts.join('|')+'#'+metaParts.join('|');
 }
+// ─── caseMeta sharding ──────────────────────────────────────────────
+// caseMeta (the per-case files) was ~75% of the single wilmer/data doc and
+// pushed it past Firestore's 1MB per-document limit, which made writes fail
+// and the fallback clobber records. We now keep records + config in
+// wilmer/data and spread caseMeta across N small docs (wilmer/cm_0..N-1),
+// bucketed by a stable hash of the clid. Each shard stays well under 1MB and
+// only dirty shards are rewritten on save. Migration is automatic: existing
+// devices already hold the full caseMeta locally, so the first save writes it
+// into the shards and stops writing it into wilmer/data (it drops out of the
+// main doc on the next write).
+const _CM_SHARD_COUNT = 16;
+function _cmShardIndex(clid){
+  const s=String(clid||''); let h=5381;
+  for(let i=0;i<s.length;i++){ h=(((h<<5)+h) ^ s.charCodeAt(i))>>>0; }
+  return h % _CM_SHARD_COUNT;
+}
+function _cmShardDocId(i){ return 'cm_'+i; }
+// Deep-copy caseMeta with base64 file payloads stripped (same rule the main
+// doc used) so big attachments never leave the device.
+function _cleanCaseMeta(cm){
+  let out;
+  try{ out=JSON.parse(JSON.stringify(cm||{})); }catch(e){ out={}; }
+  Object.values(out).forEach(m=>{ if(!m)return; (m.docSections||[]).forEach(sec=>{ (sec.docs||[]).forEach(d=>{ delete d.fileData; delete d.mimeType; }); }); });
+  return out;
+}
+// Merge incoming caseMeta into target by clid, newer _updatedAt wins, never
+// dropping a clid that exists on either side.
+function _mergeCaseMetaInto(target, incoming){
+  Object.keys(incoming||{}).forEach(clid=>{
+    const im=incoming[clid], ex=target[clid];
+    if(!ex){ target[clid]=im; return; }
+    if(((im&&im._updatedAt)||0) >= ((ex&&ex._updatedAt)||0)) target[clid]=im;
+  });
+  return target;
+}
+// Which cm shards contain a case file whose content changed since last save.
+function _dirtyCmShards(){
+  const dirty=new Set();
+  Object.keys(caseMeta||{}).forEach(clid=>{
+    const h=_metaContentHash(caseMeta[clid]);
+    if(_lastSavedMetaHashes.get(clid)!==h) dirty.add(_cmShardIndex(clid));
+  });
+  return dirty;
+}
+// Write the dirty caseMeta shards. Each shard is a read-merge-write
+// transaction so two devices editing different cases can't clobber each
+// other. Fire-and-forget; failures surface in the console + cloud indicator.
+function _syncCaseMetaShards(savedAt){
+  let dirty;
+  try{ dirty=_dirtyCmShards(); }catch(e){ dirty=new Set(); }
+  if(!dirty.size) return Promise.resolve();
+  const cleanCM=_cleanCaseMeta(caseMeta);
+  const buckets={};
+  Object.keys(cleanCM).forEach(clid=>{ const i=_cmShardIndex(clid); (buckets[i]||(buckets[i]={}))[clid]=cleanCM[clid]; });
+  const proms=[];
+  dirty.forEach(i=>{
+    const ref=db.collection('wilmer').doc(_cmShardDocId(i));
+    const localShardMeta=buckets[i]||{};
+    proms.push(db.runTransaction(async(tx)=>{
+      const snap=await tx.get(ref);
+      const cloud=(snap.exists?snap.data():{})||{};
+      const mergedMeta=Object.assign({}, cloud.caseMeta||{});
+      _mergeCaseMetaInto(mergedMeta, localShardMeta);
+      let cleaned;
+      try{ cleaned=JSON.parse(JSON.stringify({caseMeta:mergedMeta,_savedAt:savedAt||Date.now(),_deviceId:_deviceId})); }
+      catch(e){ cleaned={caseMeta:mergedMeta,_savedAt:savedAt||Date.now(),_deviceId:_deviceId}; }
+      tx.set(ref, cleaned);
+      return cleaned;
+    }).then(()=>{ _fbOnline=true; _offlineReason=''; updateCloudIndicator(); })
+      .catch(err=>{ try{ console.error('[cloud-sync] cm shard '+i+' failed:', err.code||err.message, err); }catch(e){} }));
+  });
+  // allSettled so the caller's main-doc write proceeds even if a shard fails.
+  return Promise.all(proms.map(p=>p.catch(e=>e)));
+}
 // Merge a cloud payload with the local one, item-by-item.
 // - records[] merge by id, prefer newer _updatedAt
 // - caseMeta{} merge by clid (object key), prefer newer _updatedAt
@@ -20322,6 +20396,15 @@ function _syncToFirestore(savedAt){
       customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,
       _savedAt:savedAt||Date.now(),_deviceId:_deviceId
     }));
+    // Step 2b: write caseMeta out to its own sharded docs (wilmer/cm_*).
+    // caseMeta is intentionally NOT in the main doc's whitelist below, so the
+    // main wilmer/data doc carries only records + config and stays small. We
+    // wait for the shard writes to settle BEFORE the main-doc write below,
+    // because the main write strips caseMeta out of wilmer/data — so the
+    // shards must have it first (migration safety).
+    let _cmDone;
+    try{ _cmDone=_syncCaseMetaShards(savedAt||Date.now()); }catch(e){ console.warn('[cloud-sync] cm shard write failed', e); }
+    if(!_cmDone || typeof _cmDone.then!=='function') _cmDone=Promise.resolve();
     // Step 3: read-merge-write inside a Firestore transaction. The SDK
     // retries the transaction if cloud changes during the read→write
     // window, so concurrent edits from two devices fold together
@@ -20330,7 +20413,7 @@ function _syncToFirestore(savedAt){
     const _KNOWN_TOP_FIELDS = [
       'records','paralegals','eventTypes','eventTypeMeta',
       'caseTypes','caseTypeDocLists','caseTypeStages',
-      'customColumns','colVis','caseMeta','callUpTypes','judges','caseIssueTypes',
+      'customColumns','colVis','callUpTypes','judges','caseIssueTypes',
       'customChecklists','paralegalEmails','attorneys','attorneyEmails','attorneySignatures','venues','firmInfo','bondPrepQuestions',
       '_savedAt','_deviceId'
     ];
@@ -20353,7 +20436,7 @@ function _syncToFirestore(savedAt){
       }
       return cleaned;
     }
-    db.runTransaction(async (tx)=>{
+    _cmDone.then(()=> db.runTransaction(async (tx)=>{
       const snap = await tx.get(ref);
       const cloudData = snap.exists ? snap.data() : null;
       const merged = _mergePayloads(cloudData, localPayload);
@@ -20368,7 +20451,7 @@ function _syncToFirestore(savedAt){
       }catch(e){}
       tx.set(ref, cleaned);
       return cleaned;
-    })
+    }))
       .then((merged)=>{
         _fbOnline=true; _offlineReason=''; updateCloudIndicator();
         // If the transaction folded in remote changes we didn't have yet,
@@ -20466,17 +20549,27 @@ function forcePullFromCloud(){
   const btn=document.getElementById('pull-cloud-label');
   if(btn)btn.textContent='⏳';
   showToast('↓ Pulling from cloud…');
-  db.collection('wilmer').doc('data').get()
-    .then((doc)=>{
-      if(!doc.exists){ showToast('No cloud data found'); if(btn)btn.textContent='↓'; return; }
-      const cloudData=doc.data();
-      applyPayload(cloudData);
+  // Pull the main doc (records + config) AND every caseMeta shard, then
+  // reassemble caseMeta from the shards (plus any legacy caseMeta still in
+  // the main doc during migration).
+  db.collection('wilmer').get()
+    .then((qs)=>{
+      let cloudData=null; const cm={};
+      qs.forEach(doc=>{
+        const id=doc.id, d=doc.data()||{};
+        if(id==='data'){ cloudData=d; if(d.caseMeta) _mergeCaseMetaInto(cm, d.caseMeta); }
+        else if(id.indexOf('cm_')===0){ if(d.caseMeta) _mergeCaseMetaInto(cm, d.caseMeta); }
+      });
+      if(!cloudData && !Object.keys(cm).length){ showToast('No cloud data found'); if(btn)btn.textContent='↓'; return; }
+      const payload=Object.assign({}, cloudData||{});
+      payload.caseMeta=cm;
+      applyPayload(payload);
       _dataInitialized=true; // explicit pull permits saves again
       try{
         const _now=Date.now();
-        const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
-        localStorage.setItem('casetracker_v1',JSON.stringify(payload));
-        localStorage.setItem('wilmer_save_epoch',String(cloudData._savedAt||_now));
+        const lp={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
+        localStorage.setItem('casetracker_v1',JSON.stringify(lp));
+        localStorage.setItem('wilmer_save_epoch',String((cloudData&&cloudData._savedAt)||_now));
       }catch(e){}
       renderAll();
       showToast('☁ Pulled from cloud ✓');
@@ -20893,6 +20986,41 @@ db.collection('wilmer').doc('data').onSnapshot(
     if(!_booted){ _booted=true; try{ window._onFirstCloudSnapshot && window._onFirstCloudSnapshot(false); }catch(e){} }
     updateCloudIndicator();
   }
+);
+
+// ─── caseMeta shard listener ────────────────────────────────────────
+// caseMeta lives in wilmer/cm_* docs (see _syncCaseMetaShards). Subscribe to
+// the whole wilmer collection and fold in any cm_* doc written by ANOTHER
+// device, merging per-clid (newer _updatedAt wins). The initial snapshot
+// delivers every cm_* doc, which is how this device first loads case files
+// from the cloud. data / locks docs are handled by their own listeners.
+db.collection('wilmer').onSnapshot(
+  {includeMetadataChanges:false},
+  (snap)=>{
+    let touched=false;
+    snap.docChanges().forEach(ch=>{
+      const id=ch.doc.id;
+      if(!id || id.indexOf('cm_')!==0) return;      // only caseMeta shards
+      if(ch.type==='removed') return;
+      const d=ch.doc.data()||{};
+      if(d._deviceId && d._deviceId===_deviceId) return; // our own write
+      if(d.caseMeta){ _mergeCaseMetaInto(caseMeta, d.caseMeta); touched=true; }
+    });
+    if(touched){
+      try{
+        const _now=Date.now();
+        const persistPayload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,_savedAt:_now};
+        localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
+        _lastLocalSave=_now;
+        _refreshSavedHashes();
+      }catch(e){}
+      try{ renderAll(); }catch(e){}
+      // If a case detail view is open, refresh it so the synced case shows.
+      try{ if(activeCaseClid && document.getElementById('cases-detail-view') && document.getElementById('cases-detail-view').style.display!=='none') openCaseDetail(activeCaseClid); }catch(e){}
+      showToast('☁ Case files synced ✓');
+    }
+  },
+  (err)=>{ try{ console.warn('[cloud-sync] cm listener error', err.code||err.message); }catch(e){} }
 );
 
 // ─── Per-record edit locks ──────────────────────────────────────────

@@ -11,7 +11,10 @@ rules_version = '2';
 // can touch data.
 //
 // Collections in use:
-//   wilmer/data              — the main app state (records, meta, etc.)
+//   wilmer/data              — records + config (caseMeta now lives in shards)
+//   wilmer/cm_<n>            — caseMeta shards (per-case files, split to stay
+//                              under Firestore's 1MB-per-document limit)
+//   wilmer/locks             — transient per-record edit locks
 //   wilmer_daynotes/{dnKey}  — per-day priorities + notes
 //
 // Everything outside those two paths is denied by default.
