@@ -1962,25 +1962,6 @@ window.addEventListener('load',()=>autoGrowAllNotes());
         <button onclick="backupData()" title="Export all data as JSON" style="font-size:11px;padding:4px 10px;border:1px solid #DDD5CA;border-radius:6px;background:#fff;color:#5C5148;cursor:pointer;font-weight:500;white-space:nowrap;transition:all .14s;" onmouseenter="this.style.background='#F7F3ED';this.style.borderColor='#C4BAB0'" onmouseleave="this.style.background='#fff';this.style.borderColor='#DDD5CA'">↓ Export</button>
         <button onclick="document.getElementById('restore-input').click()" title="Import data from JSON backup" style="font-size:11px;padding:4px 10px;border:1px solid #DDD5CA;border-radius:6px;background:#fff;color:#5C5148;cursor:pointer;font-weight:500;white-space:nowrap;transition:all .14s;" onmouseenter="this.style.background='#F7F3ED';this.style.borderColor='#C4BAB0'" onmouseleave="this.style.background='#fff';this.style.borderColor='#DDD5CA'">↑ Import</button>
       </div>
-      <!-- Second line: compact icon actions, aligned to the same right edge as Export/Import above -->
-      <div style="display:flex;align-items:center;gap:4px;">
-        <button onclick="saveFileWithTimestamp()" id="btn-save-file" title="Save a timestamped HTML copy to disk"
-          style="width:26px;height:26px;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:#9E9186;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .12s;"
-          onmouseenter="this.style.background='#F7F3ED';this.style.color='#4A6B4E';this.style.borderColor='#DDD5CA'"
-          onmouseleave="this.style.background='transparent';this.style.color='#9E9186';this.style.borderColor='transparent'"><span id="save-file-label" style="font-size:13px;line-height:1;">💾</span></button>
-        <button onclick="saveToCloud()" id="btn-save-cloud" title="Save to cloud"
-          style="width:26px;height:26px;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:#9E9186;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .12s;"
-          onmouseenter="this.style.background='#F7F3ED';this.style.color='#4A6B4E';this.style.borderColor='#DDD5CA'"
-          onmouseleave="this.style.background='transparent';this.style.color='#9E9186';this.style.borderColor='transparent'"><span id="save-cloud-label" style="font-size:13px;line-height:1;">☁</span></button>
-        <button onclick="forcePullFromCloud()" id="btn-pull-cloud" title="Pull the latest from cloud"
-          style="width:26px;height:26px;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:#9E9186;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .12s;"
-          onmouseenter="this.style.background='#F7F3ED';this.style.color='#4A5A7A';this.style.borderColor='#DDD5CA'"
-          onmouseleave="this.style.background='transparent';this.style.color='#9E9186';this.style.borderColor='transparent'"><span id="pull-cloud-label" style="font-size:13px;line-height:1;">↓</span></button>
-        <button onclick="openScheduleTodayModal()" id="btn-schedule-today" title="Send today's schedule to Loly"
-          style="width:26px;height:26px;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:#9E9186;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .12s;"
-          onmouseenter="this.style.background='#F7F3ED';this.style.color='#4A6B4E';this.style.borderColor='#DDD5CA'"
-          onmouseleave="this.style.background='transparent';this.style.color='#9E9186';this.style.borderColor='transparent'"><span style="font-size:13px;line-height:1;">✉</span></button>
-      </div>
     </div>
   </div>
 </div>
