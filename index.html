@@ -11036,6 +11036,13 @@ function onEventTypeChange(val){
       const pnl=document.getElementById('mp-panel');if(pnl)pnl.style.display='none';
     }
   }
+  // MASTER hearings don't use the Address / Country custom fields — hide them.
+  document.querySelectorAll('#modal-custom-fields .form-row').forEach(rw=>{
+    const lbl=rw.querySelector('.form-label');
+    const name=(lbl?lbl.textContent:'').trim().toUpperCase();
+    const hideForMaster=(val==='MASTER')&&(name==='ADDRESS'||name==='COUNTRY');
+    rw.style.display=hideForMaster?'none':'';
+  });
   const icp=document.getElementById('individual-callup-panel');
   if(icp){icp.style.display=(val==='INDIVIDUAL')?'':'none';if(val==='INDIVIDUAL'){const fcD=document.getElementById('fc-date').value;const ri=document.getElementById('icp-ref-input');if(ri){ri.value=fcD||'';}refreshIndividualCallupPanel(false);}}
   // If the chosen event type is a hearing, force-open the time range
