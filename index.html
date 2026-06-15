@@ -1034,6 +1034,14 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .section-divider { height: 1px; background: var(--border); margin: 18px 0; }
 .modal-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-muted); margin-bottom: 12px; }
 #reminder-chips { min-height: 30px; display: flex; flex-wrap: wrap; margin-bottom: 9px; }
+.reminder-head { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.reminder-head .modal-section-label { margin-bottom: 0; }
+.reminder-head-summary { font-size: 11px; color: var(--ink-faint); font-weight: 400; margin-left: auto; }
+.reminder-toggle { font-size: 10px; color: var(--ink-faint); transition: transform 0.18s; }
+.reminder-collapse.open .reminder-toggle { transform: rotate(180deg); }
+.reminder-collapse.open .reminder-head-summary { display: none; }
+.reminder-body { display: none; padding-top: 12px; }
+.reminder-collapse.open .reminder-body { display: block; }
 
 /* ── Reschedule ────────────────────────────────── */
 .reschedule-panel { display: none; background: var(--slate-light); border: 1px solid #CBD5E8; border-radius: var(--radius-md); padding: 12px 14px; margin-top: 10px; }
@@ -2821,21 +2829,27 @@ window.addEventListener('load',()=>autoGrowAllNotes());
       </div>
       <div id="fc-docs-list" style="display:flex;flex-direction:column;gap:4px;"></div>
     </div>
-    <div id="modal-reminder-section">
+    <div id="modal-reminder-section" class="reminder-collapse">
       <div class="section-divider"></div>
-      <div class="modal-section-label">Reminders</div>
-      <div class="reminder-quick">
-        <button type="button" onclick="addReminder(90)">90 days</button>
-        <button type="button" onclick="addReminder(60)">60 days</button>
-        <button type="button" onclick="addReminder(30)">30 days</button>
-        <button type="button" onclick="addReminder(15)">15 days</button>
-        <button type="button" onclick="addReminder(7)">7 days</button>
+      <div class="reminder-head" onclick="toggleReminderSection()">
+        <span class="modal-section-label" style="margin-bottom:0">Reminders</span>
+        <span class="reminder-head-summary" id="reminder-head-summary"></span>
+        <span class="reminder-toggle">&#9662;</span>
       </div>
-      <div id="reminder-chips"></div>
-      <div class="reminder-add-row">
-        <input id="fc-reminder-custom" type="number" min="1" max="999" placeholder="# days"/>
-        <button type="button" onclick="addReminderCustom()">+ Add</button>
-        <span style="font-size:11px;color:#9E9186">days before deadline</span>
+      <div class="reminder-body">
+        <div class="reminder-quick">
+          <button type="button" onclick="addReminder(90)">90 days</button>
+          <button type="button" onclick="addReminder(60)">60 days</button>
+          <button type="button" onclick="addReminder(30)">30 days</button>
+          <button type="button" onclick="addReminder(15)">15 days</button>
+          <button type="button" onclick="addReminder(7)">7 days</button>
+        </div>
+        <div id="reminder-chips"></div>
+        <div class="reminder-add-row">
+          <input id="fc-reminder-custom" type="number" min="1" max="999" placeholder="# days"/>
+          <button type="button" onclick="addReminderCustom()">+ Add</button>
+          <span style="font-size:11px;color:#9E9186">days before deadline</span>
+        </div>
       </div>
     </div>
     <div id="modal-status-section" style="display:none">
@@ -11427,7 +11441,10 @@ function renderReminderChips(){
     el.appendChild(chip);
   });
   if(!pendingReminders.length)el.innerHTML='<span style="font-size:12px;color:#C4BAB0;padding:2px 0">No reminders set</span>';
+  const sum=document.getElementById('reminder-head-summary');
+  if(sum)sum.textContent=pendingReminders.length?(pendingReminders.length+(pendingReminders.length===1?' reminder':' reminders')):'No reminders set';
 }
+function toggleReminderSection(){document.getElementById('modal-reminder-section').classList.toggle('open');}
 function addReminder(days){days=parseInt(days);if(isNaN(days)||days<1)return;if(!pendingReminders.includes(days))pendingReminders.push(days);renderReminderChips();}
 function addReminderCustom(){addReminder(parseInt(document.getElementById('fc-reminder-custom').value));document.getElementById('fc-reminder-custom').value='';}
 function removeReminder(days){pendingReminders=pendingReminders.filter(d=>d!==days);renderReminderChips();}
