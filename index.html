@@ -5525,12 +5525,12 @@ function _gmailUpdateLabelFilterBtn(){
   const lb = document.getElementById('gmail-labelfilter-btn');
   if(!lb) return;
   if(_gmailActiveLabelId){
-    lb.innerHTML = '🏷 ' + escHtml(_gmailActiveLabelName) + ' <span style="margin-left:6px;color:#fff;opacity:.7;font-weight:400;">×</span>';
+    lb.innerHTML = escHtml(_gmailActiveLabelName) + ' <span style="margin-left:6px;color:var(--cream);opacity:.7;font-weight:400;">×</span>';
     lb.style.background = 'var(--ink)';
-    lb.style.color = '#fff';
+    lb.style.color = 'var(--cream)';
     lb.title = 'Click to change or clear the label filter';
   } else {
-    lb.innerHTML = '🏷 Labels';
+    lb.innerHTML = 'Labels';
     lb.style.background = '#fff';
     lb.style.color = 'var(--ink-muted)';
     lb.title = 'View messages by label';
@@ -5547,7 +5547,7 @@ function gmailSwitchMailbox(box){
   const ib = document.getElementById('mailbox-inbox-btn');
   const sb = document.getElementById('mailbox-sent-btn');
   if(ib && sb){
-    const sel = (b) => { b.style.background='var(--ink)'; b.style.color='#fff'; };
+    const sel = (b) => { b.style.background='var(--ink)'; b.style.color='var(--cream)'; };
     const unsel = (b) => { b.style.background='#fff'; b.style.color='var(--ink-muted)'; };
     if(box==='inbox'){ sel(ib); unsel(sb); } else { unsel(ib); sel(sb); }
   }
@@ -6237,36 +6237,37 @@ function gmailRenderConnected(){
   if(!container) return;
   container.innerHTML = `
     <div style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
-      <!-- Top bar — every chrome control is the same height (32px) and uses
-           the same border/radius/spacing so the row reads as a single set -->
-      <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <!-- Top bar — minimalist chrome. Every control shares one height (30px),
+           one border colour, one radius and a single neutral hover so the row
+           reads as a quiet, unified set that matches the rest of the app. -->
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--cream);">
         <div style="display:flex;flex-shrink:0;">
-          <button id="mailbox-inbox-btn" onclick="gmailSwitchMailbox('inbox')" style="height:32px;font-size:11px;font-weight:600;padding:0 14px;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);background:${(!_gmailActiveLabelId && _gmailMailbox!=='sent')?'var(--ink)':'#fff'};color:${(!_gmailActiveLabelId && _gmailMailbox!=='sent')?'#fff':'var(--ink-muted)'};cursor:pointer;font-family:inherit;">📥 Inbox</button>
-          <button id="mailbox-sent-btn" onclick="gmailSwitchMailbox('sent')" style="height:32px;font-size:11px;font-weight:600;padding:0 14px;border:1px solid var(--border);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:${(!_gmailActiveLabelId && _gmailMailbox==='sent')?'var(--ink)':'#fff'};color:${(!_gmailActiveLabelId && _gmailMailbox==='sent')?'#fff':'var(--ink-muted)'};cursor:pointer;font-family:inherit;">📤 Sent</button>
+          <button id="mailbox-inbox-btn" onclick="gmailSwitchMailbox('inbox')" style="height:30px;font-size:11px;font-weight:600;letter-spacing:.02em;padding:0 14px;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);background:${(!_gmailActiveLabelId && _gmailMailbox!=='sent')?'var(--ink)':'#fff'};color:${(!_gmailActiveLabelId && _gmailMailbox!=='sent')?'var(--cream)':'var(--ink-muted)'};cursor:pointer;font-family:inherit;">Inbox</button>
+          <button id="mailbox-sent-btn" onclick="gmailSwitchMailbox('sent')" style="height:30px;font-size:11px;font-weight:600;letter-spacing:.02em;padding:0 14px;border:1px solid var(--border);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:${(!_gmailActiveLabelId && _gmailMailbox==='sent')?'var(--ink)':'#fff'};color:${(!_gmailActiveLabelId && _gmailMailbox==='sent')?'var(--cream)':'var(--ink-muted)'};cursor:pointer;font-family:inherit;">Sent</button>
         </div>
         <div style="position:relative;flex-shrink:0;display:flex;">
-          <button id="gmail-labelfilter-btn" onclick="gmailToggleLabelFilterDropdown()" title="${_gmailActiveLabelId ? 'Click to change or clear the label filter' : 'View messages by label'}" style="height:32px;font-size:11px;font-weight:600;padding:0 14px;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);background:${_gmailActiveLabelId ? 'var(--ink)' : '#fff'};color:${_gmailActiveLabelId ? '#fff' : 'var(--ink-muted)'};cursor:pointer;font-family:inherit;white-space:nowrap;">${_gmailActiveLabelId ? ('🏷 ' + escHtml(_gmailActiveLabelName) + ' <span style=\"margin-left:6px;color:#fff;opacity:.7;font-weight:400;\">×</span>') : '🏷 Labels'}</button>
-          <button id="gmail-labels-manage-btn" onclick="gmailOpenManageLabels()" title="Organize, rename, delete, or merge labels" style="height:32px;font-size:13px;padding:0 10px;border:1px solid var(--border);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">⚙</button>
+          <button id="gmail-labelfilter-btn" onclick="gmailToggleLabelFilterDropdown()" title="${_gmailActiveLabelId ? 'Click to change or clear the label filter' : 'View messages by label'}" style="height:30px;font-size:11px;font-weight:600;letter-spacing:.02em;padding:0 14px;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);background:${_gmailActiveLabelId ? 'var(--ink)' : '#fff'};color:${_gmailActiveLabelId ? 'var(--cream)' : 'var(--ink-muted)'};cursor:pointer;font-family:inherit;white-space:nowrap;">${_gmailActiveLabelId ? (escHtml(_gmailActiveLabelName) + ' <span style=\"margin-left:6px;color:var(--cream);opacity:.7;font-weight:400;\">×</span>') : 'Labels'}</button>
+          <button id="gmail-labels-manage-btn" onclick="gmailOpenManageLabels()" title="Organize, rename, delete, or merge labels" style="height:30px;font-size:12px;padding:0 10px;border:1px solid var(--border);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">⚙</button>
           <div id="gmail-labelfilter-dropdown" style="display:none;position:absolute;left:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:300;min-width:240px;max-height:340px;overflow-y:auto;"></div>
         </div>
         <div style="flex:1;position:relative;min-width:0;">
-          <input id="gmail-search-input" type="text" placeholder="Search emails..." style="width:100%;height:32px;font-size:12px;padding:0 12px 0 32px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;background:#fff;box-sizing:border-box;outline:none;"
+          <input id="gmail-search-input" type="text" placeholder="Search emails…" style="width:100%;height:30px;font-size:12px;padding:0 12px 0 30px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;background:#fff;box-sizing:border-box;outline:none;"
             onkeydown="if(event.key==='Enter')gmailDoSearch()"/>
-          <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--ink-faint);pointer-events:none;">🔍</span>
+          <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--ink-faint);pointer-events:none;">🔍</span>
         </div>
-        <button onclick="gmailOpenCompose()" style="height:32px;font-size:11px;font-weight:600;padding:0 16px;border:1px solid var(--sage);border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Compose</button>
-        <!-- Quick Actions — five icon buttons matching the styling of the
-             other top-bar chrome. Each button calls the same inboxOpen*
-             handler the right-side panel used. -->
-        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
-          <button onclick="inboxOpenAddEvent()" title="Add Event — create a new calendar event" style="height:32px;width:34px;font-size:14px;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" onmouseenter="this.style.background='var(--sage-light)';this.style.borderColor='var(--sage-mid)'" onmouseleave="this.style.background='#fff';this.style.borderColor='var(--border)'">📅</button>
-          <button onclick="inboxOpenAddCase()" title="Add Case — open a new client case" style="height:32px;width:34px;font-size:14px;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" onmouseenter="this.style.background='var(--slate-light)';this.style.borderColor='var(--slate)'" onmouseleave="this.style.background='#fff';this.style.borderColor='var(--border)'">📁</button>
-          <button onclick="inboxOpenAddNote()" title="Add Note — add a note to a case" style="height:32px;width:34px;font-size:14px;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" onmouseenter="this.style.background='var(--amber-light)';this.style.borderColor='var(--amber-mid)'" onmouseleave="this.style.background='#fff';this.style.borderColor='var(--border)'">📝</button>
-          <button onclick="inboxOpenCase()" title="Open Case — go to a client's case" style="height:32px;width:34px;font-size:14px;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" onmouseenter="this.style.background='var(--rose-light)';this.style.borderColor='#E8C4C4'" onmouseleave="this.style.background='#fff';this.style.borderColor='var(--border)'">🔍</button>
-          <button onclick="inboxOpenAttachment()" title="Save Attachment — attach a file to a case" style="height:32px;width:34px;font-size:14px;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" onmouseenter="this.style.background='var(--slate-light)';this.style.borderColor='var(--slate)'" onmouseleave="this.style.background='#fff';this.style.borderColor='var(--border)'">📎</button>
+        <button onclick="gmailOpenCompose()" style="height:30px;font-size:11px;font-weight:600;letter-spacing:.02em;padding:0 16px;border:1px solid var(--ink);border-radius:var(--radius-sm);background:var(--ink);color:var(--cream);cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .14s;" onmouseenter="this.style.background='var(--sage)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.background='var(--ink)';this.style.borderColor='var(--ink)'">Compose</button>
+        <!-- Quick Actions — five icon buttons sharing one quiet, neutral hover
+             (no per-button accent colours) so the group stays minimalist.
+             Each button calls the same inboxOpen* handler the panel used. -->
+        <div style="display:flex;align-items:center;gap:2px;flex-shrink:0;padding-left:8px;border-left:1px solid var(--border);">
+          <button onclick="inboxOpenAddEvent()" title="Add Event — create a new calendar event" style="height:30px;width:32px;font-size:14px;padding:0;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .14s;" onmouseenter="this.style.background='var(--cream-dark)';this.style.borderColor='var(--border)'" onmouseleave="this.style.background='transparent';this.style.borderColor='transparent'">📅</button>
+          <button onclick="inboxOpenAddCase()" title="Add Case — open a new client case" style="height:30px;width:32px;font-size:14px;padding:0;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .14s;" onmouseenter="this.style.background='var(--cream-dark)';this.style.borderColor='var(--border)'" onmouseleave="this.style.background='transparent';this.style.borderColor='transparent'">📁</button>
+          <button onclick="inboxOpenAddNote()" title="Add Note — add a note to a case" style="height:30px;width:32px;font-size:14px;padding:0;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .14s;" onmouseenter="this.style.background='var(--cream-dark)';this.style.borderColor='var(--border)'" onmouseleave="this.style.background='transparent';this.style.borderColor='transparent'">📝</button>
+          <button onclick="inboxOpenCase()" title="Open Case — go to a client's case" style="height:30px;width:32px;font-size:14px;padding:0;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .14s;" onmouseenter="this.style.background='var(--cream-dark)';this.style.borderColor='var(--border)'" onmouseleave="this.style.background='transparent';this.style.borderColor='transparent'">🔍</button>
+          <button onclick="inboxOpenAttachment()" title="Save Attachment — attach a file to a case" style="height:30px;width:32px;font-size:14px;padding:0;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .14s;" onmouseenter="this.style.background='var(--cream-dark)';this.style.borderColor='var(--border)'" onmouseleave="this.style.background='transparent';this.style.borderColor='transparent'">📎</button>
         </div>
         <div style="position:relative;">
-          <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'" style="height:32px;font-size:11px;font-weight:500;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" title="Account" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">
+          <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'" style="height:30px;font-size:11px;font-weight:500;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;" title="Account" onmouseenter="this.style.background='var(--cream-dark)'" onmouseleave="this.style.background='#fff'">
             ${_gmailUserEmail ? _gmailUserEmail.split('@')[0] : 'Account'} ▾
           </button>
           <div style="display:none;position:absolute;right:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:100;padding:8px 0;min-width:230px;">
