@@ -8077,6 +8077,25 @@ function getFiltered(){
     return true;
   });
 }
+// Finished (completed/attended/cancelled) — but not deleted — records that
+// have a date and pass the current view filters. The calendar grids show
+// these faintly so the user can still see what they already completed.
+function getFilteredFinished(){
+  const atty=(document.getElementById('f-atty')||{}).value||'';
+  const evtEl=document.getElementById('f-event');
+  const evtSet=evtEl?new Set(Array.from(evtEl.selectedOptions||[]).map(o=>o.value).filter(Boolean)):new Set();
+  const q=((document.getElementById('f-search')||{}).value||'').toLowerCase();
+  const te=document.getElementById('f-type');
+  const ctype=te?te.value:'';
+  return records.filter(r=>{
+    if(!r.finishedStatus||r.deletedStatus||!r.date)return false;
+    if(atty&&r.atty!==atty)return false;
+    if(evtSet.size&&!evtSet.has(r.event))return false;
+    if(ctype&&r.type!==ctype)return false;
+    if(q&&!r.client.toLowerCase().includes(q)&&!(r.anum||'').toLowerCase().includes(q)&&!(r.clid||'').toLowerCase().includes(q))return false;
+    return true;
+  });
+}
 function sortByDate(arr){
   // Schwartzian transform: decorate-sort-undecorate avoids repeated parseDate per comparison
   return arr.map(r=>({r,d:parseDate(r.date)}))
@@ -8723,7 +8742,7 @@ function renderWeek() {
   // ── Perf: pre-index rows by date string ──
   const rowsByDate={}, finByDate={};
   rows.forEach(r=>{ if(r.date){(rowsByDate[r.date]||(rowsByDate[r.date]=[])).push(r);} });
-  records.forEach(r=>{ if(r.finishedStatus&&!r.deletedStatus&&r.date){(finByDate[r.date]||(finByDate[r.date]=[])).push(r);} });
+  getFilteredFinished().forEach(r=>{ (finByDate[r.date]||(finByDate[r.date]=[])).push(r); });
   // Detect weekend events for this week
   const satStr = toDateStr(new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+5));
   const sunStr = toDateStr(new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+6));
@@ -8774,7 +8793,7 @@ function renderWeek() {
     const isWeekendDay = dowIdx >= 5;
     const tasks = rowsByDate[dayStr] || [];
     if (tasks.length) { any = any || isFocusWeek; if(isFocusWeek) weekTasks.push(...tasks); }
-    if(isFocusWeek) weekFinished.push(...(finByDate[dayStr]||[]));
+    if(isFocusWeek){ const _fin=finByDate[dayStr]||[]; weekFinished.push(..._fin); if(_fin.length) any=true; }
     const col = document.createElement('div');
     col.className = 'week-col'
       + (isWeekendDay ? ' weekend-col' : '')
@@ -8883,7 +8902,23 @@ function renderWeek() {
       }
       body.appendChild(t);
     });
-    if(!sortedTasks.length){
+    // Completed/finished items stay on the calendar, shown faintly with a
+    // strike-through and ✓ so it's clear the task/event was done.
+    const finishedToday = finByDate[dayStr] || [];
+    finishedToday.forEach(r => {
+      if(r.notes && r.notes.startsWith('⏰ REMINDER')) return;
+      const isTaskF = isTaskKindEvent(r.event);
+      const esF = getEventStyle(r.event||'');
+      const labelF = isTaskF ? (r.notes||'(task)') : ((esF.icon?esF.icon+' ':'')+(r.event||r.type));
+      const f = document.createElement('div');
+      f.className = 'week-task week-task-done' + (isTaskF?' task-kind':'');
+      f.title = 'Completed' + (r.finishedStatus && r.finishedStatus!=='completed' ? (' — '+r.finishedStatus) : '');
+      f.style.cssText = 'opacity:0.5;background:#F4F1EC;';
+      f.onclick = () => openEdit(r.id);
+      f.innerHTML = `<div class="week-event" style="color:#9E9186;text-decoration:line-through;white-space:normal;line-height:1.3;">✓ ${labelF}</div>${r.client?`<div class="week-client" style="color:#9E9186;text-decoration:line-through;">${r.client}</div>`:''}`;
+      body.appendChild(f);
+    });
+    if(!sortedTasks.length && !finishedToday.length){
       const empty = document.createElement('div'); empty.className='week-empty-day'; empty.textContent = isWeekendDay ? '—' : 'Nothing planned';
       body.appendChild(empty);
     }
@@ -9081,7 +9116,7 @@ function renderMonth() {
   // ── Perf: pre-index rows and finished records by date string ──
   const rowsByDate={}, finByDate={};
   rows.forEach(r=>{ if(r.date){(rowsByDate[r.date]||(rowsByDate[r.date]=[])).push(r);} });
-  records.forEach(r=>{ if(r.finishedStatus&&!r.deletedStatus&&r.date){(finByDate[r.date]||(finByDate[r.date]=[])).push(r);} });
+  getFilteredFinished().forEach(r=>{ (finByDate[r.date]||(finByDate[r.date]=[])).push(r); });
   const monthTasks = [];
   const monthFinished = [];
   const frag=document.createDocumentFragment();
@@ -9124,6 +9159,19 @@ function renderMonth() {
         if(_venueM !== null) card.appendChild(makePinIconBtn(_venueM, _absM, 10));
       }
       cell.appendChild(card);
+    });
+    // Completed/finished items remain on the calendar, faint and struck through.
+    (finByDate[dayStr2]||[]).forEach(r => {
+      if(r.notes && r.notes.startsWith('⏰ REMINDER')) return;
+      const esF=getEventStyle(r.event||'');
+      const labelF=(esF.icon?esF.icon+' ':'')+(r.event||r.type);
+      const fcard=document.createElement('div');
+      fcard.className='cal-event-card cal-event-done';
+      fcard.style.cssText='background:#F4F1EC;position:relative;opacity:0.6;';
+      fcard.title='Completed'+(r.finishedStatus && r.finishedStatus!=='completed' ? (' — '+r.finishedStatus) : '');
+      fcard.onclick=()=>openEdit(r.id);
+      fcard.innerHTML=`<div class="cal-event-name" style="color:#9E9186;text-decoration:line-through;">✓ ${labelF}</div><div class="cal-event-sub" style="color:#9E9186;text-decoration:line-through;">${r.client}</div>`;
+      cell.appendChild(fcard);
     });
     cell.addEventListener('dblclick', e => {
       if(e.target.closest('.cal-event-card')) return;
