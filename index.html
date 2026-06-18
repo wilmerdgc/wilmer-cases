@@ -5285,14 +5285,25 @@ function _buildCalendarEventPayload(r){
   const hasTime = !!(r.timeStart || r.timeEnd);
   const payload = { summary: title, description, source:{ title:'Wilmer Cases', url: location.origin+location.pathname } };
   if(hasTime){
-    const ts = (r.timeStart||'09:00').padEnd(5,'0').slice(0,5);
-    const te = (r.timeEnd||'').padEnd(5,'0').slice(0,5) || ts;
-    // Default to a 1-hour duration if end is missing or equals start
-    let endStr = te;
-    if(endStr === ts){
-      const [h,m] = ts.split(':').map(Number);
-      const endH = Math.min(23, h+1);
-      endStr = String(endH).padStart(2,'0')+':'+String(m||0).padStart(2,'0');
+    // Normalize a stored time (may be '', 'H:MM', 'HH:MM' or 'HH:MM:SS') to
+    // 'HH:MM'. Returns '' when the value isn't a usable time — note an empty
+    // string must stay falsy here (the old `''.padEnd(5,'0')` produced the
+    // truthy '00000', which defeated the missing-end fallback and sent an
+    // invalid 'T00000:00' end to Calendar, 400-ing every end-less event).
+    const normTime = (t) => {
+      const mt = String(t||'').match(/^(\d{1,2}):(\d{2})/);
+      if(!mt) return '';
+      return String(Math.min(23, +mt[1])).padStart(2,'0') + ':' + mt[2];
+    };
+    const ts = normTime(r.timeStart) || '09:00';
+    let endStr = normTime(r.timeEnd);
+    // No end time, or end not after start → default to a 1-hour block,
+    // clamped so a late start can't roll past 23:59.
+    if(!endStr || endStr <= ts){
+      let [h,m] = ts.split(':').map(Number);
+      h += 1;
+      if(h > 23){ h = 23; m = 59; }
+      endStr = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
     }
     const tz = _localTz();
     payload.start = { dateTime: r.date+'T'+ts+':00', timeZone: tz };
