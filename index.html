@@ -3419,6 +3419,18 @@ function switchTab(t){currentTab=t;
 
 // ── Inbox action helpers ──
 function inboxOpenAddEvent(){ openAdd(); }
+// Add Task — opens the same Add modal but preset to a standalone task
+// (PERSONAL TASK) so the client/case rows are hidden and it lands as a
+// task-kind record. The user can switch to OFFICE TASK / another type
+// inside the modal if needed.
+function inboxOpenAddTask(){
+  if(typeof openAdd!=='function'){ showToast('Add Task is not available'); return; }
+  openAdd();
+  const title=document.getElementById('modal-title');
+  if(title) title.textContent='Add task';
+  const sel=document.getElementById('fc-eventtype');
+  if(sel){ sel.value='PERSONAL TASK'; if(typeof onEventTypeChange==='function') onEventTypeChange('PERSONAL TASK'); }
+}
 function inboxOpenAddCase(){ openNewCaseModal(); }
 function inboxOpenAddNote(){
   const panel=document.getElementById('inbox-note-panel');
@@ -6272,6 +6284,7 @@ function gmailRenderConnected(){
              Each button calls the same inboxOpen* handler the panel used. -->
         <div style="display:flex;align-items:center;gap:2px;flex-shrink:0;padding-left:8px;border-left:1px solid var(--border);">
           <button onclick="inboxOpenAddEvent()" title="Add Event — create a new calendar event" style="height:30px;width:32px;font-size:14px;padding:0;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .14s;" onmouseenter="this.style.background='var(--cream-dark)';this.style.borderColor='var(--border)'" onmouseleave="this.style.background='transparent';this.style.borderColor='transparent'">📅</button>
+          <button onclick="inboxOpenAddTask()" title="Add Task — create a personal or office to-do" style="height:30px;width:32px;font-size:14px;padding:0;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .14s;" onmouseenter="this.style.background='var(--cream-dark)';this.style.borderColor='var(--border)'" onmouseleave="this.style.background='transparent';this.style.borderColor='transparent'">✓</button>
           <button onclick="inboxOpenAddCase()" title="Add Case — open a new client case" style="height:30px;width:32px;font-size:14px;padding:0;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .14s;" onmouseenter="this.style.background='var(--cream-dark)';this.style.borderColor='var(--border)'" onmouseleave="this.style.background='transparent';this.style.borderColor='transparent'">📁</button>
           <button onclick="inboxOpenAddNote()" title="Add Note — add a note to a case" style="height:30px;width:32px;font-size:14px;padding:0;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .14s;" onmouseenter="this.style.background='var(--cream-dark)';this.style.borderColor='var(--border)'" onmouseleave="this.style.background='transparent';this.style.borderColor='transparent'">📝</button>
           <button onclick="inboxOpenCase()" title="Open Case — go to a client's case" style="height:30px;width:32px;font-size:14px;padding:0;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .14s;" onmouseenter="this.style.background='var(--cream-dark)';this.style.borderColor='var(--border)'" onmouseleave="this.style.background='transparent';this.style.borderColor='transparent'">🔍</button>
