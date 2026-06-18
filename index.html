@@ -4455,13 +4455,23 @@ async function gmailDoCreateLabel(){
   const name = (document.getElementById('gmail-new-label-name')||{}).value||'';
   const trimmed = name.trim();
   if(!trimmed){ showToast('Enter a label name'); return; }
+  // Every label created from the app is filed as a sub-label of CLIENTS so
+  // client labels stay grouped under one parent in Gmail. Don't double-nest
+  // if the user already typed the CLIENTS/ prefix (or "CLIENTS" itself).
+  const _p = _GMAIL_CASES_PARENT;
+  const _lc = trimmed.toLowerCase();
+  const fullName = (_lc === _p.toLowerCase() || _lc.startsWith(_p.toLowerCase()+'/'))
+    ? trimmed
+    : (_p + '/' + trimmed);
+  // Gmail needs the parent label to exist before it can nest under it.
+  await _gmailFindOrCreateLabel(_p);
   const result = await gmailApi('labels', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ name: trimmed, labelListVisibility: 'labelShow', messageListVisibility: 'show' })
+    body: JSON.stringify({ name: fullName, labelListVisibility: 'labelShow', messageListVisibility: 'show' })
   });
   if(result && result.id){
-    showToast('Label "' + trimmed + '" created ✓');
+    showToast('Label "' + fullName + '" created ✓');
     _gmailLabels = null; // Clear cache so it reloads
     const dd=document.getElementById('gmail-moveto-dropdown'); if(dd) dd.style.display = 'none';
     return result;
@@ -4470,9 +4480,9 @@ async function gmailDoCreateLabel(){
   const err = _gmailLastError;
   if(err && (err.status === 409 || (err.message||'').toLowerCase().includes('already exists') || (err.message||'').toLowerCase().includes('duplicate'))){
     const labels = await gmailApi('labels');
-    const existing = labels && labels.labels ? labels.labels.find(l => l.name && l.name.toLowerCase() === trimmed.toLowerCase()) : null;
+    const existing = labels && labels.labels ? labels.labels.find(l => l.name && l.name.toLowerCase() === fullName.toLowerCase()) : null;
     if(existing){
-      showToast('Label "' + trimmed + '" already exists — using it');
+      showToast('Label "' + fullName + '" already exists — using it');
       _gmailLabels = null;
       const dd=document.getElementById('gmail-moveto-dropdown'); if(dd) dd.style.display = 'none';
       return existing;
@@ -5938,7 +5948,12 @@ function _gmlToggleCreate(force){
       if(parentSel && _gmailActiveLabelName){
         const match = Array.from(parentSel.options).find(o => o.value === _gmailActiveLabelName);
         parentSel.value = match ? _gmailActiveLabelName : '';
-      } else if(parentSel){ parentSel.value = ''; }
+      } else if(parentSel){
+        // Default new labels under CLIENTS so they nest with the client labels
+        // (user can still switch the parent, including to "none").
+        const clientsOpt = Array.from(parentSel.options).find(o => o.value === _GMAIL_CASES_PARENT);
+        parentSel.value = clientsOpt ? _GMAIL_CASES_PARENT : '';
+      }
       setTimeout(()=>nameEl.focus(), 30);
       nameEl.onkeydown = (e) => { if(e.key==='Enter'){ e.preventDefault(); _gmlDoCreate(); } else if(e.key==='Escape'){ _gmlToggleCreate(false); } };
     }
