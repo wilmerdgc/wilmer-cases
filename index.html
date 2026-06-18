@@ -20517,15 +20517,40 @@ function _mergePayloads(cloudData, localData){
     if(lu >= cu) mergedMeta[clid] = lm;
   });
   merged.caseMeta = mergedMeta;
-  // ── Other top-level config: pick from whichever doc has the newer
+  const cloudEpoch = cloudData._savedAt || 0;
+  const localEpoch = localData._savedAt || 0;
+  // Name lists (paralegals / attorneys) and their email + signature maps are
+  // merged by UNION, not whole-array last-write-wins. The old behaviour let a
+  // later save from a device holding a stale list silently wipe a name another
+  // device had just added or renamed — the reported "paralegal/attorney names
+  // not being recorded" bug. Records survive because they merge per-id; these
+  // lists had no such protection (and `attorneys` never self-heals from
+  // records, so the loss was permanent). Union keeps additions from both sides.
+  // Trade-off: a deletion no longer propagates on its own (the name reappears
+  // from the other device until removed there too), which is far less harmful
+  // than losing freshly entered names.
+  const _unionNames = (a, b) => {
+    const out = Array.isArray(a) ? a.slice() : [];
+    (Array.isArray(b) ? b : []).forEach(n => { if(!out.includes(n)) out.push(n); });
+    return out;
+  };
+  // Union map keys; on a key present in both, the newer save wins.
+  const _mergeMap = (cloudMap, localMap, localNewer) =>
+    localNewer ? Object.assign({}, cloudMap||{}, localMap||{})
+               : Object.assign({}, localMap||{}, cloudMap||{});
+  const _localNewer = localEpoch >= cloudEpoch;
+  merged.paralegals = _unionNames(cloudData.paralegals, localData.paralegals);
+  merged.attorneys  = _unionNames(cloudData.attorneys,  localData.attorneys);
+  merged.paralegalEmails    = _mergeMap(cloudData.paralegalEmails,    localData.paralegalEmails,    _localNewer);
+  merged.attorneyEmails     = _mergeMap(cloudData.attorneyEmails,     localData.attorneyEmails,     _localNewer);
+  merged.attorneySignatures = _mergeMap(cloudData.attorneySignatures, localData.attorneySignatures, _localNewer);
+  // ── Remaining top-level config: pick from whichever doc has the newer
   // overall _savedAt. Local typically wins because we set it = now just
   // before merge, but the cloud side can win if it has data the local
   // doc never loaded (e.g. fresh install).
-  const cloudEpoch = cloudData._savedAt || 0;
-  const localEpoch = localData._savedAt || 0;
-  const fields = ['paralegals','eventTypes','eventTypeMeta','caseTypes','caseTypeDocLists','caseTypeStages',
+  const fields = ['eventTypes','eventTypeMeta','caseTypes','caseTypeDocLists','caseTypeStages',
                   'customColumns','colVis','callUpTypes','judges','caseIssueTypes','customChecklists',
-                  'paralegalEmails','attorneys','attorneyEmails','attorneySignatures','venues','firmInfo','bondPrepQuestions'];
+                  'venues','firmInfo','bondPrepQuestions'];
   fields.forEach(f => {
     const lv = localData[f];
     const cv = cloudData[f];
