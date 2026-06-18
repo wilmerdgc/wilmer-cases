@@ -2878,6 +2878,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
               <select id="vh-judge" onchange="onVirtualJudgeChange()" style="width:100%;font-size:12px;padding:7px 10px;border:1px solid #CBD5E8;border-radius:6px;font-family:inherit;background:#fff;color:#2C2620;">
                 <option value="">— Select judge —</option>
               </select>
+              <button type="button" onclick="openJudgeFromEvent()" title="Create a new judge (with court venue) and assign it to this hearing" style="margin-top:5px;font-size:10px;font-weight:600;color:#6B7FA3;background:transparent;border:none;padding:0;cursor:pointer;font-family:inherit;text-decoration:underline;text-underline-offset:2px;">+ Add new judge…</button>
             </div>
             <div id="vh-link-wrap" style="flex:2;min-width:240px;">
               <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;margin-bottom:3px;">Webex link</label>
@@ -11877,7 +11878,15 @@ function openJudgeModal(id){
   document.getElementById('judge-modal').style.display='flex';
   requestAnimationFrame(()=>autoGrowAllNotes(document.getElementById('judge-modal')));
 }
-function closeJudgeModal(){document.getElementById('judge-modal').style.display='none';editingJudgeId=null;}
+function closeJudgeModal(){document.getElementById('judge-modal').style.display='none';editingJudgeId=null;window._judgePickerReturn=false;}
+// Open the Judge modal from the Add/Edit event hearing picker. The judge
+// modal (z-index 1000) stacks above the event modal (999). The flag tells
+// saveJudge to drop the user back on the event form with the new judge —
+// including its court venue — selected.
+function openJudgeFromEvent(){
+  window._judgePickerReturn=true;
+  if(typeof openJudgeModal==='function') openJudgeModal(null);
+}
 // When the user types or picks a venue in line 1, auto-fill line 2
 // with the matching city/state line from the firm's courthouse table —
 // but only when line 2 is currently empty, so we don't blow away
@@ -11928,7 +11937,17 @@ function saveJudge(){
   if(data.venue && !venues.includes(data.venue)){venues.push(data.venue);markUnsaved();}
   if(editingJudgeId){const i=judges.findIndex(x=>x.id===editingJudgeId);if(i>-1)judges[i]=data;}
   else judges.push(data);
-  saveJudgesData();closeJudgeModal();renderJudges();
+  saveJudgesData();
+  // Capture the return flag before closeJudgeModal() clears it.
+  const _returnToEvent=window._judgePickerReturn;
+  closeJudgeModal();renderJudges();
+  // Came from the event hearing picker → refresh that dropdown and select
+  // the judge just created/edited so the user continues without re-searching.
+  if(_returnToEvent){
+    if(typeof populateVirtualJudgeDropdown==='function') populateVirtualJudgeDropdown();
+    const _vsel=document.getElementById('vh-judge');
+    if(_vsel){ _vsel.value=data.id; if(typeof onVirtualJudgeChange==='function') onVirtualJudgeChange(); }
+  }
 }
 function deleteJudge(id){
   if(!confirm('Remove this judge?'))return;
