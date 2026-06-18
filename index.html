@@ -10839,6 +10839,12 @@ function eventInPersonVenue(r){
   }
   return '';
 }
+// Display name of the judge assigned to an event, '' if none / unknown.
+function eventJudgeName(r){
+  if(!r || !r.hearingJudgeId || typeof judges === 'undefined') return '';
+  const j = judges.find(x => x.id === r.hearingJudgeId);
+  return (j && j.name) || '';
+}
 // Build a discreet pin icon. If venue is given, the pin is a Google Maps link;
 // otherwise it's a static badge marking "in-person".
 function makePinIconBtn(venue, extraStyle, size){
@@ -12055,6 +12061,13 @@ function formatEventForEmail(ev, clid, defaultParalegal){
   txt+='\n';
   // Format / Hearing mode
   if(ev.hearingMode) txt+='Format: '+ev.hearingMode.charAt(0).toUpperCase()+ev.hearingMode.slice(1)+'\n';
+  // Judge (any hearing format) + Webex link (virtual only)
+  const _judge=eventJudgeName(ev);
+  if(_judge) txt+='Judge: '+_judge+'\n';
+  if(ev.hearingMode==='virtual'){
+    const _link=eventVirtualLink(ev);
+    if(_link) txt+='Virtual link: '+_link+'\n';
+  }
   // Notes
   if(ev.notes) txt+='Notes: '+ev.notes+'\n';
   // Reminders — find linked reminder records for this event
@@ -12087,6 +12100,13 @@ function formatEventForEmailES(ev, clid, defaultParalegal){
     const key=String(ev.hearingMode).toLowerCase();
     const modeEs=modeMap[key]||(ev.hearingMode.charAt(0).toUpperCase()+ev.hearingMode.slice(1));
     txt+='Formato: '+modeEs+'\n';
+  }
+  // Juez (cualquier formato) + enlace de Webex (solo virtual)
+  const _judgeEs=eventJudgeName(ev);
+  if(_judgeEs) txt+='Juez: '+_judgeEs+'\n';
+  if(ev.hearingMode==='virtual'){
+    const _linkEs=eventVirtualLink(ev);
+    if(_linkEs) txt+='Enlace virtual: '+_linkEs+'\n';
   }
   if(ev.notes) txt+='Notas: '+ev.notes+'\n';
   const reminders=records.filter(r=>r._parentId===ev.id&&r.notes&&r.notes.startsWith('⏰ REMINDER')&&r.date&&!r.finishedStatus&&!r.deletedStatus);
