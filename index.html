@@ -12067,6 +12067,9 @@ function formatEventForEmail(ev, clid, defaultParalegal){
   if(ev.hearingMode==='virtual'){
     const _link=eventVirtualLink(ev);
     if(_link) txt+='Virtual link: '+_link+'\n';
+  } else if(ev.hearingMode==='in-person'){
+    const _venue=eventInPersonVenue(ev);
+    if(_venue) txt+='Location: '+_venue+'\n';
   }
   // Notes
   if(ev.notes) txt+='Notes: '+ev.notes+'\n';
@@ -12107,6 +12110,9 @@ function formatEventForEmailES(ev, clid, defaultParalegal){
   if(ev.hearingMode==='virtual'){
     const _linkEs=eventVirtualLink(ev);
     if(_linkEs) txt+='Enlace virtual: '+_linkEs+'\n';
+  } else if(ev.hearingMode==='in-person'){
+    const _venueEs=eventInPersonVenue(ev);
+    if(_venueEs) txt+='Lugar: '+_venueEs+'\n';
   }
   if(ev.notes) txt+='Notas: '+ev.notes+'\n';
   const reminders=records.filter(r=>r._parentId===ev.id&&r.notes&&r.notes.startsWith('⏰ REMINDER')&&r.date&&!r.finishedStatus&&!r.deletedStatus);
