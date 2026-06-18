@@ -2983,6 +2983,23 @@ const TODAY=new Date();TODAY.setHours(0,0,0,0);
   }
   tick();setInterval(tick,1000);
 })();
+// ── Fix: hearing-format (Virtual / In Person) selector visibility ──
+// #modal-hearing-mode-section was authored INSIDE #modal-status-section (the
+// edit-only "Mark as…" block), which openAdd() sets to display:none. So even
+// though onEventTypeChange() correctly flips the hearing-mode section to
+// display:block when a hearing event type is picked, its hidden parent kept it
+// invisible whenever ADDING an event — the picker only ever appeared when
+// editing. Worse, the save check still demands a format ("Hearings always need
+// a format"), leaving Add in a dead-end. Lift the node out to sit just before
+// the status section so its visibility is driven solely by event type, in both
+// add and edit. One-time move; the modal markup is otherwise static.
+(function liftHearingModeSection(){
+  const hms=document.getElementById('modal-hearing-mode-section');
+  const status=document.getElementById('modal-status-section');
+  if(hms&&status&&status.parentNode&&status.contains(hms)){
+    status.parentNode.insertBefore(hms, status);
+  }
+})();
 // ══════════════════════════════════════════════════
 // DEMO_RECORDS — only applied if the user explicitly picks
 // "Start with demo data" in the welcome modal. Never silently
