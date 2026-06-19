@@ -17115,8 +17115,10 @@ function openCaseDetail(clid){
     }
 
     if(!isConsolidated){
-      // Each client: Name, A#, Case Type, Judge, Paralegal
-      allClients.forEach((cl,ci)=>L2.appendChild(clientCard(cl,ci,true,true,true,false)));
+      // Each client: Name, A#, Case Type, Judge. Paralegal is intentionally
+      // omitted here — it's a single case-level field shown once in the
+      // Case Information general data above, not repeated per client.
+      allClients.forEach((cl,ci)=>L2.appendChild(clientCard(cl,ci,true,true,false,false)));
       if(isEditing){const ab=document.createElement('button');ab.textContent='+ Add client';ab.style.cssText='font-size:11px;padding:6px 14px;border:1px dashed #B4CCAD;border-radius:8px;background:transparent;color:#6A8C6E;cursor:pointer;font-family:inherit;align-self:flex-start;';ab.onclick=()=>openAddClient(-1);L2.appendChild(ab);}
 
     } else if(!isSJC){
@@ -17135,8 +17137,10 @@ function openCaseDetail(clid){
       sc.appendChild(sg);L2.appendChild(sc);
 
     } else {
-      // Consolidated SJC: each client full (Name, A#, Case Type, Judge IC, Judge FC, Paralegal)
-      allClients.forEach((cl,ci)=>L2.appendChild(clientCard(cl,ci,true,true,true,false)));
+      // Consolidated SJC: each client (Name, A#, Case Type, Judge IC, Judge FC).
+      // Paralegal is omitted here — kept as a single case-level field in the
+      // Case Information general data above.
+      allClients.forEach((cl,ci)=>L2.appendChild(clientCard(cl,ci,true,true,false,false)));
       if(isEditing){const ab=document.createElement('button');ab.textContent='+ Add client';ab.style.cssText='font-size:11px;padding:6px 14px;border:1px dashed #B4CCAD;border-radius:8px;background:transparent;color:#6A8C6E;cursor:pointer;font-family:inherit;align-self:flex-start;';ab.onclick=()=>openAddClient(-1);L2.appendChild(ab);}
     }
 
