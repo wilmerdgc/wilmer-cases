@@ -3302,6 +3302,32 @@ function eventLabel(eventName){
   const{icon}=getEventStyle(eventName);
   return icon?(icon+' '+eventName):eventName;
 }
+// ── Paper-file deadlines ──────────────────────────────────────────────
+// Cases flagged as "Paper File" (caseMeta[clid].filingSystem==='paper') are
+// filed by physical mail, so any deadline on them must leave extra lead time
+// to be mailed and arrive on time. Whenever a deadline for such a case is
+// shown anywhere, we surface a "Paper File — mail it" warning.
+function isPaperFile(clid){
+  if(!clid||typeof caseMeta==='undefined') return false;
+  const m=caseMeta[clid];
+  return !!(m && m.filingSystem==='paper');
+}
+// Compact inline badge for event/deadline rows in lists & calendars.
+function paperFileBadge(clid){
+  if(!isPaperFile(clid)) return '';
+  return '<span title="Paper File — must be mailed; file early so it arrives on time" '
+    +'style="display:inline-block;font-size:9px;font-weight:700;letter-spacing:.03em;'
+    +'background:#FBF1F1;color:#B85C5C;border:1px solid #E6BDBD;border-radius:10px;'
+    +'padding:0 6px;line-height:15px;white-space:nowrap;vertical-align:middle;">📬 PAPER FILE — MAIL IT</span>';
+}
+// Full-width warning banner for the event detail / add-edit modal.
+function paperFileBannerHTML(clid){
+  if(!isPaperFile(clid)) return '';
+  return '<div style="margin:10px 0;padding:9px 12px;background:#FBF1F1;border:1px solid #E6BDBD;'
+    +'border-radius:8px;color:#7A3838;font-size:12px;line-height:1.45;">'
+    +'⚠ <b>Paper File case.</b> This deadline must be filed by <b>mail</b> — '
+    +'send it early so it arrives on time.</div>';
+}
 // ── Perf: memoize parseDate ──
 const _pdCache={};
 function parseDate(s){if(!s)return null;if(_pdCache[s])return _pdCache[s];const[y,m,d]=s.split('-');return _pdCache[s]=new Date(+y,+m-1,+d);}
@@ -8878,7 +8904,7 @@ function renderWeek() {
         if(isTask){
           // Tasks: no "TASK" label — lead with the note, client beneath.
           // Clicking the box opens the finish window (the status buttons).
-          t.innerHTML = `<span class="task-check" data-rid="${r.id}" title="Finish this task" style="position:absolute;left:4px;top:6px;width:14px;height:14px;border:2px solid #C4BAB0;border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;transition:all .12s;background:#fff;">&check;</span><div class="week-event" style="white-space:normal;line-height:1.3;">${r.notes||'(no description)'}</div>${r.client?`<div class="week-client">${r.client}</div>`:''}${timeBadge}`;
+          t.innerHTML = `<span class="task-check" data-rid="${r.id}" title="Finish this task" style="position:absolute;left:4px;top:6px;width:14px;height:14px;border:2px solid #C4BAB0;border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;transition:all .12s;background:#fff;">&check;</span><div class="week-event" style="white-space:normal;line-height:1.3;">${r.notes||'(no description)'}</div>${r.client?`<div class="week-client">${r.client}</div>`:''}${timeBadge}${paperFileBadge(r.clid)?`<div style="margin-top:3px;">${paperFileBadge(r.clid)}</div>`:''}`;
           const chk=t.querySelector('.task-check');
           if(chk){
             chk.onmouseenter=()=>{chk.style.borderColor='#6A8C6E';chk.style.color='#6A8C6E';};
@@ -8886,7 +8912,7 @@ function renderWeek() {
             chk.onclick=(e)=>{e.stopPropagation();_openTaskFinish(r.id);};
           }
         } else {
-          t.innerHTML = `<div class="week-event"${evColor?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div><div class="week-clid">#${r.clid || '—'}</div>${timeBadge}${cdHtml}${r.notes ? `<div class="wk-notes" style="font-size:10px;color:var(--ink-faint);margin-top:2px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
+          t.innerHTML = `<div class="week-event"${evColor?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div><div class="week-clid">#${r.clid || '—'}</div>${timeBadge}${cdHtml}${paperFileBadge(r.clid)?`<div style="margin-top:3px;">${paperFileBadge(r.clid)}</div>`:''}${r.notes ? `<div class="wk-notes" style="font-size:10px;color:var(--ink-faint);margin-top:2px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
         }
       }
       appendSoMeta(t, r, 'var(--amber)');
@@ -9148,7 +9174,7 @@ function renderMonth() {
       const fg = es.color || cardColor[s] || '#9E9186';
       const evLabel=(es.icon?es.icon+' ':'')+( r.event||r.type);
       const card = document.createElement('div'); card.className = 'cal-event-card'; card.style.background = bg; card.style.position='relative'; card.onclick = () => openEdit(r.id);
-      card.innerHTML = `<div class="cal-event-name" style="color:${fg}">${evLabel}</div><div class="cal-event-sub" style="color:${fg}">${r.client}</div>${r.notes ? `<div style="font-size:9px;opacity:0.65;margin-top:1px;line-height:1.3;font-style:italic;color:${fg};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.notes}</div>` : ''}`;
+      card.innerHTML = `<div class="cal-event-name" style="color:${fg}">${evLabel}</div><div class="cal-event-sub" style="color:${fg}">${r.client}</div>${paperFileBadge(r.clid)?`<div style="margin-top:2px;">${paperFileBadge(r.clid)}</div>`:''}${r.notes ? `<div style="font-size:9px;opacity:0.65;margin-top:1px;line-height:1.3;font-style:italic;color:${fg};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.notes}</div>` : ''}`;
       if(es.color) card.style.borderLeft=`3px solid ${es.color}`;
       appendSoMeta(card, r, fg);
       const _vlinkM = eventVirtualLink(r);
@@ -9710,7 +9736,7 @@ function renderIndividualView(){
     // Client + A#
     const cl=document.createElement('div');
     cl.style.cssText='min-width:0;';
-    cl.innerHTML='<div style="font-family:\'Lora\',Georgia,serif;font-size:14px;font-weight:600;color:#2C2620;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(r.client||'—')+'</div>'+(r.anum?'<div style="font-size:10px;color:#9E9186;margin-top:2px;">A# '+r.anum+(r.clid?' · '+r.clid:'')+'</div>':(r.clid?'<div style="font-size:10px;color:#9E9186;margin-top:2px;">'+r.clid+'</div>':''));
+    cl.innerHTML='<div style="font-family:\'Lora\',Georgia,serif;font-size:14px;font-weight:600;color:#2C2620;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(r.client||'—')+'</div>'+(r.anum?'<div style="font-size:10px;color:#9E9186;margin-top:2px;">A# '+r.anum+(r.clid?' · '+r.clid:'')+'</div>':(r.clid?'<div style="font-size:10px;color:#9E9186;margin-top:2px;">'+r.clid+'</div>':''))+(paperFileBadge(r.clid)?'<div style="margin-top:3px;">'+paperFileBadge(r.clid)+'</div>':'');
     card.appendChild(cl);
     // Paralegal
     const pa=document.createElement('div');
@@ -10018,6 +10044,7 @@ function renderSchedulingOrders(){
         sBadge.textContent=slabel;
         row1.appendChild(sBadge);
       }
+      if(isPaperFile(r.clid)){const pf=document.createElement('span');pf.innerHTML=paperFileBadge(r.clid);row1.appendChild(pf);}
 
       const notesEl=document.createElement('div');
       notesEl.style.cssText=`font-size:12px;color:${isDone?'#C4BAB0':'#2C2620'};line-height:1.45;${r.notes?'':'opacity:.45;'}margin-bottom:${(issueDate||att||r.atty||groupBy!=='client')?'5px':'0'};`;
@@ -10422,6 +10449,7 @@ function renderDeadlines(){
       tMeta.style.cssText='display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;';
       if(r.clid){const p=document.createElement('span');p.style.cssText='font-size:9px;color:#C4BAB0;';p.textContent='#'+r.clid;tMeta.appendChild(p);}
       if(r.atty){const p=document.createElement('span');p.style.cssText='font-size:9px;font-weight:600;color:#9E9186;background:#F0EBE4;padding:1px 6px;border-radius:6px;white-space:nowrap;';p.textContent=r.atty.split(' ')[0];tMeta.appendChild(p);}
+      if(isPaperFile(r.clid)){const p=document.createElement('span');p.innerHTML=paperFileBadge(r.clid);tMeta.appendChild(p);}
       if(tMeta.children.length) tBody.appendChild(tMeta);
 
       tCard.appendChild(tBody);
@@ -10532,6 +10560,11 @@ function renderDeadlines(){
       const p=document.createElement('span');
       p.style.cssText='font-size:10px;color:#9E9186;background:#EDE8E0;padding:1px 7px;border-radius:7px;white-space:nowrap;';
       p.textContent=r.atty;
+      meta.appendChild(p);
+    }
+    if(isPaperFile(r.clid)){
+      const p=document.createElement('span');
+      p.innerHTML=paperFileBadge(r.clid);
       meta.appendChild(p);
     }
 
@@ -11672,7 +11705,7 @@ function _renderReadOnlyView(r){
     + (otherHistoryNotes.length ? row('Other notes', otherHistoryNotes.join('\n\n'), 'fc-history-note', 'multiline') : '')
     + customRows
     + `</div>`;
-  host.innerHTML = hero + grid;
+  host.innerHTML = hero + paperFileBannerHTML(r.clid) + grid;
   host.querySelectorAll('.ro-value').forEach(el=>{
     const fid = el.getAttribute('data-focus');
     el.addEventListener('click', ()=>enterEditMode(fid));
@@ -12641,7 +12674,7 @@ function renderAllEvents(){
     if(colVis.type!==false)c+=`<td class="muted">${r.type}</td>`;
     if(colVis.atty!==false)c+=`<td class="muted">${r.atty||'—'}</td>`;
     if(colVis.event!==false)c+=`<td>${r.event||'—'}</td>`;
-    if(colVis.date!==false)c+=`<td><span class="badge ${isDimmed?'no-date':bc}">${fmtDate(r.date)}</span></td>`;
+    if(colVis.date!==false)c+=`<td><span class="badge ${isDimmed?'no-date':bc}">${fmtDate(r.date)}</span>${paperFileBadge(r.clid)?`<div style="margin-top:3px;">${paperFileBadge(r.clid)}</div>`:''}</td>`;
     if(colVis.assigned!==false)c+=`<td>${r.assigned?`<span class="badge ${r.assigned==='Me'?'badge-me':'no-date'}">${r.assigned}</span>`:'—'}</td>`;
     customColumns.forEach(col=>{if(colVis[col.key]!==false)c+=`<td class="muted">${r[col.key]||'—'}</td>`;});
     if(colVis.notes!==false)c+=`<td class="muted note-cell"><div class="note-short"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.notes||'—'}</span></div></td>`;
@@ -17343,6 +17376,7 @@ function openCaseDetail(clid){
     }).catch(()=>{});
   }
   activeSecEl.appendChild(atRow);
+  if(isPaperFile(clid)){const pfb=document.createElement('div');pfb.innerHTML=paperFileBannerHTML(clid);if(pfb.firstChild)activeSecEl.appendChild(pfb.firstChild);}
   if(!active.length){const emp=document.createElement('div');emp.style.cssText='font-size:12px;color:#C4BAB0;padding:6px 0';emp.textContent='No next steps.';activeSecEl.appendChild(emp);}
   else{[...active].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
     const row=document.createElement('div');row.className='case-event-row';row.onclick=()=>openEdit(r.id);
@@ -19323,6 +19357,7 @@ function renderDayTaskList(){
         clientLine.textContent = r.client;
         body.appendChild(clientLine);
       }
+      if(isPaperFile(r.clid)){const pf=document.createElement('div');pf.style.cssText='margin-top:3px;';pf.innerHTML=paperFileBadge(r.clid);body.appendChild(pf);}
       row.appendChild(cb);
       row.appendChild(body);
     } else {
@@ -19359,6 +19394,7 @@ function renderDayTaskList(){
     }
     body.appendChild(due);
     appendSoMeta(body, r, '#C9823A');
+    if(isPaperFile(r.clid)){const pf=document.createElement('div');pf.style.cssText='margin-top:3px;';pf.innerHTML=paperFileBadge(r.clid);body.appendChild(pf);}
 
     row.appendChild(cb);
     row.appendChild(body);
@@ -19403,8 +19439,8 @@ function renderDayTimeline(){
       const [bg,fg] = colors[s]||['#EDE8E0','#9E9186'];
       const pill = document.createElement('div');
       pill.style.cssText = `background:${bg};color:${fg};font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;cursor:grab;white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis;`;
-      pill.textContent = (r.event?r.event+' — ':'')+r.client;
-      pill.title = 'Drag to a time slot to schedule, or click to open';
+      pill.textContent = (isPaperFile(r.clid)?'📬 ':'')+(r.event?r.event+' — ':'')+r.client;
+      pill.title = (isPaperFile(r.clid)?'Paper File — must be mailed; file early. ':'')+'Drag to a time slot to schedule, or click to open';
       pill.onclick = ()=>openEdit(r.id);
       pill.draggable = true;
       pill.addEventListener('dragstart', e => {
@@ -19470,6 +19506,7 @@ function renderDayTimeline(){
         <div style="font-size:10px;font-weight:600;color:#9E9186;margin-bottom:2px;">${r.timeStart ? fmtTime(r.timeStart)+(r.timeEnd?' – '+fmtTime(r.timeEnd):'') : 'All day'}</div>
         <div style="font-size:12px;font-weight:700;color:#2C2620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${evLabel}</div>
         <div style="font-size:11px;color:#9E9186;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.client}${r.clid?' · #'+r.clid:''}${r.atty?' · '+r.atty:''}</div>
+        ${paperFileBadge(r.clid)?`<div style="margin-top:3px;">${paperFileBadge(r.clid)}</div>`:''}
         ${r.notes?`<div style="font-size:10px;color:#C4BAB0;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:italic;">${r.notes.slice(0,55)}${r.notes.length>55?'…':''}</div>`:''}
       `;
       row.appendChild(bar);
@@ -20129,6 +20166,7 @@ function renderQueue(){
       textBlock.appendChild(line1);
       if(r.notes && !isTaskRec) textBlock.appendChild(notesEl);
       textBlock.appendChild(clientEl);
+      if(isPaperFile(r.clid)){const pf=document.createElement('div');pf.style.cssText='margin-top:3px;';pf.innerHTML=paperFileBadge(r.clid);textBlock.appendChild(pf);}
       appendSoMeta(textBlock, r, '#C9823A');
 
       row.appendChild(dot); row.appendChild(textBlock);
