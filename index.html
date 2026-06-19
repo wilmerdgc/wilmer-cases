@@ -12261,6 +12261,9 @@ function buildCalendarEmailDraft(clid, clientName){
   bodyText+=clientName+' Client ID: '+(base.clid||clid);
   if(base.anum) bodyText+=' A#: '+base.anum;
   bodyText+='\n\n';
+  // Paper File cases are filed by mail — flag the deadlines so they're mailed
+  // with enough lead time to arrive on time.
+  if(isPaperFile(clid)) bodyText+='⚠ PAPER FILE — This case is filed by MAIL. Please mail any filing early so it arrives on time.\n\n';
   clientEvents.forEach(ev=>{ bodyText+=formatEventForEmail(ev,clid,paralegal); });
   bodyText+='Thank you.';
   // Spanish client-facing version (appended when the client is added to the email)
