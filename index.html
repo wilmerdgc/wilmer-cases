@@ -10784,6 +10784,11 @@ const MODAL_HEARING_TYPES=new Set(['MASTER','INDIVIDUAL','FAMILY COURT','FAMILY 
 // require a time, and by the brief generator's hearing dropdown.
 function isHearingEventType(val){
   if(!val) return false;
+  // PREP events (e.g. MASTER PREP / PREP MASTER) are preparation tasks, NOT
+  // the hearing itself — they don't have a courtroom format, so never ask for
+  // Virtual / In-Person (nor a judge or time). The hearing-word regex below
+  // would otherwise mis-match "MASTER PREP" on its "MASTER", so guard first.
+  if(/\bPREP\b/i.test(val)) return false;
   if(MODAL_HEARING_TYPES.has(val)) return true;
   const meta = (typeof eventTypeMeta!=='undefined' && eventTypeMeta[val]) || {};
   if(meta.category === 'hearing') return true;
