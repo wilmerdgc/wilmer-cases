@@ -70,18 +70,7 @@ firebase.auth().signInAnonymously().then(()=>{
 // ── Gmail API Configuration ──
 // PASTE YOUR OAUTH CLIENT ID HERE (from Google Cloud Console)
 const GMAIL_CLIENT_ID = '861569441296-88uroovr20c81vhiitj09i39mhnnlbp8.apps.googleusercontent.com';
-const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar.events';
-// Auto-sync calendar target — only runs when signed in as this email.
-const CALENDAR_AUTO_SYNC_EMAIL = 'wilmerdgcolina@gmail.com';
-// Pinned target calendar — all auto-sync writes land here regardless of
-// which Gmail account is signed in. If the signed-in user is the calendar
-// owner this is identical to /calendars/primary/events; if they're signed
-// in as someone else, the calendar owner has to share the calendar with
-// "Make changes to events" permission for the writes to succeed.
-const CALENDAR_TARGET_ID = CALENDAR_AUTO_SYNC_EMAIL;
-function _calTargetPath(suffix){
-  return 'calendars/' + encodeURIComponent(CALENDAR_TARGET_ID) + '/events' + (suffix || '');
-}
+const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify';
 </script>
 <style>
 /* ═══════════════════════════════════════════════════
@@ -5130,10 +5119,6 @@ function gmailInit(){
         return;
       }
       _gmailAccessToken = resp.access_token;
-      // Stash the actually-granted scopes. Google's silent reconnect only
-      // hands back the previously-consented set, so the token can be
-      // missing calendar.events even though the request asked for it.
-      _gmailGrantedScopes = (resp.scope||'').split(/\s+/).filter(Boolean);
       try{ localStorage.setItem('gmail_connected_before','1'); }catch(e){}
       gmailGetProfile().then(()=>{
         gmailRenderConnected();
@@ -5146,12 +5131,6 @@ function gmailInit(){
           window._gmailQueueTimers = true;
           setInterval(()=>{ try{ _gmailProcessSnoozeQueue(); }catch(e){} }, 60000);
           setInterval(()=>{ try{ _gmailProcessScheduledSends(); }catch(e){} }, 60000);
-        }
-        // If the user expects auto-sync but the token doesn't carry the
-        // Calendar scope, surface the re-auth banner up front instead of
-        // waiting for the first 403 from the Calendar API to do it.
-        if(_calAutoSyncEnabled && _calAutoSyncEnabled() && !_gmailHasCalendarScope()){
-          _showCalendarReauthPrompt('Calendar scope not granted on silent reconnect');
         }
       });
     }
@@ -5170,28 +5149,12 @@ function gmailInit(){
   if(el) el.style.display = 'flex';
 }
 
-// Track the scopes the current token actually carries. Empty until the
-// first successful sign-in. _gmailHasCalendarScope() is what the
-// Calendar code checks before assuming sync will work.
-let _gmailGrantedScopes = [];
-function _gmailHasCalendarScope(){
-  return _gmailGrantedScopes.indexOf('https://www.googleapis.com/auth/calendar.events') >= 0
-      || _gmailGrantedScopes.indexOf('https://www.googleapis.com/auth/calendar') >= 0;
-}
-
 // Default flow: let GIS pick (silent if it can). Pass {force:true} to
-// require a fresh consent screen — used by the "Grant calendar access"
-// button so the user sees the Calendar checkbox.
+// require a fresh consent screen.
 function gmailSignIn(opts){
   if(!_gmailTokenClient){ gmailInit(); setTimeout(()=>gmailSignIn(opts), 500); return; }
   const force = opts && opts.force;
   _gmailTokenClient.requestAccessToken(force ? { prompt: 'consent' } : {});
-}
-
-// Explicit "give the cached token Calendar access" path. Forces the
-// consent screen so the Calendar checkbox is presented for approval.
-function gmailGrantCalendarAccess(){
-  gmailSignIn({ force: true });
 }
 
 function gmailSignOut(){
@@ -5230,337 +5193,6 @@ async function gmailApi(endpoint, opts={}){
 async function gmailGetProfile(){
   const data = await gmailApi('profile');
   if(data) _gmailUserEmail = data.emailAddress || '';
-  // Refresh the Calendar auto-sync button state + kick off an initial sync
-  // when we're authenticated as the target email. Delay slightly so the
-  // inbox UI finishes rendering the button before we touch it.
-  setTimeout(()=>{
-    try{ _updateCalAutoSyncIndicator&&_updateCalAutoSyncIndicator(); }catch(e){}
-    try{
-      if(_isAutoSyncAccount&&_isAutoSyncAccount()){
-        _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync();
-      }
-    }catch(e){}
-  }, 250);
-}
-
-// ── Google Calendar integration ──────────────────────────────
-// Uses the same OAuth token as Gmail (calendar.events scope added to
-// GMAIL_SCOPES). Calendar target is 'primary' — the user's default
-// calendar for the email they signed in with.
-async function calendarApi(endpoint, opts={}){
-  if(!_gmailAccessToken){ showToast('Sign in with Google first'); return null; }
-  const base = 'https://www.googleapis.com/calendar/v3/';
-  const res = await fetch(base + endpoint, {
-    ...opts,
-    headers: { 'Authorization': 'Bearer ' + _gmailAccessToken, 'Content-Type':'application/json', ...(opts.headers||{}) }
-  });
-  if(res.status === 401){ gmailSignOut(); showToast('Google session expired — sign in again'); return null; }
-  if(!res.ok){
-    const txt = await res.text();
-    console.error('Calendar API error', res.status, txt);
-    // 403 from Calendar almost always means the calendar.events scope
-    // wasn't granted (the cached token from a previous silent sign-in is
-    // gmail-only). Tell the user clearly and offer one-click re-auth.
-    // 404 from /calendars/primary can also mean Calendar API isn't
-    // enabled on the OAuth client.
-    if(res.status === 403){
-      _showCalendarReauthPrompt(txt);
-    } else if(res.status === 400 || res.status === 404){
-      // Surface a concise toast — full body is in the console.
-      try{
-        const parsed = JSON.parse(txt);
-        const msg = (parsed.error && parsed.error.message) || ('HTTP '+res.status);
-        showToast('📅 Calendar: ' + msg);
-      }catch(e){ showToast('📅 Calendar failed — see console'); }
-    }
-    return { _error: res.status, _body: txt };
-  }
-  if(res.status === 204) return {};
-  return res.json();
-}
-
-// "Grant Google Calendar access" prompt. Forces the OAuth consent
-// screen so the Calendar checkbox is actually presented (Google's
-// silent reconnect won't add new scopes — only consent re-shows them).
-let _calReauthPromptShown = false;
-function _showCalendarReauthPrompt(detail){
-  if(_calReauthPromptShown) return;
-  _calReauthPromptShown = true;
-  let banner = document.getElementById('cal-reauth-banner');
-  if(banner) banner.remove();
-  banner = document.createElement('div');
-  banner.id = 'cal-reauth-banner';
-  banner.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:10000;background:#fff;border:1px solid #E8C49A;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:18px 22px;max-width:400px;display:flex;align-items:flex-start;gap:14px;animation:slideUp .25s ease;';
-  banner.innerHTML = `
-    <div style="font-size:28px;flex-shrink:0;">📅</div>
-    <div style="flex:1;">
-      <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Google Calendar permission needed</div>
-      <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Google's silent reconnect skipped the Calendar permission. Click below to re-show the consent screen — make sure <b>"See, edit, share, and permanently delete all the calendars you can access using Google Calendar"</b> is ticked.</div>
-      <div style="display:flex;gap:8px;margin-top:10px;">
-        <button onclick="(function(){_calReauthPromptShown=false;gmailGrantCalendarAccess();document.getElementById('cal-reauth-banner').remove();})()" style="font-size:12px;font-weight:600;padding:7px 14px;border:none;border-radius:var(--radius-sm);background:#C9823A;color:#fff;cursor:pointer;font-family:inherit;">Grant calendar access</button>
-        <button onclick="(function(){_setCalAutoSyncEnabled&&_setCalAutoSyncEnabled(false);_calReauthPromptShown=false;document.getElementById('cal-reauth-banner').remove();})()" style="font-size:12px;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Turn off Auto-sync</button>
-      </div>
-    </div>
-    <button onclick="(function(){_calReauthPromptShown=false;document.getElementById('cal-reauth-banner').remove();})()" style="border:none;background:transparent;font-size:16px;color:var(--ink-faint);cursor:pointer;padding:2px 4px;line-height:1;">×</button>`;
-  document.body.appendChild(banner);
-}
-
-function _localTz(){
-  try{ return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York'; }catch{ return 'America/New_York'; }
-}
-
-function _isSyncableRecord(r){
-  if(!r || !r.date) return false;
-  if(r.deletedStatus || r.finishedStatus) return false;
-  if(r.notes && r.notes.startsWith('⏰ REMINDER')) return false; // child reminder rows
-  return true;
-}
-
-function _buildCalendarEventPayload(r){
-  const title = ((r.event||r.type||'Event') + ' — ' + (r.client||'(no client)')).slice(0,250);
-  const descLines = [];
-  if(r.type) descLines.push('Case type: ' + r.type);
-  if(r.client) descLines.push('Client: ' + r.client);
-  if(r.clid) descLines.push('Client ID: ' + r.clid);
-  if(r.anum) descLines.push('A#: ' + r.anum);
-  if(r.atty) descLines.push('Paralegal: ' + r.atty);
-  if(r.assigned) descLines.push('Assigned: ' + r.assigned);
-  if(r.hearingMode) descLines.push('Hearing: ' + r.hearingMode);
-  if(r.notes) descLines.push('', r.notes);
-  descLines.push('', '— Synced from Wilmer Cases');
-  const description = descLines.join('\n');
-  const hasTime = !!(r.timeStart || r.timeEnd);
-  const payload = { summary: title, description, source:{ title:'Wilmer Cases', url: location.origin+location.pathname } };
-  if(hasTime){
-    // Normalize a stored time (may be '', 'H:MM', 'HH:MM' or 'HH:MM:SS') to
-    // 'HH:MM'. Returns '' when the value isn't a usable time — note an empty
-    // string must stay falsy here (the old `''.padEnd(5,'0')` produced the
-    // truthy '00000', which defeated the missing-end fallback and sent an
-    // invalid 'T00000:00' end to Calendar, 400-ing every end-less event).
-    const normTime = (t) => {
-      const mt = String(t||'').match(/^(\d{1,2}):(\d{2})/);
-      if(!mt) return '';
-      return String(Math.min(23, +mt[1])).padStart(2,'0') + ':' + mt[2];
-    };
-    const ts = normTime(r.timeStart) || '09:00';
-    let endStr = normTime(r.timeEnd);
-    // No end time, or end not after start → default to a 1-hour block,
-    // clamped so a late start can't roll past 23:59.
-    if(!endStr || endStr <= ts){
-      let [h,m] = ts.split(':').map(Number);
-      h += 1;
-      if(h > 23){ h = 23; m = 59; }
-      endStr = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
-    }
-    const tz = _localTz();
-    payload.start = { dateTime: r.date+'T'+ts+':00', timeZone: tz };
-    payload.end   = { dateTime: r.date+'T'+endStr+':00', timeZone: tz };
-  } else {
-    // All-day event: end.date is exclusive, so +1 day
-    payload.start = { date: r.date };
-    payload.end   = { date: addDateDays(r.date, 1) };
-  }
-  return payload;
-}
-
-async function _upsertRecordToCalendar(r){
-  const payload = _buildCalendarEventPayload(r);
-  if(r._gcalEventId){
-    // PATCH existing event
-    const res = await calendarApi(_calTargetPath('/' + encodeURIComponent(r._gcalEventId)), {
-      method:'PATCH', body: JSON.stringify(payload)
-    });
-    if(res && res._error){
-      // 404 → event was deleted on Calendar side. Clear id and re-insert.
-      if(res._error === 404 || res._error === 410){
-        delete r._gcalEventId;
-        return _upsertRecordToCalendar(r);
-      }
-      return { ok:false, err: res._error };
-    }
-    return { ok:true, updated:true, id: r._gcalEventId };
-  } else {
-    const res = await calendarApi(_calTargetPath(), {
-      method:'POST', body: JSON.stringify(payload)
-    });
-    if(!res || res._error) return { ok:false, err: (res&&res._error)||'network' };
-    r._gcalEventId = res.id;
-    r._gcalSyncedAt = Date.now();
-    return { ok:true, created:true, id: res.id };
-  }
-}
-
-// Signature of the fields we push to Calendar — used to skip unchanged records
-// on automatic re-syncs so we don't spam the API with no-op PATCH requests.
-function _calSig(r){
-  return [r.event,r.type,r.client,r.clid,r.anum,r.atty,r.assigned,r.date,r.timeStart,r.timeEnd,r.notes,r.hearingMode].map(v=>v==null?'':String(v)).join('|');
-}
-// Per-device opt-out. Default is ON whenever Gmail is connected — the
-// sync writes to the signed-in account's *own* primary calendar, so each
-// device naturally targets the right calendar. Set the flag to disable.
-const CAL_AUTOSYNC_DISABLED_KEY = 'wilmer_calendar_autosync_disabled';
-function _calAutoSyncEnabled(){
-  try{ return localStorage.getItem(CAL_AUTOSYNC_DISABLED_KEY) !== '1'; }catch(e){ return true; }
-}
-function _setCalAutoSyncEnabled(on){
-  try{
-    if(on) localStorage.removeItem(CAL_AUTOSYNC_DISABLED_KEY);
-    else   localStorage.setItem(CAL_AUTOSYNC_DISABLED_KEY,'1');
-  }catch(e){}
-  try{ _updateCalAutoSyncIndicator&&_updateCalAutoSyncIndicator(); }catch(e){}
-  if(on){
-    showToast('📅 Auto-sync ON — events will push to '+(_gmailUserEmail||'your Google Calendar'));
-    try{ _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync(); }catch(e){}
-  } else {
-    showToast('📅 Auto-sync OFF');
-  }
-}
-function _isAutoSyncAccount(){
-  // Whoever is signed into Gmail and hasn't opted out is the auto-sync
-  // target. The Calendar API writes to wilmerdgcolina@gmail.com's calendar
-  // specifically (CALENDAR_TARGET_ID), so the signed-in user either needs
-  // to *be* that account or have edit access to the shared calendar.
-  return !!(_gmailAccessToken && _gmailUserEmail && _calAutoSyncEnabled());
-}
-function _updateCalAutoSyncIndicator(){
-  // The visible top-bar button was retired; the indicator is now a menu
-  // row in the Account dropdown (see gmailRenderConnected) which calls
-  // gmailToggleCalAutoSync() and updates its own label. This function is
-  // kept as a hook for any future indicator and as a no-op if the legacy
-  // cal-sync-btn ever comes back.
-  const el = document.getElementById('cal-sync-btn');
-  if(!el) return;
-  if(_isAutoSyncAccount()){
-    el.title = 'Auto-sync ON — events push to '+(_gmailUserEmail||'your Google Calendar')+' automatically.';
-    el.style.borderColor = 'var(--sage)';
-    el.style.color = 'var(--sage)';
-    el.textContent = '📅 Auto-sync ON';
-  } else {
-    el.title = 'Click to enable auto-sync to '+(_gmailUserEmail||'Google Calendar')+'.';
-    el.style.borderColor = 'var(--slate)';
-    el.style.color = 'var(--slate)';
-    el.textContent = '📅 Sync to Calendar';
-  }
-}
-// Toggle handler for the Account dropdown row.
-function gmailToggleCalAutoSync(){
-  const next = !_calAutoSyncEnabled();
-  _setCalAutoSyncEnabled(next);
-  // Refresh the dropdown so the label reflects the new state.
-  const labelEl = document.getElementById('gmail-cal-autosync-label');
-  if(labelEl) labelEl.textContent = next ? 'Auto-sync ON' : 'Auto-sync OFF';
-  const dotEl = document.getElementById('gmail-cal-autosync-dot');
-  if(dotEl) dotEl.style.background = next ? 'var(--sage)' : 'var(--ink-faint)';
-}
-
-let _calAutoSyncTimer = null;
-let _calAutoSyncInFlight = false;
-function _scheduleCalendarAutoSync(){
-  if(!_isAutoSyncAccount()) return;
-  // Don't queue work that's going to 403 anyway — surface the consent
-  // prompt right now and stop. Once the user grants the scope, the
-  // sign-in callback will reschedule.
-  if(!_gmailHasCalendarScope()){
-    _showCalendarReauthPrompt('Scheduled sync skipped — no calendar scope');
-    return;
-  }
-  clearTimeout(_calAutoSyncTimer);
-  _calAutoSyncTimer = setTimeout(_runCalendarAutoSync, 5000);
-}
-async function _runCalendarAutoSync(){
-  if(_calAutoSyncInFlight || _calSyncRunning) return;
-  if(!_isAutoSyncAccount()) return;
-  if(!_gmailHasCalendarScope()){
-    _showCalendarReauthPrompt('Auto-sync skipped — no calendar scope');
-    return;
-  }
-  _calAutoSyncInFlight = true;
-  try{
-    // 1. Delete Calendar events for records that became deleted / finished /
-    //    reminder-children since the last sync.
-    const toDelete = records.filter(r => r._gcalEventId && !_isSyncableRecord(r));
-    for(const r of toDelete){
-      try{
-        await calendarApi(_calTargetPath('/'+encodeURIComponent(r._gcalEventId)),{method:'DELETE'});
-      }catch(e){}
-      delete r._gcalEventId; delete r._gcalSig; delete r._gcalSyncedAt;
-    }
-    // 2. Upsert only records whose signature changed (or that were never synced)
-    const toUpsert = records.filter(r => _isSyncableRecord(r) && (!r._gcalEventId || _calSig(r) !== r._gcalSig));
-    for(let i=0; i<toUpsert.length; i+=5){
-      const batch = toUpsert.slice(i, i+5);
-      await Promise.all(batch.map(async r => {
-        const res = await _upsertRecordToCalendar(r).catch(()=>({ok:false}));
-        if(res && res.ok) r._gcalSig = _calSig(r);
-      }));
-    }
-    if(toDelete.length || toUpsert.length){
-      // Persist the new ids/sigs. markUnsaved will re-schedule auto-sync, but
-      // the sig check on the next tick makes it a no-op, so there's no loop.
-      try{ markUnsaved(); }catch(e){}
-    }
-  } finally {
-    _calAutoSyncInFlight = false;
-  }
-}
-
-let _calSyncRunning = false;
-async function calendarSyncAll(){
-  if(_calSyncRunning){ showToast('Sync already running…'); return; }
-  if(!_gmailAccessToken){ showToast('Sign in with Google first'); gmailSignIn(); return; }
-  if(!_gmailHasCalendarScope()){
-    showToast('📅 Calendar scope not granted — re-authorize to enable sync');
-    _showCalendarReauthPrompt('Manual sync requested without calendar scope');
-    return;
-  }
-  _calSyncRunning = true;
-  const btn = document.getElementById('cal-sync-btn');
-  const origText = btn ? btn.textContent : '';
-  const targets = records.filter(_isSyncableRecord);
-  if(!targets.length){
-    _calSyncRunning = false;
-    if(btn) btn.textContent = origText;
-    showToast('No scheduled events to sync');
-    return;
-  }
-  if(btn){ btn.disabled = true; btn.textContent = '📅 Syncing 0/'+targets.length; }
-  showToast('📅 Syncing '+targets.length+' events to Google Calendar…');
-  let created=0, updated=0, failed=0, done=0;
-  let firstErr = null;     // surface the first real error to the toast
-  let abortRest = false;   // 401/403 propagate — no point retrying every row
-  // Process in small concurrency batches of 5 to stay under the write QPS
-  const batchSize = 5;
-  for(let i=0; i<targets.length; i+=batchSize){
-    if(abortRest) break;
-    const batch = targets.slice(i, i+batchSize);
-    const results = await Promise.all(batch.map(r => _upsertRecordToCalendar(r).catch(e => ({ok:false, err:String(e)}))));
-    results.forEach(res => {
-      if(res && res.ok){ if(res.created) created++; if(res.updated) updated++; }
-      else {
-        failed++;
-        if(!firstErr) firstErr = (res && res.err) || 'unknown';
-        if(res && (res.err === 401 || res.err === 403)) abortRest = true;
-      }
-    });
-    done += batch.length;
-    if(btn) btn.textContent = '📅 Syncing '+done+'/'+targets.length;
-  }
-  // Persist the new _gcalEventId / _gcalSyncedAt stamps so they survive reload
-  markUnsaved();
-  _calSyncRunning = false;
-  if(btn){ btn.disabled = false; btn.textContent = origText || '📅 Sync to Calendar'; }
-  const parts = [];
-  if(created) parts.push(created+' added');
-  if(updated) parts.push(updated+' updated');
-  if(failed){
-    parts.push(failed+' failed');
-    // If every single attempt failed, the underlying error is the same
-    // for all of them — show it once instead of a useless count.
-    if(failed === done) showToast('📅 Calendar sync failed: ' + firstErr);
-    else                showToast('📅 Calendar sync: ' + parts.join(', ') + (firstErr?' ('+firstErr+')':''));
-  } else {
-    showToast('📅 Calendar sync: '+(parts.join(', ')||'nothing changed'));
-  }
 }
 
 // Which Gmail mailbox is currently shown in the list. 'inbox' or 'sent'.
@@ -6337,11 +5969,6 @@ function gmailRenderConnected(){
           <div style="display:none;position:absolute;right:0;top:calc(100%+4px);background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:100;padding:8px 0;min-width:230px;">
             <div style="padding:8px 14px;font-size:11px;color:var(--ink-muted);border-bottom:1px solid var(--cream-dark);">${_gmailUserEmail}</div>
             <div onclick="gmailFetchInbox();this.parentElement.style.display='none'" style="padding:8px 14px;font-size:12px;cursor:pointer;color:var(--ink);" onmouseenter="this.style.background='var(--cream)'" onmouseleave="this.style.background=''">Refresh Inbox</div>
-            <div onclick="event.stopPropagation();gmailToggleCalAutoSync();" style="padding:8px 14px;font-size:12px;cursor:pointer;color:var(--ink);display:flex;align-items:center;gap:8px;border-top:1px solid var(--cream-dark);" onmouseenter="this.style.background='var(--cream)'" onmouseleave="this.style.background=''" title="Push every scheduled event to the signed-in account's Google Calendar automatically">
-              <span id="gmail-cal-autosync-dot" style="width:8px;height:8px;border-radius:50%;background:${_calAutoSyncEnabled() ? 'var(--sage)' : 'var(--ink-faint)'};flex-shrink:0;"></span>
-              <span>📅 Calendar <span id="gmail-cal-autosync-label" style="color:var(--ink-muted);font-weight:500;">${_calAutoSyncEnabled() ? 'Auto-sync ON' : 'Auto-sync OFF'}</span></span>
-            </div>
-            <div onclick="event.stopPropagation();calendarSyncAll();this.parentElement.style.display='none'" style="padding:8px 14px;font-size:11px;cursor:pointer;color:var(--ink-muted);" onmouseenter="this.style.background='var(--cream)'" onmouseleave="this.style.background=''" title="Push every event right now, regardless of the auto-sync setting">↻ Sync calendar now</div>
             <div onclick="gmailSignOut();this.parentElement.style.display='none'" style="padding:8px 14px;font-size:12px;cursor:pointer;color:var(--rose);border-top:1px solid var(--cream-dark);" onmouseenter="this.style.background='var(--rose-light)'" onmouseleave="this.style.background=''">Disconnect</div>
           </div>
         </div>
@@ -12840,8 +12467,7 @@ function saveAllData(){
   if(!_dataInitialized){ return; }
   const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
-if(_autoBackupHandle) _writeAutoBackup();// Auto-push events to Google Calendar when signed in as the target email
-try{ _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync(); }catch(e){}
+if(_autoBackupHandle) _writeAutoBackup();
 }catch(e){showToast('Save failed: storage may be full');}}
 function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}return true;}catch(e){return false;}}
 // One pending-render flag, used by both the debounced timer and the global
