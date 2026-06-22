@@ -516,6 +516,8 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .modal-backdrop.readonly-mode #modal-custom-fields,
 .modal-backdrop.readonly-mode #modal-reminder-section,
 .modal-backdrop.readonly-mode #modal-status-section,
+.modal-backdrop.readonly-mode #modal-hearing-mode-section,
+.modal-backdrop.readonly-mode #modal-master-prep-section,
 .modal-backdrop.readonly-mode #modal-time-row,
 .modal-backdrop.readonly-mode #modal-date-calc,
 .modal-backdrop.readonly-mode #modal-copy-btn { display: none !important; }
@@ -2385,6 +2387,11 @@ window.addEventListener('load',()=>autoGrowAllNotes());
   <div class="settings-section"><div class="settings-section-title">Attorneys</div><div id="attorney-tags"></div><div class="tag-add-row"><input id="new-attorney" type="text" placeholder="Add attorney..."/><button onclick="addTag('attorney')">Add</button></div></div>
   <div class="settings-section">
     <div class="settings-section-title">Event types</div>
+    <div style="font-size:11px;color:var(--ink-muted);line-height:1.55;margin-bottom:14px;background:#EEF1F7;border:1px solid #CBD5E8;border-radius:8px;padding:10px 12px;">
+      <div style="font-weight:700;color:#6B7FA3;text-transform:uppercase;letter-spacing:.05em;font-size:10px;margin-bottom:5px;">📡 Hearing category — rules</div>
+      Tag a type as <strong>Hearing</strong> (category dropdown on the right) to treat it as a court hearing. When a hearing type is chosen, the Add / Edit event form requires a <strong>format (Virtual / In Person)</strong>, a <strong>judge</strong>, and a <strong>start time</strong> before it can be saved, and the event's View shows the format, judge, and Webex link.<br>
+      Types whose name contains <strong>MASTER, INDIVIDUAL, MERITS, BOND, HEARING,</strong> or <strong>TRIAL</strong> are detected as hearings automatically, even without the tag. For virtual hearings, the judge's saved Webex room link is filled in for you (and can be overridden per event).
+    </div>
     <div id="eventtype-tags"></div>
     <div class="tag-add-row"><input id="new-eventtype" type="text" placeholder="Add event type..."/><button onclick="addTag('eventtype')">Add</button></div>
   </div>
@@ -11650,6 +11657,20 @@ function _renderReadOnlyView(r){
     });
   }
   const customRows = (customColumns||[]).map(c=>row(c.label||c.key, r[c.key]||'', 'fc-'+c.key)).join('');
+  // Hearing rows — show whether this event is a hearing and, if so, its format
+  // (Virtual / In Person), the assigned judge, and the Webex link for virtual
+  // hearings. Only rendered for hearing event types so non-hearing events stay
+  // clean. Mirrors the add/edit form so View shows the same hearing info.
+  let hearingRows = '';
+  if(typeof isHearingEventType==='function' && isHearingEventType(r.event||'')){
+    const fmtVal = r.hearingMode==='virtual' ? '📡 Virtual'
+                 : r.hearingMode==='in-person' ? '🏛 In Person'
+                 : 'Not set';
+    hearingRows += row('Format', fmtVal, 'hm-virtual');
+    const _hj = r.hearingJudgeId ? (typeof judges!=='undefined'?judges:[]).find(x=>x.id===r.hearingJudgeId) : null;
+    if(_hj) hearingRows += row('Judge', (_hj.role==='Referee'?'Ref. ':'')+(_hj.name||''), 'vh-judge');
+    if(r.hearingMode==='virtual' && r.virtualLink) hearingRows += row('Webex link', r.virtualLink, 'vh-link');
+  }
   const grid = `<div class="ro-grid">`
     + row('Client ID', r.clid||'', 'fc-clid')
     + row('Client', r.client||'', 'fc-client')
@@ -11659,6 +11680,7 @@ function _renderReadOnlyView(r){
     + row('Event type', r.event||'', 'fc-eventtype')
     + row('Deadline', dateStr, 'fc-date')
     + row('Time', timeStr, 'fc-time-toggle')
+    + hearingRows
     + row('Assigned', r.assigned||'', 'fc-assigned')
     + (statusVal?row('Status', statusVal, 'sbtn-attended'):'')
     + row('Status note', statusNote, 'fc-history-note', 'multiline')
@@ -17199,7 +17221,6 @@ function openCaseDetail(clid){
   const atRow=document.createElement('div');atRow.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:6px;border-bottom:0.5px solid #DDD5CA';
   atRow.innerHTML=`<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#6B7FA3">Next Steps <span style="font-weight:400;font-size:10px;color:#C4BAB0">(${active.length})</span></div>`;
   const addEvtBtn=document.createElement('button');addEvtBtn.className='btn-sm btn-primary';addEvtBtn.style.cssText='font-size:11px;padding:3px 11px;border-radius:20px';addEvtBtn.textContent='+ Add Event';addEvtBtn.onclick=openAddFromCase;atRow.appendChild(addEvtBtn);
-  const addCUBtn=document.createElement('button');addCUBtn.className='btn-sm';addCUBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#E8C49A;color:#C9823A;margin-left:4px;';addCUBtn.textContent='⏰ Call-Up';addCUBtn.onclick=()=>openAddDeadline(base);atRow.appendChild(addCUBtn);
   // Email Client button
   const emailClientBtn=document.createElement('button');emailClientBtn.className='btn-sm';emailClientBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#6B7FA3;color:#6B7FA3;margin-left:4px;font-weight:600;';emailClientBtn.textContent='✉ Email Client';
   emailClientBtn.onclick=()=>{
@@ -17239,18 +17260,6 @@ function openCaseDetail(clid){
     });
   };
   atRow.appendChild(emailCaseBtn);
-  // Exhibit Packet — opens the external Exhibit Packet app with this
-  // case's data encoded in the URL (?data=<base64-json>&client=…&clid=…&
-  // anum=…). The Exhibit Packet app can read either the structured JSON
-  // (preferred — has every field) or the individual params (fallback
-  // for simple form pre-fills).
-  const exhibitBtn=document.createElement('button');
-  exhibitBtn.className='btn-sm';
-  exhibitBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#C9823A;color:#C9823A;margin-left:4px;font-weight:600;';
-  exhibitBtn.textContent='📑 Exhibit Packet';
-  exhibitBtn.title='Open the Exhibit Packet app pre-filled with this case\'s data';
-  exhibitBtn.onclick=()=>openExhibitPacketForCase(clid);
-  atRow.appendChild(exhibitBtn);
   // Folder badge — when a directory is linked we show "📁 <Folder name>"
   // (click opens the in-app file viewer — best the browser can do for
   // "see where the folder is in Windows" since the File System Access API
