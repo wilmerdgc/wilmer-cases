@@ -516,6 +516,8 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .modal-backdrop.readonly-mode #modal-custom-fields,
 .modal-backdrop.readonly-mode #modal-reminder-section,
 .modal-backdrop.readonly-mode #modal-status-section,
+.modal-backdrop.readonly-mode #modal-hearing-mode-section,
+.modal-backdrop.readonly-mode #modal-master-prep-section,
 .modal-backdrop.readonly-mode #modal-time-row,
 .modal-backdrop.readonly-mode #modal-date-calc,
 .modal-backdrop.readonly-mode #modal-copy-btn { display: none !important; }
@@ -11650,6 +11652,20 @@ function _renderReadOnlyView(r){
     });
   }
   const customRows = (customColumns||[]).map(c=>row(c.label||c.key, r[c.key]||'', 'fc-'+c.key)).join('');
+  // Hearing rows — show whether this event is a hearing and, if so, its format
+  // (Virtual / In Person), the assigned judge, and the Webex link for virtual
+  // hearings. Only rendered for hearing event types so non-hearing events stay
+  // clean. Mirrors the add/edit form so View shows the same hearing info.
+  let hearingRows = '';
+  if(typeof isHearingEventType==='function' && isHearingEventType(r.event||'')){
+    const fmtVal = r.hearingMode==='virtual' ? '📡 Virtual'
+                 : r.hearingMode==='in-person' ? '🏛 In Person'
+                 : 'Not set';
+    hearingRows += row('Format', fmtVal, 'hm-virtual');
+    const _hj = r.hearingJudgeId ? (typeof judges!=='undefined'?judges:[]).find(x=>x.id===r.hearingJudgeId) : null;
+    if(_hj) hearingRows += row('Judge', (_hj.role==='Referee'?'Ref. ':'')+(_hj.name||''), 'vh-judge');
+    if(r.hearingMode==='virtual' && r.virtualLink) hearingRows += row('Webex link', r.virtualLink, 'vh-link');
+  }
   const grid = `<div class="ro-grid">`
     + row('Client ID', r.clid||'', 'fc-clid')
     + row('Client', r.client||'', 'fc-client')
@@ -11659,6 +11675,7 @@ function _renderReadOnlyView(r){
     + row('Event type', r.event||'', 'fc-eventtype')
     + row('Deadline', dateStr, 'fc-date')
     + row('Time', timeStr, 'fc-time-toggle')
+    + hearingRows
     + row('Assigned', r.assigned||'', 'fc-assigned')
     + (statusVal?row('Status', statusVal, 'sbtn-attended'):'')
     + row('Status note', statusNote, 'fc-history-note', 'multiline')
