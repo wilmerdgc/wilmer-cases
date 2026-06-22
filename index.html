@@ -17221,7 +17221,6 @@ function openCaseDetail(clid){
   const atRow=document.createElement('div');atRow.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:6px;border-bottom:0.5px solid #DDD5CA';
   atRow.innerHTML=`<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#6B7FA3">Next Steps <span style="font-weight:400;font-size:10px;color:#C4BAB0">(${active.length})</span></div>`;
   const addEvtBtn=document.createElement('button');addEvtBtn.className='btn-sm btn-primary';addEvtBtn.style.cssText='font-size:11px;padding:3px 11px;border-radius:20px';addEvtBtn.textContent='+ Add Event';addEvtBtn.onclick=openAddFromCase;atRow.appendChild(addEvtBtn);
-  const addCUBtn=document.createElement('button');addCUBtn.className='btn-sm';addCUBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#E8C49A;color:#C9823A;margin-left:4px;';addCUBtn.textContent='⏰ Call-Up';addCUBtn.onclick=()=>openAddDeadline(base);atRow.appendChild(addCUBtn);
   // Email Client button
   const emailClientBtn=document.createElement('button');emailClientBtn.className='btn-sm';emailClientBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#6B7FA3;color:#6B7FA3;margin-left:4px;font-weight:600;';emailClientBtn.textContent='✉ Email Client';
   emailClientBtn.onclick=()=>{
@@ -17261,18 +17260,6 @@ function openCaseDetail(clid){
     });
   };
   atRow.appendChild(emailCaseBtn);
-  // Exhibit Packet — opens the external Exhibit Packet app with this
-  // case's data encoded in the URL (?data=<base64-json>&client=…&clid=…&
-  // anum=…). The Exhibit Packet app can read either the structured JSON
-  // (preferred — has every field) or the individual params (fallback
-  // for simple form pre-fills).
-  const exhibitBtn=document.createElement('button');
-  exhibitBtn.className='btn-sm';
-  exhibitBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#C9823A;color:#C9823A;margin-left:4px;font-weight:600;';
-  exhibitBtn.textContent='📑 Exhibit Packet';
-  exhibitBtn.title='Open the Exhibit Packet app pre-filled with this case\'s data';
-  exhibitBtn.onclick=()=>openExhibitPacketForCase(clid);
-  atRow.appendChild(exhibitBtn);
   // Folder badge — when a directory is linked we show "📁 <Folder name>"
   // (click opens the in-app file viewer — best the browser can do for
   // "see where the folder is in Windows" since the File System Access API
