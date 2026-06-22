@@ -2387,6 +2387,11 @@ window.addEventListener('load',()=>autoGrowAllNotes());
   <div class="settings-section"><div class="settings-section-title">Attorneys</div><div id="attorney-tags"></div><div class="tag-add-row"><input id="new-attorney" type="text" placeholder="Add attorney..."/><button onclick="addTag('attorney')">Add</button></div></div>
   <div class="settings-section">
     <div class="settings-section-title">Event types</div>
+    <div style="font-size:11px;color:var(--ink-muted);line-height:1.55;margin-bottom:14px;background:#EEF1F7;border:1px solid #CBD5E8;border-radius:8px;padding:10px 12px;">
+      <div style="font-weight:700;color:#6B7FA3;text-transform:uppercase;letter-spacing:.05em;font-size:10px;margin-bottom:5px;">📡 Hearing category — rules</div>
+      Tag a type as <strong>Hearing</strong> (category dropdown on the right) to treat it as a court hearing. When a hearing type is chosen, the Add / Edit event form requires a <strong>format (Virtual / In Person)</strong>, a <strong>judge</strong>, and a <strong>start time</strong> before it can be saved, and the event's View shows the format, judge, and Webex link.<br>
+      Types whose name contains <strong>MASTER, INDIVIDUAL, MERITS, BOND, HEARING,</strong> or <strong>TRIAL</strong> are detected as hearings automatically, even without the tag. For virtual hearings, the judge's saved Webex room link is filled in for you (and can be overridden per event).
+    </div>
     <div id="eventtype-tags"></div>
     <div class="tag-add-row"><input id="new-eventtype" type="text" placeholder="Add event type..."/><button onclick="addTag('eventtype')">Add</button></div>
   </div>
