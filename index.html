@@ -16390,6 +16390,24 @@ window._sijSetFcStage = function(sel){
 
 function switchCaseTab(tab){const isO=tab==='overview';document.getElementById('cd-pane-overview').style.display=isO?'':'none';document.getElementById('cd-pane-checklists').style.display=isO?'none':'';document.getElementById('cdtab-overview').classList.toggle('active',isO);document.getElementById('cdtab-checklists').classList.toggle('active',!isO);if(!isO&&activeCaseClid)renderCaseChecklists(activeCaseClid);}
 function openAddFromCase(){if(!activeCaseClid)return;const caseRecs=records.filter(r=>(r.clid||r.client)===activeCaseClid);if(!caseRecs.length){openAdd();return;}const base=caseRecs.reduce((best,r)=>{const s=(r.client?1:0)+(r.anum?1:0)+(r.atty?1:0)+(r.type?1:0);const bs=(best.client?1:0)+(best.anum?1:0)+(best.atty?1:0)+(best.type?1:0);return s>bs?r:best;},caseRecs[0]);openAdd();setTimeout(()=>{document.getElementById('fc-clid').value=base.clid||'';document.getElementById('fc-client').value=base.client||'';document.getElementById('fc-anum').value=base.anum||'';const ce=document.getElementById('fc-casetype');if(ce)ce.value=base.type||'';const pe=document.getElementById('fc-paralegal');if(pe)pe.value=base.atty||'';customColumns.forEach(c=>{const val=caseRecs.map(r=>r[c.key]).filter(Boolean)[0]||'';const el=document.getElementById('fc-'+c.key);if(el)el.value=val;});const _m=document.getElementById('modal');if(_m)_m.classList.add('case-compact');const _sum=document.getElementById('modal-case-summary');if(_sum){const parts=[];if(base.client)parts.push('👤 '+escHtml(base.client));if(base.anum)parts.push('A# '+escHtml(base.anum));if(base.type)parts.push(escHtml(base.type));if(base.atty)parts.push(escHtml(base.atty));if(base.clid)parts.push('ID '+escHtml(base.clid));_sum.innerHTML='<div style="display:flex;align-items:center;gap:8px;background:#F2EFEA;border:1px solid #E3DCD0;border-radius:10px;padding:8px 12px;margin-bottom:14px;"><div style="flex:1;min-width:0;font-size:12px;color:#5C5148;line-height:1.4;word-break:break-word;">'+parts.join(' · ')+'</div><button type="button" onclick="document.getElementById(\'modal\').classList.remove(\'case-compact\')" style="font-size:10px;color:#9E9186;background:transparent;border:1px solid #DDD5CA;border-radius:6px;padding:3px 8px;cursor:pointer;white-space:nowrap;flex-shrink:0;">Edit case info</button></div>';}const _ev=document.getElementById('fc-eventtype');if(_ev){try{_ev.focus();}catch(e){}}},0);}
+// Quick-add: open the Add Event modal pre-filled for the active case with a
+// specific event type already selected (Individual / Master / Task shortcuts
+// shown above the Next Steps row). Reuses openAddFromCase for the case summary,
+// then sets the event type and fires its change handler so any dependent UI
+// (hearing mode, etc.) updates.
+function openAddFromCaseWithEvent(eventType){
+  if(!activeCaseClid)return;
+  openAddFromCase();
+  setTimeout(()=>{
+    const ev=document.getElementById('fc-eventtype');
+    if(ev){
+      ev.value=eventType;
+      // If the type isn't in the (case-type filtered) list, add it so it sticks.
+      if(ev.value!==eventType){const o=document.createElement('option');o.value=eventType;o.textContent=eventType;ev.appendChild(o);ev.value=eventType;}
+      if(typeof onEventTypeChange==='function')onEventTypeChange(eventType);
+    }
+  },10);
+}
 function openAddFromStage(clid,eventType,notes){const caseRecs=records.filter(r=>(r.clid||r.client)===clid);const base=caseRecs.length?caseRecs.reduce((best,r)=>{const s=(r.client?1:0)+(r.anum?1:0)+(r.atty?1:0)+(r.type?1:0);const bs=(best.client?1:0)+(best.anum?1:0)+(best.atty?1:0)+(best.type?1:0);return s>bs?r:best;},caseRecs[0]):null;openAdd();setTimeout(()=>{if(base){document.getElementById('fc-clid').value=base.clid||'';document.getElementById('fc-client').value=base.client||'';document.getElementById('fc-anum').value=base.anum||'';const ce=document.getElementById('fc-casetype');if(ce)ce.value=base.type||'';const pe=document.getElementById('fc-paralegal');if(pe)pe.value=base.atty||'';}if(eventType){const ee=document.getElementById('fc-eventtype');if(ee)ee.value=eventType;}if(notes)document.getElementById('fc-notes').value=notes;},0);}
 
 // ── Judge picker & info popover ──────────────────
@@ -17346,6 +17364,22 @@ function openCaseDetail(clid){
       folderBtn.style.display = '';
     }).catch(()=>{});
   }
+  // Quick-add shortcut row — sits on top of the Next Steps button row. Each
+  // button opens the Add Event modal pre-filled for this case with the matching
+  // event type (Individual / Master / Task) already selected.
+  const quickAddRow=document.createElement('div');
+  quickAddRow.style.cssText='display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;';
+  [['Individual','INDIVIDUAL','#6B7FA3'],['Master','MASTER','#6A8C6E'],['Task','TASK','#B07B4F']].forEach(([label,evType,col])=>{
+    const b=document.createElement('button');
+    b.type='button';
+    b.className='btn-sm';
+    b.style.cssText='font-size:11px;padding:3px 11px;border-radius:20px;border-color:'+col+';color:'+col+';font-weight:600;';
+    b.textContent=label;
+    b.title='Add a '+label+' event to this case (pre-filled)';
+    b.onclick=()=>openAddFromCaseWithEvent(evType);
+    quickAddRow.appendChild(b);
+  });
+  activeSecEl.appendChild(quickAddRow);
   activeSecEl.appendChild(atRow);
   if(!active.length){const emp=document.createElement('div');emp.style.cssText='font-size:12px;color:#C4BAB0;padding:6px 0';emp.textContent='No next steps.';activeSecEl.appendChild(emp);}
   else{[...active].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
