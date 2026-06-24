@@ -2274,9 +2274,11 @@ window.addEventListener('load',()=>autoGrowAllNotes());
     <div class="cd-tab-nav">
       <button class="cd-tab-btn active" id="cdtab-overview" onclick="switchCaseTab('overview')">Overview</button>
       <button class="cd-tab-btn" id="cdtab-checklists" onclick="switchCaseTab('checklists')">Workflow</button>
+      <button class="cd-tab-btn" id="cdtab-documents" onclick="switchCaseTab('documents')">Documents</button>
     </div>
     <div id="cd-pane-overview"><div id="case-detail-body"></div></div>
     <div id="cd-pane-checklists" style="display:none"><div id="case-checklists-body"></div></div>
+    <div id="cd-pane-documents" style="display:none"><div id="case-documents-body"></div></div>
   </div>
   <div id="cases-add-view" style="display:none;">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
@@ -15180,6 +15182,10 @@ async function generateMotionWebex(){
     a.download = fname + '.docx';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(a.href), 60000);
+    // Log the created document into the case's Documents tab.
+    if(window._briefClid && typeof recordCreatedDoc==='function'){
+      recordCreatedDoc(window._briefClid, { kind:'Motion / Brief', title:(values.field7||'Motion').trim(), filename:fname+'.docx' });
+    }
     if(status){ status.textContent = '✓ Downloaded — open it in Word to review.'; status.style.color='var(--sage)'; }
   }catch(e){
     console.error('generateMotionWebex', e);
@@ -15416,6 +15422,10 @@ async function generateWitnessList(){
     a.download = fname;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    // Log the created document into the case's Documents tab.
+    if(window._briefClid && typeof recordCreatedDoc==='function'){
+      recordCreatedDoc(window._briefClid, { kind:'Witness List', title:'Witness List', filename:fname });
+    }
     setStatus('✓ Downloaded — open it in Word to review.', false);
   }catch(e){
     console.error('generateWitnessList', e);
@@ -16782,7 +16792,96 @@ window._sijSetFcStage = function(sel){
   renderSIJBoard();
 };
 
-function switchCaseTab(tab){const isO=tab==='overview';document.getElementById('cd-pane-overview').style.display=isO?'':'none';document.getElementById('cd-pane-checklists').style.display=isO?'none':'';document.getElementById('cdtab-overview').classList.toggle('active',isO);document.getElementById('cdtab-checklists').classList.toggle('active',!isO);if(!isO&&activeCaseClid)renderCaseChecklists(activeCaseClid);}
+function switchCaseTab(tab){
+  const panes={overview:'cd-pane-overview',checklists:'cd-pane-checklists',documents:'cd-pane-documents'};
+  const tabs={overview:'cdtab-overview',checklists:'cdtab-checklists',documents:'cdtab-documents'};
+  if(!panes[tab])tab='overview';
+  Object.keys(panes).forEach(k=>{
+    const p=document.getElementById(panes[k]);if(p)p.style.display=(k===tab)?'':'none';
+    const b=document.getElementById(tabs[k]);if(b)b.classList.toggle('active',k===tab);
+  });
+  if(tab==='checklists'&&activeCaseClid)renderCaseChecklists(activeCaseClid);
+  if(tab==='documents'&&activeCaseClid)renderCaseDocuments(activeCaseClid);
+}
+
+// Record a document created for a case (from the Motion/Brief Creator or
+// the Witness List tool) into caseMeta[clid].createdDocs so it shows up
+// in the case's Documents tab. `info` carries { kind, title, filename }.
+function recordCreatedDoc(clid, info){
+  if(!clid||!info)return;
+  if(!caseMeta[clid])caseMeta[clid]={};
+  if(!Array.isArray(caseMeta[clid].createdDocs))caseMeta[clid].createdDocs=[];
+  caseMeta[clid].createdDocs.unshift({
+    kind:info.kind||'Document',
+    title:info.title||info.filename||'Document',
+    filename:info.filename||'',
+    created:(typeof todayStr==='function'?todayStr():new Date().toISOString().slice(0,10)),
+    ts:Date.now()
+  });
+  if(typeof markUnsaved==='function')markUnsaved();
+  // If the case's Documents tab is currently visible, refresh it live.
+  if(activeCaseClid===clid){
+    const pane=document.getElementById('cd-pane-documents');
+    if(pane&&pane.style.display!=='none')renderCaseDocuments(clid);
+  }
+  // Badge the tab count for the open case.
+  if(activeCaseClid===clid)_refreshDocTabLabel(clid);
+}
+
+function _refreshDocTabLabel(clid){
+  const btn=document.getElementById('cdtab-documents');
+  if(!btn)return;
+  const n=((caseMeta[clid]||{}).createdDocs||[]).length;
+  btn.textContent=n?('Documents ('+n+')'):'Documents';
+}
+
+// Render the Documents tab: the log of documents created for this case.
+function renderCaseDocuments(clid){
+  _refreshDocTabLabel(clid);
+  const body=document.getElementById('case-documents-body');
+  if(!body)return;
+  body.innerHTML='';
+  const docs=((caseMeta[clid]||{}).createdDocs||[]).slice();
+  const intro=document.createElement('div');
+  intro.style.cssText='font-size:12px;color:#9E9186;line-height:1.5;margin-bottom:14px;';
+  intro.textContent='Documents created for this case from the Motion and Brief Creator and the Witness List tool are logged here.';
+  body.appendChild(intro);
+  if(!docs.length){
+    const e=document.createElement('div');
+    e.style.cssText='font-size:13px;color:#C4BAB0;font-style:italic;padding:8px 0;';
+    e.textContent='No documents created yet.';
+    body.appendChild(e);
+    return;
+  }
+  docs.forEach((d,i)=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #EDE8E0;border-radius:10px;background:#fff;margin-bottom:8px;';
+    const icon=document.createElement('div');
+    icon.textContent='📄';icon.style.cssText='font-size:18px;flex-shrink:0;';
+    const main=document.createElement('div');main.style.cssText='flex:1;min-width:0;';
+    const t=document.createElement('div');
+    t.style.cssText='font-size:13px;font-weight:600;color:#2C2620;line-height:1.3;word-break:break-word;';
+    t.textContent=d.title||d.filename||'Document';
+    const sub=document.createElement('div');
+    sub.style.cssText='font-size:11px;color:#9E9186;margin-top:2px;';
+    const kindBadge=d.kind?('<span style="font-weight:600;color:#6B7FA3;">'+escHtml(d.kind)+'</span>'):'';
+    const dateTxt=d.created?String(d.created):'';
+    sub.innerHTML=[kindBadge,dateTxt?('Created '+escHtml(dateTxt)):'',d.filename?escHtml(d.filename):''].filter(Boolean).join(' · ');
+    main.appendChild(t);main.appendChild(sub);
+    const del=document.createElement('button');
+    del.textContent='×';del.title='Remove from list';
+    del.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:18px;line-height:1;padding:0 4px;flex-shrink:0;';
+    del.onmouseenter=()=>del.style.color='#B85C5C';del.onmouseleave=()=>del.style.color='#C4BAB0';
+    del.onclick=()=>{
+      const realIdx=(caseMeta[clid].createdDocs||[]).indexOf(d);
+      if(realIdx>=0)caseMeta[clid].createdDocs.splice(realIdx,1);
+      if(typeof markUnsaved==='function')markUnsaved();
+      renderCaseDocuments(clid);
+    };
+    row.appendChild(icon);row.appendChild(main);row.appendChild(del);
+    body.appendChild(row);
+  });
+}
 function openAddFromCase(){if(!activeCaseClid)return;const caseRecs=records.filter(r=>(r.clid||r.client)===activeCaseClid);if(!caseRecs.length){openAdd();return;}const base=caseRecs.reduce((best,r)=>{const s=(r.client?1:0)+(r.anum?1:0)+(r.atty?1:0)+(r.type?1:0);const bs=(best.client?1:0)+(best.anum?1:0)+(best.atty?1:0)+(best.type?1:0);return s>bs?r:best;},caseRecs[0]);openAdd();setTimeout(()=>{document.getElementById('fc-clid').value=base.clid||'';document.getElementById('fc-client').value=base.client||'';document.getElementById('fc-anum').value=base.anum||'';const ce=document.getElementById('fc-casetype');if(ce)ce.value=base.type||'';const pe=document.getElementById('fc-paralegal');if(pe)pe.value=base.atty||'';customColumns.forEach(c=>{const val=caseRecs.map(r=>r[c.key]).filter(Boolean)[0]||'';const el=document.getElementById('fc-'+c.key);if(el)el.value=val;});const _m=document.getElementById('modal');if(_m)_m.classList.add('case-compact');const _sum=document.getElementById('modal-case-summary');if(_sum){const parts=[];if(base.client)parts.push('👤 '+escHtml(base.client));if(base.anum)parts.push('A# '+escHtml(base.anum));if(base.type)parts.push(escHtml(base.type));if(base.atty)parts.push(escHtml(base.atty));if(base.clid)parts.push('ID '+escHtml(base.clid));_sum.innerHTML='<div style="display:flex;align-items:center;gap:8px;background:#F2EFEA;border:1px solid #E3DCD0;border-radius:10px;padding:8px 12px;margin-bottom:14px;"><div style="flex:1;min-width:0;font-size:12px;color:#5C5148;line-height:1.4;word-break:break-word;">'+parts.join(' · ')+'</div><button type="button" onclick="document.getElementById(\'modal\').classList.remove(\'case-compact\')" style="font-size:10px;color:#9E9186;background:transparent;border:1px solid #DDD5CA;border-radius:6px;padding:3px 8px;cursor:pointer;white-space:nowrap;flex-shrink:0;">Edit case info</button></div>';}const _ev=document.getElementById('fc-eventtype');if(_ev){try{_ev.focus();}catch(e){}}},0);}
 // Quick-add: open the Add Event modal pre-filled for the active case with a
 // specific event type already selected (Individual / Master / Task shortcuts
@@ -17055,8 +17154,11 @@ function openCaseDetail(clid){
   document.getElementById('cases-detail-view').style.display='';
   document.getElementById('cd-pane-overview').style.display='';
   document.getElementById('cd-pane-checklists').style.display='none';
+  document.getElementById('cd-pane-documents').style.display='none';
   document.getElementById('cdtab-overview').classList.add('active');
   document.getElementById('cdtab-checklists').classList.remove('active');
+  document.getElementById('cdtab-documents').classList.remove('active');
+  if(typeof _refreshDocTabLabel==='function')_refreshDocTabLabel(clid);
   const allRecs=records.filter(r=>(r.clid||r.client)===clid);
   if(!allRecs.length)return;
   const base=allRecs.reduce((best,r)=>{const s=(r.client?1:0)+(r.anum?1:0)+(r.atty?1:0)+(r.type?1:0);const bs=(best.client?1:0)+(best.anum?1:0)+(best.atty?1:0)+(best.type?1:0);return s>bs?r:best;},allRecs[0]);
