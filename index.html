@@ -11902,7 +11902,14 @@ function openJudgeModal(id){
   document.getElementById('judge-modal').style.display='flex';
   requestAnimationFrame(()=>autoGrowAllNotes(document.getElementById('judge-modal')));
 }
-function closeJudgeModal(){document.getElementById('judge-modal').style.display='none';editingJudgeId=null;window._judgePickerReturn=false;}
+function closeJudgeModal(){document.getElementById('judge-modal').style.display='none';editingJudgeId=null;window._judgePickerReturn=false;window._judgePickerReturnBrief=false;}
+// Open the Judge modal from the Motion and Brief Creator's Judge field so
+// a judge missing from the list can be created (with court venue) and then
+// auto-selected back on the motion form.
+function _briefOpenAddJudge(){
+  window._judgePickerReturnBrief=true;
+  if(typeof openJudgeModal==='function') openJudgeModal(null);
+}
 // Open the Judge modal from the Add/Edit event hearing picker. The judge
 // modal (z-index 1000) stacks above the event modal (999). The flag tells
 // saveJudge to drop the user back on the event form with the new judge —
@@ -11962,8 +11969,9 @@ function saveJudge(){
   if(editingJudgeId){const i=judges.findIndex(x=>x.id===editingJudgeId);if(i>-1)judges[i]=data;}
   else judges.push(data);
   saveJudgesData();
-  // Capture the return flag before closeJudgeModal() clears it.
+  // Capture the return flags before closeJudgeModal() clears them.
   const _returnToEvent=window._judgePickerReturn;
+  const _returnToBrief=window._judgePickerReturnBrief;
   closeJudgeModal();renderJudges();
   // Came from the event hearing picker → refresh that dropdown and select
   // the judge just created/edited so the user continues without re-searching.
@@ -11971,6 +11979,14 @@ function saveJudge(){
     if(typeof populateVirtualJudgeDropdown==='function') populateVirtualJudgeDropdown();
     const _vsel=document.getElementById('vh-judge');
     if(_vsel){ _vsel.value=data.id; if(typeof onVirtualJudgeChange==='function') onVirtualJudgeChange(); }
+  }
+  // Came from the Motion and Brief Creator's Judge field → select the new
+  // judge (which also auto-fills the Court address) and re-render the form.
+  if(_returnToBrief){
+    if(!window._briefValues) window._briefValues={};
+    if(typeof _briefApplySuggestion==='function') _briefApplySuggestion('field14', data.name);
+    else window._briefValues.field14=data.name;
+    if(typeof _briefRenderForm==='function') _briefRenderForm();
   }
 }
 function deleteJudge(id){
@@ -14852,12 +14868,21 @@ function _briefRenderForm(){
         + '</div>'
         + '</div>';
     }
+    // Judge field (Field 14) gets a "+ Add new judge…" link under the
+    // input — same capability as the event hearing picker — so a judge
+    // that isn't in the list yet can be created (with court venue) and
+    // selected without leaving the motion creator.
+    let extraLink = '';
+    if(f.key === 'field14'){
+      extraLink = '<button type="button" onclick="_briefOpenAddJudge()" style="margin-top:5px;font-size:10px;font-weight:600;color:#6B7FA3;background:transparent;border:none;padding:0;cursor:pointer;font-family:inherit;text-decoration:underline;text-underline-offset:2px;">+ Add new judge…</button>';
+    }
     return '<div>'
       + '<label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);margin-bottom:4px;">' + f.label + '</label>'
       + pickerHtml
       + '<input id="bg-' + f.key + '" type="text" value="' + escHtml(val).replace(/"/g,'&quot;') + '" placeholder="' + f.hint + '" '
       + 'oninput="window._briefValues[\'' + f.key + '\']=this.value" '
       + 'style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>'
+      + extraLink
       + '</div>';
   }).join('');
 }
