@@ -14339,7 +14339,13 @@ function renderBriefGenerator(){
       <button onclick="renderToolsPage()" style="font-size:11px;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">← Back</button>
       <div style="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);">📝 Motion and Brief Creator</div>
     </div>
-    <div style="font-size:13px;color:var(--ink-muted);margin-bottom:18px;line-height:1.55;">Pick a case to auto-fill the fields from its data, edit anything that needs adjusting, then click Generate to download the .docx.</div>
+    <div style="font-size:13px;color:var(--ink-muted);margin-bottom:14px;line-height:1.55;">Pick a case to auto-fill the fields from its data, edit anything that needs adjusting, then click Generate to download the .docx.</div>
+
+    <!-- Document-type toggle -->
+    <div id="bg-doctype" style="display:flex;gap:8px;margin-bottom:18px;">
+      <button id="bg-dt-motion" type="button" onclick="_briefSetDocType('motion')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--sage);border-radius:20px;background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Motion / Brief</button>
+      <button id="bg-dt-witness" type="button" onclick="_briefSetDocType('witness')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Witness List</button>
+    </div>
 
     <!-- Case picker -->
     <div style="position:relative;margin-bottom:14px;">
@@ -14356,18 +14362,137 @@ function renderBriefGenerator(){
     <!-- Multi-respondent picker (only appears when a case has 2+ clients) -->
     <div id="bg-respondents-panel" style="display:none;margin-bottom:18px;padding:12px 14px;background:#FAF0E6;border:1px solid #E8C49A;border-radius:8px;"></div>
 
-    <!-- Field form -->
+    <!-- Field form (Motion / Brief mode) -->
     <div id="bg-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:20px;"></div>
 
-    <!-- Generate -->
-    <div style="display:flex;gap:10px;align-items:center;">
+    <!-- Generate (Motion / Brief mode) -->
+    <div id="bg-motion-generate" style="display:flex;gap:10px;align-items:center;">
       <button onclick="generateMotionWebex()" id="bg-generate-btn" style="font-size:13px;font-weight:600;padding:9px 22px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Generate .docx</button>
       <span id="bg-generate-status" style="font-size:11px;color:var(--ink-muted);"></span>
     </div>
+
+    <!-- Witness List mode -->
+    <div id="bg-witness-panel" style="display:none;"></div>
   `;
   window._briefClid = null;
   window._briefValues = {};
+  window._briefDocType = 'motion';
+  if(!Array.isArray(window._witnesses) || !window._witnesses.length){
+    window._witnesses = [_blankWitness()];
+  }
   _briefRenderForm();
+}
+
+// One empty witness record. Fields mirror the firm's witness-list
+// layout: an underlined name + a parenthetical role/expertise, then the
+// lettered detail lines (a–f).
+function _blankWitness(){
+  return { name:'', role:'', residence:'', summary:'', language:'', length:'', phone:'', other:'', videoMotion:false };
+}
+
+// Switch the creator between Motion/Brief mode and Witness List mode. The
+// case picker at the top is shared (it pre-fills the respondent caption +
+// filename for the witness list too); only the form body and the Generate
+// button swap out.
+function _briefSetDocType(type){
+  window._briefDocType = type;
+  const isWitness = type === 'witness';
+  const show = (id, on) => { const el = document.getElementById(id); if(el) el.style.display = on ? '' : 'none'; };
+  show('bg-form', !isWitness);
+  show('bg-motion-generate', !isWitness);
+  show('bg-witness-panel', isWitness);
+  // Multi-respondent picker / paper-file warning are motion concepts —
+  // keep them out of the witness view.
+  if(isWitness){
+    show('bg-respondents-panel', false);
+    show('bg-paper-warn', false);
+  } else {
+    _briefRenderRespondentsPanel();
+    if(window._briefClid){
+      const meta = (caseMeta && caseMeta[window._briefClid]) || {};
+      show('bg-paper-warn', meta.filingSystem === 'paper');
+    }
+  }
+  // Tab button styling.
+  const mBtn = document.getElementById('bg-dt-motion');
+  const wBtn = document.getElementById('bg-dt-witness');
+  if(mBtn && wBtn){
+    const active = 'font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--sage);border-radius:20px;background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;';
+    const idle   = 'font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;';
+    mBtn.style.cssText = isWitness ? idle : active;
+    wBtn.style.cssText = isWitness ? active : idle;
+  }
+  if(isWitness) _renderWitnessPanel();
+}
+
+// ── Witness List editor ────────────────────────────────────────────
+// A repeatable list of witnesses. Each witness carries the underlined
+// name + a parenthetical role/expertise, then the lettered detail lines
+// (Residence, Written Summary of Testimony, Language, Estimated Length,
+// Phone Number, Other Information) and an optional Motion for Video
+// Appearance flag. generateWitnessList() lays these out as a numbered
+// list under a "Witness List" title.
+function _renderWitnessPanel(){
+  const panel = document.getElementById('bg-witness-panel');
+  if(!panel) return;
+  if(!Array.isArray(window._witnesses) || !window._witnesses.length){
+    window._witnesses = [_blankWitness()];
+  }
+  const inp = (i, key, ph) => `<input type="text" value="${escHtml(window._witnesses[i][key]||'')}" placeholder="${escHtml(ph)}" `
+    + `oninput="_witnessSet(${i},'${key}',this.value)" `
+    + `style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>`;
+  const lbl = t => `<label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">${t}</label>`;
+  const cards = window._witnesses.map((w, i) => `
+    <div style="border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:14px;background:#fff;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:700;color:var(--ink);">Witness ${i+1}</div>
+        <button type="button" onclick="_witnessDel(${i})" title="Remove this witness"
+          style="font-size:13px;line-height:1;padding:5px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-faint);cursor:pointer;font-family:inherit;">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(180px,1fr) minmax(180px,1fr);gap:10px;margin-bottom:10px;">
+        <div>${lbl('Name')}${inp(i,'name','e.g. Dr. Tommie Sue Montgomery, Ph.D.')}</div>
+        <div>${lbl('Role / expertise (parenthetical)')}${inp(i,'role','e.g. El Salvador Country Conditions Expert')}</div>
+      </div>
+      <div style="margin-bottom:10px;">${lbl('a. Residence')}${inp(i,'residence','e.g. Canada')}</div>
+      <div style="margin-bottom:10px;">${lbl('b. Written Summary of Testimony')}<textarea rows="3" placeholder="What the witness will help the Court understand…"
+        oninput="_witnessSet(${i},'summary',this.value)"
+        style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;resize:vertical;">${escHtml(w.summary||'')}</textarea></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px;">
+        <div>${lbl('c. Language of Testimony')}${inp(i,'language','e.g. English')}</div>
+        <div>${lbl('d. Estimated Length')}${inp(i,'length','e.g. 1 Hour')}</div>
+        <div>${lbl('e. Phone Number')}${inp(i,'phone','')}</div>
+      </div>
+      <div style="margin-bottom:10px;">${lbl('f. Other Information')}<textarea rows="2" placeholder="e.g. Will submit an expert report and is available to testify by phone…"
+        oninput="_witnessSet(${i},'other',this.value)"
+        style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;resize:vertical;">${escHtml(w.other||'')}</textarea></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${w.videoMotion?'checked':''} onchange="_witnessSet(${i},'videoMotion',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Motion for Video Appearance for this witness — adds "(Motion for Video Appearance attached)" to the Other Information line
+      </label>
+    </div>`).join('');
+  panel.innerHTML = `
+    <div style="font-size:12px;color:var(--ink-muted);margin-bottom:14px;line-height:1.5;">Pick a case above to caption the document, then list each witness. Empty detail lines are skipped in the generated document.</div>
+    ${cards}
+    <button type="button" onclick="_witnessAdd()" style="font-size:12px;font-weight:600;padding:7px 14px;border:1px dashed var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">+ Add witness</button>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:20px;">
+      <button type="button" onclick="generateWitnessList()" id="bg-witness-btn" style="font-size:13px;font-weight:600;padding:9px 22px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Generate .docx</button>
+      <span id="bg-witness-status" style="font-size:11px;color:var(--ink-muted);"></span>
+    </div>`;
+}
+function _witnessSet(i, key, val){
+  if(!Array.isArray(window._witnesses) || !window._witnesses[i]) return;
+  window._witnesses[i][key] = val;
+}
+function _witnessAdd(){
+  if(!Array.isArray(window._witnesses)) window._witnesses = [];
+  window._witnesses.push(_blankWitness());
+  _renderWitnessPanel();
+}
+function _witnessDel(i){
+  if(!Array.isArray(window._witnesses)) return;
+  window._witnesses.splice(i, 1);
+  if(!window._witnesses.length) window._witnesses.push(_blankWitness());
+  _renderWitnessPanel();
 }
 
 // Return suggestions for a field — case-derived where it makes sense
@@ -15026,6 +15151,169 @@ async function generateMotionWebex(){
   }catch(e){
     console.error('generateMotionWebex', e);
     if(status){ status.textContent = 'Failed: ' + (e && e.message ? e.message : 'unknown error'); status.style.color='#B85C5C'; }
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = 'Generate .docx'; }
+  }
+}
+
+// ── Witness List generator ─────────────────────────────────────────
+// Unlike the motion generator (which fills a fixed Word template), the
+// witness list is a small, fully dynamic document — a "Witness List"
+// title over a numbered list of witnesses. Each witness shows an
+// underlined name + a parenthetical role, then lettered detail lines
+// (a. Residence, b. Written Summary of Testimony, c. Language of
+// Testimony, d. Estimated Length of Testimony, e. Phone Number,
+// f. Other Information). A per-witness "Motion for Video Appearance"
+// flag appends the standard "(Motion for Video Appearance attached)"
+// note to the Other Information line. We build a complete, minimal
+// .docx package from scratch with JSZip rather than editing a template.
+async function generateWitnessList(){
+  const btn = document.getElementById('bg-witness-btn');
+  const status = document.getElementById('bg-witness-status');
+  const setStatus = (msg, err) => { if(status){ status.textContent = msg; status.style.color = err ? '#B85C5C' : 'var(--sage)'; } };
+  if(typeof JSZip === 'undefined'){ setStatus('JSZip not loaded — refresh the page and try again.', true); return; }
+  const witnesses = (window._witnesses || []).filter(w =>
+    (w.name||'').trim() || (w.role||'').trim() || (w.residence||'').trim() ||
+    (w.summary||'').trim() || (w.language||'').trim() || (w.length||'').trim() ||
+    (w.phone||'').trim() || (w.other||'').trim());
+  if(!witnesses.length){ setStatus('Add at least one witness first.', true); return; }
+  if(btn){ btn.disabled = true; btn.textContent = 'Generating…'; }
+  setStatus('', false);
+  try{
+    const esc = (typeof _escXml === 'function') ? _escXml : (s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+    // A run of text → <w:r>, honoring soft line breaks (\n → <w:br/>).
+    const run = (text, opt) => {
+      const o = opt || {};
+      const rpr = (o.bold ? '<w:b/>' : '') + (o.underline ? '<w:u w:val="single"/>' : '')
+        + (o.sz ? '<w:sz w:val="' + o.sz + '"/><w:szCs w:val="' + o.sz + '"/>' : '');
+      const parts = String(text==null?'':text).split('\n');
+      const runs = parts.map(p => '<w:t xml:space="preserve">' + esc(p) + '</w:t>').join('<w:br/>');
+      return '<w:r>' + (rpr ? '<w:rPr>' + rpr + '</w:rPr>' : '') + runs + '</w:r>';
+    };
+    const tab = '<w:r><w:tab/></w:r>';
+    // Paragraph: opt.runs is raw run XML; opt supports jc, after, left,
+    // hanging (twips) for the numbered / lettered hanging indents.
+    const para = (inner, opt) => {
+      const o = opt || {};
+      const ind = (o.left != null || o.hanging != null)
+        ? '<w:ind' + (o.left != null ? ' w:left="' + o.left + '"' : '') + (o.hanging != null ? ' w:hanging="' + o.hanging + '"' : '') + '/>'
+        : '';
+      const ppr = (o.jc ? '<w:jc w:val="' + o.jc + '"/>' : '') + ind + (o.after != null ? '<w:spacing w:after="' + o.after + '"/>' : '');
+      return '<w:p>' + (ppr ? '<w:pPr>' + ppr + '</w:pPr>' : '') + (inner || '') + '</w:p>';
+    };
+
+    // Build the numbered witness blocks.
+    const SUBS = [
+      ['residence', 'Residence'],
+      ['summary',   'Written Summary of Testimony'],
+      ['language',  'Language of Testimony'],
+      ['length',    'Estimated Length of Testimony'],
+      ['phone',     'Phone Number'],
+      ['other',     'Other Information']
+    ];
+    const letters = 'abcdefghijklmnop';
+    const witnessBlocks = witnesses.map((w, i) => {
+      const name = (w.name||'').trim() || ('Witness ' + (i+1));
+      const role = (w.role||'').trim();
+      // Header line: "1.<tab>Name (Role)" — name underlined.
+      let header = run((i+1) + '.') + tab + run(name, { underline:true });
+      if(role) header += run(' (' + role + ')');
+      const block = [ para(header, { left:720, hanging:360, after:60 }) ];
+      // Lettered detail lines, skipping empties. The video-motion flag
+      // augments the Other Information line.
+      let li = 0;
+      SUBS.forEach(([key, label]) => {
+        let val = (w[key]||'').trim();
+        if(key === 'other' && w.videoMotion){
+          const note = '(Motion for Video Appearance attached)';
+          val = val ? (val.replace(/\s*$/,'') + ' ' + note) : note;
+        }
+        if(!val) return;
+        const letter = letters[li++] || '?';
+        const line = run(letter + '.') + tab + run(label + ': ', { bold:true }) + run(val);
+        block.push(para(line, { left:1440, hanging:360, after:40 }));
+      });
+      // Trailing space after each witness block.
+      block.push(para('', { after:120 }));
+      return block.join('');
+    }).join('');
+
+    // Optional caption from the picked case (respondent name + A-number).
+    const v = window._briefValues || {};
+    const respLine = (v.field5 || '').split('\n')[0].trim();
+    const anum = (v.field6 || '').trim();
+    let caption = '';
+    if(respLine) caption += para(run('In the Matter of: ' + respLine), { after:40 });
+    if(anum)     caption += para(run('A-Number: ' + anum), { after:200 });
+
+    const title = para(run('WITNESS LIST', { bold:true, sz:'28' }), { jc:'center', after:240 });
+    const sectPr = '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>'
+      + '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
+
+    const documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+      + '<w:body>' + title + caption + witnessBlocks + sectPr + '</w:body></w:document>';
+
+    const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      + '<Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+      + '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+      + '</Types>';
+    const rootRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+      + '</Relationships>';
+    const docRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+      + '</Relationships>';
+    const stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+      + '<w:docDefaults><w:rPrDefault><w:rPr>'
+      + '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>'
+      + '<w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>'
+      + '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>'
+      + '</w:styles>';
+
+    const zip = new JSZip();
+    zip.file('[Content_Types].xml', contentTypes);
+    zip.folder('_rels').file('.rels', rootRels);
+    const wordDir = zip.folder('word');
+    wordDir.file('document.xml', documentXml);
+    wordDir.file('styles.xml', stylesXml);
+    wordDir.folder('_rels').file('document.xml.rels', docRels);
+    const outBlob = await zip.generateAsync({ type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+
+    // Filename: "<Cl ID> <LASTNAME> <First> Witness List.docx" — same
+    // space-only, punctuation-stripped house style as the motion files.
+    const clean = s => String(s||'').replace(/['’"”“]/g,'').replace(/[,\-–—\\/:*?<>|]/g,' ').replace(/\s+/g,' ').trim();
+    const segs = [];
+    if(window._briefClid) segs.push(clean(window._briefClid));
+    let last = '', first = '';
+    if(window._briefClid && caseMeta[window._briefClid]){
+      last = (caseMeta[window._briefClid].clientLastName||'').trim();
+      first = (caseMeta[window._briefClid].clientFirstName||'').trim();
+    }
+    if(!last && !first && respLine){
+      const comma = respLine.indexOf(',');
+      if(comma > 0){ last = respLine.slice(0,comma).trim(); first = respLine.slice(comma+1).trim().split(/\s+/)[0] || ''; }
+      else { const p = respLine.split(/\s+/); if(p.length>=2){ last = p[p.length-1]; first = p.slice(0,-1).join(' '); } else last = respLine; }
+    }
+    if(last)  segs.push(clean(last).toUpperCase());
+    if(first) segs.push(clean(first));
+    segs.push('Witness List');
+    const fname = (segs.join(' ').replace(/\s+/g,' ').trim() || 'Witness List') + '.docx';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(outBlob);
+    a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    setStatus('✓ Downloaded — open it in Word to review.', false);
+  }catch(e){
+    console.error('generateWitnessList', e);
+    setStatus('Failed: ' + (e && e.message ? e.message : 'unknown error'), true);
   }finally{
     if(btn){ btn.disabled = false; btn.textContent = 'Generate .docx'; }
   }
