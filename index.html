@@ -17772,7 +17772,10 @@ function openCaseDetail(clid){
   // event type (Individual / Master / Task) already selected.
   const quickAddRow=document.createElement('div');
   quickAddRow.style.cssText='display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;';
-  [['Individual','INDIVIDUAL','#6B7FA3'],['Master','MASTER','#6A8C6E'],['Task','TASK','#B07B4F']].forEach(([label,evType,col])=>{
+  [['Individual','INDIVIDUAL','#6B7FA3'],['Master','MASTER','#6A8C6E'],['Task','TASK','#B07B4F']].forEach(([label,evType,fallback])=>{
+    // Color each button with the event type's color configured in
+    // Settings → Event types; fall back to the default if none is set.
+    const col=getEventStyle(evType).color||fallback;
     const b=document.createElement('button');
     b.type='button';
     b.className='btn-sm';
@@ -17979,7 +17982,7 @@ function openCaseDetail(clid){
 
   renderProcMilestones();
   procPanel.appendChild(procHdr);procPanel.appendChild(procBody);
-  if(caseMeta[clid].procMilestones.length)procPanel.classList.add('open');
+  // Sections stay collapsed by default in every case (user preference).
   notesSec.appendChild(procPanel);
 
   // Case Notes — simple list
@@ -18087,7 +18090,7 @@ function openCaseDetail(clid){
 
   renderCaseNotesList();
   cnPanel.appendChild(cnHdr);cnPanel.appendChild(cnBody);
-  if(caseMeta[clid].caseNotesList.length)cnPanel.classList.add('open');
+  // Notes panel stays collapsed by default in every case (user preference).
   notesSec.appendChild(cnPanel);
 
   // Documents panel
@@ -18196,7 +18199,7 @@ function openCaseDetail(clid){
   } else {
     renderDocSecs();
   }
-  docPanel.appendChild(docHdr);docPanel.appendChild(docBody);if(caseMeta[clid].docSections&&caseMeta[clid].docSections.some(s=>s.docs.length))docPanel.classList.add('open');notesSec.appendChild(docPanel);
+  docPanel.appendChild(docHdr);docPanel.appendChild(docBody);notesSec.appendChild(docPanel);
   body.appendChild(notesSec);}
 
 
@@ -18935,9 +18938,7 @@ function buildCaseIssuesPanel(clid, base, notesSec){
   }
   renderIssuesPanel();
   panel.appendChild(hdr);panel.appendChild(body);
-  // Keep the panel collapsed when there's nothing in it; expand if any
-  // issue has been added (even default-empty) so the user sees them.
-  if(Object.keys(caseMeta[clid].caseIssues||{}).length) panel.classList.add('open');
+  // Issues panel stays collapsed by default in every case (user preference).
   notesSec.appendChild(panel);
 }
 
@@ -18962,7 +18963,7 @@ function buildStoryPanel(clid, notesSec){
   ta.oninput=()=>{caseMeta[clid].storyOfPersecution=ta.value;};
   body.appendChild(ta);
   panel.appendChild(hdr);panel.appendChild(body);
-  if(caseMeta[clid].storyOfPersecution)panel.classList.add('open');
+  // Story panel stays collapsed by default in every case (user preference).
   notesSec.appendChild(panel);
 }
 
