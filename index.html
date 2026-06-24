@@ -15240,6 +15240,36 @@ async function generateWitnessList(){
       const ppr = (o.jc ? '<w:jc w:val="' + o.jc + '"/>' : '') + ind + (o.after != null ? '<w:spacing w:after="' + o.after + '"/>' : '');
       return '<w:p>' + (ppr ? '<w:pPr>' + ppr + '</w:pPr>' : '') + (inner || '') + '</w:p>';
     };
+    // A table cell with an explicit width and optional borders (raw
+    // <w:*/> border elements). Used to build the motion-style caption box.
+    const tcell = (w, inner, borders) => '<w:tc><w:tcPr><w:tcW w:w="' + w + '" w:type="dxa"/>'
+      + (borders ? '<w:tcBorders>' + borders + '</w:tcBorders>' : '') + '</w:tcPr>' + (inner || para('')) + '</w:tc>';
+    // The EOIR court caption used at the top of the motion-webex template:
+    // centered DOJ / EOIR / court / address header, then "In the Matter of:"
+    // over a two-column box (respondent + "In Removal Proceedings,
+    // Respondent." on the left, "File No.: A###" on the right).
+    const captionBlock = () => {
+      let c = '';
+      c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
+      c += para(run('EXECUTIVE OFFICE FOR IMMIGRATION REVIEW'), { jc:'center', after:0 });
+      c += para(run((v.field3 || 'IMMIGRATION COURT')), { jc:'center', after:0 });
+      if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
+      if(addr[1]) c += para(run(addr[1]), { jc:'center', after:120 });
+      c += para(run('In the Matter of:'), { after:40 });
+      const leftInner = para(run(respLine || '____________', { bold:true }), { after:0 })
+        + para('', { after:0 })
+        + para(run('In Removal Proceedings,'), { after:0 })
+        + para(run('       Respondent.'), { after:0 });
+      const rightInner = para(run('File No.: ' + (anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________')), { after:0 });
+      const leftCell = tcell(5040, leftInner, '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>');
+      const rightCell = tcell(4320, rightInner, '');
+      c += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
+        + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
+        + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="4320"/></w:tblGrid>'
+        + '<w:tr>' + leftCell + rightCell + '</w:tr></w:tbl>';
+      c += para('', { after:200 });
+      return c;
+    };
 
     // Build the numbered witness blocks.
     const SUBS = [
@@ -15305,16 +15335,13 @@ async function generateWitnessList(){
     const judgeLast = String(v.field14 || '').split(',')[0].trim();
 
     // ── Cover letter ──────────────────────────────────────────────
+    // Always leads with the EOIR court caption used by the motion-webex
+    // template (centered court header + "In the Matter of:" / File No. box),
+    // then the date, salutation, body, and signature.
     let coverLetter = '';
     if(opts.cover){
-      coverLetter += para(run(coverDate), { after:240 });
-      if(v.field3)  coverLetter += para(run(v.field3), { after:0 });
-      if(addr[0])   coverLetter += para(run(addr[0]), { after:0 });
-      if(addr[1])   coverLetter += para(run(addr[1]), { after:200 });
-      coverLetter += para(run('Re:  In the Matter of ' + (respLine || '____________'), { bold:true }), { after:0 });
-      if(anum) coverLetter += para(run('       File No. A' + anum.replace(/^A[- ]?/i,'')), { after:0 });
-      if(v.field15) coverLetter += para(run('       Next Hearing: ' + v.field15), { after:0 });
-      coverLetter += blank(1);
+      coverLetter += captionBlock();
+      coverLetter += para(run(coverDate), { after:200 });
       coverLetter += para(run('Dear ' + (judgeLast ? 'Honorable Immigration Judge ' + judgeLast : 'Honorable Immigration Judge') + ':'), { after:200 });
       let body = 'Please find enclosed the Witness List of the ' + respWord + ' in the above-referenced matter';
       if(v.field15) body += ', in advance of the hearing scheduled for ' + v.field15;
