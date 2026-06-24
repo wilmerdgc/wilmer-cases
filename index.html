@@ -9155,7 +9155,7 @@ function renderMonth() {
       const fg = es.color || cardColor[s] || '#9E9186';
       const evLabel=(es.icon?es.icon+' ':'')+( r.event||r.type);
       const card = document.createElement('div'); card.className = 'cal-event-card'; card.style.background = bg; card.style.position='relative'; card.onclick = () => openEdit(r.id);
-      card.innerHTML = `<div class="cal-event-name" style="color:${fg}">${evLabel}</div><div class="cal-event-sub" style="color:${fg}">${r.client}</div>${r.notes ? `<div style="font-size:9px;opacity:0.65;margin-top:1px;line-height:1.3;font-style:italic;color:${fg};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.notes}</div>` : ''}`;
+      card.innerHTML = `<div class="cal-event-name" style="color:${fg}">${evLabel}</div><div class="cal-event-sub" style="color:${fg}">${r.client}</div>${r.assigned ? `<div style="font-size:9px;opacity:0.7;margin-top:1px;line-height:1.3;color:${fg};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">→ ${r.assigned}</div>` : ''}${r.notes ? `<div style="font-size:9px;opacity:0.65;margin-top:1px;line-height:1.3;font-style:italic;color:${fg};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.notes}</div>` : ''}`;
       if(es.color) card.style.borderLeft=`3px solid ${es.color}`;
       appendSoMeta(card, r, fg);
       const _vlinkM = eventVirtualLink(r);
