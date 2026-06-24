@@ -16855,7 +16855,11 @@ function renderCaseDocuments(clid){
   }
   docs.forEach((d,i)=>{
     const row=document.createElement('div');
-    row.style.cssText='display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #EDE8E0;border-radius:10px;background:#fff;margin-bottom:8px;';
+    row.style.cssText='display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #EDE8E0;border-radius:10px;background:#fff;margin-bottom:8px;cursor:pointer;transition:border-color .12s,box-shadow .12s;';
+    row.title='Open the '+((d.kind==='Witness List')?'Witness List tool':'Motion and Brief Creator')+' for this case to generate another';
+    row.onmouseenter=()=>{row.style.borderColor='#6A8C6E';row.style.boxShadow='0 1px 4px rgba(0,0,0,.06)';};
+    row.onmouseleave=()=>{row.style.borderColor='#EDE8E0';row.style.boxShadow='none';};
+    row.onclick=()=>openCreatedDocTool(clid,d.kind,d.title);
     const icon=document.createElement('div');
     icon.textContent='📄';icon.style.cssText='font-size:18px;flex-shrink:0;';
     const main=document.createElement('div');main.style.cssText='flex:1;min-width:0;';
@@ -16867,12 +16871,16 @@ function renderCaseDocuments(clid){
     const kindBadge=d.kind?('<span style="font-weight:600;color:#6B7FA3;">'+escHtml(d.kind)+'</span>'):'';
     const dateTxt=d.created?String(d.created):'';
     sub.innerHTML=[kindBadge,dateTxt?('Created '+escHtml(dateTxt)):'',d.filename?escHtml(d.filename):''].filter(Boolean).join(' · ');
-    main.appendChild(t);main.appendChild(sub);
+    const openHint=document.createElement('div');
+    openHint.style.cssText='font-size:10px;color:#6A8C6E;margin-top:3px;font-weight:600;';
+    openHint.textContent='↻ Click to generate another';
+    main.appendChild(t);main.appendChild(sub);main.appendChild(openHint);
     const del=document.createElement('button');
     del.textContent='×';del.title='Remove from list';
     del.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:18px;line-height:1;padding:0 4px;flex-shrink:0;';
     del.onmouseenter=()=>del.style.color='#B85C5C';del.onmouseleave=()=>del.style.color='#C4BAB0';
-    del.onclick=()=>{
+    del.onclick=(e)=>{
+      e.stopPropagation();
       const realIdx=(caseMeta[clid].createdDocs||[]).indexOf(d);
       if(realIdx>=0)caseMeta[clid].createdDocs.splice(realIdx,1);
       if(typeof markUnsaved==='function')markUnsaved();
@@ -16881,6 +16889,30 @@ function renderCaseDocuments(clid){
     row.appendChild(icon);row.appendChild(main);row.appendChild(del);
     body.appendChild(row);
   });
+}
+
+// Open the document tool (Motion and Brief Creator or Witness List) from a
+// logged document in the case's Documents tab, with the case pre-selected
+// and the same mode/title set up — ready to generate another.
+function openCreatedDocTool(clid, kind, title){
+  if(!clid)return;
+  switchTab('tools');
+  renderBriefGenerator();
+  // Resolve a display name for the case picker.
+  const base=(records||[]).find(r=>(r.clid||r.client)===clid)||{};
+  const m=caseMeta[clid]||{};
+  const disp=[m.clientFirstName,m.clientMiddleName,m.clientLastName].filter(Boolean).join(' ')||base.client||clid;
+  if(typeof _briefPickCase==='function')_briefPickCase(clid, disp);
+  if(kind==='Witness List'){
+    if(typeof _briefSetDocType==='function')_briefSetDocType('witness');
+  } else {
+    if(typeof _briefSetDocType==='function')_briefSetDocType('motion');
+    if(title){
+      if(!window._briefValues)window._briefValues={};
+      window._briefValues.field7=title;
+      if(typeof _briefRenderForm==='function')_briefRenderForm();
+    }
+  }
 }
 function openAddFromCase(){if(!activeCaseClid)return;const caseRecs=records.filter(r=>(r.clid||r.client)===activeCaseClid);if(!caseRecs.length){openAdd();return;}const base=caseRecs.reduce((best,r)=>{const s=(r.client?1:0)+(r.anum?1:0)+(r.atty?1:0)+(r.type?1:0);const bs=(best.client?1:0)+(best.anum?1:0)+(best.atty?1:0)+(best.type?1:0);return s>bs?r:best;},caseRecs[0]);openAdd();setTimeout(()=>{document.getElementById('fc-clid').value=base.clid||'';document.getElementById('fc-client').value=base.client||'';document.getElementById('fc-anum').value=base.anum||'';const ce=document.getElementById('fc-casetype');if(ce)ce.value=base.type||'';const pe=document.getElementById('fc-paralegal');if(pe)pe.value=base.atty||'';customColumns.forEach(c=>{const val=caseRecs.map(r=>r[c.key]).filter(Boolean)[0]||'';const el=document.getElementById('fc-'+c.key);if(el)el.value=val;});const _m=document.getElementById('modal');if(_m)_m.classList.add('case-compact');const _sum=document.getElementById('modal-case-summary');if(_sum){const parts=[];if(base.client)parts.push('👤 '+escHtml(base.client));if(base.anum)parts.push('A# '+escHtml(base.anum));if(base.type)parts.push(escHtml(base.type));if(base.atty)parts.push(escHtml(base.atty));if(base.clid)parts.push('ID '+escHtml(base.clid));_sum.innerHTML='<div style="display:flex;align-items:center;gap:8px;background:#F2EFEA;border:1px solid #E3DCD0;border-radius:10px;padding:8px 12px;margin-bottom:14px;"><div style="flex:1;min-width:0;font-size:12px;color:#5C5148;line-height:1.4;word-break:break-word;">'+parts.join(' · ')+'</div><button type="button" onclick="document.getElementById(\'modal\').classList.remove(\'case-compact\')" style="font-size:10px;color:#9E9186;background:transparent;border:1px solid #DDD5CA;border-radius:6px;padding:3px 8px;cursor:pointer;white-space:nowrap;flex-shrink:0;">Edit case info</button></div>';}const _ev=document.getElementById('fc-eventtype');if(_ev){try{_ev.focus();}catch(e){}}},0);}
 // Quick-add: open the Add Event modal pre-filled for the active case with a
