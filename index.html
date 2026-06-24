@@ -14380,6 +14380,7 @@ function renderBriefGenerator(){
   if(!Array.isArray(window._witnesses) || !window._witnesses.length){
     window._witnesses = [_blankWitness()];
   }
+  if(!window._wlOpts) window._wlOpts = { cover:true, cert:true };
   _briefRenderForm();
 }
 
@@ -14466,12 +14467,23 @@ function _renderWitnessPanel(){
         oninput="_witnessSet(${i},'other',this.value)"
         style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;resize:vertical;">${escHtml(w.other||'')}</textarea></div>
       <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
-        <input type="checkbox" ${w.videoMotion?'checked':''} onchange="_witnessSet(${i},'videoMotion',this.checked)" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        <input type="checkbox" ${w.videoMotion?'checked':''} onchange="_witnessSet(${i},'videoMotion',this.checked);_renderWitnessPanel()" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
         Motion for Video Appearance for this witness — adds "(Motion for Video Appearance attached)" to the Other Information line
       </label>
+      ${w.videoMotion ? `<button type="button" onclick="_witnessGoToVideoMotion(${i})" style="margin-top:8px;font-size:12px;font-weight:600;padding:6px 14px;border:1px solid var(--sage);border-radius:var(--radius-sm);background:var(--sage-light,#EBF1EB);color:var(--sage);cursor:pointer;font-family:inherit;">Go to the Motion for Video Appearance →</button>` : ''}
     </div>`).join('');
   panel.innerHTML = `
     <div style="font-size:12px;color:var(--ink-muted);margin-bottom:14px;line-height:1.5;">Pick a case above to caption the document, then list each witness. Empty detail lines are skipped in the generated document.</div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px;padding:10px 14px;background:var(--cream);border-radius:var(--radius-md);border:1px solid var(--border);">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${window._wlOpts.cover?'checked':''} onchange="window._wlOpts.cover=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include cover letter
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${window._wlOpts.cert?'checked':''} onchange="window._wlOpts.cert=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include certificate of service
+      </label>
+    </div>
     ${cards}
     <button type="button" onclick="_witnessAdd()" style="font-size:12px;font-weight:600;padding:7px 14px;border:1px dashed var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">+ Add witness</button>
     <div style="display:flex;gap:10px;align-items:center;margin-top:20px;">
@@ -14493,6 +14505,27 @@ function _witnessDel(i){
   window._witnesses.splice(i, 1);
   if(!window._witnesses.length) window._witnesses.push(_blankWitness());
   _renderWitnessPanel();
+}
+// Jump from a witness flagged for video appearance straight into the
+// Motion / Brief side of the tool, with the motion title pre-set to
+// "MOTION FOR VIDEO APPEARANCE" and every field already filled from the
+// same case. The user reviews and clicks Generate to produce the motion.
+function _witnessGoToVideoMotion(i){
+  if(!window._briefClid){
+    if(typeof showToast === 'function') showToast('Pick a case first so the motion fills from its data.');
+    return;
+  }
+  const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
+  const base = "RESPONDENT'S MOTION FOR VIDEO APPEARANCE";
+  const title = plural ? _briefPluralize(base) : base;
+  if(!window._briefValues) window._briefValues = {};
+  window._briefValues.field7 = title;
+  _briefSetDocType('motion');
+  _briefRenderForm();
+  const status = document.getElementById('bg-generate-status');
+  if(status){ status.textContent = 'Motion for Video Appearance pre-filled from the case — review the fields and click Generate.'; status.style.color = 'var(--ink-muted)'; }
+  const form = document.getElementById('bg-form');
+  if(form && form.scrollIntoView) form.scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
 // Return suggestions for a field — case-derived where it makes sense
@@ -15238,21 +15271,94 @@ async function generateWitnessList(){
       return block.join('');
     }).join('');
 
-    // Optional caption from the picked case (respondent name + A-number).
+    // Case-derived values (same fields the motion generator fills from
+    // the case). They drive the caption, cover letter, and certificate.
     const v = window._briefValues || {};
     const respLine = (v.field5 || '').split('\n')[0].trim();
     const anum = (v.field6 || '').trim();
+    const opts = window._wlOpts || { cover:true, cert:true };
+    const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
+    const respWord = plural ? 'Respondents' : 'Respondent';
+    const anyVideo = witnesses.some(w => w.videoMotion);
+    const pageBreak = para('<w:r><w:br w:type="page"/></w:r>');
+    const sigBlock = String(v.field20 || '').split('\n').filter(l => l.trim()).map(l => para(run(l), { after:0 })).join('');
+    const blank = (n) => Array.from({ length:n||1 }, () => para('', { after:0 })).join('');
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const longDate = (s) => {
+      const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s||'').trim());
+      if(m){ const d = new Date(+m[3], +m[1]-1, +m[2]); if(!isNaN(d)) return MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); }
+      return String(s||'').trim();
+    };
+    // Submission date / place come from Field 16 ("MM/DD/YYYY, Place").
+    const subParts = String(v.field16 || '').split(',');
+    const subDateRaw = (subParts[0] || '').trim();
+    const subPlace = subParts.slice(1).join(',').trim();
+    let coverDate = longDate(subDateRaw);
+    if(!coverDate){ const t = new Date(); coverDate = MONTHS[t.getMonth()] + ' ' + t.getDate() + ', ' + t.getFullYear(); }
+    const addr = (typeof _briefSplitAddr === 'function') ? _briefSplitAddr(v.field4 || '') : [String(v.field4||''), ''];
+    const judgeLast = String(v.field14 || '').split(',')[0].trim();
+
+    // ── Cover letter ──────────────────────────────────────────────
+    let coverLetter = '';
+    if(opts.cover){
+      coverLetter += para(run(coverDate), { after:240 });
+      if(v.field3)  coverLetter += para(run(v.field3), { after:0 });
+      if(addr[0])   coverLetter += para(run(addr[0]), { after:0 });
+      if(addr[1])   coverLetter += para(run(addr[1]), { after:200 });
+      coverLetter += para(run('Re:  In the Matter of ' + (respLine || '____________'), { bold:true }), { after:0 });
+      if(anum) coverLetter += para(run('       File No. A' + anum.replace(/^A[- ]?/i,'')), { after:0 });
+      if(v.field15) coverLetter += para(run('       Next Hearing: ' + v.field15), { after:0 });
+      coverLetter += blank(1);
+      coverLetter += para(run('Dear ' + (judgeLast ? 'Honorable Immigration Judge ' + judgeLast : 'Honorable Immigration Judge') + ':'), { after:200 });
+      let body = 'Please find enclosed the Witness List of the ' + respWord + ' in the above-referenced matter';
+      if(v.field15) body += ', in advance of the hearing scheduled for ' + v.field15;
+      body += '.';
+      if(anyVideo) body += ' Also enclosed ' + (witnesses.filter(w=>w.videoMotion).length > 1 ? 'are Motions' : 'is a Motion') + ' for Video Appearance for the witness(es) so noted.';
+      coverLetter += para(run(body), { jc:'both', after:200 });
+      coverLetter += para(run('Thank you for your attention to this matter.'), { jc:'both', after:200 });
+      coverLetter += para(run('Respectfully submitted,'), { after:0 });
+      coverLetter += blank(2);
+      coverLetter += sigBlock;
+      coverLetter += pageBreak;
+    }
+
+    // ── Witness List body ─────────────────────────────────────────
     let caption = '';
     if(respLine) caption += para(run('In the Matter of: ' + respLine), { after:40 });
     if(anum)     caption += para(run('A-Number: ' + anum), { after:200 });
-
     const title = para(run('WITNESS LIST', { bold:true, sz:'28' }), { jc:'center', after:240 });
+
+    // ── Certificate of service ────────────────────────────────────
+    let certificate = '';
+    if(opts.cert){
+      const svc = String(v.field18 || 'ECAS');
+      const isECAS = /ecas/i.test(svc);
+      const isICE  = /ice|efiling|e-filing/i.test(svc);
+      const isMail = /mail/i.test(svc) && !isICE;
+      const isPersonal = /personal/i.test(svc);
+      const box = (on) => on ? '☒ ' : '☐ ';
+      certificate += pageBreak;
+      certificate += para(run('CERTIFICATE OF SERVICE', { bold:true, sz:'28' }), { jc:'center', after:240 });
+      certificate += para(run('Matter of: ', { bold:true }) + run(respLine || '____________')
+        + run('          File No.: ', { bold:true }) + run(anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________'), { after:200 });
+      certificate += para(run('I hereby certify that the foregoing WITNESS LIST and any attached pages were served on the Department of Homeland Security, Office of the Chief Counsel, by:'), { jc:'both', after:120 });
+      certificate += para(run(box(isMail) + 'United States Postal Service to the person and address below.'), { left:360, after:0 });
+      certificate += para(run(box(isICE) + 'Serving notice through the ICE E-Filing System.'), { left:360, after:0 });
+      certificate += para(run(box(isECAS) + 'Serving notice through the ECAS.'), { left:360, after:0 });
+      certificate += para(run(box(isPersonal) + 'Personal service to the person and address below.'), { left:360, after:200 });
+      certificate += para(run('I declare under penalty of perjury that the foregoing is true and correct.'), { jc:'both', after:200 });
+      const dateLine = [coverDate, subPlace].filter(Boolean).join(', ');
+      certificate += para(run(dateLine), { after:0 });
+      certificate += blank(2);
+      certificate += sigBlock;
+    }
+
     const sectPr = '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>'
       + '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
 
     const documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
       + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-      + '<w:body>' + title + caption + witnessBlocks + sectPr + '</w:body></w:document>';
+      + '<w:body>' + coverLetter + title + caption + witnessBlocks + certificate + sectPr + '</w:body></w:document>';
 
     const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
       + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
