@@ -8835,15 +8835,17 @@ function renderWeek() {
     const sortedTasks = tasks.slice().sort((a,b)=>{
       const ta = isTaskKindEvent(a.event)?1:0, tb = isTaskKindEvent(b.event)?1:0;
       if(ta!==tb) return ta - tb;
-      // Within the same kind, surface hearings to the top so they read first.
-      const ha = (typeof isHearingEventType==='function'&&isHearingEventType(a.event||''))?0:1;
-      const hb = (typeof isHearingEventType==='function'&&isHearingEventType(b.event||''))?0:1;
+      // Within the same kind, surface actual hearings (not prep) to the top.
+      const _isHearingType = ev => (typeof isHearingEventType==='function') && isHearingEventType(ev||'') && !/\bPREP\b/i.test(ev||'');
+      const ha = _isHearingType(a.event)?0:1, hb = _isHearingType(b.event)?0:1;
       return ha - hb;
     });
     sortedTasks.forEach(r => {
       const isTask = isTaskKindEvent(r.event);
       const _isReminder=!!(r.notes&&r.notes.startsWith('⏰ REMINDER'));
-      const _isHearing = !isTask && !_isReminder && (typeof isHearingEventType==='function') && isHearingEventType(r.event||'');
+      // Prominence is for the actual hearing, not its prep session (INDIVIDUAL
+      // PREP / MASTER PREP / PREP MASTER all match the hearing name regex).
+      const _isHearing = !isTask && !_isReminder && (typeof isHearingEventType==='function') && isHearingEventType(r.event||'') && !/\bPREP\b/i.test(r.event||'');
       const t = document.createElement('div'); t.className = 'week-task' + (isTask?' task-kind':'') + (_isHearing?' week-hearing':''); t.onclick = () => openEdit(r.id);
       // Drag-and-drop to reschedule (disabled for reminders — they follow their parent)
       if(!_isReminder){
