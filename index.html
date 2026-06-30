@@ -2360,6 +2360,24 @@ window.addEventListener('load',()=>autoGrowAllNotes());
         <div id="ncp-custom-fields" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;"></div>
       </div>
 
+      <!-- Additional clients card -->
+      <div style="background:#FDFAF7;border:1px solid #EDE8E0;border-radius:14px;padding:20px 22px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;">Additional Clients</div>
+          <button type="button" onclick="_ncAddClient('page')" style="font-size:11px;padding:4px 12px;border:1px solid #DDD5CA;border-radius:20px;background:#fff;color:#5C5148;cursor:pointer;font-family:inherit;">+ Add client</button>
+        </div>
+        <div id="ncp-cl-rows" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+
+      <!-- Linked events card -->
+      <div style="background:#FFF8EE;border:1px solid #F0D9BB;border-radius:14px;padding:20px 22px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C9823A;">Schedule Events</div>
+          <div id="ncp-ev-btns" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+        </div>
+        <div id="ncp-ev-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
+      </div>
+
       <!-- Notes card -->
       <div style="background:#FDFAF7;border:1px solid #EDE8E0;border-radius:14px;padding:20px 22px;margin-bottom:24px;">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;margin-bottom:14px;">Notes</div>
@@ -8082,6 +8100,18 @@ function eventTypeMatches(ev){
   const set=new Set(Array.from(sel).map(o=>o.value).filter(Boolean));
   return !set.size||set.has(ev);
 }
+// A "blank anchor" is the placeholder record that exists only to register a
+// case in the Cases list — it has no event type and no date, so it carries no
+// schedulable information. New cases flag it with _caseAnchor; the type+date
+// heuristic also catches legacy placeholders created before that flag existed.
+// These are hidden from every event-listing view so a case never shows up as an
+// "event without information", while getCases() still sees them so the case
+// itself stays visible.
+function _isBlankAnchor(r){
+  if(!r) return false;
+  if(r._caseAnchor===true) return true;
+  return !(r.event&&String(r.event).trim()) && !(r.date&&String(r.date).trim());
+}
 function getFiltered(){
   const atty=(document.getElementById('f-atty')||{}).value||'';
   const evtEl=document.getElementById('f-event');
@@ -8089,9 +8119,10 @@ function getFiltered(){
   const q=((document.getElementById('f-search')||{}).value||'').toLowerCase();
   const te=document.getElementById('f-type');
   const ctype=te?te.value:'';
-  if(!atty&&!evtSet.size&&!ctype&&!q) return records.filter(r=>!r.finishedStatus&&!r.deletedStatus);
+  if(!atty&&!evtSet.size&&!ctype&&!q) return records.filter(r=>!r.finishedStatus&&!r.deletedStatus&&!_isBlankAnchor(r));
   return records.filter(r=>{
     if(r.finishedStatus||r.deletedStatus)return false;
+    if(_isBlankAnchor(r))return false;
     if(atty&&r.atty!==atty)return false;
     if(evtSet.size&&!evtSet.has(r.event))return false;
     if(ctype&&r.type!==ctype)return false;
@@ -12664,6 +12695,7 @@ function renderAllEvents(){
   const atty=document.getElementById('f-atty').value;
   const tea=document.getElementById('f-type');const ctypea=tea?tea.value:'';
   let rows=[...records].filter(r=>{
+    if(_isBlankAnchor(r))return false;
     if(atty&&r.atty!==atty)return false;
     if(!eventTypeMatches(r.event))return false;
     if(ctypea&&r.type!==ctypea)return false;
@@ -17295,7 +17327,7 @@ function openCaseDetail(clid){
   const base=allRecs.reduce((best,r)=>{const s=(r.client?1:0)+(r.anum?1:0)+(r.atty?1:0)+(r.type?1:0);const bs=(best.client?1:0)+(best.anum?1:0)+(best.atty?1:0)+(best.type?1:0);return s>bs?r:best;},allRecs[0]);
   {const _m=caseMeta[clid]||{};const _c=[_m.clientFirstName,_m.clientMiddleName,_m.clientLastName].filter(Boolean).join(' ');document.getElementById('case-detail-title').textContent=_c||base.client||clid;}
   if(typeof renderCaseDetailPhoto === 'function') renderCaseDetailPhoto(clid);
-  const active=allRecs.filter(r=>!r.deletedStatus&&!r.finishedStatus);
+  const active=allRecs.filter(r=>!r.deletedStatus&&!r.finishedStatus&&!_isBlankAnchor(r));
   const finished=allRecs.filter(r=>r.finishedStatus&&!r.deletedStatus);
   const deleted=allRecs.filter(r=>r.deletedStatus);
   const body=document.getElementById('case-detail-body');
@@ -20620,6 +20652,7 @@ function getQueueItems(){
   return records.filter(r =>
     !r.deletedStatus &&
     !r.finishedStatus &&
+    !_isBlankAnchor(r) &&
     (!r.date || !r.assigned || r.assigned === '')
   );
 }
@@ -20846,6 +20879,138 @@ function renderQueue(){
   list.appendChild(qFrag);
 }
 
+// ── New Case extras: linked events + additional clients ──────────────
+// Shared by the full-page New Case form (key 'page', id prefix 'ncp') and the
+// inbox New Case modal (key 'modal', id prefix 'ncm'). Lets the user line up a
+// few initial events (Task / Master / Individual / Scheduling Order) and add
+// co-clients (each with a structured last / middle / first name) right when the
+// case is created, instead of opening the case afterwards.
+const NEW_CASE_EVENT_OPTIONS=['TASK','MASTER','INDIVIDUAL','SCHEDULING ORDER'];
+const NEW_CASE_REL_OPTIONS=['Spouse','Child','Parent','Sibling','Grandparent','Partner','Derivative','Other'];
+const _ncPrefix={page:'ncp',modal:'ncm'};
+let _ncExtras={page:{events:[],clients:[]},modal:{events:[],clients:[]}};
+function _ncResetExtras(key){_ncExtras[key]={events:[],clients:[]};_ncRenderEventButtons(key);_ncRenderEvents(key);_ncRenderClients(key);}
+function _ncRenderEventButtons(key){
+  const host=document.getElementById(_ncPrefix[key]+'-ev-btns');
+  if(!host)return;
+  host.innerHTML='';
+  NEW_CASE_EVENT_OPTIONS.forEach(opt=>{
+    const b=document.createElement('button');
+    b.type='button';
+    b.textContent='+ '+opt;
+    b.style.cssText='font-size:10px;padding:3px 9px;border:1px solid #F0D9BB;border-radius:5px;background:#fff;color:#C9823A;cursor:pointer;font-weight:600;font-family:inherit;';
+    b.onclick=()=>{_ncExtras[key].events.push({type:opt,date:'',notes:''});_ncRenderEvents(key);};
+    host.appendChild(b);
+  });
+}
+function _ncRenderEvents(key){
+  const rows=document.getElementById(_ncPrefix[key]+'-ev-rows');
+  if(!rows)return;
+  const arr=_ncExtras[key].events;
+  rows.innerHTML='';
+  if(!arr.length){
+    const empty=document.createElement('div');
+    empty.style.cssText='font-size:11px;color:#C4BAB0;font-style:italic;';
+    empty.textContent='No events yet. Use the buttons above to add one.';
+    rows.appendChild(empty);
+    return;
+  }
+  arr.forEach((ev,idx)=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:6px;padding:4px 6px;background:#fff;border:1px solid #F0D9BB;border-radius:6px;';
+    const tag=document.createElement('span');
+    tag.style.cssText='font-size:10px;font-weight:700;color:#C9823A;background:#FAF0E6;padding:2px 6px;border-radius:4px;flex-shrink:0;';
+    tag.textContent=ev.type;
+    const dateInp=document.createElement('input');
+    dateInp.type='date';dateInp.value=ev.date||'';dateInp.title='Date';
+    dateInp.style.cssText='font-size:11px;padding:2px 5px;border:1px solid #F0D9BB;border-radius:5px;background:#FFFCF7;color:#2C2620;font-weight:600;width:130px;flex-shrink:0;';
+    dateInp.oninput=()=>{arr[idx].date=dateInp.value;if(typeof checkWeekendDate==='function')checkWeekendDate(dateInp.value);};
+    const notesInp=document.createElement('input');
+    notesInp.type='text';notesInp.value=ev.notes||'';notesInp.placeholder='Notes (optional)';
+    notesInp.style.cssText='font-size:11px;padding:2px 6px;border:1px solid #F0D9BB;border-radius:5px;background:#FFFCF7;color:#2C2620;flex:1;min-width:60px;';
+    notesInp.oninput=()=>{arr[idx].notes=notesInp.value;};
+    const rm=document.createElement('button');
+    rm.type='button';rm.textContent='✕';rm.title='Remove';
+    rm.style.cssText='font-size:11px;padding:2px 7px;border:1px solid #F0D9BB;border-radius:5px;background:#fff;color:#C9823A;cursor:pointer;flex-shrink:0;';
+    rm.onclick=()=>{arr.splice(idx,1);_ncRenderEvents(key);};
+    row.appendChild(tag);row.appendChild(dateInp);row.appendChild(notesInp);row.appendChild(rm);
+    rows.appendChild(row);
+  });
+}
+function _ncAddClient(key){_ncExtras[key].clients.push({lastName:'',firstName:'',middleName:'',anum:'',relationship:''});_ncRenderClients(key);}
+function _ncRenderClients(key){
+  const rows=document.getElementById(_ncPrefix[key]+'-cl-rows');
+  if(!rows)return;
+  const arr=_ncExtras[key].clients;
+  rows.innerHTML='';
+  if(!arr.length){
+    const empty=document.createElement('div');
+    empty.style.cssText='font-size:11px;color:#C4BAB0;font-style:italic;';
+    empty.textContent='No additional clients. Use “+ Add client” for co-clients (siblings, parents…).';
+    rows.appendChild(empty);
+    return;
+  }
+  const _inp='font-size:12px;padding:6px 8px;border:1px solid #DDD5CA;border-radius:6px;font-family:inherit;box-sizing:border-box;outline:none;background:#fff;color:#2C2620;width:100%;';
+  arr.forEach((c,idx)=>{
+    const row=document.createElement('div');
+    row.style.cssText='padding:9px 10px;background:#fff;border:1px solid #E3DCD0;border-radius:8px;display:flex;flex-direction:column;gap:7px;';
+    const r1=document.createElement('div');r1.style.cssText='display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;';
+    const last=document.createElement('input');last.type='text';last.placeholder='Last name *';last.value=c.lastName||'';last.style.cssText=_inp;last.oninput=()=>arr[idx].lastName=last.value;
+    const first=document.createElement('input');first.type='text';first.placeholder='First name *';first.value=c.firstName||'';first.style.cssText=_inp;first.oninput=()=>arr[idx].firstName=first.value;
+    const mid=document.createElement('input');mid.type='text';mid.placeholder='Middle (optional)';mid.value=c.middleName||'';mid.style.cssText=_inp;mid.oninput=()=>arr[idx].middleName=mid.value;
+    r1.appendChild(last);r1.appendChild(first);r1.appendChild(mid);
+    const r2=document.createElement('div');r2.style.cssText='display:grid;grid-template-columns:1fr 1fr auto;gap:7px;align-items:center;';
+    const anum=document.createElement('input');anum.type='text';anum.placeholder='A-Number (optional)';anum.value=c.anum||'';anum.style.cssText=_inp;anum.oninput=()=>arr[idx].anum=anum.value;
+    const rel=document.createElement('select');rel.style.cssText=_inp+'cursor:pointer;';
+    const b0=document.createElement('option');b0.value='';b0.textContent='Relationship…';rel.appendChild(b0);
+    NEW_CASE_REL_OPTIONS.forEach(o=>{const op=document.createElement('option');op.value=o;op.textContent=o;if(o===c.relationship)op.selected=true;rel.appendChild(op);});
+    rel.onchange=()=>arr[idx].relationship=rel.value;
+    const rm=document.createElement('button');rm.type='button';rm.textContent='✕';rm.title='Remove client';
+    rm.style.cssText='font-size:12px;padding:4px 9px;border:1px solid #DDD5CA;border-radius:6px;background:#F7F3ED;color:#9E9186;cursor:pointer;flex-shrink:0;';
+    rm.onclick=()=>{arr.splice(idx,1);_ncRenderClients(key);};
+    r2.appendChild(anum);r2.appendChild(rel);r2.appendChild(rm);
+    row.appendChild(r1);row.appendChild(r2);
+    rows.appendChild(row);
+  });
+}
+// Collect the cleaned co-clients (rows missing a name are skipped).
+function _ncCollectClients(key){
+  const out=[];
+  (_ncExtras[key].clients||[]).forEach(c=>{
+    const ln=_singleName((c.lastName||'').trim());
+    const fn=_singleName((c.firstName||'').trim());
+    const mn=_singleName((c.middleName||'').trim());
+    if(!ln||!fn)return; // need at least last + first to be a real client
+    out.push({name:[fn,mn,ln].filter(Boolean).join(' '),lastName:ln,firstName:fn,middleName:mn,anum:(c.anum||'').trim(),relationship:c.relationship||'',isLead:false});
+  });
+  return out;
+}
+// Build event records for a freshly created case. Each carries the case's
+// identity so it shows up correctly in every event view.
+function _ncCollectEventRecords(key,caseRec){
+  const out=[];
+  (_ncExtras[key].events||[]).forEach(ev=>{
+    if(!ev.type)return;
+    out.push({
+      id:'ev_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),
+      clid:caseRec.clid,client:caseRec.client,type:caseRec.type,anum:caseRec.anum,
+      atty:caseRec.atty,assigned:caseRec.assigned||'',
+      event:ev.type,date:ev.date||'',timeStart:'',timeEnd:'',hearingMode:'',
+      notes:(ev.notes||'').trim(),checklist:[],docs:[],history:[]
+    });
+  });
+  return out;
+}
+// Apply collected co-clients to a case's respondents list.
+function _ncApplyClients(key,cid){
+  const clients=_ncCollectClients(key);
+  if(!clients.length)return 0;
+  if(!caseMeta[cid])caseMeta[cid]={};
+  if(!Array.isArray(caseMeta[cid].respondents))caseMeta[cid].respondents=[];
+  clients.forEach(c=>caseMeta[cid].respondents.push(c));
+  return clients.length;
+}
+
 // ── New Case Modal ──
 function openAddCasePage(){
   // Hide other views
@@ -20897,6 +21062,9 @@ function openAddCasePage(){
   } else {
     customCard.style.display='none';
   }
+
+  // Reset + render the linked-events and additional-clients sections.
+  if(typeof _ncResetExtras==='function')_ncResetExtras('page');
 
   setTimeout(()=>{const el=document.getElementById('ncp-lastName');if(el)el.focus();},50);
 }
@@ -20953,10 +21121,12 @@ function saveAddCasePage(){
   const id='case_'+Date.now();
   const caseId=clid||id;
 
+  // Anchor record: registers the case (and holds case-level notes / custom
+  // fields) without ever appearing as a blank "event without information".
   const rec={
     id, clid:caseId, client, type, anum, atty, assigned,
     event:'', date:'', timeStart:'', timeEnd:'',
-    notes, history:[{type:'note',date:todayStr(),note:'Case created'}]
+    notes, _caseAnchor:true, history:[{type:'note',date:todayStr(),note:'Case created'}]
   };
 
   // Custom columns
@@ -20966,6 +21136,12 @@ function saveAddCasePage(){
   });
 
   records.push(rec);
+
+  // ── Linked events + additional clients added on the form ──
+  const _evRecs=(typeof _ncCollectEventRecords==='function')
+    ? _ncCollectEventRecords('page',{clid:caseId,client,type,anum,atty,assigned}) : [];
+  _evRecs.forEach(er=>{customColumns.forEach(c=>{er[c.key]=rec[c.key]||'';});records.push(er);});
+  const _clCount=(typeof _ncApplyClients==='function')?_ncApplyClients('page',caseId):0;
 
   // Save structured name to caseMeta. Last names always stored UPPERCASED.
   if(!caseMeta[caseId]) caseMeta[caseId]={};
@@ -20982,7 +21158,10 @@ function saveAddCasePage(){
   dirtyFilterOpts();
   markUnsaved();
   if(_nameTrimmed) showToast('Name fields accept one word each — extras trimmed');
-  showToast('Case created: '+client+' ✓');
+  const _extraBits=[];
+  if(_evRecs.length)_extraBits.push(_evRecs.length+' event'+(_evRecs.length>1?'s':''));
+  if(_clCount)_extraBits.push(_clCount+' client'+(_clCount>1?'s':''));
+  showToast('Case created: '+client+(_extraBits.length?' (+'+_extraBits.join(', ')+')':'')+' ✓');
   document.getElementById('cases-add-view').style.display='none';
   openCaseDetail(caseId);
 }
@@ -21000,6 +21179,9 @@ function openNewCaseModal(){
   // Clear fields
   ['nc-lastName','nc-firstName','nc-middleName','nc-clid','nc-anum','nc-email','nc-countryOfBirth','nc-notes'].forEach(id => {const e=document.getElementById(id);if(e)e.value='';});
   typeEl.value = ''; attyEl.value = '';
+
+  // Reset + render the linked-events and additional-clients sections.
+  if(typeof _ncResetExtras==='function')_ncResetExtras('modal');
 
   document.getElementById('new-case-modal').style.display = 'flex';
   setTimeout(() => {const el=document.getElementById('nc-lastName');if(el)el.focus();}, 50);
@@ -21047,16 +21229,23 @@ function saveNewCase(){
   const atty  = document.getElementById('nc-atty').value;
   const notes = document.getElementById('nc-notes').value.trim();
 
-  // Create a placeholder record to anchor the case
+  // Anchor record: registers the case without ever showing as a blank event.
   const id = 'case_' + Date.now();
+  const _cidNew = clid || id;
   const rec = {
-    id, clid: clid || id,
+    id, clid: _cidNew,
     client, type, anum, atty,
     event: '', date: '', timeStart: '', timeEnd: '',
-    assigned: '', notes,
+    assigned: '', notes, _caseAnchor: true,
     history: [{ type:'note', date: new Date().toLocaleDateString(), note: 'Case created' }]
   };
   records.push(rec);
+
+  // ── Linked events + additional clients added on the form ──
+  const _evRecs=(typeof _ncCollectEventRecords==='function')
+    ? _ncCollectEventRecords('modal',{clid:_cidNew,client,type,anum,atty,assigned:''}) : [];
+  _evRecs.forEach(er=>records.push(er));
+  const _clCount=(typeof _ncApplyClients==='function')?_ncApplyClients('modal',_cidNew):0;
 
   // Save structured name to caseMeta. Last names always stored UPPERCASED.
   const _cid=clid||id;
@@ -21077,11 +21266,14 @@ function saveNewCase(){
   markUnsaved();
   closeNewCaseModal();
   if(_nameTrimmed) showToast('Name fields accept one word each — extras trimmed');
-  showToast('Case created: ' + client + ' ✓');
+  const _extraBits=[];
+  if(_evRecs.length)_extraBits.push(_evRecs.length+' event'+(_evRecs.length>1?'s':''));
+  if(_clCount)_extraBits.push(_clCount+' client'+(_clCount>1?'s':''));
+  showToast('Case created: ' + client + (_extraBits.length?' (+'+_extraBits.join(', ')+')':'') + ' ✓');
 
   // Navigate to the new case
   switchTab('cases');
-  setTimeout(() => openCaseDetail(clid || id), 80);
+  setTimeout(() => openCaseDetail(_cidNew), 80);
 }
 
 // ── Boot ──
@@ -22425,6 +22617,24 @@ function saveNewTask(){
       <select id="nc-atty" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;background:#fff;">
         <option value="">None</option>
       </select>
+    </div>
+
+    <!-- Additional clients -->
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;">Additional Clients</label>
+        <button type="button" onclick="_ncAddClient('modal')" style="font-size:11px;padding:4px 11px;border:1px solid #DDD5CA;border-radius:20px;background:#F7F3ED;color:#5C5148;cursor:pointer;font-family:inherit;">+ Add client</button>
+      </div>
+      <div id="ncm-cl-rows" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+
+    <!-- Linked events -->
+    <div style="margin-bottom:18px;padding:12px 14px;background:#FFF8EE;border:1px solid #F0D9BB;border-radius:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;flex-wrap:wrap;">
+        <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#C9823A;">Schedule Events</label>
+        <div id="ncm-ev-btns" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      </div>
+      <div id="ncm-ev-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
     </div>
 
     <!-- Notes -->
