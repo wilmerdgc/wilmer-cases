@@ -10215,6 +10215,7 @@ function renderCallUpPicker(){
       if(cb.checked){ if(!callUpTypes.includes(ev)) callUpTypes.push(ev); }
       else { callUpTypes=callUpTypes.filter(t=>t!==ev); }
       saveCallUpTypes();
+      markUnsaved();
       updateCallUpTypeCount();
       renderDlTypeFilter();
       renderDeadlines();
@@ -10274,15 +10275,15 @@ function _pickerOutsideClick(e){
 
 function selectAllCallUpTypes(){
   callUpTypes=[...eventTypes];
-  saveCallUpTypes();renderCallUpPicker();renderDlTypeFilter();renderDeadlines();
+  saveCallUpTypes();markUnsaved();renderCallUpPicker();renderDlTypeFilter();renderDeadlines();
 }
 function clearAllCallUpTypes(){
   callUpTypes=[];
-  saveCallUpTypes();renderCallUpPicker();renderDlTypeFilter();renderDeadlines();
+  saveCallUpTypes();markUnsaved();renderCallUpPicker();renderDlTypeFilter();renderDeadlines();
 }
 function resetCallUpTypes(){
   callUpTypes=[..._DEFAULT_CALLUP_TYPES];
-  saveCallUpTypes();renderCallUpPicker();renderDlTypeFilter();renderDeadlines();
+  saveCallUpTypes();markUnsaved();renderCallUpPicker();renderDlTypeFilter();renderDeadlines();
 }
 
 function renderDeadlines(){
@@ -15890,6 +15891,7 @@ function _bondPrepAddItem(type){
   const t = allowed.includes(type) ? type : 'question';
   bondPrepQuestions.push({ id: 'bp_'+Date.now()+'_'+Math.random().toString(36).slice(2,6), type:t, text });
   _saveBondPrepQuestions();
+  markUnsaved();
   inp.value = '';
   _renderBondPrepQuestions();
   _renderBondPrepAnswers();
@@ -15906,6 +15908,7 @@ function _bondPrepMove(qid, delta){
   bondPrepQuestions[i] = bondPrepQuestions[j];
   bondPrepQuestions[j] = tmp;
   _saveBondPrepQuestions();
+  markUnsaved();
   _renderBondPrepQuestions();
   _renderBondPrepAnswers();
 }
@@ -15927,6 +15930,7 @@ function _bondPrepStartEdit(qid, row){
     if(!v){ inp.focus(); return; }
     q.text = v;
     _saveBondPrepQuestions();
+    markUnsaved();
     _renderBondPrepQuestions();
     _renderBondPrepAnswers();
   };
@@ -15948,6 +15952,7 @@ function _bondPrepDelete(qid){
   if(!confirm('Delete this ' + label + '?\n\n"' + (q.text||'') + '"' + note)) return;
   bondPrepQuestions = bondPrepQuestions.filter(x => x.id!==qid);
   _saveBondPrepQuestions();
+  markUnsaved();
   _renderBondPrepQuestions();
   _renderBondPrepAnswers();
 }
@@ -18662,7 +18667,7 @@ function renderIssuesList(){
     delBtn.style.cssText = 'border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:16px;padding:0 4px;border-radius:4px;';
     delBtn.onmouseenter=()=>delBtn.style.color='#B85C5C';
     delBtn.onmouseleave=()=>delBtn.style.color='#C4BAB0';
-    delBtn.onclick=()=>{caseIssueTypes.splice(idx,1);saveCaseIssueTypes();renderIssuesList();};
+    delBtn.onclick=()=>{caseIssueTypes.splice(idx,1);saveCaseIssueTypes();markUnsaved();renderIssuesList();};
     row.appendChild(name); row.appendChild(procs); row.appendChild(editBtn); row.appendChild(delBtn);
     ct.appendChild(row);
   });
@@ -18709,7 +18714,7 @@ function openIssueEditor(idx){
     iss.name=nm;
     if(isNew) caseIssueTypes.push(iss);
     else caseIssueTypes[idx]=iss;
-    saveCaseIssueTypes();ov.remove();renderIssuesList();
+    saveCaseIssueTypes();markUnsaved();ov.remove();renderIssuesList();
   };
   nameIn.addEventListener('keydown',e=>{if(e.key==='Enter')sBtn.click();if(e.key==='Escape')ov.remove();});
   actDiv.appendChild(cBtn);actDiv.appendChild(sBtn);bx.appendChild(actDiv);
