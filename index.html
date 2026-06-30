@@ -12003,6 +12003,12 @@ function saveJudge(){
   if(editingJudgeId){const i=judges.findIndex(x=>x.id===editingJudgeId);if(i>-1)judges[i]=data;}
   else judges.push(data);
   saveJudgesData();
+  // Push to the cloud too. Without this the judge lives only in this
+  // device's localStorage; the next remote snapshot (newer _savedAt) wins
+  // the last-write-wins merge on `judges` and silently wipes it — the
+  // "judge records disappear" bug. markUnsaved() bumps the save epoch and
+  // schedules the Firestore sync.
+  markUnsaved();
   // Capture the return flags before closeJudgeModal() clears them.
   const _returnToEvent=window._judgePickerReturn;
   const _returnToBrief=window._judgePickerReturnBrief;
@@ -12025,7 +12031,7 @@ function saveJudge(){
 }
 function deleteJudge(id){
   if(!confirm('Remove this judge?'))return;
-  judges=judges.filter(x=>x.id!==id);saveJudgesData();renderJudges();
+  judges=judges.filter(x=>x.id!==id);saveJudgesData();markUnsaved();renderJudges();
 }
 
 function updateDateCalc(){
@@ -21335,6 +21341,22 @@ function _mergePayloads(cloudData, localData){
   const _localNewer = localEpoch >= cloudEpoch;
   merged.paralegals = _unionNames(cloudData.paralegals, localData.paralegals);
   merged.attorneys  = _unionNames(cloudData.attorneys,  localData.attorneys);
+  // Judges: union by id, same reasoning as the name lists above. Judge
+  // objects carry no per-entry _updatedAt, so we can't do the per-id
+  // newest-wins merge records get; instead we union the ids and, on an id
+  // present on both sides, let the newer-epoch doc's version win (apply the
+  // older side first, overlay the newer side). This stops a device holding a
+  // stale judges list from wiping a judge another device just added — the
+  // whole-array last-write-wins it used to do was the disappearing-judge bug.
+  const _mergeById = (cloudArr, localArr, localNewer) => {
+    const out = new Map();
+    const older  = localNewer ? (Array.isArray(cloudArr)?cloudArr:[]) : (Array.isArray(localArr)?localArr:[]);
+    const newer  = localNewer ? (Array.isArray(localArr)?localArr:[]) : (Array.isArray(cloudArr)?cloudArr:[]);
+    older.forEach(o => { if(o && o.id) out.set(o.id, o); });
+    newer.forEach(o => { if(o && o.id) out.set(o.id, o); });
+    return Array.from(out.values());
+  };
+  merged.judges = _mergeById(cloudData.judges, localData.judges, _localNewer);
   merged.paralegalEmails    = _mergeMap(cloudData.paralegalEmails,    localData.paralegalEmails,    _localNewer);
   merged.attorneyEmails     = _mergeMap(cloudData.attorneyEmails,     localData.attorneyEmails,     _localNewer);
   merged.attorneySignatures = _mergeMap(cloudData.attorneySignatures, localData.attorneySignatures, _localNewer);
@@ -21343,7 +21365,7 @@ function _mergePayloads(cloudData, localData){
   // before merge, but the cloud side can win if it has data the local
   // doc never loaded (e.g. fresh install).
   const fields = ['eventTypes','eventTypeMeta','caseTypes','caseTypeDocLists','caseTypeStages',
-                  'customColumns','colVis','callUpTypes','judges','caseIssueTypes','customChecklists',
+                  'customColumns','colVis','callUpTypes','caseIssueTypes','customChecklists',
                   'venues','firmInfo','bondPrepQuestions'];
   fields.forEach(f => {
     const lv = localData[f];
