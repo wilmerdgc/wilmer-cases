@@ -1,0 +1,3126 @@
+<!-- FILE: master_hearing_prep.html | FOLDER: /mnt/user-data/uploads/ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Master Hearing Prep</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: Georgia, serif;
+    background: #f7f4ef;
+    color: #2c2720;
+    font-size: 14px;
+  }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #d4c9b8;
+    background: #f0ece4;
+    padding: 0 30px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .tab {
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding: 11px 22px;
+    cursor: pointer;
+    color: #9a8872;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    transition: color 0.15s;
+  }
+  .tab.active { color: #2c2720; border-bottom: 2px solid #2c2720; }
+  .tab:hover { color: #4a3c2c; }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── FORM PANEL ── */
+  .wrap { max-width: 740px; margin: 0 auto; padding: 24px 20px 90px; }
+
+  .page-title { font-size: 18px; font-weight: bold; color: #2c2720; margin-bottom: 4px; }
+  .page-sub { font-size: 12px; color: #9a8872; margin-bottom: 8px; }
+
+  h2 {
+    font-size: 11px; font-weight: bold; text-transform: uppercase;
+    letter-spacing: 0.08em; color: #6b5a3e;
+    border-bottom: 1px solid #d4c9b8; padding-bottom: 5px; margin: 28px 0 14px;
+  }
+
+  .row { display: flex; gap: 14px; margin-bottom: 12px; flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 110px; }
+  .field.full { flex: 1 1 100%; }
+  .field.w2 { flex: 2; }
+
+  label.lbl {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;
+    color: #9a8872; font-family: Arial, sans-serif;
+    user-select: none;
+  }
+  label.lbl.lbl-copyable { cursor: copy; }
+  label.lbl.lbl-copy-flash { color: #a0865a !important; transition: color 0.1s; }
+
+  input[type="text"], input[type="date"], input[type="time"], select, textarea {
+    font-family: Georgia, serif; font-size: 13px;
+    border: 1px solid #cfc4b0; border-radius: 2px;
+    padding: 5px 8px; background: #fffdf9; color: #2c2720; width: 100%; outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: #a0865a; }
+  textarea { resize: vertical; min-height: 60px; }
+
+  .yn { display: flex; gap: 16px; align-items: center; margin-top: 2px; }
+  .yn label { font-size: 13px; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .yn input { width: 14px; height: 14px; }
+
+  .checks { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 4px; }
+  .checks label { font-size: 13px; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .checks input { width: 14px; height: 14px; }
+
+  .client-block {
+    border: 1px solid #d4c9b8; border-radius: 3px;
+    padding: 14px; margin-bottom: 14px; background: #fffdf9;
+  }
+  .client-title {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;
+    color: #9a8872; margin-bottom: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 10px;
+    font-family: Arial, sans-serif;
+  }
+  .client-title-left { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+
+  /* Lead/Rider role badges */
+  .role-pill {
+    font-family: Arial, sans-serif; font-size: 10px; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 3px 10px; border-radius: 10px;
+    border: 1px solid #cfc4b0; background: #fffdf9; color: #9a8872;
+    cursor: pointer; transition: all 0.1s;
+  }
+  .role-pill.lead { background: #2c2720; color: #fffdf9; border-color: #2c2720; }
+  .role-pill.rider { background: #fffdf9; color: #9a8872; }
+  .role-pill:hover:not(.lead) { background: #f0ece4; }
+
+  /* Same address block / toggle */
+  .same-as-c1 {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; background: #f7f4ef; border: 1px dashed #cfc4b0;
+    border-radius: 3px; margin-bottom: 10px;
+  }
+  .same-as-c1 span {
+    font-family: Arial, sans-serif; font-size: 11px; color: #6b5a3e;
+  }
+  .addr-block.hidden { display: none; }
+
+  /* NTA Check per-client */
+  .ntc-block {
+    border: 1px solid #e8e0d4; border-radius: 3px;
+    padding: 12px; margin-bottom: 12px; background: #fffdf9;
+  }
+  .ntc-block.single-client {
+    border: none; background: transparent; padding: 0; margin-bottom: 0;
+  }
+  .ntc-title {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;
+    color: #6b5a3e; font-weight: bold; margin-bottom: 10px;
+    font-family: Arial, sans-serif;
+    padding-bottom: 6px; border-bottom: 1px solid #e8e0d4;
+  }
+  .ntc-block.single-client .ntc-title { display: none; }
+
+  .filing-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 6px 0; border-bottom: 1px solid #e8e0d4; flex-wrap: wrap;
+  }
+  .filing-row:last-child { border-bottom: none; }
+  .filing-name { width: 130px; font-size: 13px; flex-shrink: 0; }
+  .filing-lbl { font-size: 11px; color: #9a8872; font-family: Arial, sans-serif; }
+
+  .alleg-row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+  .alleg-row input { flex: 1; }
+
+  button.add {
+    font-family: Arial, sans-serif; font-size: 11px; background: none;
+    border: 1px dashed #a0865a; color: #a0865a;
+    padding: 5px 14px; border-radius: 2px; cursor: pointer; margin-top: 4px;
+  }
+  button.add:hover { background: #f0e8dc; }
+
+  button.rem {
+    font-family: Arial, sans-serif; font-size: 10px; background: none;
+    border: 1px solid #cfc4b0; color: #9a8872;
+    padding: 2px 8px; border-radius: 2px; cursor: pointer;
+  }
+  button.rem:hover { color: #8b3a2a; border-color: #8b3a2a; }
+
+  /* ── HISTORY PANEL ── */
+  .hist-wrap { max-width: 740px; margin: 0 auto; padding: 24px 20px 90px; }
+
+  .hist-header {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;
+  }
+  .hist-title { font-size: 15px; font-weight: bold; color: #2c2720; }
+  .hist-count { font-family: Arial, sans-serif; font-size: 11px; color: #9a8872; }
+
+  .hist-empty {
+    font-family: Arial, sans-serif; font-size: 12px; color: #b0a090;
+    padding: 40px 0; text-align: center;
+  }
+
+  .hist-entry {
+    border: 1px solid #d4c9b8; border-radius: 3px;
+    background: #fffdf9; margin-bottom: 12px; overflow: hidden;
+  }
+  .hist-entry-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-bottom: 1px solid #e8e0d4;
+    background: #f7f4ef;
+  }
+  .hist-ts {
+    font-family: Arial, sans-serif; font-size: 11px; font-weight: bold; color: #4a3c2c;
+  }
+  .hist-badge {
+    font-family: Arial, sans-serif; font-size: 10px; color: #9a8872;
+    background: #ede8df; padding: 2px 8px; border-radius: 10px;
+  }
+  .hist-actions { display: flex; gap: 8px; align-items: center; }
+  button.hist-restore {
+    font-family: Arial, sans-serif; font-size: 10px; font-weight: bold;
+    background: none; border: 1px solid #a0865a; color: #a0865a;
+    padding: 3px 10px; border-radius: 2px; cursor: pointer;
+  }
+  button.hist-restore:hover { background: #f0e8dc; }
+  button.hist-del {
+    font-family: Arial, sans-serif; font-size: 10px;
+    background: none; border: 1px solid #cfc4b0; color: #b0a090;
+    padding: 3px 8px; border-radius: 2px; cursor: pointer;
+  }
+  button.hist-del:hover { color: #8b3a2a; border-color: #8b3a2a; }
+
+  .hist-changes { padding: 10px 14px; }
+  .change-item {
+    font-family: Arial, sans-serif; font-size: 11px;
+    color: #4a3c2c; padding: 3px 0;
+    border-bottom: 1px dotted #e8e0d4;
+    display: flex; gap: 8px;
+  }
+  .change-item:last-child { border-bottom: none; }
+  .change-field { color: #9a8872; min-width: 140px; flex-shrink: 0; }
+  .change-arrow { color: #cfc4b0; }
+  .change-val { color: #2c2720; }
+  .no-changes { font-family: Arial, sans-serif; font-size: 11px; color: #b0a090; }
+
+  button.clear-hist {
+    font-family: Arial, sans-serif; font-size: 10px;
+    background: none; border: 1px solid #cfc4b0; color: #9a8872;
+    padding: 5px 14px; border-radius: 2px; cursor: pointer;
+  }
+  button.clear-hist:hover { color: #8b3a2a; border-color: #8b3a2a; }
+
+  /* ── FIELD MAP ── */
+  .fmap-section-head {
+    font-family: Arial, sans-serif; font-size: 10px; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 0.08em; color: #6b5a3e;
+    border-bottom: 1px solid #d4c9b8; padding: 6px 0 4px; margin: 18px 0 0;
+  }
+  .fmap-row {
+    display: grid; grid-template-columns: 36px 1fr 1fr 80px;
+    gap: 0; border-bottom: 1px solid #f0ece4;
+    align-items: center; min-height: 32px;
+  }
+  .fmap-row:hover { background: #f7f4ef; }
+  .fmap-row.header {
+    background: #f0ece4; font-family: Arial, sans-serif; font-size: 10px;
+    font-weight: bold; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #9a8872; border-bottom: 2px solid #d4c9b8; position: sticky; top: 44px; z-index: 10;
+  }
+  .fmap-cell {
+    padding: 6px 10px; font-family: Arial, sans-serif; font-size: 11px; color: #2c2720;
+  }
+  .fmap-cell.num { color: #b0a090; font-size: 10px; text-align: center; }
+  .fmap-cell.id-cell {
+    font-family: 'Courier New', monospace; font-size: 10px;
+    color: #6b5a3e; background: #f7f2eb; border-radius: 2px; padding: 3px 8px;
+    margin: 3px 6px; display: inline-block;
+  }
+  .fmap-cell.type-badge {
+    font-family: Arial, sans-serif; font-size: 9px; text-transform: uppercase;
+    letter-spacing: 0.05em; padding: 2px 7px; border-radius: 10px; display: inline-block;
+  }
+  .type-text { background: #e8f0e8; color: #3a6b3a; }
+  .type-radio { background: #e8eaf5; color: #3a4a8a; }
+  .type-checkbox { background: #f5e8e8; color: #8a3a3a; }
+  .type-date { background: #f0ece0; color: #6b5a2a; }
+  .type-select { background: #f0e8f5; color: #6a3a8a; }
+  .type-textarea { background: #e8f5f5; color: #2a6b6b; }
+
+  .fmap-pill {
+    font-family: Arial, sans-serif; font-size: 10px; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 4px 12px; border-radius: 12px; cursor: pointer;
+    border: 1px solid #cfc4b0; background: #fffdf9; color: #9a8872;
+    transition: all 0.1s;
+  }
+  .fmap-pill.active { background: #2c2720; color: #fffdf9; border-color: #2c2720; }
+  .fmap-pill:hover:not(.active) { background: #f0ece4; }
+  .fmap-empty { font-family: Arial,sans-serif; font-size:12px; color:#b0a090; padding:30px 0; text-align:center; }
+
+  /* ── IN-PERSON FIELDS ── */
+  .age-disabled { opacity: 0.35; pointer-events: none; }
+
+  /* ── CLICK-TO-COPY FIELDS ── */
+  input.copy-ready, textarea.copy-ready, select.copy-ready {
+    cursor: copy;
+  }
+  input.copy-ready:focus, textarea.copy-ready:focus, select.copy-ready:focus {
+    cursor: text;
+  }
+  .copy-flash {
+    outline: 2px solid #a0865a !important;
+    background: #f7f0e4 !important;
+    transition: outline 0.1s, background 0.1s;
+  }
+  .inperson-fields {
+    display: none; overflow: hidden;
+    animation: slideDown 0.18s ease;
+  }
+  .inperson-fields.visible { display: flex; }
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── BOTTOM BAR ── */
+  .bottom {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #2c2720; padding: 12px 30px;
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  }
+  .bottom-left { display: flex; align-items: center; gap: 10px; }
+  .bottom-right { display: flex; gap: 10px; }
+
+  .backup-indicator {
+    font-family: Arial, sans-serif; font-size: 10px;
+    color: #9a8872; transition: color 0.3s;
+  }
+  .backup-indicator.saved { color: #8fbc8f; }
+
+  button.bkp {
+    font-family: Arial, sans-serif; font-size: 11px; font-weight: bold;
+    background: #5a4e40; color: #e8e0d4;
+    border: none; padding: 9px 18px; border-radius: 2px; cursor: pointer;
+  }
+  button.bkp:hover { background: #6b5a48; }
+  button.gen {
+    font-family: Arial, sans-serif; font-size: 11px; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    background: #fffdf9; color: #2c2720;
+    border: none; padding: 9px 24px; border-radius: 2px; cursor: pointer;
+  }
+  button.gen:hover { opacity: 0.85; }
+  button.rst {
+    font-family: Arial, sans-serif; font-size: 11px;
+    background: transparent; color: #9a8872;
+    border: 1px solid #5a4e40; padding: 9px 18px; border-radius: 2px; cursor: pointer;
+  }
+  button.rst:hover { color: #cfc4b0; }
+
+  /* ── FILE ATTACH ── */
+  .fo-item { display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
+  .fo-item label { font-size:13px; display:flex; align-items:center; gap:5px; cursor:pointer; min-width:110px; }
+  .fo-item input[type="checkbox"] { width:14px; height:14px; }
+  .fo-attach-btn {
+    font-family:Arial,sans-serif; font-size:10px; background:none;
+    border:1px dashed #a0865a; color:#a0865a;
+    padding:2px 8px; border-radius:2px; cursor:pointer; white-space:nowrap;
+  }
+  .fo-attach-btn:hover { background:#f0e8dc; }
+  .fo-fname {
+    font-family:Arial,sans-serif; font-size:10px; color:#3a6b3a;
+    max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .fo-clear { font-family:Arial,sans-serif; font-size:10px; background:none; border:none; color:#9a8872; cursor:pointer; padding:0 2px; }
+  .fo-clear:hover { color:#8b3a2a; }
+
+  /* ── RELIEF ITEMS ── */
+  .relief-item { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .relief-item label { font-size:13px; display:flex; align-items:center; gap:5px; cursor:pointer; min-width:160px; }
+  .relief-item input[type="checkbox"] { width:14px; height:14px; }
+  .relief-note { flex:1; font-family:Georgia,serif; font-size:13px; border:1px solid #cfc4b0; border-radius:2px; padding:4px 7px; background:#fffdf9; color:#2c2720; outline:none; }
+  .relief-note:focus { border-color:#a0865a; }
+
+  /* ── CHARGES ── */
+  .charge-row { margin-bottom:8px; border:1px solid #e8e0d4; border-radius:3px; padding:8px 10px; background:#fffdf9; }
+  .charge-top { display:flex; align-items:center; gap:8px; margin-bottom:0; }
+  .charge-top input[type="text"] { flex:1; }
+  .charge-decline-wrap { margin-top:6px; display:none; }
+  .charge-decline-wrap.visible { display:block; }
+  .charge-reason { margin-top:5px; display:none; }
+  .charge-reason.visible { display:block; }
+
+  /* ── LAYOUT WITH PREVIEW ── */
+  .form-layout { display:flex; align-items:stretch; gap:0; height:calc(100vh - 44px); overflow:hidden; }
+  .form-col { flex:0 0 50%; min-width:200px; max-width:none; padding:24px 20px 90px; overflow-y:auto; }
+  .resizer {
+    width:5px; flex-shrink:0; cursor:col-resize;
+    background:#d4c9b8;
+    transition:background 0.15s;
+    position:relative; z-index:10;
+  }
+  .resizer:hover, .resizer.dragging { background:#a0865a; }
+  .preview-col {
+    flex:1; min-width:150px;
+    background: #f0ece4;
+    border-left: none;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .preview-col.hidden { display: none; }
+  .resizer.hidden { display: none; }
+
+  .preview-toolbar {
+    display:flex; align-items:center; gap:6px;
+    padding:6px 10px; border-bottom:1px solid #d4c9b8;
+    background:#ebe7df; flex-shrink:0; flex-wrap:wrap;
+  }
+  .preview-zoom-btn {
+    font-family:Arial,sans-serif; font-size:13px; background:none;
+    border:1px solid #cfc4b0; color:#6b5a3e;
+    width:24px; height:24px; border-radius:2px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .preview-zoom-btn:hover { background:#f0e8dc; }
+  .preview-zoom-lbl { font-family:Arial,sans-serif; font-size:10px; color:#9a8872; min-width:34px; text-align:center; flex-shrink:0; }
+  .preview-doc-tabs {
+    display:flex; gap:4px; flex:1; flex-wrap:wrap; overflow:hidden;
+  }
+  .preview-doc-tab {
+    font-family:Arial,sans-serif; font-size:10px; font-weight:bold;
+    text-transform:uppercase; letter-spacing:0.05em;
+    padding:3px 8px; border-radius:2px; cursor:pointer;
+    background:#fffdf9; border:1px solid #cfc4b0; color:#6b5a3e;
+    white-space:nowrap; max-width:100px; overflow:hidden; text-overflow:ellipsis;
+  }
+  .preview-doc-tab.active { background:#2c2720; color:#fffdf9; border-color:#2c2720; }
+
+  .preview-viewport {
+    flex:1; overflow-y:auto; overflow-x:auto;
+    position:relative; background:#888;
+    cursor:grab;
+  }
+  .preview-viewport.panning { cursor:grabbing; }
+  .preview-page-wrap {
+    position:relative; margin:8px auto;
+    box-shadow:0 2px 8px rgba(0,0,0,0.35);
+    display:block;
+  }
+  .preview-page-wrap canvas { display:block; }
+  .preview-empty {
+    display:flex; align-items:center; justify-content:center;
+    height:100%; font-family:Arial,sans-serif; font-size:11px; color:#b0a090;
+    text-align:center; padding:20px;
+  }
+
+  /* ── HIGHLIGHT TOOLS ── */
+  .hl-btn {
+    font-family:Arial,sans-serif; font-size:11px; font-weight:bold;
+    border:2px solid transparent; border-radius:3px; cursor:pointer;
+    padding:3px 10px; background:none; transition:border-color 0.15s;
+    flex-shrink:0;
+  }
+  .hl-btn.active { border-color:#2c2720; }
+  .hl-btn.red  { color:#cc0000; background:#fff0f0; }
+  .hl-btn.green{ color:#1a6b1a; background:#f0fff0; }
+  .hl-btn.erase{ color:#6b5a3e; background:#f7f4ef; border:1px solid #cfc4b0; font-weight:normal; }
+  .hl-save-btn {
+    font-family:Arial,sans-serif; font-size:10px; font-weight:bold;
+    background:#2c2720; color:#fffdf9; border:none;
+    padding:4px 10px; border-radius:2px; cursor:pointer; flex-shrink:0;
+  }
+  .hl-save-btn:hover { opacity:0.85; }
+  .annot-canvas {
+    position:absolute; top:0; left:0;
+    cursor:crosshair; touch-action:none;
+  }
+
+  /* ── FLOATING PREVIEW ── */
+  .preview-col.floating {
+    position:fixed; z-index:200;
+    border:1px solid #a0865a;
+    border-radius:4px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.35);
+    min-width:260px; min-height:300px;
+    resize:both; overflow:hidden;
+  }
+  .preview-col.floating .preview-toolbar { cursor:move; }
+  .preview-drag-btn {
+    font-family:Arial,sans-serif; font-size:12px; background:none;
+    border:1px solid #cfc4b0; color:#9a8872;
+    width:24px; height:24px; border-radius:2px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    title:"Detach / Dock";
+  }
+  .preview-drag-btn:hover { background:#f0e8dc; color:#6b5a3e; }
+
+  /* ── RED NOTES ── */
+  .preview-notes-bar {
+    padding:8px 12px; border-top:1px solid #d4c9b8;
+    background:#ebe7df; flex-shrink:0;
+  }
+  .preview-notes-bar textarea {
+    width:100%; font-family:Georgia,serif; font-size:12px;
+    color:#c00; border:1px solid #d4b0a0; border-radius:2px;
+    background:#fffdf9; padding:5px 7px; resize:vertical; min-height:52px;
+    outline:none;
+  }
+  .preview-notes-bar textarea:focus { border-color:#8b3a2a; }
+  .preview-notes-bar textarea::placeholder { color:#e8b0a0; }
+  .notes-lbl { font-family:Arial,sans-serif; font-size:10px; text-transform:uppercase;
+    letter-spacing:0.07em; color:#8b3a2a; margin-bottom:4px; display:block; }
+  .note-overlay {
+    position:absolute; left:0; top:0; width:100%; pointer-events:none;
+    padding:8px 10px; font-family:Georgia,serif; font-size:11px;
+    color:#cc0000; white-space:pre-wrap; word-break:break-word;
+    text-shadow:0 0 3px #fff8f8;
+  }
+</style>
+</head>
+<body>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('form')">Form</button>
+  <button class="tab" onclick="switchTab('history')" id="hist-tab">History</button>
+  <button class="tab" onclick="switchTab('settings')">Settings</button>
+</div>
+
+<!-- FORM PANEL -->
+<div class="tab-panel active" id="panel-form">
+<div class="form-layout">
+<div class="form-col">
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+    <div>
+      <div class="page-title">Master Hearing Prep</div>
+      <div class="page-sub">The Romero Law Firm</div>
+    </div>
+    <div id="client-summary" style="text-align:right;font-family:Georgia,serif;color:#2c2720;line-height:1.5;min-height:36px;"></div>
+  </div>
+
+  <h2>Hearing</h2>
+  <div class="row">
+    <div class="field"><label class="lbl">Court</label><input type="text" id="court" data-label="Court"></div>
+    <div class="field"><label class="lbl">Judge</label><input type="text" id="judge" data-label="Judge"></div>
+    <div class="field"><label class="lbl">Date</label><input type="date" id="h_date" data-label="Hearing Date"></div>
+    <div class="field"><label class="lbl">Time</label><input type="time" id="h_time" data-label="Hearing Time"></div>
+    <div class="field"><label class="lbl">Format</label>
+      <select id="format" data-label="Format" onchange="toggleInPerson('format','h_loc')">
+        <option value="">—</option>
+        <option>In-person</option><option>Webex</option>
+        <option>Telephonic</option><option>Zoom</option>
+      </select>
+    </div>
+    <div class="field inperson-fields" id="h_loc">
+      <label class="lbl">FL</label><input type="text" id="h_fl" data-label="Hearing Floor" placeholder="Floor">
+    </div>
+    <div class="field inperson-fields" id="h_loc2">
+      <label class="lbl">RM</label><input type="text" id="h_rm" data-label="Hearing Room" placeholder="Room">
+    </div>
+  </div>
+
+  <h2>Clients</h2>
+  <div id="clients"></div>
+  <button class="add" onclick="addClient()">+ Add Client</button>
+
+  <h2>Procedural History</h2>
+  <div class="row">
+    <div class="field"><label class="lbl">File Type</label>
+      <div class="yn">
+        <label><input type="radio" name="ftype" value="ECAS" checked data-label="File Type" onchange="checkPaperFile()"> ECAS</label>
+        <label><input type="radio" name="ftype" value="Paper" data-label="File Type" onchange="checkPaperFile()"> Paper File</label>
+      </div>
+    </div>
+    <div class="field"><label class="lbl">Detained</label>
+      <div class="yn">
+        <label><input type="radio" name="detained" value="Yes" data-label="Detained"> Yes</label>
+        <label><input type="radio" name="detained" value="No" checked data-label="Detained"> No</label>
+      </div>
+    </div>
+    <div class="field" id="yr_issue_wrap" style="display:none;">
+      <div style="font-family:Arial,sans-serif;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.08em;color:#8b3a2a;border:1px solid #d4b0a0;background:#fdf3f0;border-radius:2px;padding:5px 10px;">⚑ 1-Year Issue</div>
+      <input type="hidden" name="yr_issue" value="Yes" data-label="1-Year Issue">
+    </div>
+    <div class="field" id="yr_no_issue_wrap" style="display:none;">
+      <div style="font-family:Georgia,serif;font-size:12px;font-style:italic;color:#9a8872;padding:5px 2px;">No one year issue</div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="field"><label class="lbl">Date of Entry</label><input type="date" id="d_entry" data-label="Date of Entry" onchange="recalcAllAges(); check1YearIssue();"></div>
+    <div class="field"><label class="lbl">Date 1st I-589</label><input type="date" id="d_589" data-label="Date 1st I-589" onchange="check1YearIssue();"></div>
+    <div class="field"><label class="lbl">Retained On</label><input type="date" id="retained" data-label="Retained On"></div>
+    <div class="field w2" id="justif_wrap"><label class="lbl">Justification (1-yr)</label><input type="text" id="justif" data-label="Justification"></div>
+  </div>
+  <div class="row">
+    <div class="field"><label class="lbl">Primary Attorney</label><input type="text" id="p_att" data-label="Primary Attorney"></div>
+    <div class="field"><label class="lbl">Paralegal</label><input type="text" id="paralegal" data-label="Paralegal"></div>
+  </div>
+
+  <h2>Filings &amp; Service</h2>
+  <div id="an-clients"></div>
+
+  <div class="filing-row">
+    <span class="filing-name">WG E-28</span>
+    <div class="yn"><label><input type="radio" name="wg_e28" value="Yes" data-label="WG E-28"> Yes</label><label><input type="radio" name="wg_e28" value="No" checked data-label="WG E-28"> No</label></div>
+    <span class="filing-lbl">Date</span>
+    <input type="date" id="wg_d" data-label="WG E-28 Date" style="width:140px;flex:none;">
+  </div>
+
+  <div id="dhs-row" class="filing-row" style="display:none;">
+    <span class="filing-name">DHS E-28 Served?</span>
+    <div class="yn"><label><input type="radio" name="dhs_e28" value="Yes" data-label="DHS E-28"> Yes</label><label><input type="radio" name="dhs_e28" value="No" checked data-label="DHS E-28"> No</label></div>
+  </div>
+
+  <div class="filing-row">
+    <span class="filing-name">Biometrics</span>
+    <div class="yn"><label><input type="radio" name="bio" value="Yes" data-label="Biometrics"> Yes</label><label><input type="radio" name="bio" value="No" checked data-label="Biometrics"> No</label></div>
+    <span class="filing-lbl">Date</span>
+    <input type="date" id="bio_d" data-label="Biometrics Date" style="width:140px;flex:none;">
+  </div>
+
+  <h2>NTA Check</h2>
+  <div id="ntc-clients"></div>
+
+  <h2>Relief Sought</h2>
+  <div style="margin-bottom:10px;">
+    <label class="lbl" style="display:block;margin-bottom:8px;">Asylum — Ground</label>
+    <div class="relief-item"><label><input type="checkbox" id="asy_psg" data-label="Asylum: PSG" onchange="toggleReliefNote('asy_psg')"> PSG</label><input type="text" id="note_asy_psg" data-label="Asylum PSG Note" placeholder="Why PSG..." class="relief-note" style="display:none;"></div>
+    <div class="relief-item"><label><input type="checkbox" id="asy_race" data-label="Asylum: Race" onchange="toggleReliefNote('asy_race')"> Race</label><input type="text" id="note_asy_race" data-label="Asylum Race Note" placeholder="Why Race..." class="relief-note" style="display:none;"></div>
+    <div class="relief-item"><label><input type="checkbox" id="asy_nat" data-label="Asylum: Nationality" onchange="toggleReliefNote('asy_nat')"> Nationality</label><input type="text" id="note_asy_nat" data-label="Asylum Nationality Note" placeholder="Why Nationality..." class="relief-note" style="display:none;"></div>
+    <div class="relief-item"><label><input type="checkbox" id="asy_rel" data-label="Asylum: Religion" onchange="toggleReliefNote('asy_rel')"> Religion</label><input type="text" id="note_asy_rel" data-label="Asylum Religion Note" placeholder="Why Religion..." class="relief-note" style="display:none;"></div>
+    <div class="relief-item"><label><input type="checkbox" id="asy_pol" data-label="Asylum: Political Opinion" onchange="toggleReliefNote('asy_pol')"> Political Opinion</label><input type="text" id="note_asy_pol" data-label="Asylum Political Opinion Note" placeholder="Why Political Opinion..." class="relief-note" style="display:none;"></div>
+  </div>
+  <div style="margin-bottom:10px;">
+    <label class="lbl" style="display:block;margin-bottom:8px;">Other Relief</label>
+    <div class="relief-item"><label><input type="checkbox" id="r_ina" data-label="INA Withholding" onchange="toggleReliefNote('r_ina')"> INA Withholding</label><input type="text" id="note_r_ina" data-label="INA Withholding Note" placeholder="Why INA..." class="relief-note" style="display:none;"></div>
+    <div class="relief-item"><label><input type="checkbox" id="r_cat" data-label="CAT Withholding" onchange="toggleReliefNote('r_cat')"> CAT Withholding</label><input type="text" id="note_r_cat" data-label="CAT Withholding Note" placeholder="Why CAT..." class="relief-note" style="display:none;"></div>
+    <div class="relief-item"><label><input type="checkbox" id="r_canc" data-label="Cancellation of Removal" onchange="toggleReliefNote('r_canc')"> Cancellation of Removal</label><input type="text" id="note_r_canc" data-label="Cancellation Note" placeholder="Why Cancellation..." class="relief-note" style="display:none;"></div>
+    <div class="relief-item"><label><input type="checkbox" id="r_sij" data-label="SIJ" onchange="toggleReliefNote('r_sij')"> SIJ</label><input type="text" id="note_r_sij" data-label="SIJ Note" placeholder="Why SIJ..." class="relief-note" style="display:none;"></div>
+    <div class="relief-item"><label><input type="checkbox" id="r_tvpra" data-label="TVPRA" onchange="toggleReliefNote('r_tvpra')"> TVPRA</label><input type="text" id="note_r_tvpra" data-label="TVPRA Note" placeholder="Why TVPRA..." class="relief-note" style="display:none;"></div>
+    <div class="relief-item"><label><input type="checkbox" id="r_vawa" data-label="VAWA" onchange="toggleReliefNote('r_vawa')"> VAWA</label><input type="text" id="note_r_vawa" data-label="VAWA Note" placeholder="Why VAWA..." class="relief-note" style="display:none;"></div>
+    <div class="relief-item"><label><input type="checkbox" id="r_uvis" data-label="U-Visa" onchange="toggleReliefNote('r_uvis')"> U-Visa</label><input type="text" id="note_r_uvis" data-label="U-Visa Note" placeholder="Why U-Visa..." class="relief-note" style="display:none;"></div>
+    <div class="relief-item"><label><input type="checkbox" id="r_other" data-label="Other Relief" onchange="toggleReliefNote('r_other')"> Other</label><input type="text" id="note_r_other" data-label="Other Relief Note" placeholder="Specify..." class="relief-note" style="display:none;"></div>
+  </div>
+  <div style="margin-bottom:10px;">
+    <label class="lbl" style="display:block;margin-bottom:8px;">File Organized — Include</label>
+    <div id="fo-items">
+      <div id="fo-nta-per-client"></div>
+      <div class="fo-item">
+        <label><input type="checkbox" id="fo_589" data-label="File: I-589"> I-589</label>
+        <button class="fo-attach-btn" onclick="document.getElementById('fo_fi_589').click()">📎 Attach</button>
+        <input type="file" id="fo_fi_589" accept=".pdf,.png,.jpg,.jpeg" style="display:none" onchange="attachDoc('589',this)">
+        <span class="fo-fname" id="fo_fn_589"></span>
+        <button class="fo-clear" id="fo_fc_589" style="display:none" onclick="clearDoc('589')">✕</button>
+      </div>
+      <div class="fo-item">
+        <label><input type="checkbox" id="fo_sub" data-label="File: Submission"> Submission</label>
+        <button class="fo-attach-btn" onclick="document.getElementById('fo_fi_sub').click()">📎 Attach</button>
+        <input type="file" id="fo_fi_sub" accept=".pdf,.png,.jpg,.jpeg" style="display:none" onchange="attachDoc('sub',this)">
+        <span class="fo-fname" id="fo_fn_sub"></span>
+        <button class="fo-clear" id="fo_fc_sub" style="display:none" onclick="clearDoc('sub')">✕</button>
+      </div>
+      <div class="fo-item">
+        <label><input type="checkbox" id="fo_noh" data-label="File: NOH"> NOH</label>
+        <button class="fo-attach-btn" onclick="document.getElementById('fo_fi_noh').click()">📎 Attach</button>
+        <input type="file" id="fo_fi_noh" accept=".pdf,.png,.jpg,.jpeg" style="display:none" onchange="attachDoc('noh',this)">
+        <span class="fo-fname" id="fo_fn_noh"></span>
+        <button class="fo-clear" id="fo_fc_noh" style="display:none" onclick="clearDoc('noh')">✕</button>
+      </div>
+      <div class="fo-item">
+        <label><input type="checkbox" id="fo_e28" data-label="File: E-28"> E-28</label>
+        <button class="fo-attach-btn" onclick="document.getElementById('fo_fi_e28').click()">📎 Attach</button>
+        <input type="file" id="fo_fi_e28" accept=".pdf,.png,.jpg,.jpeg" style="display:none" onchange="attachDoc('e28',this)">
+        <span class="fo-fname" id="fo_fn_e28"></span>
+        <button class="fo-clear" id="fo_fc_e28" style="display:none" onclick="clearDoc('e28')">✕</button>
+      </div>
+      <div class="fo-item" id="fo_mts_wrap" style="display:none;">
+        <label style="min-width:110px;">Motion to Sub</label>
+        <button class="fo-attach-btn" onclick="document.getElementById('fo_fi_mts').click()">📎 Attach</button>
+        <input type="file" id="fo_fi_mts" accept=".pdf,.png,.jpg,.jpeg" style="display:none" onchange="attachDoc('mts',this)">
+        <span class="fo-fname" id="fo_fn_mts"></span>
+        <button class="fo-clear" id="fo_fc_mts" style="display:none" onclick="clearDoc('mts')">✕</button>
+      </div>
+      <div id="fo-custom-items"></div>
+    </div>
+    <button class="add" style="margin-top:6px;" onclick="addCustomDoc()">+ Add Document</button>
+  </div>
+
+  <h2>Other Issues &amp; Judge Comments</h2>
+  <textarea id="other_issues" data-label="Other Issues / Judge Comments" rows="4"></textarea>
+
+  <h2>Next Steps / Deadlines</h2>
+  <textarea id="next_steps" data-label="Next Steps / Deadlines" rows="3"></textarea>
+
+  <h2>Next Hearing</h2>
+  <div class="row">
+    <div class="field"><label class="lbl">Date</label><input type="date" id="n_date" data-label="Next Hearing Date"></div>
+    <div class="field"><label class="lbl">Time</label><input type="time" id="n_time" data-label="Next Hearing Time"></div>
+    <div class="field"><label class="lbl">Format</label>
+      <select id="n_format" data-label="Next Hearing Format" onchange="toggleInPerson('n_format','n_loc')">
+        <option value="">—</option>
+        <option>In-person</option><option>Webex</option>
+        <option>Telephonic</option><option>Zoom</option>
+      </select>
+    </div>
+    <div class="field inperson-fields" id="n_loc">
+      <label class="lbl">FL</label><input type="text" id="n_fl" data-label="Next Hearing Floor" placeholder="Floor">
+    </div>
+    <div class="field inperson-fields" id="n_loc2">
+      <label class="lbl">RM</label><input type="text" id="n_rm" data-label="Next Hearing Room" placeholder="Room">
+    </div>
+    <div class="field"><label class="lbl">Sent to Office Calendar?</label>
+      <div class="yn">
+        <label><input type="radio" name="sent_cal" value="Yes" data-label="Sent to Calendar" onchange="toggleSentOn()"> Yes</label>
+        <label><input type="radio" name="sent_cal" value="No" checked data-label="Sent to Calendar" onchange="toggleSentOn()"> No</label>
+      </div>
+    </div>
+    <div class="field age-disabled" id="sent_on_wrap"><label class="lbl">Sent On</label><input type="date" id="sent_on" data-label="Sent to Calendar On"></div>
+  </div>
+
+</div><!-- /form-col -->
+
+<!-- RESIZER -->
+<div class="resizer hidden" id="resizer"></div>
+
+<!-- PREVIEW PANEL -->
+<div class="preview-col hidden" id="preview-col">
+  <div class="preview-toolbar" id="preview-toolbar">
+    <div class="preview-doc-tabs" id="preview-tabs"></div>
+    <button class="preview-zoom-btn" onclick="changeZoom(-0.25)" title="Zoom out">−</button>
+    <span class="preview-zoom-lbl" id="zoom-lbl">100%</span>
+    <button class="preview-zoom-btn" onclick="changeZoom(+0.25)" title="Zoom in">+</button>
+    <button class="hl-btn red" id="hl-red" onclick="setHlTool('red')" title="Red highlight">■ Red</button>
+    <button class="hl-btn green" id="hl-green" onclick="setHlTool('green')" title="Green highlight">■ Green</button>
+    <button class="hl-btn erase" id="hl-erase" onclick="setHlTool('erase')" title="Erase">⌫ Erase</button>
+    <button class="hl-save-btn" onclick="saveAnnotated()" title="Save annotated PDF">💾 Save</button>
+    <button class="preview-drag-btn" id="float-btn" onclick="toggleFloat()" title="Detach / Dock">⊞</button>
+  </div>
+  <div class="preview-viewport" id="preview-viewport">
+    <div class="preview-empty" id="preview-empty">No document selected</div>
+  </div>
+</div>
+
+</div><!-- /form-layout -->
+</div><!-- /panel-form -->
+
+<!-- HISTORY PANEL -->
+<div class="tab-panel" id="panel-history">
+<div class="hist-wrap">
+  <div class="hist-header">
+    <div>
+      <div class="hist-title">Change History</div>
+      <div class="hist-count" id="hist-count"></div>
+    </div>
+    <button class="clear-hist" onclick="clearHistory()">Clear All</button>
+  </div>
+  <div id="hist-list"></div>
+</div>
+</div>
+
+<!-- SETTINGS PANEL -->
+<div class="tab-panel" id="panel-settings">
+<div class="hist-wrap">
+  <div class="hist-header">
+    <div>
+      <div class="hist-title">Settings — Field Map</div>
+      <div class="hist-count" id="fmap-count"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input type="text" id="fmap-search" placeholder="Search fields…" oninput="renderFieldMap()" style="font-family:Arial,sans-serif;font-size:11px;border:1px solid #cfc4b0;border-radius:2px;padding:4px 10px;background:#fffdf9;color:#2c2720;outline:none;width:200px;">
+      <button class="clear-hist" onclick="copyFieldMap()">Copy All</button>
+    </div>
+  </div>
+
+  <div style="margin-bottom:18px;">
+    <p style="font-family:Arial,sans-serif;font-size:11px;color:#9a8872;line-height:1.6;">
+      All form fields are listed below with their <strong>Label</strong> (used in Excel export/import and change history) and their <strong>Element ID</strong> (used in PDF generation). Use this map to verify imports or build integrations.
+    </p>
+  </div>
+
+  <!-- Section filter pills -->
+  <div id="fmap-filters" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;"></div>
+
+  <div id="fmap-table"></div>
+</div>
+</div>
+<div class="bottom">
+  <div class="bottom-left">
+    <button class="bkp" onclick="manualBackup()">💾 Backup Now</button>
+    <span class="backup-indicator" id="bkp-indicator">No backup yet</span>
+  </div>
+  <div class="bottom-right">
+    <input type="file" id="xl-import-input" accept=".xlsx" style="display:none" onchange="importExcel(this)">
+    <button class="rst" onclick="document.getElementById('xl-import-input').click()">📂 Import XLS</button>
+    <button class="bkp" onclick="exportExcel()">📊 Export XLS</button>
+    <button class="rst" onclick="resetForm()">Reset</button>
+    <button class="gen" onclick="generatePDF()">Generate PDF</button>
+  </div>
+</div>
+
+<script>
+// ── STATE ────────────────────────────────────────────────────────────────────
+let cc = 0, ac = 0;
+const STORAGE_KEY = 'mhp_backups';
+let lastSnap = null;
+let autoTimer = null;
+let pendingChanges = []; // changes since last backup
+
+// ── TABS ─────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (name === 'history') renderHistory();
+  if (name === 'settings') renderFieldMap();
+}
+
+// ── CLIENT SUMMARY HEADER ────────────────────────────────────────────────────
+function updateClientSummary() {
+  const el = document.getElementById('client-summary');
+  if (!el) return;
+  const blocks = document.querySelectorAll('.client-block');
+  if (!blocks.length) { el.innerHTML = ''; return; }
+  const lines = [];
+  blocks.forEach((b, idx) => {
+    const i = b.id.replace('cb', '');
+    const cid   = document.getElementById(`c${i}_cid`)?.value.trim() || '';
+    const fname = document.getElementById(`c${i}_fname`)?.value.trim() || '';
+    const lname = document.getElementById(`c${i}_lname`)?.value.trim() || '';
+    const anum  = document.getElementById(`c${i}_anum`)?.value.trim() || '';
+    const last3 = anum ? anum.replace(/\D/g,'').slice(-3) : '';
+    const name  = [fname, lname].filter(Boolean).join(' ');
+    const parts = [cid, name, last3 ? `···${last3}` : ''].filter(Boolean);
+    if (parts.length) lines.push(parts.join(' · '));
+  });
+  el.innerHTML = lines.map((l, idx) => {
+    const size = idx === 0 ? '14px' : '12px';
+    const weight = idx === 0 ? 'bold' : 'normal';
+    return `<div style="font-size:${size};font-weight:${weight};color:#2c2720;">${l}</div>`;
+  }).join('');
+
+  // Refresh NTA attach labels so they show the client name
+  updateClientCountUI();
+}
+
+// ── CLIENT & ALLEGATION BUILDERS ─────────────────────────────────────────────
+function addClient() {
+  cc++;
+  const i = cc;
+  const isFirst = (i === 1);
+  const d = document.createElement('div');
+  d.className = 'client-block'; d.id = 'cb' + i;
+  d.innerHTML = `
+    <div class="client-title">
+      <div class="client-title-left">
+        <span>Client ${i}</span>
+        <button type="button" class="role-pill" id="c${i}_role_btn" onclick="setLead(${i})">RIDER</button>
+        <input type="hidden" id="c${i}_role" data-label="Client ${i} Role" value="Rider">
+      </div>
+      ${i > 1 ? `<button class="rem" onclick="removeClient(${i})">Remove</button>` : ''}
+    </div>
+    <div class="row">
+      <div class="field w2"><label class="lbl">First Name</label><input type="text" id="c${i}_fname" data-label="Client ${i} First Name"></div>
+      <div class="field"><label class="lbl">Middle Name</label><input type="text" id="c${i}_mname" data-label="Client ${i} Middle Name"></div>
+      <div class="field w2"><label class="lbl">Last Name</label><input type="text" id="c${i}_lname" data-label="Client ${i} Last Name"></div>
+      <div class="field"><label class="lbl">A-Number</label><input type="text" id="c${i}_anum" data-label="Client ${i} A-Number"></div>
+      <div class="field"><label class="lbl">Client ID</label><input type="text" id="c${i}_cid" data-label="Client ${i} ID"></div>
+    </div>
+    <div class="row" id="c${i}_sij_cid_row" style="display:none;">
+      <div class="field"><label class="lbl">SIJ Client ID</label><input type="text" id="c${i}_cid_sij" data-label="Client ${i} SIJ ID" placeholder="For SIJ case"></div>
+    </div>
+    <div class="row" style="align-items:flex-start;">
+      <div class="field" style="flex:2;min-width:120px;"><label class="lbl">DOB</label><input type="date" id="c${i}_dob" data-label="Client ${i} DOB" onchange="calcAges(${i})"></div>
+      <div class="field" style="flex:1;min-width:70px;"><label class="lbl">Age Today</label><input type="text" id="c${i}_age" data-label="Client ${i} Age" placeholder="—" readonly style="background:#f0ece4;cursor:default;"></div>
+      <div class="field" style="flex:1;min-width:70px;"><label class="lbl">Age at Entry</label><input type="text" id="c${i}_age_entry" data-label="Client ${i} Age at Entry" placeholder="—" readonly style="background:#f0ece4;cursor:default;"></div>
+      <div class="field" style="flex:2;min-width:110px;"><label class="lbl">Country</label><input type="text" id="c${i}_country" data-label="Client ${i} Country"></div>
+    </div>
+    ${!isFirst ? `
+    <div class="same-as-c1" id="c${i}_same_bar">
+      <span>📍 Same address &amp; phone as Client 1</span>
+      <button type="button" class="fmap-pill" onclick="toggleSameAddr(${i})" id="c${i}_same_btn">Use different contact info</button>
+      <input type="hidden" id="c${i}_sameaddr" data-label="Client ${i} Same Address as C1" value="Yes">
+    </div>` : ''}
+    <div class="addr-block${!isFirst ? ' hidden' : ''}" id="c${i}_addr">
+      <div class="row">
+        <div class="field" style="flex:2;min-width:110px;">
+          <label class="lbl" style="margin-bottom:4px;">Phone</label>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <input type="text" id="c${i}_phone" data-label="Client ${i} Phone" placeholder="Primary" style="flex:1;">
+            <button type="button" onclick="togglePhone2(${i})" id="c${i}_phone2btn" style="font-family:Arial,sans-serif;font-size:10px;background:none;border:1px solid #a0865a;color:#a0865a;border-radius:2px;padding:3px 7px;cursor:pointer;white-space:nowrap;flex-shrink:0;" title="Add second phone">+</button>
+          </div>
+          <input type="text" id="c${i}_phone2" data-label="Client ${i} Phone 2" placeholder="Secondary" style="display:none;margin-top:4px;width:100%;">
+        </div>
+        ${isFirst ? `<div class="field" style="flex:2;min-width:140px;"><label class="lbl">Email</label><input type="text" id="c${i}_email" data-label="Client ${i} Email" placeholder="name@example.com"></div>` : ''}
+      </div>
+      <div class="row">
+        <div class="field w2"><label class="lbl">Street</label><input type="text" id="c${i}_st_name" data-label="Client ${i} St Name" placeholder="123 Main St"></div>
+        <div class="field" style="max-width:100px;"><label class="lbl">Apt. No.</label><input type="text" id="c${i}_apt" data-label="Client ${i} Apt" placeholder="Apt 4B"></div>
+      </div>
+      <div class="row">
+        <div class="field w2"><label class="lbl">City</label><input type="text" id="c${i}_city" data-label="Client ${i} City"></div>
+        <div class="field" style="max-width:80px;"><label class="lbl">State</label><input type="text" id="c${i}_state" data-label="Client ${i} State" placeholder="NY"></div>
+        <div class="field" style="max-width:100px;"><label class="lbl">Zip Code</label><input type="text" id="c${i}_zip" data-label="Client ${i} Zip" placeholder="10001"></div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field" id="c${i}_minor_wrap"><label class="lbl">Minor</label>
+        <div class="yn"><label><input type="radio" name="c${i}_minor" value="Yes" data-label="Client ${i} Minor" onchange="toggleSijCid(${i})"> Yes</label><label><input type="radio" name="c${i}_minor" value="No" checked data-label="Client ${i} Minor" onchange="toggleSijCid(${i})"> No</label></div>
+      </div>
+      <div class="field" id="c${i}_sij_wrap"><label class="lbl">SIJ</label>
+        <div class="yn"><label><input type="radio" name="c${i}_sij" value="Yes" data-label="Client ${i} SIJ" onchange="toggleSijCid(${i})"> Yes</label><label><input type="radio" name="c${i}_sij" value="No" checked data-label="Client ${i} SIJ" onchange="toggleSijCid(${i})"> No</label></div>
+      </div>
+      <div class="field"><label class="lbl">Notified of Hearing</label>
+        <div class="yn"><label><input type="radio" name="c${i}_notif" value="Yes" data-label="Client ${i} Notified"> Yes</label><label><input type="radio" name="c${i}_notif" value="No" checked data-label="Client ${i} Notified"> No</label></div>
+      </div>
+      <div class="field"><label class="lbl">Formal Clothes</label>
+        <div class="yn"><label><input type="radio" name="c${i}_cloth" value="Yes" data-label="Client ${i} Clothes"> Yes</label><label><input type="radio" name="c${i}_cloth" value="No" checked data-label="Client ${i} Clothes"> No</label></div>
+      </div>
+      <div class="field" id="c${i}_guard_wrap"><label class="lbl">Guardian Notified</label>
+        <div class="yn"><label><input type="radio" name="c${i}_guard" value="Yes" data-label="Client ${i} Guardian"> Yes</label><label><input type="radio" name="c${i}_guard" value="No" checked data-label="Client ${i} Guardian"> No</label></div>
+      </div>
+    </div>`;
+  document.getElementById('clients').appendChild(d);
+  attachListeners(d);
+
+  // Anibal E-28 + Motion to Sub rows for this client in Filings section
+  const af = document.createElement('div');
+  af.id = 'an-c' + i;
+  af.innerHTML = `
+    <div class="filing-row">
+      <span class="filing-name" style="font-family:Arial,sans-serif;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.07em;color:#6b5a3e;min-width:70px;">Client ${i}</span>
+      <span class="filing-name">Anibal E-28</span>
+      <div class="yn">
+        <label><input type="radio" name="an_e28_c${i}" value="Yes" data-label="Client ${i} Anibal E-28" onchange="toggleAnDate(${i})"> Yes</label>
+        <label><input type="radio" name="an_e28_c${i}" value="No" checked data-label="Client ${i} Anibal E-28" onchange="toggleAnDate(${i})"> No</label>
+      </div>
+      <span class="filing-lbl" id="an_d_lbl_c${i}" style="display:none;">Date</span>
+      <input type="date" id="an_d_c${i}" data-label="Client ${i} Anibal E-28 Date" style="width:140px;flex:none;display:none;" onchange="syncMotionToSub(${i})">
+    </div>
+    <div class="filing-row" id="mts_c${i}">
+      <span style="min-width:70px;"></span>
+      <span class="filing-name">Motion to Sub</span>
+      <label style="font-size:13px;display:flex;align-items:center;gap:5px;cursor:pointer;">
+        <input type="checkbox" id="mts_chk_c${i}" data-label="Client ${i} Motion to Sub" onchange="toggleMts(${i})">
+      </label>
+      <span class="filing-lbl" id="mts_d_lbl_c${i}" style="display:none;">Date</span>
+      <input type="date" id="mts_d_c${i}" data-label="Client ${i} Motion to Sub Date" style="width:140px;flex:none;display:none;">
+      <input type="text" id="mts_note_c${i}" data-label="Client ${i} Motion to Sub Note" placeholder="Note..." style="display:none;flex:1;min-width:120px;">
+    </div>
+  `;
+  document.getElementById('an-clients').appendChild(af);
+  attachListeners(af);
+
+  // NTA attach row (File Organized section) for this client
+  const ntaRow = document.createElement('div');
+  ntaRow.className = 'fo-item';
+  ntaRow.id = 'fo_nta_row_c' + i;
+  ntaRow.innerHTML = `
+    <label style="min-width:110px;"><input type="checkbox" id="fo_nta_c${i}" data-label="Client ${i} File: NTA"> <span id="fo_nta_lbl_c${i}">NTA</span></label>
+    <button class="fo-attach-btn" onclick="document.getElementById('fo_fi_nta_c${i}').click()">📎 Attach</button>
+    <input type="file" id="fo_fi_nta_c${i}" accept=".pdf,.png,.jpg,.jpeg" style="display:none" onchange="attachDoc('nta_c${i}',this,'NTA — Client ${i}')">
+    <span class="fo-fname" id="fo_fn_nta_c${i}"></span>
+    <button class="fo-clear" id="fo_fc_nta_c${i}" style="display:none" onclick="clearDoc('nta_c${i}')">✕</button>
+  `;
+  document.getElementById('fo-nta-per-client').appendChild(ntaRow);
+  attachListeners(ntaRow);
+
+  // NTA Check sub-block for this client
+  const ntc = document.createElement('div');
+  ntc.className = 'ntc-block';
+  ntc.id = 'ntc-c' + i;
+  ntc.innerHTML = `
+    <div class="ntc-title" id="ntc_title_c${i}">Client ${i}</div>
+    <div id="allegs-c${i}"></div>
+    <button class="add" onclick="addAlleg(${i})">+ Add Allegation</button>
+    <div class="row" style="margin-top:14px;">
+      <div class="field full"><label class="lbl">Reject / Notes</label><input type="text" id="alleg_rej_c${i}" data-label="Client ${i} Allegation Reject/Notes"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label class="lbl">Service OK?</label>
+        <div class="yn">
+          <label><input type="radio" name="svc_ok_c${i}" value="Yes" data-label="Client ${i} Service OK" onchange="toggleSvcReason(${i})"> Yes</label>
+          <label><input type="radio" name="svc_ok_c${i}" value="No" checked data-label="Client ${i} Service OK" onchange="toggleSvcReason(${i})"> No</label>
+        </div>
+      </div>
+      <div class="field" id="svc_reason_wrap_c${i}" style="display:none;">
+        <label class="lbl">Reason</label>
+        <input type="text" id="svc_reason_c${i}" data-label="Client ${i} Service Not OK Reason" placeholder="Why service is not OK...">
+      </div>
+      <div class="field"><label class="lbl" style="margin-bottom:6px;">Country of Removal</label>
+        <div class="yn">
+          <label><input type="checkbox" id="dec_country_c${i}" data-label="Client ${i} Decline Country"> Decline to designate</label>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:10px;">
+      <label class="lbl" style="display:block;margin-bottom:8px;">Charges</label>
+      <div id="charges-list-c${i}"></div>
+      <button class="add" onclick="addCharge(${i})" style="margin-top:4px;">+ Add Charge</button>
+    </div>
+  `;
+  document.getElementById('ntc-clients').appendChild(ntc);
+  attachListeners(ntc);
+  // Seed with one charge for this client
+  addCharge(i);
+
+  // Set role: first client = LEAD, others = RIDER
+  if (isFirst) {
+    setLead(1);
+  }
+  updateRoleBadges();
+  updateClientCountUI();
+  updateClientSummary();
+}
+
+// ── LEAD / RIDER ──────────────────────────────────────────────────────────────
+function setLead(i) {
+  document.querySelectorAll('.client-block').forEach(b => {
+    const idx = b.id.replace('cb', '');
+    const roleInput = document.getElementById(`c${idx}_role`);
+    if (roleInput) roleInput.value = (String(idx) === String(i)) ? 'Lead' : 'Rider';
+  });
+  updateRoleBadges();
+  scheduleAutoBackup();
+}
+
+function updateRoleBadges() {
+  document.querySelectorAll('.client-block').forEach(b => {
+    const idx = b.id.replace('cb', '');
+    const role = document.getElementById(`c${idx}_role`)?.value || 'Rider';
+    const btn = document.getElementById(`c${idx}_role_btn`);
+    if (!btn) return;
+    btn.textContent = role.toUpperCase();
+    btn.classList.toggle('lead', role === 'Lead');
+    btn.classList.toggle('rider', role !== 'Lead');
+    btn.title = role === 'Lead' ? 'This is the Lead case' : 'Click to make this client the Lead';
+  });
+}
+
+// Ensure at least one client is Lead
+function ensureLead() {
+  const blocks = document.querySelectorAll('.client-block');
+  if (!blocks.length) return;
+  const hasLead = [...blocks].some(b => {
+    const idx = b.id.replace('cb', '');
+    return document.getElementById(`c${idx}_role`)?.value === 'Lead';
+  });
+  if (!hasLead) {
+    const firstIdx = blocks[0].id.replace('cb', '');
+    setLead(parseInt(firstIdx));
+  }
+}
+
+// ── SAME-AS-CLIENT-1 ADDRESS TOGGLE ───────────────────────────────────────────
+function toggleSameAddr(i) {
+  const hidden = document.getElementById(`c${i}_sameaddr`);
+  const addr = document.getElementById(`c${i}_addr`);
+  const btn = document.getElementById(`c${i}_same_btn`);
+  const bar = document.getElementById(`c${i}_same_bar`);
+  if (!hidden || !addr) return;
+  const isSame = hidden.value === 'Yes';
+  if (isSame) {
+    hidden.value = 'No';
+    addr.classList.remove('hidden');
+    if (btn) btn.textContent = 'Use same as Client 1';
+    if (bar) bar.querySelector('span').innerHTML = '📍 Using custom address &amp; phone';
+  } else {
+    hidden.value = 'Yes';
+    addr.classList.add('hidden');
+    // Clear fields when reverting to shared
+    ['phone','phone2','st_name','apt','city','state','zip'].forEach(f => {
+      const el = document.getElementById(`c${i}_${f}`);
+      if (el) el.value = '';
+    });
+    if (btn) btn.textContent = 'Use different contact info';
+    if (bar) bar.querySelector('span').innerHTML = '📍 Same address &amp; phone as Client 1';
+  }
+  scheduleAutoBackup();
+}
+
+// ── SIJ CLIENT ID (shown when Minor=Yes & SIJ=Yes) ───────────────────────────
+function toggleSijCid(i) {
+  const minor = document.querySelector(`input[name="c${i}_minor"]:checked`)?.value;
+  const sij   = document.querySelector(`input[name="c${i}_sij"]:checked`)?.value;
+  const row   = document.getElementById(`c${i}_sij_cid_row`);
+  if (!row) return;
+  const show = (minor === 'Yes' && sij === 'Yes');
+  row.style.display = show ? '' : 'none';
+  if (!show) {
+    const el = document.getElementById(`c${i}_cid_sij`);
+    if (el) el.value = '';
+  }
+}
+
+// ── CLIENT COUNT UI (headers, labels) ─────────────────────────────────────────
+function updateClientCountUI() {
+  const blocks = document.querySelectorAll('.client-block');
+  const multi = blocks.length > 1;
+  // NTA Check: show per-client title only when multi
+  document.querySelectorAll('.ntc-block').forEach(b => {
+    b.classList.toggle('single-client', !multi);
+  });
+  // NTA attach labels
+  document.querySelectorAll('[id^="fo_nta_lbl_c"]').forEach(lbl => {
+    const idx = lbl.id.replace('fo_nta_lbl_c', '');
+    const fname = document.getElementById(`c${idx}_fname`)?.value.trim() || '';
+    const lname = document.getElementById(`c${idx}_lname`)?.value.trim() || '';
+    const name = [fname, lname].filter(Boolean).join(' ');
+    lbl.textContent = multi ? (name ? `NTA — Client ${idx} (${name})` : `NTA — Client ${idx}`) : 'NTA';
+  });
+}
+
+function removeClient(i) {
+  if (!confirm(`Remove Client ${i}?`)) return;
+  document.getElementById('cb' + i)?.remove();
+  document.getElementById('an-c' + i)?.remove();
+  document.getElementById('fo_nta_row_c' + i)?.remove();
+  document.getElementById('ntc-c' + i)?.remove();
+  // Clean up any attached doc for this client
+  clearDoc('nta_c' + i);
+  recordChange(`Removed Client ${i}`, '', '(removed)');
+  ensureLead();
+  updateRoleBadges();
+  updateClientCountUI();
+  updateClientSummary();
+  scheduleAutoBackup();
+}
+
+// Per-client allegation counters
+const allegCt = {}; // { clientIdx: nextNum }
+
+function addAlleg(clientIdx) {
+  if (!clientIdx) {
+    // Default: first client
+    const first = document.querySelector('.client-block');
+    if (!first) return;
+    clientIdx = parseInt(first.id.replace('cb', ''));
+  }
+  allegCt[clientIdx] = (allegCt[clientIdx] || 0) + 1;
+  const n = allegCt[clientIdx];
+  const d = document.createElement('div');
+  d.className = 'alleg-row'; d.id = `ar_c${clientIdx}_${n}`;
+  d.innerHTML = `<input type="text" id="al_c${clientIdx}_${n}" placeholder="Allegation ${n}" data-label="Client ${clientIdx} Allegation ${n}"><button class="rem" onclick="removeEl('ar_c${clientIdx}_${n}','Removed Client ${clientIdx} Allegation ${n}')">✕</button>`;
+  const container = document.getElementById('allegs-c' + clientIdx);
+  if (container) container.appendChild(d);
+  attachListeners(d);
+  // Keep legacy `ac` counter roughly in sync (for export total)
+  ac++;
+}
+
+function removeEl(id, changeDesc) {
+  document.getElementById(id)?.remove();
+  recordChange(changeDesc, '', '(removed)');
+  scheduleAutoBackup();
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+const g = id => (document.getElementById(id)||{}).value?.trim()||'';
+const r = n => { const e = document.querySelector(`input[name="${n}"]:checked`); return e ? e.value : ''; };
+const fd = d => { if (!d) return ''; const [y,m,day]=d.split('-'); return `${m}/${day}/${y}`; };
+const ft = t => { if (!t) return ''; const [h,m]=t.split(':'); const hr=parseInt(h); return `${hr%12||12}:${m} ${hr>=12?'PM':'AM'}`; };
+
+// ── SNAPSHOT (for diffing) ────────────────────────────────────────────────────
+function takeSnapshot() {
+  const data = {};
+  document.querySelectorAll('input[data-label], select[data-label], textarea[data-label]').forEach(el => {
+    const key = el.dataset.label;
+    if (el.type === 'radio') { if (el.checked) data[key] = el.value; }
+    else if (el.type === 'checkbox') data[key] = el.checked ? 'checked' : '';
+    else data[key] = el.value;
+  });
+  return data;
+}
+
+// ── CHANGE TRACKING ───────────────────────────────────────────────────────────
+function recordChange(field, oldVal, newVal) {
+  if (oldVal === newVal) return;
+  // Deduplicate: if same field already pending, update it
+  const existing = pendingChanges.find(c => c.field === field);
+  if (existing) { existing.newVal = newVal; }
+  else { pendingChanges.push({ field, oldVal, newVal }); }
+}
+
+function attachListeners(root) {
+  // ── LABEL DOUBLE-CLICK TO COPY ───────────────────────────────────────────────
+  root.querySelectorAll('label.lbl').forEach(lbl => {
+    const field = lbl.closest('.field');
+    if (!field) return;
+    const target = field.querySelector('input[data-label], select[data-label], textarea[data-label]');
+    if (!target || target.type === 'radio' || target.type === 'checkbox') return;
+    lbl.classList.add('lbl-copyable');
+    lbl.addEventListener('click', (e) => {
+      e.preventDefault();
+      const val = target.tagName === 'SELECT'
+        ? (target.options[target.selectedIndex]?.text || '').replace(/^—$/, '')
+        : target.value.trim();
+      if (!val) return;
+      navigator.clipboard.writeText(val).then(() => {
+        lbl.classList.add('lbl-copy-flash');
+        setTimeout(() => lbl.classList.remove('lbl-copy-flash'), 700);
+      });
+    });
+  });
+
+  root.querySelectorAll('input, select, textarea').forEach(el => {
+    if (!el.dataset.label) return;
+
+    // ── CLICK TO COPY / DBLCLICK TO EDIT ──────────────────────────────────────
+    if (el.type !== 'radio' && el.type !== 'checkbox') {
+      el.addEventListener('click', (e) => {
+        const val = el.tagName === 'SELECT'
+          ? el.options[el.selectedIndex]?.text || ''
+          : el.value.trim();
+        if (!val || val === '—') return;
+        // Single click on a filled field = copy, but only if not already focused
+        if (document.activeElement !== el) {
+          e.preventDefault();
+          navigator.clipboard.writeText(val).then(() => {
+            el.classList.add('copy-flash');
+            setTimeout(() => el.classList.remove('copy-flash'), 600);
+          });
+          el.classList.add('copy-ready');
+        }
+      });
+
+      el.addEventListener('dblclick', () => {
+        el.classList.remove('copy-ready');
+        el.focus();
+        if (el.type !== 'date' && el.type !== 'time' && el.tagName !== 'SELECT') {
+          el.select();
+        }
+      });
+
+      el.addEventListener('blur', () => {
+        el.classList.remove('copy-ready');
+      });
+
+      // Update cursor when value changes
+      el.addEventListener('input', () => {
+        el.classList.remove('copy-ready');
+      });
+    }
+
+    el.addEventListener('change', () => {
+      const label = el.dataset.label;
+      let oldVal = '', newVal = '';
+      if (el.type === 'radio') {
+        if (!el.checked) return;
+        const prev = lastSnap ? lastSnap[label] : '';
+        oldVal = prev || '';
+        newVal = el.value;
+      } else if (el.type === 'checkbox') {
+        oldVal = el.checked ? '' : 'checked';
+        newVal = el.checked ? 'checked' : '';
+      } else {
+        oldVal = lastSnap ? (lastSnap[label] || '') : '';
+        newVal = el.value;
+      }
+      recordChange(label, oldVal, newVal);
+      scheduleAutoBackup();
+      updateClientSummary();
+    });
+  });
+}
+
+// ── AUTO-BACKUP ───────────────────────────────────────────────────────────────
+function scheduleAutoBackup() {
+  if (autoTimer) clearTimeout(autoTimer);
+  autoTimer = setTimeout(() => {
+    saveBackup('auto');
+  }, 1500); // 1.5s debounce
+}
+
+function manualBackup() {
+  saveBackup('manual');
+}
+
+function saveBackup(type) {
+  const snap = takeSnapshot();
+  const changes = pendingChanges.length > 0 ? [...pendingChanges] : [];
+  pendingChanges = [];
+  lastSnap = snap;
+
+  const backups = loadBackups();
+  const entry = {
+    id: Date.now(),
+    ts: new Date().toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true }),
+    type,
+    changes,
+    snap
+  };
+  backups.unshift(entry);
+  // Keep max 50 backups
+  if (backups.length > 50) backups.splice(50);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(backups));
+
+  // Update indicator
+  const ind = document.getElementById('bkp-indicator');
+  ind.textContent = (type === 'manual' ? '✓ Saved ' : '✓ Auto-saved ') + entry.ts;
+  ind.classList.add('saved');
+  setTimeout(() => ind.classList.remove('saved'), 3000);
+
+  // Update history tab badge
+  updateHistBadge(backups.length);
+}
+
+// ── STORAGE ───────────────────────────────────────────────────────────────────
+function loadBackups() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch { return []; }
+}
+
+function updateHistBadge(count) {
+  const tab = document.getElementById('hist-tab');
+  tab.textContent = `History${count ? ' ('+count+')' : ''}`;
+}
+
+// ── HISTORY RENDER ────────────────────────────────────────────────────────────
+function renderHistory() {
+  const backups = loadBackups();
+  const list = document.getElementById('hist-list');
+  const count = document.getElementById('hist-count');
+  count.textContent = backups.length ? `${backups.length} backup${backups.length > 1 ? 's' : ''} stored` : '';
+  updateHistBadge(backups.length);
+
+  if (!backups.length) {
+    list.innerHTML = '<div class="hist-empty">No backups yet. Any change will trigger an automatic backup.</div>';
+    return;
+  }
+
+  list.innerHTML = backups.map((b, idx) => {
+    const changeRows = b.changes && b.changes.length
+      ? b.changes.map(c => `
+          <div class="change-item">
+            <span class="change-field">${c.field}</span>
+            <span class="change-arrow">→</span>
+            <span class="change-val">${c.newVal || '(cleared)'}</span>
+          </div>`).join('')
+      : '<div class="no-changes">Initial save or structural change</div>';
+
+    return `
+      <div class="hist-entry" id="he-${b.id}">
+        <div class="hist-entry-header">
+          <div>
+            <div class="hist-ts">${b.ts}</div>
+          </div>
+          <div class="hist-actions">
+            <span class="hist-badge">${b.type === 'manual' ? 'Manual' : 'Auto'} · ${b.changes ? b.changes.length : 0} change${b.changes && b.changes.length !== 1 ? 's' : ''}</span>
+            <button class="hist-restore" onclick="restoreBackup(${b.id})">Restore</button>
+            <button class="hist-del" onclick="deleteBackup(${b.id})">✕</button>
+          </div>
+        </div>
+        <div class="hist-changes">${changeRows}</div>
+      </div>`;
+  }).join('');
+}
+
+function restoreBackup(id) {
+  if (!confirm('Restore this backup? Current form data will be replaced.')) return;
+  const backups = loadBackups();
+  const b = backups.find(x => x.id === id);
+  if (!b || !b.snap) return;
+
+  // Restore snapshot values
+  Object.entries(b.snap).forEach(([label, val]) => {
+    const els = document.querySelectorAll(`[data-label="${label}"]`);
+    els.forEach(el => {
+      if (el.type === 'radio') { el.checked = (el.value === val); }
+      else if (el.type === 'checkbox') { el.checked = (val === 'checked'); }
+      else { el.value = val; }
+    });
+  });
+
+  lastSnap = takeSnapshot();
+  pendingChanges = [];
+
+  const ind = document.getElementById('bkp-indicator');
+  ind.textContent = '✓ Restored ' + b.ts;
+  ind.classList.add('saved');
+  setTimeout(() => ind.classList.remove('saved'), 3000);
+
+  // Switch to form tab
+  switchTabByName('form');
+}
+
+function switchTabByName(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  document.querySelector(`.tab:first-child`).classList.add('active');
+}
+
+function deleteBackup(id) {
+  let backups = loadBackups().filter(x => x.id !== id);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(backups));
+  renderHistory();
+}
+
+function clearHistory() {
+  if (!confirm('Delete all backups?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  renderHistory();
+}
+
+// ── PDF GENERATION ────────────────────────────────────────────────────────────
+async function generatePDF() {
+  try {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('PDF library (jsPDF) did not load. Check your internet connection and reload the page.');
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+  const W = 612, H = 792, ML = 45, MR = 45, PW = W - ML - MR;
+  let y = 50;
+
+  // ── APP COLOR PALETTE ─────────────────────────────────────────────────────
+  const BG   = [247, 244, 239]; // #f7f4ef — page background
+  const CARD = [255, 253, 249]; // #fffdf9 — off-white card
+  const DARK = [ 44,  39,  32]; // #2c2720 — body text
+  const BRN  = [107,  90,  62]; // #6b5a3e — section accent
+  const ACC  = [160, 134,  90]; // #a0865a — highlight
+  const MUT  = [154, 136, 114]; // #9a8872 — muted
+  const LINE = [212, 201, 184]; // #d4c9b8 — border
+  const SOFT = [232, 224, 212]; // #e8e0d4 — soft divider
+
+  // ── PAGE SETUP ────────────────────────────────────────────────────────────
+  function fillPage() {
+    doc.setFillColor(...BG);
+    doc.rect(0, 0, W, H, 'F');
+  }
+  function np(need) {
+    if (y + (need || 20) > 740) {
+      doc.addPage();
+      fillPage();
+      y = 50;
+    }
+  }
+  fillPage();
+
+  // ── HELPERS (app-styled) ─────────────────────────────────────────────────
+  // Labels use helvetica (Arial-like) with tracking; values use times (Georgia-like serif)
+  function sec(title) {
+    np(34);
+    y += 10;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...BRN);
+    doc.text(title.toUpperCase(), ML, y, { charSpace: 0.8 });
+    y += 5;
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.5);
+    doc.line(ML, y, ML + PW, y);
+    y += 14;
+    doc.setTextColor(...DARK);
+  }
+
+  function lv(label, val, x, maxW) {
+    doc.setFont('helvetica','bold'); doc.setFontSize(6.8); doc.setTextColor(...MUT);
+    doc.text(label.toUpperCase(), x, y, { charSpace: 0.4 });
+    doc.setFont('times','normal'); doc.setFontSize(10); doc.setTextColor(...DARK);
+    doc.text(doc.splitTextToSize(val || '—', maxW || 120)[0], x, y + 12);
+  }
+
+  function row(pairs) {
+    np(30); const cw = PW / pairs.length;
+    pairs.forEach(([l, v], i) => lv(l, v, ML + cw * i, cw - 8));
+    y += 30;
+  }
+
+  function tb(label, text) {
+    np(40);
+    if (label) {
+      doc.setFont('helvetica','bold'); doc.setFontSize(6.8); doc.setTextColor(...MUT);
+      doc.text(label.toUpperCase(), ML, y, { charSpace: 0.4 });
+      y += 12;
+    }
+    doc.setFont('times','normal'); doc.setFontSize(10); doc.setTextColor(...DARK);
+    doc.splitTextToSize(text || '—', PW).forEach(ln => {
+      np(14); doc.text(ln, ML, y); y += 13;
+    });
+    y += 4;
+  }
+
+  function chks(label, items) {
+    np(32);
+    doc.setFont('helvetica','bold'); doc.setFontSize(6.8); doc.setTextColor(...MUT);
+    doc.text(label.toUpperCase(), ML, y, { charSpace: 0.4 });
+    y += 13;
+    let xo = ML;
+    items.forEach(([l, chk]) => {
+      np(15);
+      // Checkbox: rounded-ish via two rect strokes
+      doc.setDrawColor(...LINE); doc.setLineWidth(0.7);
+      doc.setFillColor(...CARD);
+      doc.rect(xo, y - 8, 9, 9, 'FD');
+      if (chk) {
+        doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...BRN);
+        doc.text('✓', xo + 1.3, y - 0.5);
+      }
+      doc.setFont('times','normal'); doc.setFontSize(10); doc.setTextColor(...DARK);
+      doc.text(l, xo + 14, y);
+      xo += doc.getTextWidth(l) + 26;
+      if (xo > W - 100) { xo = ML; y += 15; }
+    });
+    y += 18;
+  }
+
+  // ── TITLE BLOCK (matches app page-title + page-sub) ──────────────────────
+  doc.setFont('times','bold'); doc.setFontSize(20); doc.setTextColor(...DARK);
+  doc.text('Master Hearing Prep', ML, y + 4);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...MUT);
+  doc.text('The Romero Law Firm', ML, y + 20, { charSpace: 0.3 });
+
+  // Right side: client summary lines (mirrors #client-summary in app)
+  const summaryLines = [];
+  document.querySelectorAll('.client-block').forEach((b) => {
+    const idx = b.id.replace('cb', '');
+    const cid   = g(`c${idx}_cid`);
+    const fname = g(`c${idx}_fname`);
+    const lname = g(`c${idx}_lname`);
+    const anum  = g(`c${idx}_anum`);
+    const last3 = anum ? anum.replace(/\D/g,'').slice(-3) : '';
+    const name  = [fname, lname].filter(Boolean).join(' ');
+    const parts = [cid, name, last3 ? `···${last3}` : ''].filter(Boolean);
+    if (parts.length) summaryLines.push(parts.join(' · '));
+  });
+  summaryLines.slice(0, 4).forEach((line, i) => {
+    if (i === 0) {
+      doc.setFont('times','bold'); doc.setFontSize(10); doc.setTextColor(...DARK);
+    } else {
+      doc.setFont('times','normal'); doc.setFontSize(9); doc.setTextColor(...DARK);
+    }
+    doc.text(line, W - MR, y + 4 + i * 12, { align: 'right' });
+  });
+
+  y += 36;
+  // Subtle divider under the title
+  doc.setDrawColor(...LINE); doc.setLineWidth(0.5);
+  doc.line(ML, y, ML + PW, y);
+  y += 4;
+
+
+  sec('Hearing');
+  const hfmt = g('format');
+  if (hfmt === 'In-person') {
+    row([['Court',g('court')],['Judge',g('judge')],['Date',fd(g('h_date'))],['Time',ft(g('h_time'))],['Format',hfmt],['FL',g('h_fl')],['RM',g('h_rm')]]);
+  } else {
+    row([['Court',g('court')],['Judge',g('judge')],['Date',fd(g('h_date'))],['Time',ft(g('h_time'))],['Format',hfmt]]);
+  }
+
+  // Resolve Client 1 address once (shared default)
+  const c1 = { idx: '1' };
+  const firstCB = document.querySelector('.client-block');
+  if (firstCB) c1.idx = firstCB.id.replace('cb', '');
+  const c1Addr = {
+    phone: g(`c${c1.idx}_phone`),
+    phone2: g(`c${c1.idx}_phone2`),
+    st: g(`c${c1.idx}_st_name`),
+    apt: g(`c${c1.idx}_apt`),
+    city: g(`c${c1.idx}_city`),
+    state: g(`c${c1.idx}_state`),
+    zip: g(`c${c1.idx}_zip`),
+    email: g(`c${c1.idx}_email`)
+  };
+
+  document.querySelectorAll('.client-block').forEach((el,i)=>{
+    const idx=el.id.replace('cb','');
+    const role = g(`c${idx}_role`) || 'Rider';
+    const isFirst = (i === 0);
+    const roleLabel = role === 'Lead' ? ' [LEAD]' : ' [RIDER]';
+    const hdrName = g(`c${idx}_fname`) ? ' — '+g(`c${idx}_fname`)+' '+(g(`c${idx}_mname`)?g(`c${idx}_mname`)+' ':'')+g(`c${idx}_lname`) : '';
+    sec(`Client ${i+1}${roleLabel}${hdrName}`);
+    row([['First Name',g(`c${idx}_fname`)],['Middle Name',g(`c${idx}_mname`)],['Last Name',g(`c${idx}_lname`)],['A-Number',g(`c${idx}_anum`)],['Client ID',g(`c${idx}_cid`)]]);
+    // SIJ Client ID row if present
+    const sijCid = g(`c${idx}_cid_sij`);
+    const minorYes = r(`c${idx}_minor`) === 'Yes';
+    const sijYes = r(`c${idx}_sij`) === 'Yes';
+    if (minorYes && sijYes && sijCid) {
+      row([['SIJ Client ID', sijCid]]);
+    }
+    // Determine which address to use
+    const sameAsC1 = !isFirst && g(`c${idx}_sameaddr`) === 'Yes';
+    const useAddr = sameAsC1 ? c1Addr : {
+      phone: g(`c${idx}_phone`),
+      phone2: g(`c${idx}_phone2`),
+      st: g(`c${idx}_st_name`),
+      apt: g(`c${idx}_apt`),
+      city: g(`c${idx}_city`),
+      state: g(`c${idx}_state`),
+      zip: g(`c${idx}_zip`),
+      email: ''
+    };
+    const phoneLabel = useAddr.phone2 ? `${useAddr.phone} / ${useAddr.phone2}` : useAddr.phone;
+    row([['DOB',fd(g(`c${idx}_dob`))],['Age Today',g(`c${idx}_age`)],['Age at Entry',g(`c${idx}_age_entry`)],['Country',g(`c${idx}_country`)],['Phone',phoneLabel]]);
+    const addrLine1 = [useAddr.st, useAddr.apt].filter(Boolean).join(' ');
+    const addrLine2 = [useAddr.city, useAddr.state, useAddr.zip].filter(Boolean).join(', ');
+    const fullAddr = [addrLine1, addrLine2].filter(Boolean).join(' — ') + (sameAsC1 && (addrLine1 || addrLine2) ? '  (same as C1)' : '');
+    const emailCell = isFirst ? c1Addr.email : (sameAsC1 ? c1Addr.email + (c1Addr.email ? '  (same as C1)' : '') : '');
+    row([['Address', fullAddr], ['Email', emailCell]]);
+    row([['Minor',r(`c${idx}_minor`)],['SIJ',r(`c${idx}_sij`)],['Notified',r(`c${idx}_notif`)],['Clothes',r(`c${idx}_cloth`)],['Guardian',r(`c${idx}_guard`)]]);
+  });
+
+  sec('Procedural History');
+  row([['File Type',r('ftype')],['Detained',r('detained')],['1-Yr Issue',r('yr_issue')],['Entry Date',fd(g('d_entry'))],['1st I-589',fd(g('d_589'))],['Retained On',fd(g('retained'))]]);
+  row([['Primary Attorney',g('p_att')],['Paralegal',g('paralegal')],['Justification (1-yr)',g('justif')]]);
+
+  sec('Filings & Service');
+  [['Biometrics',r('bio'),fd(g('bio_d')),''],['E-33',r('e33'),fd(g('e33_d')),''],
+   ['Anibal E-28',r('an_e28'),fd(g('an_d')),'Each: '+r('an_each')],
+   ['WG E-28',r('wg_e28'),fd(g('wg_d')),'Each: '+r('wg_each')],
+   ['DHS E-28 Served',r('dhs_e28'),'','']
+  ].forEach(([name,yn,date,note])=>{
+    np(16);
+    // Alternating row band for readability
+    doc.setFillColor(...CARD);
+    doc.rect(ML, y - 10, PW, 14, 'F');
+    doc.setFont('times','normal'); doc.setFontSize(10); doc.setTextColor(...DARK);
+    doc.text(name, ML + 4, y);
+    if (yn === 'Yes') { doc.setTextColor(...BRN); doc.setFont('times','bold'); }
+    else { doc.setTextColor(...MUT); }
+    doc.text(yn || '—', ML + 135, y);
+    doc.setFont('times','normal'); doc.setTextColor(...DARK);
+    doc.text(date || '', ML + 200, y);
+    doc.text(note || '', ML + 320, y);
+    y += 15;
+  });
+  y += 6;
+
+  sec('Relief Sought');
+  chks('Asylum — Ground',[['PSG',document.getElementById('asy_psg').checked],['Race',document.getElementById('asy_race').checked],['Nationality',document.getElementById('asy_nat').checked],['Religion',document.getElementById('asy_rel').checked],['Political Opinion',document.getElementById('asy_pol').checked]]);
+  chks('Other Relief',[['INA Withholding',document.getElementById('r_ina').checked],['CAT Withholding',document.getElementById('r_cat').checked],['Cancellation of Removal',document.getElementById('r_canc').checked],['SIJ',document.getElementById('r_sij').checked],['TVPRA',document.getElementById('r_tvpra').checked]]);
+  row([['TVPRA Detail', g('note_r_tvpra')], ['Other Relief Detail', g('note_r_other')]]);
+  chks('File Organized — Include',[['I-589',document.getElementById('fo_589').checked],['Submission',document.getElementById('fo_sub').checked],['NOH',document.getElementById('fo_noh').checked],['E-28',document.getElementById('fo_e28').checked]]);
+
+  // Per-client NTA
+  const ntaChecks = [...document.querySelectorAll('[id^="fo_nta_c"]')].filter(el => el.type === 'checkbox');
+  if (ntaChecks.length) {
+    chks('NTA (per client)', ntaChecks.map(el => {
+      const idx = el.id.replace('fo_nta_c', '');
+      const fname = g(`c${idx}_fname`) || '';
+      const lname = g(`c${idx}_lname`) || '';
+      const name = [fname, lname].filter(Boolean).join(' ');
+      return [`Client ${idx}${name ? ' — ' + name : ''}`, el.checked];
+    }));
+  }
+
+  sec('NTA Check');
+  const clientBlocks = [...document.querySelectorAll('.client-block')];
+  const multiClient = clientBlocks.length > 1;
+  clientBlocks.forEach((cb, i) => {
+    const idx = cb.id.replace('cb', '');
+    const fname = g(`c${idx}_fname`);
+    const lname = g(`c${idx}_lname`);
+    if (multiClient) {
+      np(22);
+      // Soft card band
+      doc.setFillColor(...CARD);
+      doc.rect(ML, y - 10, PW, 18, 'F');
+      doc.setDrawColor(...SOFT); doc.setLineWidth(0.4);
+      doc.line(ML, y + 8, ML + PW, y + 8);
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...BRN);
+      const cname = [fname, lname].filter(Boolean).join(' ');
+      doc.text(`CLIENT ${i+1}${cname ? ' · ' + cname.toUpperCase() : ''}`, ML + 4, y, { charSpace: 0.5 });
+      y += 18;
+      doc.setTextColor(...DARK);
+    }
+    // Allegations for this client
+    const clientAllegs = [...document.querySelectorAll(`#allegs-c${idx} input[type="text"]`)]
+      .map(e => e.value.trim()).filter(Boolean);
+    if (!clientAllegs.length) {
+      np(14); doc.setFont('times','italic'); doc.setFontSize(10); doc.setTextColor(...MUT);
+      doc.text('No allegations recorded', ML, y); y += 16;
+    } else {
+      clientAllegs.forEach((a, j) => {
+        np(14);
+        doc.setFont('helvetica','bold'); doc.setFontSize(6.8); doc.setTextColor(...MUT);
+        doc.text(`ALLEG. ${j+1}`, ML, y, { charSpace: 0.3 });
+        doc.setFont('times','normal'); doc.setFontSize(10); doc.setTextColor(...DARK);
+        doc.text(a, ML + 55, y); y += 14;
+      });
+    }
+    y += 4;
+    const svcReason = g(`svc_reason_c${idx}`);
+    const svcOk = r(`svc_ok_c${idx}`);
+    const svcDisplay = svcOk === 'No' && svcReason ? `No — ${svcReason}` : svcOk;
+    row([
+      ['Reject / Notes', g(`alleg_rej_c${idx}`)],
+      ['Service OK?', svcDisplay],
+      ['Decline Country of Removal', document.getElementById(`dec_country_c${idx}`)?.checked ? 'Yes' : 'No']
+    ]);
+    // Charges for this client
+    np(16);
+    doc.setFont('helvetica','bold'); doc.setFontSize(6.8); doc.setTextColor(...MUT);
+    doc.text('CHARGES', ML, y, { charSpace: 0.4 });
+    y += 12;
+    const chargeRows = [...document.querySelectorAll(`#charges-list-c${idx} .charge-row`)];
+    if (!chargeRows.length) {
+      doc.setFont('times','italic'); doc.setFontSize(10); doc.setTextColor(...MUT);
+      doc.text('—', ML, y); y += 16;
+    } else {
+      chargeRows.forEach(cr => {
+        const nMatch = cr.id.match(/chrow_c\d+_(\d+)/);
+        const n = nMatch ? nMatch[1] : '';
+        const txt = g(`ch_txt_c${idx}_${n}`);
+        const con = r(`ch_con_c${idx}_${n}`);
+        const why = g(`ch_why_c${idx}_${n}`);
+        if (!txt && !con) return;
+        np(14);
+        doc.setFont('times','normal'); doc.setFontSize(10); doc.setTextColor(...DARK);
+        doc.text(txt || '—', ML, y);
+        if (con === 'Yes') { doc.setFont('times','bold'); doc.setTextColor(...BRN); }
+        else { doc.setTextColor(...MUT); }
+        doc.text(con ? `Concede: ${con}` : '', ML + 240, y);
+        doc.setFont('times','normal'); doc.setTextColor(...DARK);
+        if (con === 'No' && why) { doc.text(why, ML + 340, y); }
+        y += 14;
+      });
+    }
+    y += 6;
+  });
+
+  sec('Other Issues & Judge Comments'); tb('',g('other_issues'));
+  sec('Next Steps / Deadlines'); tb('',g('next_steps'));
+  sec('Next Hearing');
+  const nfmt = g('n_format');
+  if (nfmt === 'In-person') {
+    row([['Date',fd(g('n_date'))],['Time',ft(g('n_time'))],['Format',nfmt],['FL',g('n_fl')],['RM',g('n_rm')],['Sent to Cal?',r('sent_cal')],['Sent On',fd(g('sent_on'))]]);
+  } else {
+    row([['Date',fd(g('n_date'))],['Time',ft(g('n_time'))],['Format',nfmt],['Sent to Cal?',r('sent_cal')],['Sent On',fd(g('sent_on'))]]);
+  }
+
+  const tp = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= tp; p++) {
+    doc.setPage(p);
+    // Thin divider above footer
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.4);
+    doc.line(ML, 762, ML + PW, 762);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(...MUT);
+    doc.text('THE ROMERO LAW FIRM  ·  CONFIDENTIAL', ML, 778, { charSpace: 0.6 });
+    doc.text(`Page ${p} of ${tp}`, W / 2, 778, { align: 'center' });
+    doc.text(new Date().toLocaleDateString('en-US'), W - MR, 778, { align: 'right' });
+  }
+
+  const fname = document.querySelector('[id$="_fname"]')?.value?.trim() || '';
+  const lname = document.querySelector('[id$="_lname"]')?.value?.trim() || '';
+  const cid   = document.querySelector('[id$="_cid"]')?.value?.trim() || '';
+  const hdate = g('h_date') || new Date().toISOString().slice(0,10);
+  const htime = g('h_time') ? g('h_time').replace(':','-') : '';
+  const namePart = [cid, fname, lname].filter(Boolean).join('_').replace(/\s+/g,'_') || 'client';
+  const timePart = htime ? `_${htime}` : '';
+  const filename = `MH_${namePart}_${hdate}${timePart}.pdf`;
+
+  const ntaKeys = [...document.querySelectorAll('.client-block')]
+    .map(b => 'nta_c' + b.id.replace('cb', ''))
+    .filter(k => docStore[k]);
+  const attachedKeys = [
+    ...ntaKeys,
+    ...DOC_ORDER.filter(k => docStore[k]),
+    ...Object.keys(docStore).filter(k => k.startsWith('custom_'))
+  ];
+
+  if (!attachedKeys.length) {
+    doc.save(filename);
+    return;
+  }
+
+  // Merge with pdf-lib
+  try {
+    const { PDFDocument } = PDFLib;
+    const mainBytes = doc.output('arraybuffer');
+    const merged = await PDFDocument.load(mainBytes);
+
+    for (const key of attachedKeys) {
+      const att = docStore[key];
+      if (!att) continue;
+      if (att.type === 'application/pdf') {
+        const attPdf = await PDFDocument.load(att.buffer);
+        const pages  = await merged.copyPages(attPdf, attPdf.getPageIndices());
+        pages.forEach(p => merged.addPage(p));
+      } else {
+        const pg = merged.addPage([612, 792]);
+        let img;
+        if (att.type === 'image/png') {
+          img = await merged.embedPng(att.buffer);
+        } else {
+          img = await merged.embedJpg(att.buffer);
+        }
+        const scale = Math.min(612 / img.width, 792 / img.height, 1);
+        const w = img.width * scale, h = img.height * scale;
+        pg.drawImage(img, { x: (612-w)/2, y: (792-h)/2, width: w, height: h });
+      }
+    }
+
+    const finalBytes = await merged.save();
+    const blob = new Blob([finalBytes], { type: 'application/pdf' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch(err) {
+    console.error('PDF merge error:', err);
+    doc.save(filename); // fallback
+  }
+  } catch(outerErr) {
+    console.error('PDF generation error:', outerErr);
+    alert('PDF generation failed: ' + outerErr.message + '\n\nCheck the browser console for details.');
+  }
+}
+
+// ── EXCEL EXPORT ──────────────────────────────────────────────────────────────
+function exportExcel() {
+  const snap = takeSnapshot();
+
+  // Build structured rows
+  const sections = [
+    ['MASTER HEARING PREP — The Romero Law Firm', ''],
+    ['', ''],
+    ['SECTION', 'FIELD', 'VALUE'],
+  ];
+
+  const fieldSections = {
+    'Hearing': ['Court','Judge','Hearing Date','Hearing Time','Format'],
+    'Procedural History': ['File Type','Detained','1-Year Issue','Date of Entry','Date 1st I-589','Retained On','Justification','Primary Attorney','Paralegal'],
+    'Filings & Service': ['Biometrics','Biometrics Date','E-33','E-33 Date','WG E-28','WG E-28 Date','DHS E-28'],
+    'Relief Sought': ['Asylum: PSG','Asylum: Race','Asylum: Nationality','Asylum: Religion','Asylum: Political Opinion','INA Withholding','CAT Withholding','Cancellation of Removal','SIJ','TVPRA','TVPRA Detail','Other Relief','File: I-589','File: Submission','File: NOH','File: E-28','File: ECAS eService','File: DHS eService'],
+    'Other': ['Other Issues / Judge Comments','Next Steps / Deadlines'],
+    'Next Hearing': ['Next Hearing Date','Next Hearing Time','Next Hearing Format','Sent to Calendar','Sent to Calendar On'],
+  };
+
+  // Normalize snap keys for lookup
+  const snapLower = {};
+  Object.entries(snap).forEach(([k, v]) => { snapLower[k.toLowerCase()] = { key: k, val: v }; });
+
+  function findVal(field) {
+    const direct = snap[field];
+    if (direct !== undefined) return direct;
+    // Try case-insensitive partial match
+    const fl = field.toLowerCase();
+    for (const [k, entry] of Object.entries(snapLower)) {
+      if (k === fl || k.includes(fl) || fl.includes(k)) return entry.val;
+    }
+    return '';
+  }
+
+  const rows = [['MASTER HEARING PREP — The Romero Law Firm', '', '']];
+  rows.push(['Generated', new Date().toLocaleString('en-US'), '']);
+  rows.push(['', '', '']);
+  rows.push(['SECTION', 'FIELD', 'VALUE']);
+
+  Object.entries(fieldSections).forEach(([sec, fields]) => {
+    rows.push(['', '', '']);
+    rows.push([sec.toUpperCase(), '', '']);
+    fields.forEach(f => {
+      rows.push(['', f, findVal(f)]);
+    });
+  });
+
+  // Clients — dynamic
+  rows.push(['', '', '']);
+  rows.push(['CLIENTS', '', '']);
+  document.querySelectorAll('.client-block').forEach((el, idx) => {
+    const i = el.id.replace('cb', '');
+    rows.push(['', `--- Client ${idx + 1} ---`, '']);
+    const clientFields = ['Role','First Name','Middle Name','Last Name','A-Number','ID','SIJ ID','DOB','Age','Age at Entry','Country','Same Address as C1','Phone','Phone 2','Email','St Name','Apt','City','State','Zip','Minor','SIJ','Notified','Clothes','Guardian','File: NTA'];
+    clientFields.forEach(cf => {
+      const key = `Client ${i} ${cf}`;
+      const val = snap[key] || '';
+      rows.push(['', `Client ${idx+1} ${cf}`, val]);
+    });
+  });
+
+  // NTA Check — per client
+  rows.push(['', '', '']);
+  rows.push(['NTA CHECK', '', '']);
+  document.querySelectorAll('.client-block').forEach((el, idx) => {
+    const i = el.id.replace('cb', '');
+    rows.push(['', `--- Client ${idx + 1} NTA Check ---`, '']);
+    const ntcFields = ['Allegation Reject/Notes','Service OK','Service Not OK Reason','Decline Country'];
+    ntcFields.forEach(cf => {
+      const key = `Client ${i} ${cf}`;
+      rows.push(['', `Client ${idx+1} ${cf}`, snap[key] || '']);
+    });
+    // Allegations for this client
+    Object.keys(snap).filter(k => k.startsWith(`Client ${i} Allegation `) && !k.includes('Reject')).sort().forEach(k => {
+      if (snap[k]) rows.push(['', k, snap[k]]);
+    });
+    // Charges for this client
+    Object.keys(snap).filter(k => k.startsWith(`Client ${i} Charge `)).sort().forEach(k => {
+      if (snap[k]) rows.push(['', k, snap[k]]);
+    });
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+
+  // Styling via column widths
+  ws['!cols'] = [{ wch: 22 }, { wch: 30 }, { wch: 60 }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Hearing Prep');
+
+  // Second sheet: raw key-value for reimport
+  const kvRows = [['KEY', 'VALUE']];
+  Object.entries(snap).forEach(([k, v]) => kvRows.push([k, v]));
+  // Also store client count and allegation count for restore
+  kvRows.push(['__cc__', cc]);
+  kvRows.push(['__ac__', ac]);
+  const wsKV = XLSX.utils.aoa_to_sheet(kvRows);
+  wsKV['!cols'] = [{ wch: 40 }, { wch: 80 }];
+  XLSX.utils.book_append_sheet(wb, wsKV, '_Data');
+
+  const efname = document.querySelector('[id$="_fname"]')?.value?.trim() || '';
+  const elname = document.querySelector('[id$="_lname"]')?.value?.trim() || '';
+  const ecid   = document.querySelector('[id$="_cid"]')?.value?.trim() || '';
+  const hdate  = document.getElementById('h_date')?.value || new Date().toISOString().slice(0,10);
+  const htime  = (document.getElementById('h_time')?.value || '').replace(':','-');
+  const enamePart = [ecid, efname, elname].filter(Boolean).join('_').replace(/\s+/g,'_') || 'client';
+  const etimePart = htime ? `_${htime}` : '';
+  XLSX.writeFile(wb, `MH_${enamePart}_${hdate}${etimePart}.xlsx`);
+
+  const ind = document.getElementById('bkp-indicator');
+  ind.textContent = '✓ Excel exported';
+  ind.classList.add('saved');
+  setTimeout(() => ind.classList.remove('saved'), 3000);
+}
+
+// ── EXCEL IMPORT ──────────────────────────────────────────────────────────────
+function importExcel(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+
+      // Try _Data sheet first (clean key-value restore)
+      const kvSheet = wb.Sheets['_Data'];
+      if (!kvSheet) { alert('Not a valid Master Hearing Prep Excel file.'); return; }
+
+      const kvRows = XLSX.utils.sheet_to_json(kvSheet, { header: 1 });
+      if (kvRows.length < 2) { alert('No data found in Excel file.'); return; }
+
+      // Rebuild clients/allegations based on stored counts before restoring
+      const dataMap = {};
+      let storedCC = 0, storedAC = 0;
+      kvRows.slice(1).forEach(row => {
+        if (!row[0]) return;
+        const k = String(row[0]);
+        const v = row[1] !== undefined ? String(row[1]) : '';
+        if (k === '__cc__') storedCC = parseInt(v) || 0;
+        else if (k === '__ac__') storedAC = parseInt(v) || 0;
+        else dataMap[k] = v;
+      });
+
+      if (!confirm('Import will replace current form data. Continue?')) return;
+
+      // Reset structure first
+      document.querySelectorAll('input[type="text"],input[type="date"],input[type="time"],textarea,select').forEach(e=>e.value='');
+      document.querySelectorAll('input[type="checkbox"]').forEach(e=>e.checked=false);
+      document.querySelectorAll('input[type="radio"]').forEach(e=>{ e.checked=(e.value==='No'); });
+      try { document.querySelector('input[name="ftype"][value="ECAS"]').checked=true; } catch(e){}
+      document.getElementById('clients').innerHTML='';
+      document.getElementById('an-clients').innerHTML='';
+      document.getElementById('fo-nta-per-client').innerHTML='';
+      document.getElementById('ntc-clients').innerHTML='';
+      cc=0; ac=0;
+      Object.keys(allegCt).forEach(k => delete allegCt[k]);
+      Object.keys(chargeCtPer).forEach(k => delete chargeCtPer[k]);
+
+      // Re-add clients (minimum 1)
+      const nClients = Math.max(storedCC, 1);
+      for (let x = 0; x < nClients; x++) addClient();
+
+      // Count how many allegations each client needs based on dataMap
+      for (let ci = 1; ci <= nClients; ci++) {
+        const maxAlleg = Math.max(
+          0,
+          ...Object.keys(dataMap)
+            .filter(k => k.startsWith(`Client ${ci} Allegation `) && !k.includes('Reject'))
+            .map(k => parseInt(k.replace(`Client ${ci} Allegation `, '')) || 0)
+        );
+        const needed = Math.max(maxAlleg, nClients === 1 ? 4 : 1);
+        // Remove any seeded allegs first
+        const cont = document.getElementById('allegs-c' + ci);
+        if (cont) cont.innerHTML = '';
+        allegCt[ci] = 0;
+        for (let j = 0; j < needed; j++) addAlleg(ci);
+
+        // Charges: detect max charge index
+        const maxCharge = Math.max(
+          0,
+          ...Object.keys(dataMap)
+            .filter(k => k.startsWith(`Client ${ci} Charge `) && !k.includes('Concede') && !k.includes('Decline'))
+            .map(k => {
+              const m = k.match(/^Client \d+ Charge (\d+)$/);
+              return m ? parseInt(m[1]) : 0;
+            })
+        );
+        // Reset charges container for this client and rebuild
+        const chList = document.getElementById('charges-list-c' + ci);
+        if (chList) chList.innerHTML = '';
+        chargeCtPer[ci] = 0;
+        const chargesNeeded = Math.max(maxCharge, 1);
+        for (let j = 0; j < chargesNeeded; j++) addCharge(ci);
+      }
+
+      // Now restore all field values
+      Object.entries(dataMap).forEach(([label, val]) => {
+        const els = document.querySelectorAll(`[data-label="${label}"]`);
+        els.forEach(el => {
+          if (el.type === 'radio') { el.checked = (el.value === val); }
+          else if (el.type === 'checkbox') { el.checked = (val === 'checked'); }
+          else { el.value = val; }
+        });
+      });
+
+      recalcAllAges();
+      syncInPersonFields();
+      // Restore phone2, SIJ CID, same-address, role badge visibility per client
+      document.querySelectorAll('.client-block').forEach(el => {
+        const idx = el.id.replace('cb','');
+        const p2 = document.getElementById(`c${idx}_phone2`);
+        const btn = document.getElementById(`c${idx}_phone2btn`);
+        if (p2 && p2.value) { p2.style.display = ''; if (btn) { btn.textContent = '−'; btn.title = 'Remove second phone'; } }
+        toggleSijCid(parseInt(idx));
+        // Same-address: if No and client > 1, reveal addr block
+        const same = document.getElementById(`c${idx}_sameaddr`);
+        const addr = document.getElementById(`c${idx}_addr`);
+        const sameBtn = document.getElementById(`c${idx}_same_btn`);
+        const sameBar = document.getElementById(`c${idx}_same_bar`);
+        if (same && addr && same.value === 'No') {
+          addr.classList.remove('hidden');
+          if (sameBtn) sameBtn.textContent = 'Use same as Client 1';
+          if (sameBar) sameBar.querySelector('span').innerHTML = '📍 Using custom address &amp; phone';
+        }
+        // Toggle charge decline wraps
+        document.querySelectorAll(`#charges-list-c${idx} .charge-row`).forEach(cr => {
+          const m = cr.id.match(/chrow_c(\d+)_(\d+)/);
+          if (m) toggleChargeDecline(parseInt(m[1]), parseInt(m[2]));
+        });
+      });
+      ensureLead();
+      updateRoleBadges();
+      updateClientCountUI();
+      toggleSvcReason();
+      lastSnap = takeSnapshot();
+      pendingChanges = [];
+      recordChange('Form', '', 'Imported from Excel');
+      saveBackup('manual');
+
+      const ind = document.getElementById('bkp-indicator');
+      ind.textContent = '✓ Imported from Excel — ' + file.name;
+      ind.classList.add('saved');
+      setTimeout(() => ind.classList.remove('saved'), 4000);
+
+      switchTabByName('form');
+    } catch(err) {
+      alert('Error reading Excel file: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── RESET ─────────────────────────────────────────────────────────────────────
+// ── AGE CALCULATION ───────────────────────────────────────────────────────────
+function ageOn(dobStr, refStr) {
+  if (!dobStr || !refStr) return '';
+  const dob = new Date(dobStr), ref = new Date(refStr);
+  if (isNaN(dob) || isNaN(ref)) return '';
+  let age = ref.getFullYear() - dob.getFullYear();
+  const m = ref.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && ref.getDate() < dob.getDate())) age--;
+  return age >= 0 ? String(age) : '';
+}
+
+function calcAges(i) {
+  const dob = document.getElementById(`c${i}_dob`)?.value || '';
+  const today = new Date().toISOString().slice(0, 10);
+  const entry = document.getElementById('d_entry')?.value || '';
+  const ageEl = document.getElementById(`c${i}_age`);
+  const ageEntryEl = document.getElementById(`c${i}_age_entry`);
+  if (ageEl) ageEl.value = ageOn(dob, today);
+  if (ageEntryEl) ageEntryEl.value = ageOn(dob, entry);
+
+  const ageNum = parseInt(ageOn(dob, today));
+  const hasDob = !isNaN(ageNum);
+  const isMinor = hasDob && ageNum < 18;
+  const isAdult21 = hasDob && ageNum >= 21;
+
+  // Auto-compute Minor from DOB (under 18). Lock field when DOB is set; leave editable when blank.
+  const minorWrap = document.getElementById(`c${i}_minor_wrap`);
+  if (minorWrap) {
+    if (hasDob) {
+      const yesRadio = minorWrap.querySelector(`input[value="Yes"]`);
+      const noRadio  = minorWrap.querySelector(`input[value="No"]`);
+      if (yesRadio) yesRadio.checked = isMinor;
+      if (noRadio)  noRadio.checked  = !isMinor;
+      minorWrap.classList.add('age-disabled');
+    } else {
+      minorWrap.classList.remove('age-disabled');
+    }
+  }
+
+  // SIJ & Guardian: disabled only when age >= 21 (SIJ is available under 21)
+  ['sij','guard'].forEach(field => {
+    const wrap = document.getElementById(`c${i}_${field}_wrap`);
+    if (!wrap) return;
+    wrap.classList.toggle('age-disabled', isAdult21);
+    if (isAdult21) {
+      const noRadio = wrap.querySelector(`input[value="No"]`);
+      if (noRadio) { noRadio.checked = true; }
+    }
+  });
+
+  // Minor state may have flipped — refresh SIJ Client ID row visibility
+  toggleSijCid(i);
+}
+
+let customDocCount = 0;
+
+function addCustomDoc() {
+  const name = prompt('Document name:');
+  if (!name || !name.trim()) return;
+  customDocCount++;
+  const key = 'custom_' + customDocCount;
+  const label = name.trim();
+
+  const wrap = document.createElement('div');
+  wrap.className = 'fo-item';
+  wrap.id = 'fo_cust_' + key;
+  wrap.innerHTML = `
+    <span style="font-family:Georgia,serif;font-size:13px;min-width:110px;">${label}</span>
+    <button class="fo-attach-btn" onclick="document.getElementById('fo_cfi_${key}').click()">📎 Attach</button>
+    <input type="file" id="fo_cfi_${key}" accept=".pdf,.png,.jpg,.jpeg" style="display:none" onchange="attachCustomDoc('${key}','${label.replace(/'/g,"\\'")}',this)">
+    <span class="fo-fname" id="fo_cfn_${key}"></span>
+    <button class="fo-clear" id="fo_cfc_${key}" style="display:none" onclick="clearCustomDoc('${key}')">✕</button>
+    <button class="fo-clear" onclick="document.getElementById('fo_cust_${key}').remove();clearCustomDoc('${key}')">🗑</button>
+  `;
+  document.getElementById('fo-custom-items').appendChild(wrap);
+}
+
+function attachCustomDoc(key, label, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const blob = new Blob([e.target.result], { type: file.type });
+    const url = URL.createObjectURL(blob);
+    docStore[key] = { name: file.name, label, buffer: e.target.result, type: file.type, url };
+    const fnEl = document.getElementById('fo_cfn_' + key);
+    const fcEl = document.getElementById('fo_cfc_' + key);
+    if (fnEl) fnEl.innerHTML = `<a href="${url}" target="_blank" style="color:#3a6b3a;text-decoration:underline;font-size:10px;">${file.name}</a>`;
+    if (fcEl) fcEl.style.display = '';
+    input.value = '';
+    rebuildPreviewTabs();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function clearCustomDoc(key) {
+  if (docStore[key]?.url) URL.revokeObjectURL(docStore[key].url);
+  delete docStore[key];
+  const fnEl = document.getElementById('fo_cfn_' + key);
+  const fcEl = document.getElementById('fo_cfc_' + key);
+  if (fnEl) fnEl.innerHTML = '';
+  if (fcEl) fcEl.style.display = 'none';
+  rebuildPreviewTabs();
+}
+
+// ── DOCUMENT PREVIEW ────────────────────────────────────────────────────────
+const previewNotes = {};
+let activePreviewKey = null;
+let previewZoom = 1.0;
+
+if (window.pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+function showPreviewPanel() {
+  document.getElementById('preview-col').classList.remove('hidden');
+  document.getElementById('resizer').classList.remove('hidden');
+}
+function hidePreviewPanel() {
+  document.getElementById('preview-col').classList.add('hidden');
+  document.getElementById('resizer').classList.add('hidden');
+}
+
+function changeZoom(delta) {
+  previewZoom = Math.min(4, Math.max(0.25, previewZoom + delta));
+  document.getElementById('zoom-lbl').textContent = Math.round(previewZoom * 100) + '%';
+  if (activePreviewKey) renderPreview(activePreviewKey);
+}
+
+function rebuildPreviewTabs() {
+  // Build ordered list: NTA per client first (in client order), then other docs
+  const ntaKeys = [...document.querySelectorAll('.client-block')]
+    .map(b => 'nta_c' + b.id.replace('cb', ''))
+    .filter(k => docStore[k]);
+  const allKeys = [...ntaKeys,
+                   ...DOC_ORDER.filter(k => docStore[k]),
+                   ...Object.keys(docStore).filter(k => k.startsWith('custom_'))];
+  const tabs = document.getElementById('preview-tabs');
+  tabs.innerHTML = '';
+  if (!allKeys.length) { hidePreviewPanel(); activePreviewKey = null; return; }
+  showPreviewPanel();
+  allKeys.forEach(key => {
+    const label = docStore[key].label || DOC_LABELS[key] || key;
+    const btn = document.createElement('button');
+    btn.className = 'preview-doc-tab' + (key === activePreviewKey ? ' active' : '');
+    btn.title = label;
+    btn.textContent = label;
+    btn.onclick = () => switchPreview(key);
+    tabs.appendChild(btn);
+  });
+  if (!activePreviewKey || !docStore[activePreviewKey]) switchPreview(allKeys[0]);
+}
+
+function switchPreview(key) {
+  activePreviewKey = key;
+  document.querySelectorAll('.preview-doc-tab').forEach(t => {
+    t.classList.toggle('active', t.title === (docStore[key]?.label || DOC_LABELS[key] || key));
+  });
+  // Wait until the panel has a real width before rendering
+  const tryRender = (attempts) => {
+    const vp = document.getElementById('preview-viewport');
+    const w = vp ? vp.clientWidth : 0;
+    if (w > 0 || attempts <= 0) {
+      renderPreview(key);
+    } else {
+      setTimeout(() => tryRender(attempts - 1), 50);
+    }
+  };
+  setTimeout(() => tryRender(10), 0);
+}
+
+// ── HIGHLIGHT / ANNOTATION ───────────────────────────────────────────────────
+const annotations = {}; // key -> [ {page, x, y, w, h, color} ]
+let hlTool = null; // 'red' | 'green' | 'erase' | null
+
+function setHlTool(tool) {
+  hlTool = (hlTool === tool) ? null : tool;
+  ['red','green','erase'].forEach(t => {
+    document.getElementById('hl-' + t)?.classList.toggle('active', hlTool === t);
+  });
+  // Update cursor on annotation canvases
+  document.querySelectorAll('.annot-canvas').forEach(c => {
+    c.style.cursor = hlTool ? 'crosshair' : 'default';
+    c.style.pointerEvents = hlTool ? 'auto' : 'none';
+  });
+  // toggle panning
+  const vp = document.getElementById('preview-viewport');
+  if (vp) vp.style.cursor = hlTool ? 'default' : 'grab';
+}
+
+function getAnnotations(key) {
+  if (!annotations[key]) annotations[key] = [];
+  return annotations[key];
+}
+
+function addAnnotation(key, rect) {
+  getAnnotations(key).push(rect);
+}
+
+function redrawAnnotCanvas(canvas, key, pageNum, scale) {
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  getAnnotations(key).filter(a => a.page === pageNum).forEach(a => {
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = a.color === 'red' ? '#ff0000' : '#00cc00';
+    ctx.fillRect(a.x * scale, a.y * scale, a.w * scale, a.h * scale);
+  });
+  ctx.globalAlpha = 1;
+}
+
+function attachAnnotEvents(canvas, key, pageNum, pdfScale, canvasScale) {
+  // canvasScale = canvas px / pdf unit
+  let drawing = false, sx = 0, sy = 0;
+
+  canvas.addEventListener('mousedown', e => {
+    if (!hlTool) return;
+    drawing = true;
+    const r = canvas.getBoundingClientRect();
+    sx = (e.clientX - r.left) / (canvas.width / canvas.width); // px on canvas
+    sy = (e.clientY - r.top);
+    e.stopPropagation();
+  });
+
+  canvas.addEventListener('mousemove', e => {
+    if (!drawing || !hlTool) return;
+    const r = canvas.getBoundingClientRect();
+    const ex = e.clientX - r.left;
+    const ey = e.clientY - r.top;
+    // Live preview
+    const ctx = canvas.getContext('2d');
+    redrawAnnotCanvas(canvas, key, pageNum, 1);
+    if (hlTool !== 'erase') {
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = hlTool === 'red' ? '#ff0000' : '#00cc00';
+      ctx.fillRect(sx, sy, ex - sx, ey - sy);
+      ctx.globalAlpha = 1;
+    }
+    e.stopPropagation();
+  });
+
+  canvas.addEventListener('mouseup', e => {
+    if (!drawing || !hlTool) return;
+    drawing = false;
+    const r = canvas.getBoundingClientRect();
+    const ex = e.clientX - r.left;
+    const ey = e.clientY - r.top;
+    const x = Math.min(sx, ex), y = Math.min(sy, ey);
+    const w = Math.abs(ex - sx), h = Math.abs(ey - sy);
+    if (w < 3 || h < 3) { redrawAnnotCanvas(canvas, key, pageNum, 1); return; }
+
+    if (hlTool === 'erase') {
+      // Remove any annotation overlapping this rect (in canvas px)
+      annotations[key] = getAnnotations(key).filter(a => {
+        if (a.page !== pageNum) return true;
+        const ax = a.x * canvasScale, ay = a.y * canvasScale;
+        const aw = a.w * canvasScale, ah = a.h * canvasScale;
+        return !(ax < x + w && ax + aw > x && ay < y + h && ay + ah > y);
+      });
+    } else {
+      // Store in PDF coordinate space (divide by canvasScale)
+      addAnnotation(key, { page: pageNum, x: x/canvasScale, y: y/canvasScale, w: w/canvasScale, h: h/canvasScale, color: hlTool });
+    }
+    redrawAnnotCanvas(canvas, key, pageNum, 1);
+    e.stopPropagation();
+  });
+}
+
+async function renderPreview(key) {
+  const vp = document.getElementById('preview-viewport');
+  const att = docStore[key];
+  if (!att) { vp.innerHTML = '<div class="preview-empty">No document</div>'; return; }
+  const vpW = Math.max(vp.clientWidth || 0, 400);
+  vp.innerHTML = '';
+
+  if (att.type === 'application/pdf') {
+    try {
+      const pdf = await pdfjsLib.getDocument({ data: att.buffer.slice(0) }).promise;
+      for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p);
+        const baseScale = (vpW - 16) / page.getViewport({ scale: 1 }).width;
+        const scale = baseScale * previewZoom;
+        const vport = page.getViewport({ scale });
+        const wrap = document.createElement('div');
+        wrap.className = 'preview-page-wrap';
+        wrap.style.width = vport.width + 'px';
+        wrap.style.height = vport.height + 'px';
+        // PDF canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = vport.width; canvas.height = vport.height;
+        canvas.style.width = vport.width + 'px';
+        canvas.style.height = vport.height + 'px';
+        wrap.appendChild(canvas);
+        // Annotation canvas
+        const aCanvas = document.createElement('canvas');
+        aCanvas.className = 'annot-canvas';
+        aCanvas.width = vport.width; aCanvas.height = vport.height;
+        aCanvas.style.width = vport.width + 'px';
+        aCanvas.style.height = vport.height + 'px';
+        aCanvas.style.pointerEvents = hlTool ? 'auto' : 'none';
+        aCanvas.style.cursor = hlTool ? 'crosshair' : 'default';
+        aCanvas.dataset.page = p;
+        wrap.appendChild(aCanvas);
+        vp.appendChild(wrap);
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport: vport }).promise;
+        redrawAnnotCanvas(aCanvas, key, p, 1);
+        attachAnnotEvents(aCanvas, key, p, scale, scale);
+      }
+    } catch(e) {
+      vp.innerHTML = '<div class="preview-empty">Could not render PDF</div>';
+    }
+  } else {
+    // Image
+    const wrap = document.createElement('div');
+    wrap.className = 'preview-page-wrap';
+    const w = Math.round((vpW - 16) * previewZoom);
+    wrap.style.width = w + 'px';
+    const img = document.createElement('img');
+    img.style.width = '100%'; img.style.display = 'block';
+    img.onload = () => {
+      const h = img.naturalHeight * (w / img.naturalWidth);
+      wrap.style.height = h + 'px';
+      const aCanvas = document.createElement('canvas');
+      aCanvas.className = 'annot-canvas';
+      aCanvas.width = w; aCanvas.height = h;
+      aCanvas.style.width = w + 'px'; aCanvas.style.height = h + 'px';
+      aCanvas.style.pointerEvents = hlTool ? 'auto' : 'none';
+      aCanvas.style.cursor = hlTool ? 'crosshair' : 'default';
+      wrap.appendChild(aCanvas);
+      redrawAnnotCanvas(aCanvas, key, 1, 1);
+      attachAnnotEvents(aCanvas, key, 1, 1, 1);
+    };
+    const blob = new Blob([att.buffer], { type: att.type });
+    img.src = URL.createObjectURL(blob);
+    wrap.appendChild(img);
+    vp.appendChild(wrap);
+  }
+}
+
+// ── SAVE ANNOTATED PDF ───────────────────────────────────────────────────────
+async function saveAnnotated() {
+  const key = activePreviewKey;
+  const att = docStore[key];
+  if (!att) return;
+
+  const clientId = document.querySelector('[id$="_cid"]')?.value?.trim() || 'client';
+  const label = (att.label || DOC_LABELS[key] || key).replace(/\s+/g,'_');
+  const filename = `${label}_${clientId}_notes.pdf`;
+
+  const { PDFDocument, rgb } = PDFLib;
+
+  try {
+    let pdfDoc;
+    if (att.type === 'application/pdf') {
+      pdfDoc = await PDFDocument.load(att.buffer.slice(0));
+    } else {
+      pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([612, 792]);
+      let img;
+      if (att.type === 'image/png') img = await pdfDoc.embedPng(att.buffer);
+      else img = await pdfDoc.embedJpg(att.buffer);
+      const scale = Math.min(612 / img.width, 792 / img.height, 1);
+      page.drawImage(img, { x: (612 - img.width*scale)/2, y: (792 - img.height*scale)/2, width: img.width*scale, height: img.height*scale });
+    }
+
+    const pages = pdfDoc.getPages();
+    const annots = getAnnotations(key);
+    annots.forEach(a => {
+      const pg = pages[a.page - 1];
+      if (!pg) return;
+      const { width, height } = pg.getSize();
+      // pdf-lib y is from bottom; our y is from top
+      const color = a.color === 'red' ? rgb(1, 0, 0) : rgb(0, 0.7, 0);
+      pg.drawRectangle({
+        x: a.x,
+        y: height - a.y - a.h,
+        width: a.w,
+        height: a.h,
+        color,
+        opacity: 0.35,
+      });
+    });
+
+    const bytes = await pdfDoc.save();
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch(err) {
+    console.error('Save annotated error:', err);
+    alert('Could not save annotated PDF.');
+  }
+}
+
+function saveCurrentNote() {
+  if (!activePreviewKey) return;
+}
+
+// ── RESIZER DRAG ─────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Splitter resizer
+  const rs = document.getElementById('resizer');
+  const fc = document.querySelector('.form-col');
+  if (rs && fc) {
+    let dragging = false, startX = 0, startW = 0;
+    rs.addEventListener('mousedown', e => {
+      dragging = true; startX = e.clientX; startW = fc.offsetWidth;
+      rs.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      const delta = e.clientX - startX;
+      const layout = document.querySelector('.form-layout');
+      const totalW = layout.offsetWidth - rs.offsetWidth;
+      const newW = Math.max(200, Math.min(totalW - 150, startW + delta));
+      fc.style.flex = 'none';
+      fc.style.width = newW + 'px';
+      if (activePreviewKey) renderPreview(activePreviewKey);
+    });
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false; rs.classList.remove('dragging');
+      document.body.style.cursor = ''; document.body.style.userSelect = '';
+    });
+  }
+
+  // Viewport pan (click-drag to scroll)
+  const vp = document.getElementById('preview-viewport');
+  if (vp) {
+    let panning = false, px = 0, py = 0, sl = 0, st = 0;
+    vp.addEventListener('mousedown', e => {
+      if (e.target.closest('button,input,textarea,a')) return;
+      panning = true; px = e.clientX; py = e.clientY;
+      sl = vp.scrollLeft; st = vp.scrollTop;
+      vp.classList.add('panning');
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', e => {
+      if (!panning) return;
+      vp.scrollLeft = sl - (e.clientX - px);
+      vp.scrollTop  = st - (e.clientY - py);
+    });
+    document.addEventListener('mouseup', () => {
+      if (!panning) return;
+      panning = false; vp.classList.remove('panning');
+    });
+  }
+});
+
+// ── FLOAT / DOCK PREVIEW ─────────────────────────────────────────────────────
+let isFloating = false;
+
+function toggleFloat() {
+  const col = document.getElementById('preview-col');
+  const rs  = document.getElementById('resizer');
+  const btn = document.getElementById('float-btn');
+  const toolbar = document.getElementById('preview-toolbar');
+
+  if (!isFloating) {
+    // Detach: make floating at current position
+    const rect = col.getBoundingClientRect();
+    col.style.position = 'fixed';
+    col.style.left = rect.left + 'px';
+    col.style.top  = rect.top  + 'px';
+    col.style.width = rect.width + 'px';
+    col.style.height = rect.height + 'px';
+    col.style.flex = 'none';
+    col.classList.add('floating');
+    if (rs) { rs.style.display = 'none'; }
+    btn.textContent = '⊟';
+    btn.title = 'Dock back';
+    isFloating = true;
+
+    // Drag the floating panel by its toolbar
+    let dragging = false, ox = 0, oy = 0;
+    toolbar.addEventListener('mousedown', startDragPanel);
+    function startDragPanel(e) {
+      if (e.target.closest('button')) return;
+      dragging = true;
+      ox = e.clientX - col.offsetLeft;
+      oy = e.clientY - col.offsetTop;
+      document.body.style.userSelect = 'none';
+    }
+    function onDragPanel(e) {
+      if (!dragging) return;
+      col.style.left = (e.clientX - ox) + 'px';
+      col.style.top  = (e.clientY - oy) + 'px';
+    }
+    function stopDragPanel() { dragging = false; document.body.style.userSelect = ''; }
+    document.addEventListener('mousemove', onDragPanel);
+    document.addEventListener('mouseup', stopDragPanel);
+    col._cleanupDrag = () => {
+      toolbar.removeEventListener('mousedown', startDragPanel);
+      document.removeEventListener('mousemove', onDragPanel);
+      document.removeEventListener('mouseup', stopDragPanel);
+    };
+  } else {
+    // Dock back
+    if (col._cleanupDrag) { col._cleanupDrag(); delete col._cleanupDrag; }
+    col.style.position = '';
+    col.style.left = ''; col.style.top = '';
+    col.style.width = ''; col.style.height = '';
+    col.style.flex = '';
+    col.classList.remove('floating');
+    if (rs) { rs.style.display = ''; }
+    btn.textContent = '⊞';
+    btn.title = 'Detach';
+    isFloating = false;
+    if (activePreviewKey) renderPreview(activePreviewKey);
+  }
+}
+
+// ── DOCUMENT ATTACHMENTS ─────────────────────────────────────────────────────
+const docStore = {};
+const DOC_ORDER = ['589','sub','noh','e28','mts']; // NTA handled dynamically per client
+const DOC_LABELS = { '589':'I-589', sub:'Submission', noh:'NOH', e28:'E-28', mts:'Motion to Sub' };
+
+function attachDoc(key, input, customLabel) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const blob = new Blob([e.target.result], { type: file.type });
+    const url = URL.createObjectURL(blob);
+    const label = customLabel || DOC_LABELS[key] || key;
+    docStore[key] = { name: file.name, label, buffer: e.target.result, type: file.type, url };
+    const fnEl = document.getElementById('fo_fn_' + key);
+    const fcEl = document.getElementById('fo_fc_' + key);
+    if (fnEl) fnEl.innerHTML = `<a href="${url}" target="_blank" style="color:#3a6b3a;text-decoration:underline;font-size:10px;">${file.name}</a>`;
+    if (fcEl) fcEl.style.display = '';
+    input.value = '';
+    rebuildPreviewTabs();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function clearDoc(key) {
+  if (docStore[key]?.url) URL.revokeObjectURL(docStore[key].url);
+  delete docStore[key];
+  const fnEl = document.getElementById('fo_fn_' + key);
+  const fcEl = document.getElementById('fo_fc_' + key);
+  if (fnEl) fnEl.innerHTML = '';
+  if (fcEl) fcEl.style.display = 'none';
+  rebuildPreviewTabs();
+}
+
+function updateMotionToSubAttach() {
+  const anyChecked = [...document.querySelectorAll('[id^="mts_chk_c"]')].some(c => c.checked);
+  const wrap = document.getElementById('fo_mts_wrap');
+  if (wrap) wrap.style.display = anyChecked ? '' : 'none';
+  if (!anyChecked) clearDoc('mts');
+}
+
+// ── ANIBAL E-28 DATE TOGGLE & MOTION TO SUB ──────────────────────────────────
+function toggleAnDate(i) {
+  const isYes = document.querySelector(`input[name="an_e28_c${i}"][value="Yes"]`)?.checked;
+  const dateEl = document.getElementById(`an_d_c${i}`);
+  const lblEl  = document.getElementById(`an_d_lbl_c${i}`);
+  if (dateEl) dateEl.style.display = isYes ? '' : 'none';
+  if (lblEl)  lblEl.style.display  = isYes ? '' : 'none';
+  if (!isYes && dateEl) { dateEl.value = ''; }
+  syncMotionToSub(i);
+}
+
+function toggleMts(i) {
+  const checked = document.getElementById(`mts_chk_c${i}`)?.checked;
+  const dateEl  = document.getElementById(`mts_d_c${i}`);
+  const lblEl   = document.getElementById(`mts_d_lbl_c${i}`);
+  const noteEl  = document.getElementById(`mts_note_c${i}`);
+  if (dateEl) dateEl.style.display = checked ? '' : 'none';
+  if (lblEl)  lblEl.style.display  = checked ? '' : 'none';
+  if (noteEl) noteEl.style.display = checked ? '' : 'none';
+  if (!checked) {
+    if (dateEl) dateEl.value = '';
+    if (noteEl) noteEl.value = '';
+  }
+  updateMotionToSubAttach();
+}
+
+function syncMotionToSub(i) {
+  const isYes = document.querySelector(`input[name="an_e28_c${i}"][value="Yes"]`)?.checked;
+  const dated = !!document.getElementById(`an_d_c${i}`)?.value;
+  const mtsRow = document.getElementById(`mts_c${i}`);
+  // Hide Motion to Sub row if E-28 is Yes AND dated
+  if (mtsRow) mtsRow.style.display = (isYes && dated) ? 'none' : '';
+  if (isYes && dated) {
+    const chk = document.getElementById(`mts_chk_c${i}`);
+    if (chk) { chk.checked = false; toggleMts(i); }
+  }
+  updateMotionToSubAttach();
+}
+
+// ── RELIEF NOTE TOGGLE ───────────────────────────────────────────────────────
+function toggleReliefNote(id) {
+  const checked = document.getElementById(id)?.checked;
+  const note = document.getElementById('note_' + id);
+  if (!note) return;
+  note.style.display = checked ? '' : 'none';
+  if (!checked) note.value = '';
+}
+
+// ── CHARGES ──────────────────────────────────────────────────────────────────
+// Per-client charge counters
+const chargeCtPer = {}; // { clientIdx: nextNum }
+let chargeCt = 0; // keep legacy name for safety
+
+function addCharge(clientIdx) {
+  if (!clientIdx) {
+    const first = document.querySelector('.client-block');
+    if (!first) return;
+    clientIdx = parseInt(first.id.replace('cb', ''));
+  }
+  chargeCtPer[clientIdx] = (chargeCtPer[clientIdx] || 0) + 1;
+  const n = chargeCtPer[clientIdx];
+  chargeCt++;
+  const wrap = document.createElement('div');
+  wrap.className = 'charge-row'; wrap.id = `chrow_c${clientIdx}_${n}`;
+  wrap.innerHTML = `
+    <div class="charge-top">
+      <input type="text" id="ch_txt_c${clientIdx}_${n}" data-label="Client ${clientIdx} Charge ${n}" placeholder="Charge ${n} (e.g. 212(a)(6)(A)(i))">
+      <span style="font-family:Arial,sans-serif;font-size:11px;color:#9a8872;white-space:nowrap;">Concede</span>
+      <label style="font-size:13px;display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;">
+        <input type="radio" name="ch_con_c${clientIdx}_${n}" value="Yes" data-label="Client ${clientIdx} Charge ${n} Concede" onchange="toggleChargeDecline(${clientIdx},${n})"> Yes
+      </label>
+      <label style="font-size:13px;display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;">
+        <input type="radio" name="ch_con_c${clientIdx}_${n}" value="No" data-label="Client ${clientIdx} Charge ${n} Concede" onchange="toggleChargeDecline(${clientIdx},${n})"> No
+      </label>
+      <button class="rem" onclick="removeEl('chrow_c${clientIdx}_${n}','Removed Client ${clientIdx} Charge ${n}')">✕</button>
+    </div>
+    <div class="charge-decline-wrap" id="ch_decwrap_c${clientIdx}_${n}">
+      <input type="text" id="ch_why_c${clientIdx}_${n}" data-label="Client ${clientIdx} Charge ${n} Decline Reason" placeholder="Why not conceding..." style="width:100%;margin-top:4px;">
+    </div>
+  `;
+  const list = document.getElementById('charges-list-c' + clientIdx);
+  if (list) list.appendChild(wrap);
+  attachListeners(wrap);
+}
+
+function toggleChargeDecline(clientIdx, n) {
+  const isNo = document.querySelector(`input[name="ch_con_c${clientIdx}_${n}"][value="No"]`)?.checked;
+  const wrap = document.getElementById(`ch_decwrap_c${clientIdx}_${n}`);
+  if (wrap) wrap.classList.toggle('visible', isNo);
+  if (!isNo) { const f = document.getElementById(`ch_why_c${clientIdx}_${n}`); if (f) f.value = ''; }
+}
+
+function toggleSentOn() {
+  const isYes = document.querySelector('input[name="sent_cal"][value="Yes"]')?.checked;
+  const wrap = document.getElementById('sent_on_wrap');
+  if (wrap) wrap.classList.toggle('age-disabled', !isYes);
+  if (!isYes) { const f = document.getElementById('sent_on'); if (f) f.value = ''; }
+}
+
+// ── TOGGLE SERVICE REASON (per client) ───────────────────────────────────────
+function toggleSvcReason(i) {
+  if (i === undefined || i === null) {
+    // Apply to all clients
+    document.querySelectorAll('.client-block').forEach(b => {
+      const idx = b.id.replace('cb', '');
+      _toggleSvcReasonOne(idx);
+    });
+    return;
+  }
+  _toggleSvcReasonOne(i);
+}
+function _toggleSvcReasonOne(i) {
+  const isNo = document.querySelector(`input[name="svc_ok_c${i}"][value="No"]`)?.checked;
+  const wrap = document.getElementById(`svc_reason_wrap_c${i}`);
+  if (wrap) wrap.style.display = isNo ? '' : 'none';
+  if (!isNo) { const f = document.getElementById(`svc_reason_c${i}`); if (f) f.value = ''; }
+}
+
+// ── PAPER FILE / DHS ROW ─────────────────────────────────────────────────────
+function checkPaperFile() {
+  const isPaper = document.querySelector('input[name="ftype"]:checked')?.value === 'Paper';
+  const dhsRow = document.getElementById('dhs-row');
+  if (dhsRow) dhsRow.style.display = isPaper ? '' : 'none';
+}
+
+// ── 1-YEAR ISSUE AUTO-ENABLE ──────────────────────────────────────────────────
+function check1YearIssue() {
+  const entry = document.getElementById('d_entry')?.value;
+  const filed = document.getElementById('d_589')?.value;
+  const yrWrap     = document.getElementById('yr_issue_wrap');
+  const yrNoWrap   = document.getElementById('yr_no_issue_wrap');
+  const justWrap   = document.getElementById('justif_wrap');
+  if (!yrWrap || !justWrap) return;
+
+  let isOver1Year = false;
+  let bothFilled  = !!(entry && filed);
+
+  if (bothFilled) {
+    const entryDate = new Date(entry);
+    const filedDate = new Date(filed);
+    const threshold = new Date(entryDate);
+    threshold.setFullYear(threshold.getFullYear() + 1);
+    isOver1Year = filedDate > threshold;
+  }
+
+  yrWrap.style.display   = (bothFilled && isOver1Year)   ? '' : 'none';
+  if (yrNoWrap) yrNoWrap.style.display = (bothFilled && !isOver1Year) ? '' : 'none';
+
+  // Locked only when both dates filled AND gap <= 1 year
+  const lockJustif = bothFilled && !isOver1Year;
+  justWrap.classList.toggle('age-disabled', lockJustif);
+
+  if (lockJustif) {
+    const justif = document.getElementById('justif');
+    if (justif) justif.value = '';
+  }
+}
+
+
+function recalcAllAges() {
+  document.querySelectorAll('.client-block').forEach(el => {
+    calcAges(el.id.replace('cb', ''));
+  });
+}
+
+function resetForm() {
+  if (!confirm('Reset all fields?')) return;
+  document.querySelectorAll('input[type="text"],input[type="date"],input[type="time"],textarea,select').forEach(e=>e.value='');
+  document.querySelectorAll('input[type="checkbox"]').forEach(e=>e.checked=false);
+  document.querySelectorAll('input[type="radio"]').forEach(e=>{ e.checked=(e.value==='No'); });
+  document.querySelector('input[name="ftype"][value="ECAS"]').checked=true;
+  document.getElementById('clients').innerHTML='';
+  document.getElementById('an-clients').innerHTML='';
+  document.getElementById('fo-nta-per-client').innerHTML='';
+  document.getElementById('ntc-clients').innerHTML='';
+  chargeCt=0;
+  Object.keys(allegCt).forEach(k => delete allegCt[k]);
+  Object.keys(chargeCtPer).forEach(k => delete chargeCtPer[k]);
+  cc=0; ac=0;
+  // Clear all per-client NTA docs
+  Object.keys(docStore).filter(k => k.startsWith('nta_c')).forEach(k => clearDoc(k));
+  addClient();
+  // Seed 4 allegations for client 1
+  for(let i=0;i<4;i++) addAlleg(1);
+  lastSnap = takeSnapshot();
+  pendingChanges = [];
+  recordChange('Form', '', 'Reset');
+  saveBackup('manual');
+}
+
+// ── PHONE 2 TOGGLE ───────────────────────────────────────────────────────────
+function togglePhone2(i) {
+  const p2 = document.getElementById(`c${i}_phone2`);
+  const btn = document.getElementById(`c${i}_phone2btn`);
+  if (!p2) return;
+  const visible = p2.style.display !== 'none';
+  p2.style.display = visible ? 'none' : '';
+  btn.textContent = visible ? '+' : '−';
+  btn.title = visible ? 'Add second phone' : 'Remove second phone';
+  if (visible) { p2.value = ''; scheduleAutoBackup(); }
+  else { p2.focus(); }
+}
+
+// ── IN-PERSON FIELDS ─────────────────────────────────────────────────────────
+function toggleInPerson(selectId, locId) {
+  const val = document.getElementById(selectId)?.value;
+  const show = val === 'In-person';
+  // Each format select has two sibling inperson-fields (loc, loc2)
+  const el1 = document.getElementById(locId);
+  const el2 = document.getElementById(locId + '2');
+  [el1, el2].forEach(el => {
+    if (!el) return;
+    el.classList.toggle('visible', show);
+    if (!show) el.querySelectorAll('input').forEach(i => i.value = '');
+  });
+}
+
+// Call on page load to sync state (e.g. after import)
+function syncInPersonFields() {
+  toggleInPerson('format', 'h_loc');
+  toggleInPerson('n_format', 'n_loc');
+}
+
+// ── FIELD MAP ────────────────────────────────────────────────────────────────
+let fmapActiveSection = 'ALL';
+
+function getFieldSection(el) {
+  // Walk up DOM to find nearest h2
+  let node = el.parentElement;
+  while (node && node !== document.body) {
+    let prev = node.previousElementSibling;
+    while (prev) {
+      if (prev.tagName === 'H2') return prev.textContent.trim();
+      prev = prev.previousElementSibling;
+    }
+    node = node.parentElement;
+  }
+  return 'General';
+}
+
+function collectFields() {
+  const fields = [];
+  document.querySelectorAll('input[data-label], select[data-label], textarea[data-label]').forEach(el => {
+    const label = el.dataset.label || '';
+    const id = el.id || '';
+    const name = el.name || '';
+    let type = el.type || el.tagName.toLowerCase();
+    if (el.tagName === 'SELECT') type = 'select';
+    if (el.tagName === 'TEXTAREA') type = 'textarea';
+    const section = getFieldSection(el);
+    fields.push({ label, id, name, type, section });
+  });
+  return fields;
+}
+
+function renderFieldMap() {
+  const search = (document.getElementById('fmap-search')?.value || '').toLowerCase();
+  const fields = collectFields();
+
+  // Build section list
+  const sections = ['ALL', ...new Set(fields.map(f => f.section))];
+
+  // Render filter pills
+  const pillContainer = document.getElementById('fmap-filters');
+  pillContainer.innerHTML = sections.map(s =>
+    `<button class="fmap-pill${s === fmapActiveSection ? ' active' : ''}" onclick="setFmapSection('${s}')">${s}</button>`
+  ).join('');
+
+  // Filter
+  const filtered = fields.filter(f => {
+    const secOk = fmapActiveSection === 'ALL' || f.section === fmapActiveSection;
+    const searchOk = !search || f.label.toLowerCase().includes(search) || f.id.toLowerCase().includes(search) || f.name.toLowerCase().includes(search);
+    return secOk && searchOk;
+  });
+
+  document.getElementById('fmap-count').textContent = `${filtered.length} field${filtered.length !== 1 ? 's' : ''}`;
+
+  if (!filtered.length) {
+    document.getElementById('fmap-table').innerHTML = '<div class="fmap-empty">No fields match.</div>';
+    return;
+  }
+
+  // Group by section
+  const grouped = {};
+  filtered.forEach((f, idx) => {
+    if (!grouped[f.section]) grouped[f.section] = [];
+    grouped[f.section].push({ ...f, num: idx + 1 });
+  });
+
+  let html = `<div class="fmap-row header">
+    <div class="fmap-cell num">#</div>
+    <div class="fmap-cell">Label (Excel / History Key)</div>
+    <div class="fmap-cell">Element ID / Name</div>
+    <div class="fmap-cell">Type</div>
+  </div>`;
+
+  let counter = 1;
+  Object.entries(grouped).forEach(([sec, rows]) => {
+    if (fmapActiveSection === 'ALL') {
+      html += `<div class="fmap-section-head">${sec}</div>`;
+    }
+    rows.forEach(f => {
+      const typeClass = {
+        text: 'type-text', radio: 'type-radio', checkbox: 'type-checkbox',
+        date: 'type-date', time: 'type-date', select: 'type-select', textarea: 'type-textarea'
+      }[f.type] || 'type-text';
+
+      const idDisplay = f.id
+        ? `<span class="fmap-cell id-cell">#${f.id}</span>`
+        : f.name
+          ? `<span class="fmap-cell id-cell" style="background:#eef0f8;">[${f.name}]</span>`
+          : '<span style="color:#b0a090;font-size:10px;padding-left:10px;">—</span>';
+
+      html += `<div class="fmap-row">
+        <div class="fmap-cell num">${counter++}</div>
+        <div class="fmap-cell">${f.label}</div>
+        <div class="fmap-cell">${idDisplay}</div>
+        <div class="fmap-cell"><span class="fmap-cell type-badge ${typeClass}">${f.type}</span></div>
+      </div>`;
+    });
+  });
+
+  document.getElementById('fmap-table').innerHTML = html;
+}
+
+function setFmapSection(sec) {
+  fmapActiveSection = sec;
+  renderFieldMap();
+}
+
+function copyFieldMap() {
+  const fields = collectFields();
+  const lines = ['#\tLabel\tID / Name\tType\tSection'];
+  fields.forEach((f, i) => {
+    lines.push(`${i+1}\t${f.label}\t${f.id || f.name || '—'}\t${f.type}\t${f.section}`);
+  });
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    const ind = document.getElementById('bkp-indicator');
+    ind.textContent = '✓ Field map copied to clipboard';
+    ind.classList.add('saved');
+    setTimeout(() => ind.classList.remove('saved'), 3000);
+  });
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+// Attach listeners to static elements
+document.addEventListener('DOMContentLoaded', () => {
+  attachListeners(document.body);
+  syncInPersonFields();
+  check1YearIssue();
+  checkPaperFile();
+  toggleSentOn();
+});
+
+addClient();
+for(let i=0;i<4;i++) addAlleg(1);
+
+lastSnap = takeSnapshot();
+updateHistBadge(loadBackups().length);
+
+// Show last backup time if any
+const existing = loadBackups();
+if (existing.length) {
+  document.getElementById('bkp-indicator').textContent = 'Last: ' + existing[0].ts;
+}
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     APP BRIDGE — runs only when this tool is embedded (in an <iframe>) by the
+     Romero case-tracker. It swaps the tool's single global localStorage store
+     for per-case persistence driven by the parent app: the parent sends a
+     prefill (or a previously-saved state) after the tool announces it's ready,
+     and the tool posts its serialized form state back on every change so the
+     parent can store it on caseMeta[clid] (which the app syncs to Firestore
+     with attachments stripped). Standalone use (opened directly) is unaffected:
+     window.parent === window, so nothing below fires a cross-frame message.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  var EMBEDDED = (window.parent && window.parent !== window);
+  if(!EMBEDDED) return; // opened standalone — leave the tool exactly as-is
+
+  var _mhpClid=null, _mhpSaveTimer=null, _mhpLoading=false;
+
+  function _idxs(){
+    return [].slice.call(document.querySelectorAll('.client-block'))
+      .map(function(b){ return parseInt(b.id.replace('cb',''),10); });
+  }
+  function _leadIdx(){
+    var xs=_idxs();
+    for(var k=0;k<xs.length;k++){ var el=document.getElementById('c'+xs[k]+'_role'); if(el&&el.value==='Lead') return xs[k]; }
+    return xs[0]||1;
+  }
+  function _allegCount(i){ return document.querySelectorAll('#allegs-c'+i+' .alleg-row').length; }
+  function _chargeCount(i){ return document.querySelectorAll('#charges-list-c'+i+' .charge-row').length; }
+
+  // ── Serialize the full form (flat field snapshot + dynamic structure) ──
+  function mhpGetState(){
+    var xs=_idxs();
+    return {
+      v:1,
+      snap: takeSnapshot(),
+      clientCount: xs.length,
+      clients: xs.map(function(i){ return { allegs:_allegCount(i), charges:_chargeCount(i) }; }),
+      leadIdx: _leadIdx()
+    };
+  }
+  function _applySnap(snap){
+    Object.keys(snap||{}).forEach(function(label){
+      var val=snap[label];
+      document.querySelectorAll('[data-label="'+label.replace(/"/g,'\\"')+'"]').forEach(function(el){
+        if(el.type==='radio'){ el.checked=(el.value===val); }
+        else if(el.type==='checkbox'){ el.checked=(val==='checked'); }
+        else { el.value=val; }
+      });
+    });
+  }
+  function _ensureCount(getLen, add, remId, target, i){
+    var guard=0;
+    while(getLen()<target && guard++<80){ add(i); }
+    // trim any extras (fresh load seeds a deterministic base) from the end
+    guard=0;
+    while(getLen()>target && guard++<80){
+      var rows=document.querySelectorAll(remId(i));
+      if(!rows.length) break;
+      rows[rows.length-1].remove();
+    }
+  }
+  function _refreshDerived(){
+    try{ syncInPersonFields(); }catch(e){}
+    try{ updateRoleBadges(); }catch(e){}
+    try{ updateClientSummary(); }catch(e){}
+    _idxs().forEach(function(i){ try{ calcAges(i); }catch(e){} });
+  }
+  function mhpDeserialize(state){
+    if(!state||!state.snap) return;
+    var target=state.clientCount||1, g=0;
+    while(_idxs().length<target && g++<50){ addClient(); }
+    var xs=_idxs();
+    (state.clients||[]).forEach(function(c,pos){
+      var i=xs[pos]; if(i==null) return;
+      _ensureCount(function(){return _allegCount(i);}, addAlleg, function(){return '#allegs-c'+i+' .alleg-row';}, c.allegs||0, i);
+      _ensureCount(function(){return _chargeCount(i);}, addCharge, function(){return '#charges-list-c'+i+' .charge-row';}, Math.max(1,c.charges||1), i);
+    });
+    _applySnap(state.snap);
+    if(state.leadIdx){ try{ setLead(state.leadIdx); }catch(e){} }
+    _refreshDerived();
+    lastSnap=takeSnapshot(); pendingChanges=[];
+  }
+
+  // ── Prefill from the case the parent picked ──
+  function mhpApplyPrefill(pf){
+    if(!pf) return;
+    var set=function(id,v){ var e=document.getElementById(id); if(e&&v!=null&&v!=='') e.value=v; };
+    var h=pf.hearing||{};
+    set('court',h.court); set('judge',h.judge); set('h_date',h.date); set('h_time',h.time);
+    if(h.format){ var fs=document.getElementById('format'); if(fs){ fs.value=h.format; try{ toggleInPerson('format','h_loc'); }catch(e){} } }
+    set('h_fl',h.fl); set('h_rm',h.rm);
+    var cls=pf.clients||[], g=0;
+    while(_idxs().length<cls.length && g++<50){ addClient(); }
+    var xs=_idxs();
+    cls.forEach(function(c,pos){
+      var i=xs[pos]; if(i==null) return;
+      set('c'+i+'_fname',c.fname); set('c'+i+'_mname',c.mname); set('c'+i+'_lname',c.lname);
+      set('c'+i+'_anum',c.anum); set('c'+i+'_cid',c.cid); set('c'+i+'_dob',c.dob);
+      set('c'+i+'_country',c.country); if(c.email) set('c'+i+'_email',c.email);
+      if(c.dob){ try{ calcAges(i); }catch(e){} }
+    });
+    _refreshDerived();
+    lastSnap=takeSnapshot(); pendingChanges=[];
+  }
+
+  // ── Per-case localStorage history (replaces the single global store) ──
+  function _key(){ return 'mhp_backups_'+(_mhpClid||'global'); }
+  window.loadBackups=function(){ try{ return JSON.parse(localStorage.getItem(_key()))||[]; }catch(e){ return []; } };
+  window.saveBackup=function(type){
+    var snap=takeSnapshot();
+    var changes=pendingChanges.length?pendingChanges.slice():[];
+    pendingChanges=[]; lastSnap=snap;
+    var backups=loadBackups();
+    var entry={ id:Date.now(), ts:new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true}), type:type, changes:changes, snap:snap };
+    backups.unshift(entry); if(backups.length>50) backups.splice(50);
+    try{ localStorage.setItem(_key(), JSON.stringify(backups)); }catch(e){}
+    var ind=document.getElementById('bkp-indicator');
+    if(ind){ ind.textContent=(type==='manual'?'✓ Saved ':'✓ Auto-saved ')+entry.ts; ind.classList.add('saved'); setTimeout(function(){ind.classList.remove('saved');},3000); }
+    updateHistBadge(backups.length);
+  };
+  window.deleteBackup=function(id){ var b=loadBackups().filter(function(x){return x.id!==id;}); try{ localStorage.setItem(_key(), JSON.stringify(b)); }catch(e){} renderHistory(); };
+  window.clearHistory=function(){ if(!confirm('Delete all backups?')) return; try{ localStorage.removeItem(_key()); }catch(e){} renderHistory(); };
+
+  // ── Push serialized state to the parent on every change (debounced) ──
+  var _origSchedule=window.scheduleAutoBackup;
+  window.scheduleAutoBackup=function(){
+    try{ if(_origSchedule) _origSchedule.apply(this,arguments); }catch(e){}
+    if(_mhpLoading) return;
+    clearTimeout(_mhpSaveTimer);
+    _mhpSaveTimer=setTimeout(function(){
+      try{ window.parent.postMessage({ type:'mhp-state', clid:_mhpClid, state:mhpGetState() }, '*'); }catch(e){}
+    }, 600);
+  };
+
+  // ── Handshake with the parent ──
+  window.addEventListener('message', function(e){
+    var d=e.data||{};
+    if(d.type!=='mhp-load') return;
+    _mhpLoading=true;
+    _mhpClid=d.clid||null;
+    try{
+      if(d.state){ mhpDeserialize(d.state); }
+      else if(d.prefill){ mhpApplyPrefill(d.prefill); }
+    }catch(err){ try{ console.warn('[mhp-bridge] load failed', err); }catch(e){} }
+    try{ updateHistBadge(loadBackups().length); }catch(e){}
+    setTimeout(function(){ _mhpLoading=false; }, 60);
+  });
+  window.addEventListener('load', function(){
+    try{ window.parent.postMessage({ type:'mhp-ready' }, '*'); }catch(e){}
+  });
+})();
+</script>
+</body>
+</html>

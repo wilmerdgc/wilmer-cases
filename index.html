@@ -2283,10 +2283,12 @@ window.addEventListener('load',()=>autoGrowAllNotes());
       <button class="cd-tab-btn active" id="cdtab-overview" onclick="switchCaseTab('overview')">Overview</button>
       <button class="cd-tab-btn" id="cdtab-checklists" onclick="switchCaseTab('checklists')">Workflow</button>
       <button class="cd-tab-btn" id="cdtab-documents" onclick="switchCaseTab('documents')">Documents</button>
+      <button class="cd-tab-btn" id="cdtab-masterprep" onclick="switchCaseTab('masterprep')">Master Prep</button>
     </div>
     <div id="cd-pane-overview"><div id="case-detail-body"></div></div>
     <div id="cd-pane-checklists" style="display:none"><div id="case-checklists-body"></div></div>
     <div id="cd-pane-documents" style="display:none"><div id="case-documents-body"></div></div>
+    <div id="cd-pane-masterprep" style="display:none"><div id="case-masterprep-body"></div></div>
   </div>
   <div id="cases-add-view" style="display:none;">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
@@ -14080,6 +14082,11 @@ function renderToolsPage(){
         <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Bond Hearing Prep</div>
         <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Maintain a bank of standard bond questions and record each client's answers in one place.</div>
       </div>
+      <div onclick="renderMasterPrep()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
+        <div style="font-size:24px;margin-bottom:8px;">🏛️</div>
+        <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Master Hearing Prep</div>
+        <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Pick a case and the master-calendar prep form is filled with the client(s), A-numbers, hearing, and judge — then saved back to that case.</div>
+      </div>
       <div onclick="document.getElementById('restore-backup-input').click()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
         <div style="font-size:24px;margin-bottom:8px;">♻️</div>
         <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Restore from backup</div>
@@ -14097,6 +14104,178 @@ function renderToolsPage(){
         <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Pick a case and the app fills in the Motion for Video Appearance Word template — respondent, A#, judge, hearing date, attorney block — then downloads a ready-to-edit .docx.</div>
       </div>
     </div>`;
+}
+
+// ══════════════════════════════════════════════════
+// MASTER HEARING PREP — embeds tools/master-hearing-prep.html in an iframe,
+// scoped to one case. The parent prefills the form from case data on first
+// open and stores the tool's serialized state on caseMeta[clid].masterPrep so
+// it syncs with the rest of the case (see _cleanCaseMeta — masterPrep never
+// carries file attachments into the Firestore shards, keeping docs small).
+// ══════════════════════════════════════════════════
+const MHP_TOOL_URL='tools/master-hearing-prep.html';
+let _mhpActive=null;         // { frame, handler, clid }
+let _mhpSaveTimers={};       // per-clid debounce timers
+
+// Tear down the active iframe's message listener (called when leaving the
+// Master Prep view / switching cases) so stale frames don't keep saving.
+function _mhpTeardown(){
+  if(_mhpActive&&_mhpActive.handler){
+    try{ window.removeEventListener('message',_mhpActive.handler); }catch(e){}
+  }
+  _mhpActive=null;
+}
+
+// Map a case's data onto the tool's prefill shape.
+function _mhpBuildPrefill(clid){
+  const recs=records.filter(r=>(r.clid||r.client)===clid);
+  const base=recs.length?recs.reduce((best,r)=>{
+    const s=(r.client?1:0)+(r.anum?1:0)+(r.atty?1:0)+(r.type?1:0);
+    const bs=(best.client?1:0)+(best.anum?1:0)+(best.atty?1:0)+(best.type?1:0);
+    return s>bs?r:best;
+  },recs[0]):{clid:clid,client:'',anum:''};
+  const meta=caseMeta[clid]||{};
+  // Next (or most recent) hearing event on the case
+  const _today=(typeof todayStr==='function')?todayStr():new Date().toISOString().slice(0,10);
+  const hearings=recs.filter(r=>(typeof isHearingEventType==='function')&&isHearingEventType(r.event||'')&&r.date&&!r.finishedStatus&&!r.deletedStatus)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const h=hearings.find(r=>(r.date||'')>=_today)||hearings[0]||null;
+  const hearing={};
+  if(h){
+    hearing.date=h.date||'';
+    hearing.time=h.timeStart||'';
+    hearing.format = h.hearingMode==='virtual'?'Webex':(h.hearingMode==='in-person'?'In-person':'');
+    if(h.hearingJudgeId&&typeof judges!=='undefined'){
+      const j=judges.find(x=>x.id===h.hearingJudgeId);
+      if(j){ hearing.judge=j.name||''; hearing.court=j.venue||''; }
+    }
+  }
+  // Lead client — prefer the structured name in caseMeta, fall back to the record.
+  let lf=meta.clientFirstName||'', lm=meta.clientMiddleName||'', ll=meta.clientLastName||'';
+  if(!lf&&!ll&&base.client){
+    const parts=String(base.client).trim().split(/\s+/);
+    if(parts.length===1){ lf=parts[0]; }
+    else{ lf=parts[0]; ll=parts[parts.length-1]; if(parts.length>2) lm=parts.slice(1,-1).join(' '); }
+  }
+  const clients=[{
+    fname:lf, mname:lm, lname:ll,
+    anum:base.anum||'', cid:base.clid||clid||'',
+    dob:meta.clientDob||'', country:meta.clientCountryOfBirth||'', email:meta.clientEmail||''
+  }];
+  (meta.respondents||[]).forEach(r=>{
+    if(!r) return;
+    clients.push({
+      fname:r.firstName||'', mname:r.middleName||'', lname:r.lastName||'',
+      anum:r.anum||'', cid:'', dob:r.dob||'', country:r.country||'', email:''
+    });
+  });
+  return { hearing, clients };
+}
+
+// Defensive: never let a base64 attachment ride along into caseMeta (the tool
+// only posts a text snapshot today, but this keeps the Firestore shard small
+// even if the tool starts persisting attachments later).
+function _mhpStripState(state){
+  let s; try{ s=JSON.parse(JSON.stringify(state||{})); }catch(e){ s={}; }
+  if(s&&s.attachments) delete s.attachments;
+  if(s&&s.docs) delete s.docs;
+  return s;
+}
+
+// Persist a state posted by the iframe onto the case, debounced.
+function _mhpSaveState(clid,state){
+  if(!clid||!state) return;
+  clearTimeout(_mhpSaveTimers[clid]);
+  _mhpSaveTimers[clid]=setTimeout(()=>{
+    if(!caseMeta[clid]) caseMeta[clid]={};
+    caseMeta[clid].masterPrep=_mhpStripState(state);
+    try{ if(typeof markUnsaved==='function') markUnsaved(); }catch(e){}
+    try{ if(typeof saveAllData==='function') saveAllData(); }catch(e){}
+  },400);
+}
+
+// Build the iframe for a case and run the ready/load/state handshake.
+function _openMasterPrep(clid,hostEl,opts){
+  opts=opts||{};
+  _mhpTeardown();
+  const saved=(caseMeta[clid]||{}).masterPrep||null;
+  const prefill=saved?null:_mhpBuildPrefill(clid);
+  hostEl.innerHTML='';
+  const frame=document.createElement('iframe');
+  frame.src=MHP_TOOL_URL;
+  frame.title='Master Hearing Prep';
+  frame.style.cssText='width:100%;height:'+(opts.height||'calc(100vh - 190px)')+';min-height:520px;border:1px solid var(--border);border-radius:10px;background:#f7f4ef;display:block;';
+  function handler(e){
+    if(e.source!==frame.contentWindow) return;
+    const d=e.data||{};
+    if(d.type==='mhp-ready'){
+      try{ frame.contentWindow.postMessage({type:'mhp-load',clid:clid,state:saved,prefill:prefill},'*'); }catch(err){}
+    } else if(d.type==='mhp-state'){
+      _mhpSaveState(clid,d.state);
+    }
+  }
+  window.addEventListener('message',handler);
+  _mhpActive={frame,handler,clid};
+  hostEl.appendChild(frame);
+  return frame;
+}
+
+// Case-detail sub-tab renderer.
+function renderCaseMasterPrep(clid){
+  const host=document.getElementById('case-masterprep-body');
+  if(!host)return;
+  _openMasterPrep(clid,host,{height:'calc(100vh - 200px)'});
+}
+
+// Tools-tab launcher: pick a case, then open the tool full-width.
+function renderMasterPrep(){
+  const el=document.getElementById('tools-content');
+  if(!el)return;
+  el.style.cssText='';
+  const cases=(typeof getCases==='function'?getCases():[]).slice().sort((a,b)=>(a.client||'').localeCompare(b.client||''));
+  el.innerHTML=`
+    <button onclick="_mhpTeardown();renderToolsPage();" style="font-size:11px;padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;margin-bottom:14px;">← Back to Tools</button>
+    <div style="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);margin-bottom:4px;">Master Hearing Prep</div>
+    <div style="font-size:13px;color:var(--ink-muted);margin-bottom:16px;">Pick a case — the prep form is filled with the client(s), A-numbers, hearing, and judge, and saved to that case.</div>
+    <div style="position:relative;max-width:420px;margin-bottom:8px;">
+      <input id="mhp-case-search" type="text" placeholder="Search client, A-number or Client ID…" autocomplete="off" oninput="_mhpFilterCases(this.value)" style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;background:#fff;"/>
+    </div>
+    <div id="mhp-case-list" style="display:flex;flex-direction:column;gap:4px;max-width:640px;"></div>
+    <div id="mhp-open-host" style="margin-top:16px;"></div>`;
+  _mhpAllCasesCache=cases;
+  _mhpFilterCases('');
+}
+let _mhpAllCasesCache=[];
+function _mhpFilterCases(q){
+  const list=document.getElementById('mhp-case-list');
+  if(!list)return;
+  q=(q||'').toLowerCase().trim();
+  let cases=_mhpAllCasesCache;
+  if(q){
+    cases=cases.filter(c=>((c.client||'').toLowerCase().includes(q)||(c.anum||'').toLowerCase().includes(q)||(c.clid||'').toLowerCase().includes(q)));
+  }
+  cases=cases.slice(0,40);
+  if(!cases.length){ list.innerHTML='<div style="font-size:12px;color:var(--ink-faint);font-style:italic;padding:8px 2px;">No cases match.</div>'; return; }
+  list.innerHTML=cases.map(c=>{
+    const cid=(c.clid||c.client||'').replace(/'/g,"\\'");
+    const sub=[c.anum?('A# '+escHtml(c.anum)):'',c.type?escHtml(c.type):'',c.clid?('ID '+escHtml(c.clid)):''].filter(Boolean).join(' · ');
+    return `<button onclick="_mhpPickCase('${cid}')" style="text-align:left;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;padding:9px 12px;cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.borderColor='var(--sage)'" onmouseleave="this.style.borderColor='var(--border)'">
+      <div style="font-size:13px;font-weight:600;color:var(--ink);">👤 ${escHtml(c.client||'—')}</div>
+      <div style="font-size:11px;color:var(--ink-muted);margin-top:2px;">${sub}</div>
+    </button>`;
+  }).join('');
+}
+function _mhpPickCase(clid){
+  const host=document.getElementById('mhp-open-host');
+  const list=document.getElementById('mhp-case-list');
+  const search=document.getElementById('mhp-case-search');
+  if(list)list.style.display='none';
+  if(search)search.style.display='none';
+  if(!host)return;
+  host.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><div style="font-size:12px;color:var(--ink-muted);">Prep for <strong>'+escHtml(clid)+'</strong></div><button onclick="_mhpTeardown();renderMasterPrep();" style="font-size:11px;padding:4px 11px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Pick another case</button></div>';
+  const frameHost=document.createElement('div');
+  host.appendChild(frameHost);
+  _openMasterPrep(clid,frameHost,{height:'calc(100vh - 240px)'});
 }
 
 // ══════════════════════════════════════════════════
@@ -16924,15 +17103,18 @@ window._sijSetFcStage = function(sel){
 };
 
 function switchCaseTab(tab){
-  const panes={overview:'cd-pane-overview',checklists:'cd-pane-checklists',documents:'cd-pane-documents'};
-  const tabs={overview:'cdtab-overview',checklists:'cdtab-checklists',documents:'cdtab-documents'};
+  const panes={overview:'cd-pane-overview',checklists:'cd-pane-checklists',documents:'cd-pane-documents',masterprep:'cd-pane-masterprep'};
+  const tabs={overview:'cdtab-overview',checklists:'cdtab-checklists',documents:'cdtab-documents',masterprep:'cdtab-masterprep'};
   if(!panes[tab])tab='overview';
+  // Leaving the Master Prep tab? tear down the iframe bridge listener.
+  if(tab!=='masterprep')_mhpTeardown();
   Object.keys(panes).forEach(k=>{
     const p=document.getElementById(panes[k]);if(p)p.style.display=(k===tab)?'':'none';
     const b=document.getElementById(tabs[k]);if(b)b.classList.toggle('active',k===tab);
   });
   if(tab==='checklists'&&activeCaseClid)renderCaseChecklists(activeCaseClid);
   if(tab==='documents'&&activeCaseClid)renderCaseDocuments(activeCaseClid);
+  if(tab==='masterprep'&&activeCaseClid)renderCaseMasterPrep(activeCaseClid);
 }
 
 // Record a document created for a case (from the Motion/Brief Creator or
@@ -17315,12 +17497,15 @@ function openCaseDetail(clid){
   document.getElementById('cases-subtab-sij').style.display='none';
   document.getElementById('cases-sub-nav').style.display='none';
   document.getElementById('cases-detail-view').style.display='';
+  _mhpTeardown();
   document.getElementById('cd-pane-overview').style.display='';
   document.getElementById('cd-pane-checklists').style.display='none';
   document.getElementById('cd-pane-documents').style.display='none';
+  {const _mpp=document.getElementById('cd-pane-masterprep');if(_mpp)_mpp.style.display='none';}
   document.getElementById('cdtab-overview').classList.add('active');
   document.getElementById('cdtab-checklists').classList.remove('active');
   document.getElementById('cdtab-documents').classList.remove('active');
+  {const _mpt=document.getElementById('cdtab-masterprep');if(_mpt)_mpt.classList.remove('active');}
   if(typeof _refreshDocTabLabel==='function')_refreshDocTabLabel(clid);
   const allRecs=records.filter(r=>(r.clid||r.client)===clid);
   if(!allRecs.length)return;
@@ -21426,8 +21611,15 @@ function _cmShardDocId(i){ return 'cm_'+i; }
 function _cleanCaseMeta(cm){
   let out;
   try{ out=JSON.parse(JSON.stringify(cm||{})); }catch(e){ out={}; }
-  Object.values(out).forEach(m=>{ if(!m)return; (m.docSections||[]).forEach(sec=>{ (sec.docs||[]).forEach(d=>{ delete d.fileData; delete d.mimeType; }); }); });
+  Object.values(out).forEach(m=>{ if(!m)return; (m.docSections||[]).forEach(sec=>{ (sec.docs||[]).forEach(d=>{ delete d.fileData; delete d.mimeType; }); }); _stripMhpAttachments(m); });
   return out;
+}
+// Master Hearing Prep persists only a text snapshot, but strip any attachment
+// blobs defensively so caseMeta shards can never blow past the 1MB Firestore
+// document limit because of a prep form.
+function _stripMhpAttachments(m){
+  if(m&&m.masterPrep){ delete m.masterPrep.attachments; delete m.masterPrep.docs; }
+  return m;
 }
 // Merge incoming caseMeta into target by clid, newer _updatedAt wins, never
 // dropping a clid that exists on either side.
@@ -21607,6 +21799,7 @@ function _syncToFirestore(savedAt){
       (meta.docSections||[]).forEach(sec=>{
         (sec.docs||[]).forEach(d=>{delete d.fileData;delete d.mimeType;});
       });
+      if(typeof _stripMhpAttachments==='function')_stripMhpAttachments(meta);
     });
     const localPayload=JSON.parse(JSON.stringify({
       records,paralegals,eventTypes,eventTypeMeta,
@@ -21651,6 +21844,7 @@ function _syncToFirestore(savedAt){
           (m.docSections||[]).forEach(sec=>{
             (sec.docs||[]).forEach(d=>{ delete d.fileData; delete d.mimeType; });
           });
+          if(typeof _stripMhpAttachments==='function')_stripMhpAttachments(m);
         });
       }
       return cleaned;
