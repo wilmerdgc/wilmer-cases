@@ -993,6 +993,7 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .case-event-left { flex: 1; min-width: 0; }
 .case-event-name { font-size: 12px; font-weight: 600; }
 .case-event-sub { font-size: 11px; color: var(--ink-muted); margin-top: 2px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; }
+.case-event-check { margin: 2px 2px 0 0; width: 15px; height: 15px; cursor: pointer; accent-color: #6A8C6E; flex-shrink: 0; }
 
 /* ── Case detail tabs ──────────────────────────── */
 .cd-tab-nav { display: flex; gap: 0; border-bottom: 1.5px solid var(--border); margin-bottom: 22px; }
@@ -18266,6 +18267,15 @@ function openCaseDetail(clid){
     }
     row.innerHTML=`<div class="case-event-left"><div class="case-event-name" style="${colorStyle}font-weight:600;">${evLabel}${cdHtml}${judgeBadge}</div><div class="case-event-sub">${r.notes?escHtml(r.notes):'—'}</div></div><div style="flex-shrink:0">${sb2}</div>`;
     appendSoMeta(row.querySelector('.case-event-left'),r,'#C9823A');
+    // Per-event finish checkbox — clicking it opens the finish options
+    // (Attended / Completed / Cancelled / Reschedule / Delete) for this event
+    // without opening the full editor.
+    const _fchk=document.createElement('input');
+    _fchk.type='checkbox';
+    _fchk.className='case-event-check';
+    _fchk.title='Finish this event';
+    _fchk.onclick=(e)=>{ e.stopPropagation(); _fchk.checked=false; if(typeof _openTaskFinish==='function')_openTaskFinish(r.id); };
+    row.insertBefore(_fchk,row.firstChild);
     activeSecEl.appendChild(row);
   });}
   body.appendChild(activeSecEl);
