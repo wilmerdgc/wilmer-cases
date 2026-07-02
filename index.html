@@ -46,11 +46,19 @@ let _fbAuthReady=false;
 let _pendingSyncEpoch=null;
 firebase.auth().signInAnonymously().then(()=>{
   _fbAuthReady=true;
+  // Attach the cloud listeners now that requests carry an auth token.
+  // (Attaching before auth resolves gets permission-denied, which
+  // permanently cancels an onSnapshot listener — killing cloud sync for
+  // the session.) If this .then wins the race with script parsing, the
+  // definition site attaches instead via its own _fbAuthReady check.
+  try{ if(typeof window._attachCloudListeners==='function') window._attachCloudListeners(); }catch(e){}
   // Flush a save if one was queued during the auth wait
   if(_pendingSyncEpoch!==null){
     const epoch=_pendingSyncEpoch;_pendingSyncEpoch=null;
     if(typeof _syncToFirestore==='function') _syncToFirestore(epoch);
   }
+  // Flush day notes typed during the auth wait
+  try{ if(typeof window._flushPendingDayNotes==='function') window._flushPendingDayNotes(); }catch(e){}
 }).catch(err=>{
   _fbOnline=false;
   _offlineReason='Auth failed: '+(err.code||err.message||'unknown')+'. Enable Anonymous sign-in in Firebase Console.';
@@ -19773,13 +19781,20 @@ function toDateStr(d){
 
 // ── Day priorities & notes ───────────────────────────
 function dayNotesKey(d){const dt=d||dayViewDate;return'daynotes_'+dt.getFullYear()+'_'+(dt.getMonth()+1)+'_'+dt.getDate();}
+let _pendingDayNotes=false;
 function saveDayNotes(){
   const key=dayNotesKey();
   const data={p1:document.getElementById('dv-priority-1').value,p2:document.getElementById('dv-priority-2').value,p3:document.getElementById('dv-priority-3').value,notes:document.getElementById('dv-day-notes').value};
   try{localStorage.setItem(key,JSON.stringify(data));}catch{}
-  // Sync to Firestore
-  try{db.collection('wilmer_daynotes').doc(key).set(data).catch(()=>{});}catch(e){}
+  // Sync to Firestore — the rules require request.auth != null, so a write
+  // fired before the anonymous sign-in resolves would be permission-denied
+  // and silently lost. Park it and flush when auth is ready (same pattern
+  // as _syncToFirestore's _pendingSyncEpoch guard).
+  if(typeof _fbAuthReady!=='undefined' && !_fbAuthReady){ _pendingDayNotes=true; return; }
+  try{db.collection('wilmer_daynotes').doc(key).set(data).catch(err=>{ try{ console.warn('[daynotes] cloud write failed:', err.code||err.message); }catch(e){} });}catch(e){}
 }
+// Called from the sign-in .then() in the boot block.
+window._flushPendingDayNotes=function(){ if(_pendingDayNotes){ _pendingDayNotes=false; try{ saveDayNotes(); }catch(e){} } };
 function loadDayNotes(){
   const key=dayNotesKey();
   let data={p1:'',p2:'',p3:'',notes:''};
@@ -22105,10 +22120,31 @@ function saveToCloud(){
 
 function retryFirestoreConnection(){
   showToast('Retrying…');
+  // If the anonymous sign-in never succeeded (rules deny everything without
+  // it), retry the sign-in first, then attach listeners and flush the save.
+  if(typeof _fbAuthReady!=='undefined' && !_fbAuthReady){
+    firebase.auth().signInAnonymously().then(()=>{
+      _fbAuthReady=true;
+      _fbOnline=true; _offlineReason='';
+      try{ window._attachCloudListeners && window._attachCloudListeners(); }catch(e){}
+      try{ window._flushPendingDayNotes && window._flushPendingDayNotes(); }catch(e){}
+      _syncToFirestore(Date.now());
+      updateCloudIndicator();
+    }).catch(err=>{
+      _fbOnline=false;
+      _offlineReason='Auth failed: '+(err.code||err.message||'unknown')+'. Enable Anonymous sign-in in Firebase Console.';
+      updateCloudIndicator();
+      showToast('☁ Still offline — '+_offlineReason);
+    });
+    return;
+  }
   _syncToFirestore(Date.now());
 }
 
 function forcePullFromCloud(){
+  // Rules require an auth token — reads fired before the anonymous
+  // sign-in resolves come back permission-denied.
+  if(typeof _fbAuthReady!=='undefined' && !_fbAuthReady){ showToast('☁ Cloud sign-in not ready yet — try again in a moment'); return; }
   const btn=document.getElementById('pull-cloud-label');
   if(btn)btn.textContent='⏳';
   showToast('↓ Pulling from cloud…');
@@ -22466,8 +22502,25 @@ window._onFirstCloudSnapshot=function(cloudDocExists){
 // so the user is never trapped in an autosave-blocked state forever.
 setTimeout(()=>{ if(!_dataInitialized) showWelcomeGate(); }, 4000);
 
-// Step 2: Listen to Firestore for updates from OTHER devices
+// Step 2: Listen to Firestore for updates from OTHER devices.
+// The security rules require request.auth != null on every read, and the
+// SDK permanently cancels an onSnapshot listener that gets permission-
+// denied. Attaching before the anonymous sign-in resolved could therefore
+// kill cloud sync for the whole session (a device's first-ever load races
+// the sign-in round-trip). So every listener is attached through
+// _attachCloudListeners(), called from the sign-in .then() — or right
+// here if auth already resolved by the time this block runs.
 let _booted=false;
+let _cloudListenersAttached=false;
+window._attachCloudListeners=function(){
+  if(_cloudListenersAttached) return;
+  _cloudListenersAttached=true;
+  try{ _attachDataListener(); }catch(e){ console.warn('[cloud-sync] data listener attach failed', e); }
+  try{ _attachCmShardListener(); }catch(e){ console.warn('[cloud-sync] cm listener attach failed', e); }
+  try{ _attachLocksListener(); }catch(e){ console.warn('[cloud-sync] locks listener attach failed', e); }
+  try{ _attachDayNotesListener(); }catch(e){ console.warn('[cloud-sync] daynotes listener attach failed', e); }
+};
+function _attachDataListener(){
 db.collection('wilmer').doc('data').onSnapshot(
   {includeMetadataChanges:false},
   (doc)=>{
@@ -22550,6 +22603,7 @@ db.collection('wilmer').doc('data').onSnapshot(
     updateCloudIndicator();
   }
 );
+}
 
 // ─── caseMeta shard listener ────────────────────────────────────────
 // caseMeta lives in wilmer/cm_* docs (see _syncCaseMetaShards). Subscribe to
@@ -22557,6 +22611,7 @@ db.collection('wilmer').doc('data').onSnapshot(
 // device, merging per-clid (newer _updatedAt wins). The initial snapshot
 // delivers every cm_* doc, which is how this device first loads case files
 // from the cloud. data / locks docs are handled by their own listeners.
+function _attachCmShardListener(){
 db.collection('wilmer').onSnapshot(
   {includeMetadataChanges:false},
   (snap)=>{
@@ -22585,6 +22640,7 @@ db.collection('wilmer').onSnapshot(
   },
   (err)=>{ try{ console.warn('[cloud-sync] cm listener error', err.code||err.message); }catch(e){} }
 );
+}
 
 // ─── Per-record edit locks ──────────────────────────────────────────
 // While one device is editing a record, every other device is hard-blocked
@@ -22599,9 +22655,11 @@ var _recordLocks={};
 var _heldLockId=null;
 var _lockHeartbeatTimer=null;
 var _locksRef=db.collection('wilmer').doc('locks');
+function _attachLocksListener(){
 _locksRef.onSnapshot({includeMetadataChanges:false},function(doc){
   _recordLocks=(doc.exists?doc.data():{})||{};
 },function(err){ /* offline: acquire fails open below, so editing still works */ });
+}
 function _lockIsActive(l){ return !!(l&&l.at&&(Date.now()-l.at)<_LOCK_TTL_MS); }
 function _acquireLock(id){
   // No auth yet / offline → fail open so the user is never trapped.
@@ -22629,6 +22687,7 @@ function _showLockBlocked(lock){
 window.addEventListener('beforeunload',function(){ if(_heldLockId)_releaseLock(_heldLockId); });
 
 // Step 3: Listen to day notes from other devices
+function _attachDayNotesListener(){
 const dnKey=dayNotesKey();
 db.collection('wilmer_daynotes').doc(dnKey).onSnapshot(
   {includeMetadataChanges:false},
@@ -22640,8 +22699,12 @@ db.collection('wilmer_daynotes').doc(dnKey).onSnapshot(
     ['dv-priority-1','dv-priority-2','dv-priority-3'].forEach((id,i)=>{ if(active!==id){const el=document.getElementById(id);if(el)el.value=d['p'+(i+1)]||'';} });
     if(active!=='dv-day-notes'){const el=document.getElementById('dv-day-notes');if(el){el.value=d.notes||'';autoGrowNotes(el);}}
   },
-  ()=>{}
+  (err)=>{ try{ console.warn('[daynotes] listener error', err.code||err.message); }catch(e){} }
 );
+}
+// Attach now if the anonymous sign-in already resolved while this file was
+// parsing; otherwise the sign-in .then() in the boot block attaches them.
+if(_fbAuthReady) window._attachCloudListeners();
 // ── Perf: debounce filter inputs ──
 ['f-search','f-atty','f-type'].forEach(id=>{
   const el=document.getElementById(id);
