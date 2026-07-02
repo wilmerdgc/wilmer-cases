@@ -14173,6 +14173,27 @@ function _mhpBuildPrefill(clid){
   return { hearing, clients };
 }
 
+// All scheduled (open) hearing events on a case, for the tool's "Scheduled"
+// picker in its Hearing section. Sent on every mhp-load, even when a saved
+// state exists, so the tool always offers the current schedule.
+function _mhpBuildHearings(clid){
+  const recs=records.filter(r=>(r.clid||r.client)===clid);
+  return recs.filter(r=>(typeof isHearingEventType==='function')&&isHearingEventType(r.event||'')&&r.date&&!r.finishedStatus&&!r.deletedStatus)
+    .sort((a,b)=>((a.date||'').localeCompare(b.date||''))||((a.timeStart||'').localeCompare(b.timeStart||'')))
+    .map(r=>{
+      const j=(r.hearingJudgeId&&typeof judges!=='undefined')?judges.find(x=>x.id===r.hearingJudgeId):null;
+      return {
+        event:r.event||'Hearing',
+        date:r.date||'',
+        time:r.timeStart||'',
+        timeEnd:r.timeEnd||'',
+        format:r.hearingMode==='virtual'?'Webex':(r.hearingMode==='in-person'?'In-person':''),
+        judge:(j&&j.name)||'',
+        court:(j&&j.venue)||''
+      };
+    });
+}
+
 // Defensive: never let a base64 attachment ride along into caseMeta (the tool
 // only posts a text snapshot today, but this keeps the Firestore shard small
 // even if the tool starts persisting attachments later).
@@ -14210,7 +14231,7 @@ function _openMasterPrep(clid,hostEl,opts){
     if(e.source!==frame.contentWindow) return;
     const d=e.data||{};
     if(d.type==='mhp-ready'){
-      try{ frame.contentWindow.postMessage({type:'mhp-load',clid:clid,state:saved,prefill:prefill},'*'); }catch(err){}
+      try{ frame.contentWindow.postMessage({type:'mhp-load',clid:clid,state:saved,prefill:prefill,hearings:_mhpBuildHearings(clid)},'*'); }catch(err){}
     } else if(d.type==='mhp-state'){
       _mhpSaveState(clid,d.state);
     }

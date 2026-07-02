@@ -88,6 +88,24 @@
   .tab-save:hover { opacity:0.85; }
   .tab-save.saved { background:#3a6b3a; }
 
+  /* ── SCHEDULED HEARINGS (chips fed by the case tracker) ── */
+  .sched-hearings { display:flex; align-items:flex-start; gap:8px; margin:2px 0 16px; flex-wrap:wrap; }
+  .sched-lbl {
+    font-family:Arial,sans-serif; font-size:9px; font-weight:bold;
+    letter-spacing:0.08em; color:#9a8872; text-transform:uppercase;
+    padding-top:6px; flex-shrink:0;
+  }
+  .sched-list { display:flex; gap:6px; flex-wrap:wrap; }
+  .sched-chip {
+    font-family:Arial,sans-serif; font-size:11px;
+    background:#fffdf9; border:1px solid #cfc4b0; color:#6b5a3e;
+    border-radius:12px; padding:4px 12px; cursor:pointer;
+    text-align:left;
+  }
+  .sched-chip:hover { background:#f0e8dc; border-color:#a0865a; }
+  .sched-chip.active { background:#2c2720; color:#fffdf9; border-color:#2c2720; }
+  .sched-chip .sched-evt { font-weight:bold; text-transform:uppercase; letter-spacing:0.04em; }
+
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
 
@@ -590,6 +608,10 @@
   </div>
 
   <h2>Hearing</h2>
+  <div class="sched-hearings" id="sched-hearings" style="display:none;">
+    <span class="sched-lbl">Scheduled</span>
+    <div class="sched-list" id="sched-list"></div>
+  </div>
   <div class="row">
     <div class="field"><label class="lbl">Court</label><input type="text" id="court" data-label="Court"></div>
     <div class="field"><label class="lbl">Judge</label><input type="text" id="judge" data-label="Judge"></div>
@@ -1460,6 +1482,76 @@ function clearHistory() {
   if (!confirm('Delete all backups?')) return;
   localStorage.removeItem(STORAGE_KEY);
   renderHistory();
+}
+
+// ── SCHEDULED HEARINGS ────────────────────────────────────────────────────────
+// The case tracker sends the case's open hearing events with mhp-load; they
+// show as chips under the Hearing heading. Clicking one fills the fields.
+let scheduledHearings = [];
+let _schedListenerOn = false;
+
+function setScheduledHearings(list) {
+  scheduledHearings = Array.isArray(list) ? list : [];
+  if (!_schedListenerOn) {
+    _schedListenerOn = true;
+    ['h_date','h_time'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', renderScheduledHearings);
+    });
+  }
+  renderScheduledHearings();
+}
+
+function renderScheduledHearings() {
+  const wrap = document.getElementById('sched-hearings');
+  const listEl = document.getElementById('sched-list');
+  if (!wrap || !listEl) return;
+  if (!scheduledHearings.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  const curDate = document.getElementById('h_date')?.value || '';
+  const curTime = document.getElementById('h_time')?.value || '';
+  listEl.innerHTML = '';
+  scheduledHearings.forEach((h, idx) => {
+    const time = (h.time || '').slice(0, 5);
+    const inForm = h.date && h.date === curDate && (!time || time === curTime);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'sched-chip' + (inForm ? ' active' : '');
+    const evt = document.createElement('span');
+    evt.className = 'sched-evt';
+    evt.textContent = h.event || 'Hearing';
+    b.appendChild(evt);
+    const rest = [
+      h.date ? fd(h.date) : '',
+      time ? ft(time) : '',
+      h.judge || '',
+      h.format || ''
+    ].filter(Boolean).join(' · ');
+    if (rest) b.appendChild(document.createTextNode(' · ' + rest));
+    b.title = inForm ? 'This hearing is in the form' : 'Fill the Hearing fields with this event';
+    b.onclick = () => applyScheduledHearing(idx);
+    listEl.appendChild(b);
+  });
+}
+
+function applyScheduledHearing(idx) {
+  const h = scheduledHearings[idx];
+  if (!h) return;
+  const set = (id, v) => { const e = document.getElementById(id); if (e && v != null && v !== '') e.value = v; };
+  set('court', h.court);
+  set('judge', h.judge);
+  set('h_date', h.date);
+  set('h_time', (h.time || '').slice(0, 5));
+  if (h.format) {
+    const fs = document.getElementById('format');
+    if (fs) fs.value = h.format;
+  }
+  try { syncInPersonFields(); } catch(e) {}
+  try {
+    const when = [h.date ? fd(h.date) : '', h.time ? ft((h.time||'').slice(0,5)) : ''].filter(Boolean).join(' ');
+    recordChange('Hearing', '', (h.event || 'Hearing') + (when ? ' — ' + when : ''));
+  } catch(e) {}
+  scheduleAutoBackup();
+  renderScheduledHearings();
 }
 
 // ── MULTIPLE MASTER PREPS ─────────────────────────────────────────────────────
@@ -3486,6 +3578,7 @@ if (window.parent === window) initPreps(true);
     }catch(err){ try{ console.warn('[mhp-bridge] load failed', err); }catch(e){} }
     try{ updateHistBadge(loadBackups().length); }catch(e){}
     try{ initPreps(false); }catch(e){} // per-case prep tabs; parent state stays in the form
+    try{ if(d.hearings) setScheduledHearings(d.hearings); }catch(e){}
     setTimeout(function(){ _mhpLoading=false; }, 60);
   });
   window.addEventListener('load', function(){
