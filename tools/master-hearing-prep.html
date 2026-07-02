@@ -395,6 +395,8 @@
   }
   .preview-col.hidden { display: none; }
   .resizer.hidden { display: none; }
+  /* When the preview is closed, let the form use the whole window */
+  .form-layout:has(> .preview-col.hidden) .form-col { flex:1 1 auto; }
 
   .preview-toolbar {
     display:flex; align-items:center; gap:6px;
@@ -479,6 +481,23 @@
     title:"Detach / Dock";
   }
   .preview-drag-btn:hover { background:#f0e8dc; color:#6b5a3e; }
+  .preview-close-btn {
+    font-family:Arial,sans-serif; font-size:12px; background:none;
+    border:1px solid #cfc4b0; color:#9a8872;
+    width:24px; height:24px; border-radius:2px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .preview-close-btn:hover { background:#f5e0e0; color:#a04040; border-color:#c09090; }
+  .preview-reopen {
+    position:fixed; top:52px; right:14px; z-index:60;
+    font-family:Arial,sans-serif; font-size:10px; font-weight:bold;
+    text-transform:uppercase; letter-spacing:0.05em;
+    background:#2c2720; color:#fffdf9; border:none;
+    padding:6px 12px; border-radius:2px; cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.25);
+  }
+  .preview-reopen:hover { opacity:0.85; }
+  .preview-reopen.hidden { display:none; }
 
   /* ── RED NOTES ── */
   .preview-notes-bar {
@@ -514,6 +533,7 @@
 
 <!-- FORM PANEL -->
 <div class="tab-panel active" id="panel-form">
+<button class="preview-reopen hidden" id="preview-reopen" onclick="reopenPreview()" title="Reopen document preview">📄 Preview</button>
 <div class="form-layout">
 <div class="form-col">
 
@@ -721,6 +741,7 @@
     <button class="hl-btn erase" id="hl-erase" onclick="setHlTool('erase')" title="Erase">⌫ Erase</button>
     <button class="hl-save-btn" onclick="saveAnnotated()" title="Save annotated PDF">💾 Save</button>
     <button class="preview-drag-btn" id="float-btn" onclick="toggleFloat()" title="Detach / Dock">⊞</button>
+    <button class="preview-close-btn" onclick="closePreview()" title="Close preview">✕</button>
   </div>
   <div class="preview-viewport" id="preview-viewport">
     <div class="preview-empty" id="preview-empty">No document selected</div>
@@ -2138,6 +2159,7 @@ function attachCustomDoc(key, label, input) {
     if (fnEl) fnEl.innerHTML = `<a href="${url}" target="_blank" style="color:#3a6b3a;text-decoration:underline;font-size:10px;">${file.name}</a>`;
     if (fcEl) fcEl.style.display = '';
     input.value = '';
+    previewClosed = false; // attaching a doc means the user wants to see it
     rebuildPreviewTabs();
   };
   reader.readAsArrayBuffer(file);
@@ -2157,18 +2179,51 @@ function clearCustomDoc(key) {
 const previewNotes = {};
 let activePreviewKey = null;
 let previewZoom = 1.0;
+let previewClosed = false;
 
 if (window.pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 }
 
 function showPreviewPanel() {
+  const fc = document.querySelector('.form-col');
+  if (fc) {
+    fc.style.flex = fc.dataset.savedFlex || '';
+    fc.style.width = fc.dataset.savedWidth || '';
+  }
   document.getElementById('preview-col').classList.remove('hidden');
   document.getElementById('resizer').classList.remove('hidden');
+  document.getElementById('preview-reopen')?.classList.add('hidden');
 }
 function hidePreviewPanel() {
-  document.getElementById('preview-col').classList.add('hidden');
+  const fc = document.querySelector('.form-col');
+  const col = document.getElementById('preview-col');
+  if (fc) {
+    if (!col.classList.contains('hidden')) {
+      fc.dataset.savedFlex = fc.style.flex || '';
+      fc.dataset.savedWidth = fc.style.width || '';
+    }
+    // Let the form use the full window while the preview is closed
+    fc.style.flex = '1 1 auto';
+    fc.style.width = 'auto';
+  }
+  col.classList.add('hidden');
   document.getElementById('resizer').classList.add('hidden');
+}
+
+function closePreview() {
+  if (isFloating) toggleFloat(); // dock back first so state stays consistent
+  previewClosed = true;
+  hidePreviewPanel();
+  const btn = document.getElementById('preview-reopen');
+  if (btn) btn.classList.toggle('hidden', !Object.keys(docStore).length);
+}
+
+function reopenPreview() {
+  previewClosed = false;
+  showPreviewPanel();
+  rebuildPreviewTabs();
+  if (activePreviewKey) switchPreview(activePreviewKey);
 }
 
 function changeZoom(delta) {
@@ -2187,8 +2242,18 @@ function rebuildPreviewTabs() {
                    ...Object.keys(docStore).filter(k => k.startsWith('custom_'))];
   const tabs = document.getElementById('preview-tabs');
   tabs.innerHTML = '';
-  if (!allKeys.length) { hidePreviewPanel(); activePreviewKey = null; return; }
-  showPreviewPanel();
+  if (!allKeys.length) {
+    hidePreviewPanel();
+    document.getElementById('preview-reopen')?.classList.add('hidden');
+    activePreviewKey = null;
+    return;
+  }
+  if (previewClosed) {
+    hidePreviewPanel();
+    document.getElementById('preview-reopen')?.classList.remove('hidden');
+  } else {
+    showPreviewPanel();
+  }
   allKeys.forEach(key => {
     const label = docStore[key].label || DOC_LABELS[key] || key;
     const btn = document.createElement('button');
@@ -2581,6 +2646,7 @@ function attachDoc(key, input, customLabel) {
     if (fnEl) fnEl.innerHTML = `<a href="${url}" target="_blank" style="color:#3a6b3a;text-decoration:underline;font-size:10px;">${file.name}</a>`;
     if (fcEl) fcEl.style.display = '';
     input.value = '';
+    previewClosed = false; // attaching a doc means the user wants to see it
     rebuildPreviewTabs();
   };
   reader.readAsArrayBuffer(file);
