@@ -121,6 +121,7 @@
   }
   .ne-remove:hover { background:#f5e0e0; color:#a04040; border-color:#c09090; }
   .ne-add-bar { display:flex; gap:8px; flex-wrap:wrap; }
+  .dar-x { position:static; align-self:flex-end; margin-bottom:6px; flex-shrink:0; }
 
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
@@ -683,6 +684,25 @@
   <div class="row">
     <div class="field"><label class="lbl">Primary Attorney</label><input type="text" id="p_att" data-label="Primary Attorney"></div>
     <div class="field"><label class="lbl">Paralegal</label><input type="text" id="paralegal" data-label="Paralegal"></div>
+  </div>
+  <div class="row">
+    <div class="field"><label class="lbl">Pleadings Have Been Taken?</label>
+      <div class="yn">
+        <label><input type="radio" name="pleadings" value="Yes" data-label="Pleadings Taken" onchange="togglePleadings()"> Yes</label>
+        <label><input type="radio" name="pleadings" value="No" checked data-label="Pleadings Taken" onchange="togglePleadings()"> No</label>
+      </div>
+    </div>
+    <div class="field age-disabled" id="pleadings_on_wrap"><label class="lbl">Taken On</label><input type="date" id="pleadings_on" data-label="Pleadings Taken On"></div>
+    <div class="field"><label class="lbl">Did You Hear DAR?</label>
+      <div class="yn">
+        <label><input type="radio" name="dar" value="Yes" data-label="DAR Heard" onchange="toggleDar()"> Yes</label>
+        <label><input type="radio" name="dar" value="No" checked data-label="DAR Heard" onchange="toggleDar()"> No</label>
+      </div>
+    </div>
+  </div>
+  <div id="dar-wrap" style="display:none;">
+    <div id="dar-list"></div>
+    <button class="add" onclick="addDar()">+ Add DAR Date</button>
   </div>
 
   <h2>Filings &amp; Service</h2>
@@ -1658,6 +1678,63 @@ function migrateLegacyNextEvent(snap) {
 }
 window.migrateLegacyNextEvent = migrateLegacyNextEvent;
 
+// ── PLEADINGS & DAR ───────────────────────────────────────────────────────────
+function togglePleadings() {
+  const isYes = document.querySelector('input[name="pleadings"][value="Yes"]')?.checked;
+  const wrap = document.getElementById('pleadings_on_wrap');
+  if (wrap) wrap.classList.toggle('age-disabled', !isYes);
+  if (!isYes) { const f = document.getElementById('pleadings_on'); if (f) f.value = ''; }
+}
+
+let darCt = 0;
+
+function darIdxList() {
+  return [...document.querySelectorAll('#dar-list .dar-row')].map(b => parseInt(b.id.replace('dar',''), 10));
+}
+
+function toggleDar() {
+  const isYes = document.querySelector('input[name="dar"][value="Yes"]')?.checked;
+  const wrap = document.getElementById('dar-wrap');
+  if (wrap) wrap.style.display = isYes ? '' : 'none';
+  if (isYes && !darIdxList().length) addDar(null, true);
+}
+
+// data: optional {date, note}; silent: no history noise (restore path)
+function addDar(data, silent) {
+  darCt++;
+  const n = darCt;
+  const d = document.createElement('div');
+  d.className = 'row dar-row'; d.id = 'dar' + n;
+  d.innerHTML = `
+    <div class="field" style="flex:0 0 170px;"><label class="lbl">DAR Date</label><input type="date" id="dar_date_${n}" data-label="DAR ${n} Date"></div>
+    <div class="field"><label class="lbl">Note</label><input type="text" id="dar_note_${n}" data-label="DAR ${n} Note" placeholder="What was on this recording…"></div>
+    <button type="button" class="ne-remove dar-x" onclick="removeDar(${n})" title="Remove this DAR date">✕</button>`;
+  document.getElementById('dar-list').appendChild(d);
+  if (data) {
+    if (data.date) document.getElementById('dar_date_' + n).value = data.date;
+    if (data.note) document.getElementById('dar_note_' + n).value = data.note;
+  }
+  attachListeners(d);
+  if (!silent) {
+    recordChange('DAR', '', '(new date)');
+    scheduleAutoBackup();
+    document.getElementById('dar_date_' + n).focus();
+  }
+  return n;
+}
+
+function removeDar(n) {
+  const dt = document.getElementById('dar_date_' + n)?.value || '';
+  document.getElementById('dar' + n)?.remove();
+  recordChange('DAR' + (dt ? ' (' + fd(dt) + ')' : ''), '', '(removed)');
+  scheduleAutoBackup();
+}
+
+// Ordered structural copy (numbering-independent, for saved states)
+function collectDars() {
+  return darIdxList().map(n => ({ date: g('dar_date_' + n), note: g('dar_note_' + n) }));
+}
+
 // ── MULTIPLE MASTER PREPS ─────────────────────────────────────────────────────
 // Each "prep" is a named, saved copy of the whole form. The list lives in
 // localStorage (the app bridge overrides prepStorageKey for per-case keys).
@@ -1686,10 +1763,10 @@ function serializeForm() {
   for (const i of xs) {
     if (document.getElementById('c'+i+'_role')?.value === 'Lead') { lead = i; break; }
   }
-  // Next Event rows are stored structurally (their numbering isn't stable
-  // across sessions), so strip their labels from the flat snapshot.
+  // Next Event and DAR rows are stored structurally (their numbering isn't
+  // stable across sessions), so strip their labels from the flat snapshot.
   const snap = takeSnapshot();
-  Object.keys(snap).forEach(k => { if (/^Next Event \d+ /.test(k)) delete snap[k]; });
+  Object.keys(snap).forEach(k => { if (/^(Next Event|DAR) \d+ /.test(k)) delete snap[k]; });
   return {
     v: 1,
     snap,
@@ -1699,7 +1776,8 @@ function serializeForm() {
       charges: document.querySelectorAll('#charges-list-c'+i+' .charge-row').length
     })),
     leadIdx: lead,
-    nextEvents: collectNextEvents()
+    nextEvents: collectNextEvents(),
+    darEntries: collectDars()
   };
 }
 
@@ -1719,6 +1797,9 @@ function blankFormBase() {
   cc=0; ac=0;
   document.getElementById('next-events').innerHTML='';
   neCt=0;
+  document.getElementById('dar-list').innerHTML='';
+  darCt=0;
+  document.getElementById('dar-wrap').style.display='none';
   Object.keys(docStore).filter(k => k.startsWith('nta_c')).forEach(k => clearDoc(k));
   addClient();
   for(let i=0;i<4;i++) addAlleg(1);
@@ -1762,11 +1843,14 @@ function applyFormState(state) {
     } else {
       try { migrateLegacyNextEvent(state.snap); } catch(e) {}
     }
+    (state.darEntries || []).forEach(d => { try { addDar(d, true); } catch(e) {} });
   }
   // Re-run visibility toggles driven by the restored values
   try { syncInPersonFields(); } catch(e) {}
   try { check1YearIssue(); } catch(e) {}
   try { checkPaperFile(); } catch(e) {}
+  try { togglePleadings(); } catch(e) {}
+  try { toggleDar(); } catch(e) {}
   try { updateRoleBadges(); } catch(e) {}
   try { updateClientSummary(); } catch(e) {}
   clientIdxList().forEach(i => {
@@ -2113,6 +2197,18 @@ async function generatePDF() {
   sec('Procedural History');
   row([['File Type',r('ftype')],['Detained',r('detained')],['1-Yr Issue',r('yr_issue')],['Entry Date',fd(g('d_entry'))],['1st I-589',fd(g('d_589'))],['Retained On',fd(g('retained'))]]);
   row([['Primary Attorney',g('p_att')],['Paralegal',g('paralegal')],['Justification (1-yr)',g('justif')]]);
+  row([['Pleadings Taken?',r('pleadings')],['Taken On',fd(g('pleadings_on'))],['DAR Heard?',r('dar')]]);
+  if (r('dar') === 'Yes') {
+    darIdxList().forEach((n, idx) => {
+      const note = g('dar_note_' + n);
+      if (note.length > 60) {
+        row([['DAR ' + (idx + 1), fd(g('dar_date_' + n))]]);
+        tb('', note);
+      } else {
+        row([['DAR ' + (idx + 1), fd(g('dar_date_' + n))],['Note', note]]);
+      }
+    });
+  }
 
   sec('Filings & Service');
   [['Biometrics',r('bio'),fd(g('bio_d')),''],['E-33',r('e33'),fd(g('e33_d')),''],
@@ -2336,7 +2432,7 @@ function exportExcel() {
 
   const fieldSections = {
     'Hearing': ['Court','Judge','Hearing Date','Hearing Time','Format'],
-    'Procedural History': ['File Type','Detained','1-Year Issue','Date of Entry','Date 1st I-589','Retained On','Justification','Primary Attorney','Paralegal'],
+    'Procedural History': ['File Type','Detained','1-Year Issue','Date of Entry','Date 1st I-589','Retained On','Justification','Primary Attorney','Paralegal','Pleadings Taken','Pleadings Taken On','DAR Heard'],
     'Filings & Service': ['Biometrics','Biometrics Date','E-33','E-33 Date','WG E-28','WG E-28 Date','DHS E-28'],
     'Relief Sought': ['Asylum: PSG','Asylum: Race','Asylum: Nationality','Asylum: Religion','Asylum: Political Opinion','INA Withholding','CAT Withholding','Cancellation of Removal','SIJ','TVPRA','TVPRA Detail','Other Relief','File: I-589','File: Submission','File: NOH','File: E-28','File: ECAS eService','File: DHS eService'],
     'Other': ['Other Issues / Judge Comments','Next Steps / Deadlines'],
@@ -2368,6 +2464,14 @@ function exportExcel() {
     fields.forEach(f => {
       rows.push(['', f, findVal(f)]);
     });
+  });
+
+  // DAR dates — dynamic
+  rows.push(['', '', '']);
+  rows.push(['DAR', '', '']);
+  darIdxList().forEach((n, idx) => {
+    rows.push(['', `DAR ${idx + 1} Date`, snap['DAR ' + n + ' Date'] || '']);
+    rows.push(['', `DAR ${idx + 1} Note`, snap['DAR ' + n + ' Note'] || '']);
   });
 
   // Next Events — dynamic
@@ -3364,6 +3468,9 @@ function resetForm() {
   cc=0; ac=0;
   document.getElementById('next-events').innerHTML='';
   neCt=0;
+  document.getElementById('dar-list').innerHTML='';
+  darCt=0;
+  document.getElementById('dar-wrap').style.display='none';
   // Clear all per-client NTA docs
   Object.keys(docStore).filter(k => k.startsWith('nta_c')).forEach(k => clearDoc(k));
   addClient();
@@ -3590,15 +3697,16 @@ if (window.parent === window) initPreps(true);
   function mhpGetState(){
     var xs=_idxs();
     var snap=takeSnapshot();
-    // Next Event rows are stored structurally (numbering isn't stable across loads)
-    Object.keys(snap).forEach(function(k){ if(/^Next Event \d+ /.test(k)) delete snap[k]; });
+    // Next Event and DAR rows are stored structurally (numbering isn't stable across loads)
+    Object.keys(snap).forEach(function(k){ if(/^(Next Event|DAR) \d+ /.test(k)) delete snap[k]; });
     return {
       v:1,
       snap: snap,
       clientCount: xs.length,
       clients: xs.map(function(i){ return { allegs:_allegCount(i), charges:_chargeCount(i) }; }),
       leadIdx: _leadIdx(),
-      nextEvents: (typeof collectNextEvents==='function'?collectNextEvents():[])
+      nextEvents: (typeof collectNextEvents==='function'?collectNextEvents():[]),
+      darEntries: (typeof collectDars==='function'?collectDars():[])
     };
   }
   function _applySnap(snap){
@@ -3647,6 +3755,9 @@ if (window.parent === window) initPreps(true);
         window.migrateLegacyNextEvent(state.snap);
       }
     }catch(e){}
+    try{ (state.darEntries||[]).forEach(function(d){ addDar(d, true); }); }catch(e){}
+    try{ togglePleadings(); }catch(e){}
+    try{ toggleDar(); }catch(e){}
     _refreshDerived();
     lastSnap=takeSnapshot(); pendingChanges=[];
   }
