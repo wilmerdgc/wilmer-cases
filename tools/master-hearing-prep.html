@@ -50,6 +50,44 @@
   .tab.active { color: #2c2720; border-bottom: 2px solid #2c2720; }
   .tab:hover { color: #4a3c2c; }
 
+  /* ── PREP BAR (multiple Master Preps + Save, right side of the tab bar) ── */
+  .tabs { align-items: center; flex-wrap: wrap; }
+  .prep-bar { margin-left:auto; display:flex; align-items:center; gap:6px; padding:5px 0; flex-wrap:wrap; }
+  .prep-bar-lbl {
+    font-family:Arial,sans-serif; font-size:9px; font-weight:bold;
+    letter-spacing:0.08em; color:#9a8872; text-transform:uppercase;
+  }
+  .prep-tabs { display:flex; gap:4px; flex-wrap:wrap; }
+  .prep-tab {
+    display:flex; align-items:center; gap:6px;
+    font-family:Arial,sans-serif; font-size:10px; font-weight:bold;
+    text-transform:uppercase; letter-spacing:0.05em;
+    padding:4px 10px; border-radius:2px; cursor:pointer;
+    background:#fffdf9; border:1px solid #cfc4b0; color:#6b5a3e;
+    user-select:none; max-width:170px;
+  }
+  .prep-tab:hover { background:#f0e8dc; }
+  .prep-tab.active { background:#2c2720; color:#fffdf9; border-color:#2c2720; }
+  .prep-tab.active:hover { background:#2c2720; }
+  .prep-tab-lbl { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .prep-tab-x { font-weight:normal; opacity:0.6; }
+  .prep-tab-x:hover { opacity:1; color:#e08080; }
+  .prep-add {
+    font-family:Arial,sans-serif; font-size:10px; font-weight:bold;
+    text-transform:uppercase; letter-spacing:0.05em;
+    padding:4px 10px; border-radius:2px; cursor:pointer;
+    background:none; border:1px dashed #b0a090; color:#9a8872;
+  }
+  .prep-add:hover { color:#6b5a3e; border-color:#6b5a3e; }
+  .tab-save {
+    font-family:Arial,sans-serif; font-size:10px; font-weight:bold;
+    text-transform:uppercase; letter-spacing:0.05em;
+    padding:5px 14px; border-radius:2px; cursor:pointer;
+    background:#2c2720; color:#fffdf9; border:none;
+  }
+  .tab-save:hover { opacity:0.85; }
+  .tab-save.saved { background:#3a6b3a; }
+
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
 
@@ -529,6 +567,12 @@
   <button class="tab active" onclick="switchTab('form')">Form</button>
   <button class="tab" onclick="switchTab('history')" id="hist-tab">History</button>
   <button class="tab" onclick="switchTab('settings')">Settings</button>
+  <div class="prep-bar">
+    <span class="prep-bar-lbl">Preps</span>
+    <div class="prep-tabs" id="prep-tabs"></div>
+    <button class="prep-add" onclick="newPrep()" title="Start another Master Prep (current one is saved first)">+ New Prep</button>
+    <button class="tab-save" id="tab-save-btn" onclick="savePrepManual()" title="Save all form fields">💾 Save</button>
+  </div>
 </div>
 
 <!-- FORM PANEL -->
@@ -1276,6 +1320,7 @@ function scheduleAutoBackup() {
   if (autoTimer) clearTimeout(autoTimer);
   autoTimer = setTimeout(() => {
     saveBackup('auto');
+    persistActivePrep(); // keep the active prep's saved copy current
   }, 1500); // 1.5s debounce
 }
 
@@ -1408,6 +1453,251 @@ function clearHistory() {
   if (!confirm('Delete all backups?')) return;
   localStorage.removeItem(STORAGE_KEY);
   renderHistory();
+}
+
+// ── MULTIPLE MASTER PREPS ─────────────────────────────────────────────────────
+// Each "prep" is a named, saved copy of the whole form. The list lives in
+// localStorage (the app bridge overrides prepStorageKey for per-case keys).
+window.prepStorageKey = function(){ return 'mhp_preps'; };
+let activePrepId = null;
+let prepsReady = false; // embedded mode: wait for the parent to send the case id
+
+function loadPreps() {
+  try {
+    const d = JSON.parse(localStorage.getItem(prepStorageKey()));
+    return (d && Array.isArray(d.list)) ? d : { list: [], activeId: null };
+  } catch { return { list: [], activeId: null }; }
+}
+function storePreps(d) {
+  try { localStorage.setItem(prepStorageKey(), JSON.stringify(d)); } catch(e) {}
+}
+
+function clientIdxList() {
+  return [...document.querySelectorAll('.client-block')].map(b => parseInt(b.id.replace('cb',''), 10));
+}
+
+// Full form state: flat field snapshot + dynamic structure (clients/rows/lead)
+function serializeForm() {
+  const xs = clientIdxList();
+  let lead = xs[0] || 1;
+  for (const i of xs) {
+    if (document.getElementById('c'+i+'_role')?.value === 'Lead') { lead = i; break; }
+  }
+  return {
+    v: 1,
+    snap: takeSnapshot(),
+    clientCount: xs.length,
+    clients: xs.map(i => ({
+      allegs: document.querySelectorAll('#allegs-c'+i+' .alleg-row').length,
+      charges: document.querySelectorAll('#charges-list-c'+i+' .charge-row').length
+    })),
+    leadIdx: lead
+  };
+}
+
+// resetForm() without the confirm prompt or history noise
+function blankFormBase() {
+  document.querySelectorAll('input[type="text"],input[type="date"],input[type="time"],textarea,select').forEach(e=>e.value='');
+  document.querySelectorAll('input[type="checkbox"]').forEach(e=>e.checked=false);
+  document.querySelectorAll('input[type="radio"]').forEach(e=>{ e.checked=(e.value==='No'); });
+  document.querySelector('input[name="ftype"][value="ECAS"]').checked=true;
+  document.getElementById('clients').innerHTML='';
+  document.getElementById('an-clients').innerHTML='';
+  document.getElementById('fo-nta-per-client').innerHTML='';
+  document.getElementById('ntc-clients').innerHTML='';
+  chargeCt=0;
+  Object.keys(allegCt).forEach(k => delete allegCt[k]);
+  Object.keys(chargeCtPer).forEach(k => delete chargeCtPer[k]);
+  cc=0; ac=0;
+  Object.keys(docStore).filter(k => k.startsWith('nta_c')).forEach(k => clearDoc(k));
+  addClient();
+  for(let i=0;i<4;i++) addAlleg(1);
+}
+
+function ensureRowCount(countFn, addFn, selector, target) {
+  let g = 0;
+  while (countFn() < target && g++ < 80) addFn();
+  g = 0;
+  while (countFn() > target && g++ < 80) {
+    const rows = document.querySelectorAll(selector);
+    if (!rows.length) break;
+    rows[rows.length - 1].remove();
+  }
+}
+
+function applyFormState(state) {
+  blankFormBase();
+  if (state && state.snap) {
+    const target = state.clientCount || 1;
+    let g = 0;
+    while (clientIdxList().length < target && g++ < 50) addClient();
+    const xs = clientIdxList();
+    (state.clients || []).forEach((c, pos) => {
+      const i = xs[pos]; if (i == null) return;
+      ensureRowCount(() => document.querySelectorAll('#allegs-c'+i+' .alleg-row').length,
+                     () => addAlleg(i), '#allegs-c'+i+' .alleg-row', c.allegs || 0);
+      ensureRowCount(() => document.querySelectorAll('#charges-list-c'+i+' .charge-row').length,
+                     () => addCharge(i), '#charges-list-c'+i+' .charge-row', Math.max(1, c.charges || 1));
+    });
+    Object.entries(state.snap).forEach(([label, val]) => {
+      document.querySelectorAll(`[data-label="${label.replace(/"/g,'\\"')}"]`).forEach(el => {
+        if (el.type === 'radio') { el.checked = (el.value === val); }
+        else if (el.type === 'checkbox') { el.checked = (val === 'checked'); }
+        else { el.value = val; }
+      });
+    });
+    if (state.leadIdx) { try { setLead(state.leadIdx); } catch(e) {} }
+  }
+  // Re-run visibility toggles driven by the restored values
+  try { syncInPersonFields(); } catch(e) {}
+  try { check1YearIssue(); } catch(e) {}
+  try { checkPaperFile(); } catch(e) {}
+  try { toggleSentOn(); } catch(e) {}
+  try { updateRoleBadges(); } catch(e) {}
+  try { updateClientSummary(); } catch(e) {}
+  clientIdxList().forEach(i => {
+    try { calcAges(i); } catch(e) {}
+    try { toggleAnDate(i); } catch(e) {}
+  });
+  lastSnap = takeSnapshot();
+  pendingChanges = [];
+  if (autoTimer) clearTimeout(autoTimer); // setLead etc. scheduled a spurious auto-backup
+}
+
+function ensureActivePrep() {
+  const d = loadPreps();
+  if (!d.list.length) {
+    const p = { id: Date.now(), name: 'Prep 1', ts: '', state: null };
+    d.list.push(p); d.activeId = p.id; storePreps(d);
+    activePrepId = p.id;
+  } else if (activePrepId == null || !d.list.some(p => p.id === activePrepId)) {
+    activePrepId = d.list.some(p => p.id === d.activeId) ? d.activeId : d.list[0].id;
+  }
+  return loadPreps();
+}
+
+function persistActivePrep() {
+  if (!prepsReady) return null;
+  const d = ensureActivePrep();
+  const p = d.list.find(x => x.id === activePrepId) || d.list[0];
+  p.state = serializeForm();
+  p.ts = new Date().toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true });
+  d.activeId = activePrepId = p.id;
+  storePreps(d);
+  return p;
+}
+
+function savePrepManual() {
+  persistActivePrep();
+  saveBackup('manual'); // also record it in the History tab
+  const btn = document.getElementById('tab-save-btn');
+  if (btn) {
+    btn.textContent = '✓ Saved';
+    btn.classList.add('saved');
+    setTimeout(() => { btn.textContent = '💾 Save'; btn.classList.remove('saved'); }, 2000);
+  }
+  renderPrepTabs();
+}
+
+function newPrep() {
+  if (!prepsReady) return;
+  persistActivePrep(); // don't lose current work
+  const d = loadPreps();
+  let n = 1;
+  while (d.list.some(p => p.name === 'Prep ' + n)) n++;
+  let id = Date.now();
+  while (d.list.some(p => p.id === id)) id++;
+  const p = { id, name: 'Prep ' + n, ts: '', state: null };
+  d.list.push(p); d.activeId = p.id; storePreps(d);
+  activePrepId = p.id;
+  applyFormState(null); // fresh blank form
+  renderPrepTabs();
+  switchTabByName('form');
+}
+
+function switchPrep(id) {
+  if (!prepsReady || id === activePrepId) return;
+  persistActivePrep();
+  const d = loadPreps();
+  const p = d.list.find(x => x.id === id);
+  if (!p) return;
+  activePrepId = id; d.activeId = id; storePreps(d);
+  applyFormState(p.state);
+  renderPrepTabs();
+  switchTabByName('form');
+}
+
+function renamePrep(id) {
+  const d = loadPreps();
+  const p = d.list.find(x => x.id === id);
+  if (!p) return;
+  const name = prompt('Rename this prep:', p.name);
+  if (name === null) return;
+  p.name = name.trim() || p.name;
+  storePreps(d);
+  renderPrepTabs();
+}
+
+function deletePrep(id, ev) {
+  if (ev) ev.stopPropagation();
+  const d = loadPreps();
+  const p = d.list.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(`Delete "${p.name}"? Its saved fields will be lost.`)) return;
+  d.list = d.list.filter(x => x.id !== id);
+  if (!d.list.length) {
+    const np = { id: Date.now(), name: 'Prep 1', ts: '', state: null };
+    d.list.push(np); d.activeId = np.id; storePreps(d);
+    activePrepId = np.id;
+    applyFormState(null);
+  } else if (id === activePrepId) {
+    const nxt = d.list[0];
+    d.activeId = nxt.id; storePreps(d);
+    activePrepId = nxt.id;
+    applyFormState(nxt.state);
+  } else {
+    d.activeId = activePrepId; storePreps(d);
+  }
+  renderPrepTabs();
+}
+
+function renderPrepTabs() {
+  const wrap = document.getElementById('prep-tabs');
+  if (!wrap || !prepsReady) return;
+  const d = ensureActivePrep();
+  wrap.innerHTML = '';
+  d.list.forEach(p => {
+    const t = document.createElement('div');
+    t.className = 'prep-tab' + (p.id === activePrepId ? ' active' : '');
+    t.title = (p.ts ? 'Saved ' + p.ts + ' — ' : '') + 'Click to open · Double-click to rename';
+    t.onclick = () => switchPrep(p.id);
+    t.ondblclick = e => { e.preventDefault(); renamePrep(p.id); };
+    const lbl = document.createElement('span');
+    lbl.className = 'prep-tab-lbl';
+    lbl.textContent = p.name;
+    t.appendChild(lbl);
+    if (d.list.length > 1) {
+      const x = document.createElement('span');
+      x.className = 'prep-tab-x';
+      x.textContent = '✕';
+      x.title = 'Delete this prep';
+      x.onclick = e => deletePrep(p.id, e);
+      t.appendChild(x);
+    }
+    wrap.appendChild(t);
+  });
+}
+
+// applySaved: standalone reload restores the active prep; embedded mode keeps
+// the form the parent app just populated and only picks up the tab list.
+function initPreps(applySaved) {
+  prepsReady = true;
+  const d = ensureActivePrep();
+  if (applySaved) {
+    const p = d.list.find(x => x.id === activePrepId);
+    if (p && p.state) applyFormState(p.state);
+  }
+  renderPrepTabs();
 }
 
 // ── PDF GENERATION ────────────────────────────────────────────────────────────
@@ -2857,6 +3147,8 @@ function resetForm() {
   pendingChanges = [];
   recordChange('Form', '', 'Reset');
   saveBackup('manual');
+  persistActivePrep();
+  renderPrepTabs();
 }
 
 // ── PHONE 2 TOGGLE ───────────────────────────────────────────────────────────
@@ -3034,6 +3326,10 @@ const existing = loadBackups();
 if (existing.length) {
   document.getElementById('bkp-indicator').textContent = 'Last: ' + existing[0].ts;
 }
+
+// Multiple preps: standalone restores the last active prep on load. When
+// embedded, the app bridge below initializes preps once the case id arrives.
+if (window.parent === window) initPreps(true);
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════
@@ -3143,6 +3439,7 @@ if (existing.length) {
 
   // ── Per-case localStorage history (replaces the single global store) ──
   function _key(){ return 'mhp_backups_'+(_mhpClid||'global'); }
+  window.prepStorageKey=function(){ return 'mhp_preps_'+(_mhpClid||'global'); };
   window.loadBackups=function(){ try{ return JSON.parse(localStorage.getItem(_key()))||[]; }catch(e){ return []; } };
   window.saveBackup=function(type){
     var snap=takeSnapshot();
@@ -3181,6 +3478,7 @@ if (existing.length) {
       else if(d.prefill){ mhpApplyPrefill(d.prefill); }
     }catch(err){ try{ console.warn('[mhp-bridge] load failed', err); }catch(e){} }
     try{ updateHistBadge(loadBackups().length); }catch(e){}
+    try{ initPreps(false); }catch(e){} // per-case prep tabs; parent state stays in the form
     setTimeout(function(){ _mhpLoading=false; }, 60);
   });
   window.addEventListener('load', function(){
