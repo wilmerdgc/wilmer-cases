@@ -106,6 +106,22 @@
   .sched-chip.active { background:#2c2720; color:#fffdf9; border-color:#2c2720; }
   .sched-chip .sched-evt { font-weight:bold; text-transform:uppercase; letter-spacing:0.04em; }
 
+  /* ── NEXT EVENTS ── */
+  .ne-block {
+    position:relative; border:1px solid #e4dbc8; border-radius:3px;
+    background:#fffdf9; padding:12px 34px 0 12px; margin-bottom:10px;
+  }
+  .ne-block .row { margin-bottom:12px; }
+  .ne-remove {
+    position:absolute; top:8px; right:8px;
+    font-family:Arial,sans-serif; font-size:11px; background:none;
+    border:1px solid #cfc4b0; color:#9a8872;
+    width:20px; height:20px; border-radius:2px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .ne-remove:hover { background:#f5e0e0; color:#a04040; border-color:#c09090; }
+  .ne-add-bar { display:flex; gap:8px; flex-wrap:wrap; }
+
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
 
@@ -764,30 +780,13 @@
   <h2>Next Steps / Deadlines</h2>
   <textarea id="next_steps" data-label="Next Steps / Deadlines" rows="3"></textarea>
 
-  <h2>Next Hearing</h2>
-  <div class="row">
-    <div class="field"><label class="lbl">Date</label><input type="date" id="n_date" data-label="Next Hearing Date"></div>
-    <div class="field"><label class="lbl">Time</label><input type="time" id="n_time" data-label="Next Hearing Time"></div>
-    <div class="field"><label class="lbl">Format</label>
-      <select id="n_format" data-label="Next Hearing Format" onchange="toggleInPerson('n_format','n_loc')">
-        <option value="">—</option>
-        <option>In-person</option><option>Webex</option>
-        <option>Telephonic</option><option>Zoom</option>
-      </select>
-    </div>
-    <div class="field inperson-fields" id="n_loc">
-      <label class="lbl">FL</label><input type="text" id="n_fl" data-label="Next Hearing Floor" placeholder="Floor">
-    </div>
-    <div class="field inperson-fields" id="n_loc2">
-      <label class="lbl">RM</label><input type="text" id="n_rm" data-label="Next Hearing Room" placeholder="Room">
-    </div>
-    <div class="field"><label class="lbl">Sent to Office Calendar?</label>
-      <div class="yn">
-        <label><input type="radio" name="sent_cal" value="Yes" data-label="Sent to Calendar" onchange="toggleSentOn()"> Yes</label>
-        <label><input type="radio" name="sent_cal" value="No" checked data-label="Sent to Calendar" onchange="toggleSentOn()"> No</label>
-      </div>
-    </div>
-    <div class="field age-disabled" id="sent_on_wrap"><label class="lbl">Sent On</label><input type="date" id="sent_on" data-label="Sent to Calendar On"></div>
+  <h2>Next Events</h2>
+  <div id="next-events"></div>
+  <div class="ne-add-bar">
+    <button class="add" onclick="addNextEvent('MASTER HEARING')">+ Master Hearing</button>
+    <button class="add" onclick="addNextEvent('INDIVIDUAL HEARING')">+ Individual Hearing</button>
+    <button class="add" onclick="addNextEvent('SCHEDULING ORDER')">+ Scheduling Order</button>
+    <button class="add" onclick="addNextEvent('')">+ Add Event</button>
   </div>
 
 </div><!-- /form-col -->
@@ -1554,6 +1553,111 @@ function applyScheduledHearing(idx) {
   renderScheduledHearings();
 }
 
+// ── NEXT EVENTS (replaces the single Next Hearing block) ─────────────────────
+let neCt = 0;
+
+function neIdxList() {
+  return [...document.querySelectorAll('#next-events .ne-block')].map(b => parseInt(b.id.replace('ne',''), 10));
+}
+
+// data: optional {date,time,format,fl,rm,sent,sentOn}; silent: no history noise
+function addNextEvent(type, data, silent) {
+  neCt++;
+  const n = neCt;
+  const d = document.createElement('div');
+  d.className = 'ne-block'; d.id = 'ne' + n;
+  d.innerHTML = `
+    <div class="row">
+      <div class="field" style="flex:1.4;"><label class="lbl">Event</label>
+        <input type="text" id="ne_type_${n}" data-label="Next Event ${n} Type" placeholder="Event type"></div>
+      <div class="field"><label class="lbl">Date</label><input type="date" id="ne_date_${n}" data-label="Next Event ${n} Date"></div>
+      <div class="field"><label class="lbl">Time</label><input type="time" id="ne_time_${n}" data-label="Next Event ${n} Time"></div>
+      <div class="field"><label class="lbl">Format</label>
+        <select id="ne_fmt_${n}" data-label="Next Event ${n} Format" onchange="toggleInPerson('ne_fmt_${n}','ne_loc_${n}')">
+          <option value="">—</option>
+          <option>In-person</option><option>Webex</option>
+          <option>Telephonic</option><option>Zoom</option>
+        </select>
+      </div>
+      <div class="field inperson-fields" id="ne_loc_${n}">
+        <label class="lbl">FL</label><input type="text" id="ne_fl_${n}" data-label="Next Event ${n} Floor" placeholder="Floor">
+      </div>
+      <div class="field inperson-fields" id="ne_loc_${n}2">
+        <label class="lbl">RM</label><input type="text" id="ne_rm_${n}" data-label="Next Event ${n} Room" placeholder="Room">
+      </div>
+      <div class="field"><label class="lbl">Sent to Office Calendar?</label>
+        <div class="yn">
+          <label><input type="radio" name="ne_sent_${n}" value="Yes" data-label="Next Event ${n} Sent to Calendar" onchange="toggleNeSentOn(${n})"> Yes</label>
+          <label><input type="radio" name="ne_sent_${n}" value="No" checked data-label="Next Event ${n} Sent to Calendar" onchange="toggleNeSentOn(${n})"> No</label>
+        </div>
+      </div>
+      <div class="field age-disabled" id="ne_sent_wrap_${n}"><label class="lbl">Sent On</label><input type="date" id="ne_sent_on_${n}" data-label="Next Event ${n} Sent On"></div>
+    </div>
+    <button type="button" class="ne-remove" onclick="removeNextEvent(${n})" title="Remove this event">✕</button>`;
+  document.getElementById('next-events').appendChild(d);
+  document.getElementById('ne_type_' + n).value = type || '';
+  if (data) {
+    const set = (id, v) => { const e = document.getElementById(id); if (e && v) e.value = v; };
+    set('ne_date_' + n, data.date); set('ne_time_' + n, (data.time || '').slice(0,5));
+    set('ne_fmt_' + n, data.format); set('ne_fl_' + n, data.fl); set('ne_rm_' + n, data.rm);
+    if (data.sent === 'Yes') {
+      const y = document.querySelector(`input[name="ne_sent_${n}"][value="Yes"]`);
+      if (y) y.checked = true;
+      set('ne_sent_on_' + n, data.sentOn);
+    }
+    toggleNeSentOn(n);
+    try { toggleInPerson('ne_fmt_' + n, 'ne_loc_' + n); } catch(e) {}
+  }
+  attachListeners(d);
+  if (!silent) {
+    recordChange('Next Event', '', type || '(new event)');
+    scheduleAutoBackup();
+    if (!type) document.getElementById('ne_type_' + n).focus();
+  }
+  return n;
+}
+
+function removeNextEvent(n) {
+  const t = document.getElementById('ne_type_' + n)?.value || '';
+  document.getElementById('ne' + n)?.remove();
+  recordChange('Next Event' + (t ? ' (' + t + ')' : ''), '', '(removed)');
+  scheduleAutoBackup();
+}
+
+function toggleNeSentOn(n) {
+  const isYes = document.querySelector(`input[name="ne_sent_${n}"][value="Yes"]`)?.checked;
+  const wrap = document.getElementById('ne_sent_wrap_' + n);
+  if (wrap) wrap.classList.toggle('age-disabled', !isYes);
+  if (!isYes) { const f = document.getElementById('ne_sent_on_' + n); if (f) f.value = ''; }
+}
+
+// Ordered structural copy of the rows (numbering-independent, for saved states)
+function collectNextEvents() {
+  return neIdxList().map(n => ({
+    type: g('ne_type_' + n),
+    date: g('ne_date_' + n),
+    time: g('ne_time_' + n),
+    format: g('ne_fmt_' + n),
+    fl: g('ne_fl_' + n),
+    rm: g('ne_rm_' + n),
+    sent: document.querySelector(`input[name="ne_sent_${n}"]:checked`)?.value || 'No',
+    sentOn: g('ne_sent_on_' + n)
+  }));
+}
+
+// Old saved states carry a single "Next Hearing ..." snapshot: turn it into one event row.
+function migrateLegacyNextEvent(snap) {
+  if (!snap || neIdxList().length) return;
+  const legacy = {
+    date: snap['Next Hearing Date'] || '', time: snap['Next Hearing Time'] || '',
+    format: snap['Next Hearing Format'] || '', fl: snap['Next Hearing Floor'] || '',
+    rm: snap['Next Hearing Room'] || '',
+    sent: snap['Sent to Calendar'] || 'No', sentOn: snap['Sent to Calendar On'] || ''
+  };
+  if (legacy.date || legacy.time || legacy.format) addNextEvent('HEARING', legacy, true);
+}
+window.migrateLegacyNextEvent = migrateLegacyNextEvent;
+
 // ── MULTIPLE MASTER PREPS ─────────────────────────────────────────────────────
 // Each "prep" is a named, saved copy of the whole form. The list lives in
 // localStorage (the app bridge overrides prepStorageKey for per-case keys).
@@ -1582,15 +1686,20 @@ function serializeForm() {
   for (const i of xs) {
     if (document.getElementById('c'+i+'_role')?.value === 'Lead') { lead = i; break; }
   }
+  // Next Event rows are stored structurally (their numbering isn't stable
+  // across sessions), so strip their labels from the flat snapshot.
+  const snap = takeSnapshot();
+  Object.keys(snap).forEach(k => { if (/^Next Event \d+ /.test(k)) delete snap[k]; });
   return {
     v: 1,
-    snap: takeSnapshot(),
+    snap,
     clientCount: xs.length,
     clients: xs.map(i => ({
       allegs: document.querySelectorAll('#allegs-c'+i+' .alleg-row').length,
       charges: document.querySelectorAll('#charges-list-c'+i+' .charge-row').length
     })),
-    leadIdx: lead
+    leadIdx: lead,
+    nextEvents: collectNextEvents()
   };
 }
 
@@ -1608,6 +1717,8 @@ function blankFormBase() {
   Object.keys(allegCt).forEach(k => delete allegCt[k]);
   Object.keys(chargeCtPer).forEach(k => delete chargeCtPer[k]);
   cc=0; ac=0;
+  document.getElementById('next-events').innerHTML='';
+  neCt=0;
   Object.keys(docStore).filter(k => k.startsWith('nta_c')).forEach(k => clearDoc(k));
   addClient();
   for(let i=0;i<4;i++) addAlleg(1);
@@ -1646,12 +1757,16 @@ function applyFormState(state) {
       });
     });
     if (state.leadIdx) { try { setLead(state.leadIdx); } catch(e) {} }
+    if (state.nextEvents && state.nextEvents.length) {
+      state.nextEvents.forEach(ev => { try { addNextEvent(ev.type || '', ev, true); } catch(e) {} });
+    } else {
+      try { migrateLegacyNextEvent(state.snap); } catch(e) {}
+    }
   }
   // Re-run visibility toggles driven by the restored values
   try { syncInPersonFields(); } catch(e) {}
   try { check1YearIssue(); } catch(e) {}
   try { checkPaperFile(); } catch(e) {}
-  try { toggleSentOn(); } catch(e) {}
   try { updateRoleBadges(); } catch(e) {}
   try { updateClientSummary(); } catch(e) {}
   clientIdxList().forEach(i => {
@@ -2116,12 +2231,18 @@ async function generatePDF() {
 
   sec('Other Issues & Judge Comments'); tb('',g('other_issues'));
   sec('Next Steps / Deadlines'); tb('',g('next_steps'));
-  sec('Next Hearing');
-  const nfmt = g('n_format');
-  if (nfmt === 'In-person') {
-    row([['Date',fd(g('n_date'))],['Time',ft(g('n_time'))],['Format',nfmt],['FL',g('n_fl')],['RM',g('n_rm')],['Sent to Cal?',r('sent_cal')],['Sent On',fd(g('sent_on'))]]);
+  sec('Next Events');
+  const neRows = neIdxList();
+  if (!neRows.length) {
+    row([['Event','—'],['Date','—'],['Time','—']]);
   } else {
-    row([['Date',fd(g('n_date'))],['Time',ft(g('n_time'))],['Format',nfmt],['Sent to Cal?',r('sent_cal')],['Sent On',fd(g('sent_on'))]]);
+    neRows.forEach(n => {
+      const nfmt = g('ne_fmt_' + n);
+      const cells = [['Event',g('ne_type_' + n)],['Date',fd(g('ne_date_' + n))],['Time',ft(g('ne_time_' + n))],['Format',nfmt]];
+      if (nfmt === 'In-person') cells.push(['FL',g('ne_fl_' + n)],['RM',g('ne_rm_' + n)]);
+      cells.push(['Sent to Cal?',r('ne_sent_' + n)],['Sent On',fd(g('ne_sent_on_' + n))]);
+      row(cells);
+    });
   }
 
   const tp = doc.internal.getNumberOfPages();
@@ -2219,7 +2340,6 @@ function exportExcel() {
     'Filings & Service': ['Biometrics','Biometrics Date','E-33','E-33 Date','WG E-28','WG E-28 Date','DHS E-28'],
     'Relief Sought': ['Asylum: PSG','Asylum: Race','Asylum: Nationality','Asylum: Religion','Asylum: Political Opinion','INA Withholding','CAT Withholding','Cancellation of Removal','SIJ','TVPRA','TVPRA Detail','Other Relief','File: I-589','File: Submission','File: NOH','File: E-28','File: ECAS eService','File: DHS eService'],
     'Other': ['Other Issues / Judge Comments','Next Steps / Deadlines'],
-    'Next Hearing': ['Next Hearing Date','Next Hearing Time','Next Hearing Format','Sent to Calendar','Sent to Calendar On'],
   };
 
   // Normalize snap keys for lookup
@@ -2247,6 +2367,18 @@ function exportExcel() {
     rows.push([sec.toUpperCase(), '', '']);
     fields.forEach(f => {
       rows.push(['', f, findVal(f)]);
+    });
+  });
+
+  // Next Events — dynamic
+  rows.push(['', '', '']);
+  rows.push(['NEXT EVENTS', '', '']);
+  neIdxList().forEach((n, idx) => {
+    rows.push(['', `--- Event ${idx + 1} ---`, '']);
+    [['Type','Next Event '+n+' Type'],['Date','Next Event '+n+' Date'],['Time','Next Event '+n+' Time'],
+     ['Format','Next Event '+n+' Format'],['Floor','Next Event '+n+' Floor'],['Room','Next Event '+n+' Room'],
+     ['Sent to Calendar','Next Event '+n+' Sent to Calendar'],['Sent On','Next Event '+n+' Sent On']].forEach(([lbl, key]) => {
+      rows.push(['', `Event ${idx+1} ${lbl}`, snap[key] || '']);
     });
   });
 
@@ -3150,13 +3282,6 @@ function toggleChargeDecline(clientIdx, n) {
   if (!isNo) { const f = document.getElementById(`ch_why_c${clientIdx}_${n}`); if (f) f.value = ''; }
 }
 
-function toggleSentOn() {
-  const isYes = document.querySelector('input[name="sent_cal"][value="Yes"]')?.checked;
-  const wrap = document.getElementById('sent_on_wrap');
-  if (wrap) wrap.classList.toggle('age-disabled', !isYes);
-  if (!isYes) { const f = document.getElementById('sent_on'); if (f) f.value = ''; }
-}
-
 // ── TOGGLE SERVICE REASON (per client) ───────────────────────────────────────
 function toggleSvcReason(i) {
   if (i === undefined || i === null) {
@@ -3237,6 +3362,8 @@ function resetForm() {
   Object.keys(allegCt).forEach(k => delete allegCt[k]);
   Object.keys(chargeCtPer).forEach(k => delete chargeCtPer[k]);
   cc=0; ac=0;
+  document.getElementById('next-events').innerHTML='';
+  neCt=0;
   // Clear all per-client NTA docs
   Object.keys(docStore).filter(k => k.startsWith('nta_c')).forEach(k => clearDoc(k));
   addClient();
@@ -3280,7 +3407,7 @@ function toggleInPerson(selectId, locId) {
 // Call on page load to sync state (e.g. after import)
 function syncInPersonFields() {
   toggleInPerson('format', 'h_loc');
-  toggleInPerson('n_format', 'n_loc');
+  neIdxList().forEach(n => toggleInPerson('ne_fmt_' + n, 'ne_loc_' + n));
 }
 
 // ── FIELD MAP ────────────────────────────────────────────────────────────────
@@ -3411,7 +3538,6 @@ document.addEventListener('DOMContentLoaded', () => {
   syncInPersonFields();
   check1YearIssue();
   checkPaperFile();
-  toggleSentOn();
 });
 
 addClient();
@@ -3463,12 +3589,16 @@ if (window.parent === window) initPreps(true);
   // ── Serialize the full form (flat field snapshot + dynamic structure) ──
   function mhpGetState(){
     var xs=_idxs();
+    var snap=takeSnapshot();
+    // Next Event rows are stored structurally (numbering isn't stable across loads)
+    Object.keys(snap).forEach(function(k){ if(/^Next Event \d+ /.test(k)) delete snap[k]; });
     return {
       v:1,
-      snap: takeSnapshot(),
+      snap: snap,
       clientCount: xs.length,
       clients: xs.map(function(i){ return { allegs:_allegCount(i), charges:_chargeCount(i) }; }),
-      leadIdx: _leadIdx()
+      leadIdx: _leadIdx(),
+      nextEvents: (typeof collectNextEvents==='function'?collectNextEvents():[])
     };
   }
   function _applySnap(snap){
@@ -3510,6 +3640,13 @@ if (window.parent === window) initPreps(true);
     });
     _applySnap(state.snap);
     if(state.leadIdx){ try{ setLead(state.leadIdx); }catch(e){} }
+    try{
+      if(state.nextEvents&&state.nextEvents.length){
+        state.nextEvents.forEach(function(ev){ addNextEvent(ev.type||'', ev, true); });
+      } else if(window.migrateLegacyNextEvent){
+        window.migrateLegacyNextEvent(state.snap);
+      }
+    }catch(e){}
     _refreshDerived();
     lastSnap=takeSnapshot(); pendingChanges=[];
   }
