@@ -2484,6 +2484,10 @@ window.addEventListener('load',()=>autoGrowAllNotes());
         <span style="font-size:15px;">⬆</span>
         <span>Restore Backup</span>
       </button>
+      <button onclick="closeAppEverywhere()" title="Freeze every other open session of this app (other computers, other tabs) so a forgotten stale tab can't overwrite your changes. Those sessions show a reload screen; this one stays open." style="display:flex;align-items:center;gap:7px;padding:10px 18px;border:1px solid #E9C9C9;border-radius:8px;background:#fff;color:#B85C5C;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;transition:all .14s;" onmouseenter="this.style.background='#FAEDED';this.style.borderColor='#D9A8A8'" onmouseleave="this.style.background='#fff';this.style.borderColor='#E9C9C9'">
+        <span style="font-size:15px;">⏻</span>
+        <span>Close app on other devices</span>
+      </button>
     </div>
     <div id="last-backup-indicator" style="font-size:11px;color:#C4BAB0;margin-bottom:20px;"></div>
 
@@ -3328,6 +3332,10 @@ function saveAttorneyEmails(){ try{ localStorage.setItem('casetracker_attorney_e
 function loadAttorneyEmails(){ try{ const d=localStorage.getItem('casetracker_attorney_emails'); if(d) attorneyEmails=JSON.parse(d); }catch(e){} }
 function saveAttorneySignatures(){ try{ localStorage.setItem('casetracker_attorney_signatures', JSON.stringify(attorneySignatures)); }catch(e){} }
 function loadAttorneySignatures(){ try{ const d=localStorage.getItem('casetracker_attorney_signatures'); if(d) attorneySignatures=JSON.parse(d); }catch(e){} }
+// Bumped whenever the eventTypes list itself changes (add/remove/rename/
+// reorder) so the cloud merge can tell which device's ORDER is newer
+// without falling back to whole-doc last-write-wins.
+let eventTypesUpdatedAt=0;
 let eventTypeMeta={
   'SCHEDULING ORDER': {color:'#C9823A'},
   '90-DAY DEADLINE':  {color:'#6B7FA3'},
@@ -7424,7 +7432,11 @@ function _renderEventTypeRow(el,v,i,m){
       const inp=document.createElement('input');inp.value=v;
       inp.style.cssText='font-size:12px;font-weight:600;border:1px solid #6A8C6E;border-radius:6px;padding:3px 9px;outline:none;width:180px;';
       preview.replaceWith(inp);inp.focus();inp.select();
-      function commit(){const nv=inp.value.trim();if(nv&&nv!==v){if(eventTypeMeta[v]){eventTypeMeta[nv]={...eventTypeMeta[v]};delete eventTypeMeta[v];}eventTypes[i]=nv;records.forEach(r=>{if(r.event===v)r.event=nv;});updateSettingsSaveBar();markUnsaved();}renderEventTypeTags();renderAll();}
+      function commit(){const nv=inp.value.trim();if(nv&&nv!==v){const _now=Date.now();if(eventTypeMeta[v]){eventTypeMeta[nv]={...eventTypeMeta[v],_updatedAt:_now};delete eventTypeMeta[nv]._deleted;}
+        // Tombstone the old name (instead of deleting it) so the rename
+        // propagates: without this, the cloud merge would resurrect the
+        // old name from any device still holding the pre-rename list.
+        eventTypeMeta[v]={_deleted:true,_updatedAt:_now};eventTypes[i]=nv;records.forEach(r=>{if(r.event===v)r.event=nv;});updateSettingsSaveBar();markUnsaved();}renderEventTypeTags();renderAll();}
       inp.onblur=commit;inp.onkeydown=(e)=>{if(e.key==='Enter'){e.preventDefault();inp.blur();}if(e.key==='Escape'){inp.value=v;inp.blur();}};
     };
     nameWrap.appendChild(preview);
@@ -7457,8 +7469,8 @@ function toggleAddColForm(){const f=document.getElementById('add-col-form');f.cl
 function addCustomColumn(){const name=document.getElementById('new-col-name').value.trim(),type=document.getElementById('new-col-type').value;if(!name){alert('Column name required.');return;}const key='custom_'+name.toLowerCase().replace(/\s+/g,'_')+'_'+Date.now();customColumns.push({key,label:name,type,options:type==='select'?[...paralegals,'Me']:[]});colVis[key]=true;records.forEach(r=>r[key]='');document.getElementById('new-col-name').value='';document.getElementById('add-col-form').classList.remove('open');showToast(`Column "${name}" added`);renderSettings();updateSettingsSaveBar();}
 function removeCustomColumn(key){customColumns=customColumns.filter(c=>c.key!==key);delete colVis[key];records.forEach(r=>delete r[key]);renderSettings();renderAll();updateSettingsSaveBar();}
 function startEditTag(tag,label,kind,i,arr){if(tag.classList.contains('editing'))return;tag.classList.add('editing');const oldVal=arr[i];const input=document.createElement('input');input.className='tag-edit-input';input.value=oldVal;input.style.width=(Math.max(oldVal.length,4)*8)+'px';input.oninput=()=>{input.style.width=(Math.max(input.value.length,4)*8)+'px';};label.replaceWith(input);input.focus();input.select();function commit(){const newVal=input.value.trim();if(newVal&&newVal!==oldVal){if(kind==='paralegal'){paralegals[i]=newVal;records.forEach(r=>{if(r.atty===oldVal)r.atty=newVal;if(r.assigned===oldVal)r.assigned=newVal;});}else if(kind==='eventtype'){eventTypes[i]=newVal;records.forEach(r=>{if(r.event===oldVal)r.event=newVal;});}else if(kind==='casetype'){caseTypes[i]=newVal;records.forEach(r=>{if(r.type===oldVal)r.type=newVal;});}updateSettingsSaveBar();}renderSettings();}input.onblur=commit;input.onkeydown=(e)=>{if(e.key==='Enter'){e.preventDefault();input.blur();}if(e.key==='Escape'){input.value=oldVal;input.blur();}};}
-function addTag(kind){const inp=document.getElementById('new-'+kind),val=inp.value.trim();if(!val)return;if(kind==='paralegal'&&!paralegals.includes(val))paralegals.push(val);else if(kind==='attorney'&&!attorneys.includes(val))attorneys.push(val);else if(kind==='eventtype'&&!eventTypes.includes(val))eventTypes.push(val);else if(kind==='casetype'&&!caseTypes.includes(val))caseTypes.push(val);inp.value='';renderSettings();updateSettingsSaveBar();dirtyFilterOpts();if(kind==='paralegal'||kind==='attorney')markUnsaved();}
-function removeTag(kind,i){if(kind==='paralegal')paralegals.splice(i,1);else if(kind==='eventtype')eventTypes.splice(i,1);else if(kind==='casetype')caseTypes.splice(i,1);renderSettings();updateSettingsSaveBar();dirtyFilterOpts();}
+function addTag(kind){const inp=document.getElementById('new-'+kind),val=inp.value.trim();if(!val)return;if(kind==='paralegal'&&!paralegals.includes(val))paralegals.push(val);else if(kind==='attorney'&&!attorneys.includes(val))attorneys.push(val);else if(kind==='eventtype'&&!eventTypes.includes(val)){eventTypes.push(val);if(eventTypeMeta[val]&&eventTypeMeta[val]._deleted){delete eventTypeMeta[val]._deleted;eventTypeMeta[val]._updatedAt=Date.now();}}else if(kind==='casetype'&&!caseTypes.includes(val))caseTypes.push(val);inp.value='';renderSettings();updateSettingsSaveBar();dirtyFilterOpts();if(kind==='paralegal'||kind==='attorney')markUnsaved();}
+function removeTag(kind,i){if(kind==='paralegal')paralegals.splice(i,1);else if(kind==='eventtype'){const _n=eventTypes[i];eventTypes.splice(i,1);if(_n)eventTypeMeta[_n]=Object.assign({},eventTypeMeta[_n],{_deleted:true,_updatedAt:Date.now()});}else if(kind==='casetype')caseTypes.splice(i,1);renderSettings();updateSettingsSaveBar();dirtyFilterOpts();}
 function renderSettingsTable(){const cols=allColumns().filter(c=>c.key!=='notes');const thead=document.getElementById('settings-thead');thead.innerHTML='';[...cols,{key:'notes',label:'Notes'},{key:'_a',label:''}].forEach(c=>{const th=document.createElement('th');th.textContent=c.label;thead.appendChild(th);});const tbody=document.getElementById('settings-tbody');tbody.innerHTML='';const stFrag=document.createDocumentFragment();const sorted=[...records].filter(r=>!r.deletedStatus).map(r=>({r,d:parseDate(r.date)})).sort((a,b)=>{if(!a.d&&!b.d)return 0;if(!a.d)return 1;if(!b.d)return-1;return a.d-b.d;}).map(x=>x.r);sorted.forEach(r=>{const isE=editingRowId===r.id;const tr=document.createElement('tr');tr.className=isE?'editing-row':'';if(isE){let c=`<td><input id="se-clid-${r.id}" value="${r.clid||''}" style="min-width:55px"/></td><td><input id="se-client-${r.id}" value="${r.client}" style="min-width:90px"/></td><td><input id="se-anum-${r.id}" value="${r.anum||''}" style="min-width:80px"/></td><td><select id="se-type-${r.id}" style="min-width:110px">${caseTypes.map(c=>`<option${c===r.type?' selected':''}>${c}</option>`).join('')}</select></td><td><select id="se-atty-${r.id}" style="min-width:100px"><option value="">—</option>${paralegals.map(p=>`<option${p===r.atty?' selected':''}>${p}</option>`).join('')}</select></td><td><select id="se-event-${r.id}" style="min-width:100px"><option value="">—</option>${eventTypes.map(e=>`<option${e===r.event?' selected':''}>${e}</option>`).join('')}</select></td><td><input type="date" id="se-date-${r.id}" value="${r.date||''}" style="min-width:110px"/></td><td><select id="se-assigned-${r.id}" style="min-width:90px"><option value="">—</option><option value="Me"${r.assigned==='Me'?' selected':''}>Me</option>${paralegals.map(p=>`<option${p===r.assigned?' selected':''}>${p}</option>`).join('')}</select></td>`;customColumns.forEach(cc=>{c+=cc.type==='select'?`<td><select id="se-${cc.key}-${r.id}" style="min-width:90px"><option value="">—</option>${cc.options.map(o=>`<option${o===(r[cc.key]||'')?(' selected="selected"'):''}">${o}</option>`).join('')}</select></td>`:`<td><input id="se-${cc.key}-${r.id}" value="${r[cc.key]||''}" style="min-width:90px"/></td>`;});c+=`<td><input id="se-notes-${r.id}" value="${r.notes||''}" style="min-width:130px"/></td><td style="white-space:nowrap"><button class="btn-success btn-sm" onclick="saveRow('${r.id}')" style="margin-right:4px">Save</button><button class="btn-sm" onclick="cancelRow()">Cancel</button></td>`;tr.innerHTML=c;}else{let c=`<td class="muted">${r.clid||'—'}</td><td style="font-weight:500">${r.client}</td><td class="muted">${r.anum||'—'}</td><td class="muted">${r.type}</td><td class="muted">${r.atty||'—'}</td><td>${r.event||'—'}</td><td><span class="badge ${badgeClass(status(parseDate(r.date)))}">${fmtDate(r.date)}</span></td><td>${r.assigned?`<span class="badge ${r.assigned==='Me'?'badge-me':'no-date'}">${r.assigned}</span>`:'—'}</td>`;customColumns.forEach(cc=>{c+=`<td class="muted">${r[cc.key]||'—'}</td>`;});c+=`<td class="muted" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.notes}">${r.notes||'—'}</td><td style="white-space:nowrap"><button class="edit-btn" onclick="startEditRow('${r.id}')" style="margin-right:4px">Edit</button><button class="btn-danger btn-sm" onclick="deleteById('${r.id}')">Del</button></td>`;tr.innerHTML=c;}tbody.appendChild(tr);});}
 function startEditRow(id){editingRowId=id;renderSettingsTable();}
 function cancelRow(){editingRowId=null;renderSettingsTable();}
@@ -12924,7 +12936,7 @@ async function _writeAutoBackup(){
   _autoBackupWriting = true;
   _setAutoBackupDot('writing');
   try{
-    const payload = {records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta};
+    const payload = {records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta};
     const json = JSON.stringify(payload, null, 2);
     const writable = await _autoBackupHandle.createWritable();
     await writable.write(json);
@@ -12956,12 +12968,15 @@ function saveAllData(){
   // that wiped a month of real data). See showWelcomeGate() for the
   // modal that sets _dataInitialized after the user picks a path.
   if(!_dataInitialized){ return; }
-  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
+  // GUARD: a session frozen by "Close app on other devices" must never
+  // write again — its in-memory state is presumed stale.
+  if(typeof _remoteClosed!=='undefined' && _remoteClosed){ return; }
+  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();// Auto-push events to Google Calendar when signed in as the target email
 try{ _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync(); }catch(e){}
 }catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypesUpdatedAt)eventTypesUpdatedAt=p.eventTypesUpdatedAt;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}return true;}catch(e){return false;}}
 // One pending-render flag, used by both the debounced timer and the global
 // focusout listener: if the user is mid-edit when the timer fires, we set
 // the flag and re-try after they blur, so we never yank focus mid-type.
@@ -13023,7 +13038,7 @@ function saveFileWithTimestamp(){
   const epoch=d.getTime();
 
   // Capture full state including preferences
-  const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,
+  const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,
     caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes};
   const payloadJSON=JSON.stringify(payload);
 
@@ -21630,9 +21645,17 @@ function saveNewCase(){
 function applyPayload(p){
   if(p.records)records=p.records;
   if(p.paralegals)paralegals=p.paralegals;
-  if(p.eventTypes)eventTypes=p.eventTypes;
+  // Event-type config: merge per entry against what this device already
+  // has, so an incoming (possibly stale) payload can't wipe fresher local
+  // categories/icons/colors. Ties prefer the incoming side, which matches
+  // the old overwrite behavior for legacy unstamped entries.
+  const _pEtMeta = p.eventTypeMeta ? _mergeEtMetaMaps(eventTypeMeta, p.eventTypeMeta) : eventTypeMeta;
+  if(p.eventTypes){
+    eventTypes = _mergeEventTypeLists(eventTypes, eventTypesUpdatedAt, p.eventTypes, p.eventTypesUpdatedAt||0, _pEtMeta);
+    eventTypesUpdatedAt = Math.max(eventTypesUpdatedAt, p.eventTypesUpdatedAt||0);
+  }
+  eventTypeMeta = _pEtMeta;
   ensureFCEventTypes();
-  if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);
   if(p.caseTypes)caseTypes=p.caseTypes;
   if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);
   if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);
@@ -21694,6 +21717,8 @@ let _syncTimer=null;
 // after each successful sync.
 const _lastSavedRecordHashes = new Map();
 const _lastSavedMetaHashes = new Map();
+const _lastSavedEtMetaHashes = new Map();
+let _lastSavedEtListHash = '';
 function _recordContentHash(r){
   // Stable JSON of the record's own fields, excluding _updatedAt itself
   // (otherwise stamping the timestamp would immediately re-dirty the row).
@@ -21729,6 +21754,22 @@ function _stampUpdatedTimestamps(){
       m._updatedAt = now;
     }
   });
+  // Event-type settings (category / icon / color) carry the same per-entry
+  // stamps so the config merge can protect them the way records are
+  // protected — a stale device must not be able to wipe them wholesale.
+  Object.keys(eventTypeMeta||{}).forEach(name => {
+    const m = eventTypeMeta[name];
+    if(!m) return;
+    const h = _metaContentHash(m);
+    if(_lastSavedEtMetaHashes.get(name) !== h){
+      m._updatedAt = now;
+    }
+  });
+  let _etList='';
+  try{ _etList = JSON.stringify(eventTypes||[]); }catch(e){}
+  if(_lastSavedEtListHash !== _etList){
+    eventTypesUpdatedAt = now;
+  }
 }
 // Refresh the saved-hash maps after a successful sync so the next dirty
 // check starts from this exact state.
@@ -21740,6 +21781,12 @@ function _refreshSavedHashes(){
     const m = caseMeta[clid];
     if(m) _lastSavedMetaHashes.set(clid, _metaContentHash(m));
   });
+  _lastSavedEtMetaHashes.clear();
+  Object.keys(eventTypeMeta||{}).forEach(name => {
+    const m = eventTypeMeta[name];
+    if(m) _lastSavedEtMetaHashes.set(name, _metaContentHash(m));
+  });
+  try{ _lastSavedEtListHash = JSON.stringify(eventTypes||[]); }catch(e){}
 }
 // Order-independent signature of record + caseMeta state, keyed on each
 // item's _updatedAt (which is bumped on any content change just before a
@@ -21835,9 +21882,37 @@ function _syncCaseMetaShards(savedAt){
   // allSettled so the caller's main-doc write proceeds even if a shard fails.
   return Promise.all(proms.map(p=>p.catch(e=>e)));
 }
+// ── Event-type config merge helpers ─────────────────────────────────
+// eventTypeMeta merges per event-type name: the entry with the newer
+// _updatedAt wins; on a tie (e.g. legacy entries that predate stamping)
+// the OVERLAY side wins, which preserves the old whole-object behavior
+// for unstamped data. Entries can be tombstones ({_deleted:true}) left
+// behind by a rename/delete, so removals propagate across devices
+// instead of the old name resurrecting from a stale copy.
+function _mergeEtMetaMaps(base, overlay){
+  const out = Object.assign({}, base||{});
+  Object.keys(overlay||{}).forEach(k => {
+    const ov = overlay[k];
+    const bv = out[k];
+    if(!bv){ out[k] = ov; return; }
+    if(((ov&&ov._updatedAt)||0) >= ((bv&&bv._updatedAt)||0)) out[k] = ov;
+  });
+  return out;
+}
+// Merge the eventTypes name list: take the ORDER from whichever side
+// changed its list more recently (ties → b side), union in names only the
+// other side has (an addition is never lost), and drop tombstoned names.
+function _mergeEventTypeLists(aList, aTs, bList, bTs, meta){
+  const a = Array.isArray(aList)?aList:[], b = Array.isArray(bList)?bList:[];
+  const bWins = (bTs||0) >= (aTs||0);
+  const out = (bWins?b:a).slice();
+  (bWins?a:b).forEach(n => { if(!out.includes(n)) out.push(n); });
+  return out.filter(n => !(meta && meta[n] && meta[n]._deleted));
+}
 // Merge a cloud payload with the local one, item-by-item.
 // - records[] merge by id, prefer newer _updatedAt
 // - caseMeta{} merge by clid (object key), prefer newer _updatedAt
+// - eventTypeMeta / eventTypes: per-entry merge (see helpers above)
 // - All other top-level fields: pick from whichever side has the newer
 //   _savedAt (typically local since we just edited).
 function _mergePayloads(cloudData, localData){
@@ -21914,11 +21989,23 @@ function _mergePayloads(cloudData, localData){
   merged.paralegalEmails    = _mergeMap(cloudData.paralegalEmails,    localData.paralegalEmails,    _localNewer);
   merged.attorneyEmails     = _mergeMap(cloudData.attorneyEmails,     localData.attorneyEmails,     _localNewer);
   merged.attorneySignatures = _mergeMap(cloudData.attorneySignatures, localData.attorneySignatures, _localNewer);
+  // ── Event-type config: merged per entry (like records) instead of
+  // whole-object newest-doc-wins. Before this, a stale device saving
+  // ANYTHING wiped categories/icons/colors just set on another device —
+  // the reported "my event-type changes don't save" bug. When a side has
+  // no eventTypesUpdatedAt (legacy doc), fall back to its doc epoch so
+  // ordering degrades to the old behavior instead of picking randomly.
+  merged.eventTypeMeta = _mergeEtMetaMaps(cloudData.eventTypeMeta, localData.eventTypeMeta);
+  merged.eventTypes = _mergeEventTypeLists(
+    cloudData.eventTypes, cloudData.eventTypesUpdatedAt||cloudEpoch,
+    localData.eventTypes, localData.eventTypesUpdatedAt||localEpoch,
+    merged.eventTypeMeta);
+  merged.eventTypesUpdatedAt = Math.max(cloudData.eventTypesUpdatedAt||0, localData.eventTypesUpdatedAt||0);
   // ── Remaining top-level config: pick from whichever doc has the newer
   // overall _savedAt. Local typically wins because we set it = now just
   // before merge, but the cloud side can win if it has data the local
   // doc never loaded (e.g. fresh install).
-  const fields = ['eventTypes','eventTypeMeta','caseTypes','caseTypeDocLists','caseTypeStages',
+  const fields = ['caseTypes','caseTypeDocLists','caseTypeStages',
                   'customColumns','colVis','callUpTypes','caseIssueTypes','customChecklists',
                   'venues','firmInfo','bondPrepQuestions'];
   fields.forEach(f => {
@@ -21941,6 +22028,8 @@ function _mergePayloads(cloudData, localData){
 
 let _syncFailStreak=0;
 function _syncToFirestore(savedAt){
+  // Frozen by "Close app on other devices" — never push again.
+  if(typeof _remoteClosed!=='undefined' && _remoteClosed){ return; }
   // If anon auth hasn't resolved yet, park the save. It will flush
   // automatically when signInAnonymously() succeeds (see boot block).
   // Without this guard, the first edit in a fresh session fires a write
@@ -21967,7 +22056,7 @@ function _syncToFirestore(savedAt){
       if(typeof _stripMhpAttachments==='function')_stripMhpAttachments(meta);
     });
     const localPayload=JSON.parse(JSON.stringify({
-      records,paralegals,eventTypes,eventTypeMeta,
+      records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,
       caseTypes,caseTypeDocLists,caseTypeStages,
       customColumns,colVis,caseMeta:caseMetaClean,callUpTypes,judges,caseIssueTypes,
       customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,
@@ -21988,7 +22077,7 @@ function _syncToFirestore(savedAt){
     // instead of overwriting.
     const ref = db.collection('wilmer').doc('data');
     const _KNOWN_TOP_FIELDS = [
-      'records','paralegals','eventTypes','eventTypeMeta',
+      'records','paralegals','eventTypes','eventTypesUpdatedAt','eventTypeMeta',
       'caseTypes','caseTypeDocLists','caseTypeStages',
       'customColumns','colVis','callUpTypes','judges','caseIssueTypes',
       'customChecklists','paralegalEmails','attorneys','attorneyEmails','attorneySignatures','venues','firmInfo','bondPrepQuestions',
@@ -22166,7 +22255,7 @@ function forcePullFromCloud(){
       _dataInitialized=true; // explicit pull permits saves again
       try{
         const _now=Date.now();
-        const lp={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
+        const lp={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
         localStorage.setItem('casetracker_v1',JSON.stringify(lp));
         localStorage.setItem('wilmer_save_epoch',String((cloudData&&cloudData._savedAt)||_now));
       }catch(e){}
@@ -22429,6 +22518,12 @@ switchView(bootView);
 updateQueueBadge();
 updateDeadlinesBadge();
 showToast(loaded?'Loaded from local storage':'Ready');
+// Seed the saved-hash maps from the just-loaded state. Without this, the
+// first sync of every session saw empty hash maps, treated EVERYTHING as
+// "changed since last save", and stamped a fresh _updatedAt on every
+// record / meta entry — which let a stale device's old copy beat genuinely
+// newer edits from another device in the per-item merges.
+try{ _refreshSavedHashes(); }catch(e){}
 
 // ══════════════════════════════════════════════════
 // WELCOME GATE — protects against the empty-localStorage -> seed-autosave
@@ -22519,7 +22614,64 @@ window._attachCloudListeners=function(){
   try{ _attachCmShardListener(); }catch(e){ console.warn('[cloud-sync] cm listener attach failed', e); }
   try{ _attachLocksListener(); }catch(e){ console.warn('[cloud-sync] locks listener attach failed', e); }
   try{ _attachDayNotesListener(); }catch(e){ console.warn('[cloud-sync] daynotes listener attach failed', e); }
+  try{ _attachControlListener(); }catch(e){ console.warn('[remote-close] control listener attach failed', e); }
 };
+
+// ─── Remote close — "Close app on other devices" ────────────────────
+// Settings → Data & Tools → "Close app on other devices" writes a signal
+// doc (wilmer/control). Every OTHER live session that was loaded before
+// the signal freezes on receiving it: all saves and cloud pushes stop and
+// a full-screen overlay asks for a reload. This is the kill switch for the
+// stale-session problem: a forgotten tab at the office holds old settings
+// in memory, and its next save (or mere presence) used to overwrite
+// changes made elsewhere. Sessions loaded AFTER the signal ignore it, so
+// reloading (which picks up fresh data) always un-freezes a device.
+// _sessionId is per-TAB (unlike _deviceId, which localStorage shares
+// across tabs of one browser) so the button also closes sibling tabs on
+// the same machine.
+var _sessionId='s-'+Math.random().toString(36).slice(2,12);
+var _pageLoadedAt=Date.now();
+var _remoteClosed=false;
+function closeAppEverywhere(){
+  if(typeof _fbAuthReady!=='undefined' && !_fbAuthReady){ showToast('☁ Cloud sign-in not ready — try again in a moment'); return; }
+  if(!confirm('Close this app on every OTHER device and tab where it is open?\n\nThose sessions freeze immediately (they stop saving) and show a reload screen. This tab stays open and keeps working.'))return;
+  db.collection('wilmer').doc('control').set({closeAllAt:Date.now(),bySession:_sessionId,byDevice:_deviceId},{merge:true})
+    .then(()=>showToast('⏻ Close signal sent — every other open session is now frozen ✓'))
+    .catch(err=>showToast('Close signal failed: '+(err.code||err.message||'error')));
+}
+function _attachControlListener(){
+  db.collection('wilmer').doc('control').onSnapshot(
+    {includeMetadataChanges:false},
+    (doc)=>{
+      if(!doc.exists)return;
+      const d=doc.data()||{};
+      if(!d.closeAllAt)return;
+      if(d.bySession && d.bySession===_sessionId)return; // we sent it
+      if(d.closeAllAt<=_pageLoadedAt)return;             // predates this session
+      _remoteCloseApp(d);
+    },
+    (err)=>{ try{ console.warn('[remote-close] listener error', err.code||err.message); }catch(e){} }
+  );
+}
+function _remoteCloseApp(info){
+  if(_remoteClosed)return;
+  _remoteClosed=true;
+  // Kill every pending write — this session is presumed stale from here on.
+  // (saveAllData and _syncToFirestore also check _remoteClosed themselves.)
+  try{ clearTimeout(window._autoSaveTimer); window._autoSaveTimer=null; }catch(e){}
+  try{ clearTimeout(_syncTimer); }catch(e){}
+  const ov=document.createElement('div');
+  ov.id='remote-closed-ov';
+  ov.style.cssText="position:fixed;inset:0;z-index:1000000;background:rgba(44,38,32,0.94);display:flex;align-items:center;justify-content:center;font-family:'DM Sans',system-ui,sans-serif;";
+  const when=info&&info.closeAllAt?new Date(info.closeAllAt).toLocaleString():'';
+  ov.innerHTML='<div style="max-width:430px;background:#FDFAF7;border-radius:14px;padding:30px 34px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.35);">'
+    +'<div style="font-size:34px;margin-bottom:10px;">⏻</div>'
+    +'<div style="font-family:\'Lora\',Georgia,serif;font-size:19px;font-weight:600;color:#2C2620;margin-bottom:10px;">Closed from another device</div>'
+    +'<div style="font-size:13px;color:#5C5148;line-height:1.6;margin-bottom:20px;">Someone used <b>Close app on other devices</b>'+(when?' at '+when:'')+'. This session stopped saving so it can\'t overwrite newer changes made elsewhere. Reload to pick up the latest data and keep working.</div>'
+    +'<button onclick="location.reload()" style="font-size:13px;font-weight:600;padding:10px 26px;border:none;border-radius:9px;background:#2C2620;color:#F7F3ED;cursor:pointer;font-family:inherit;">Reload</button>'
+    +'</div>';
+  document.body.appendChild(ov);
+}
 function _attachDataListener(){
 db.collection('wilmer').doc('data').onSnapshot(
   {includeMetadataChanges:false},
@@ -22539,7 +22691,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         _dataInitialized=true; // cloud was applied — safe to autosave
         try{
           const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
+          const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
           localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
@@ -22559,7 +22711,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         // Build a snapshot of the current local state (caseMeta deep-copied
         // so the merge can't mutate live references).
         const localPayload = {
-          records, paralegals, eventTypes, eventTypeMeta,
+          records, paralegals, eventTypes, eventTypesUpdatedAt, eventTypeMeta,
           caseTypes, caseTypeDocLists, caseTypeStages,
           customColumns, colVis,
           caseMeta: JSON.parse(JSON.stringify(caseMeta||{})),
@@ -22584,7 +22736,7 @@ db.collection('wilmer').doc('data').onSnapshot(
           // re-push to Firestore and cause an infinite ping-pong loop.
           try{
             const _now=Date.now();
-            const persistPayload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
+            const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
             localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
             localStorage.setItem('wilmer_save_epoch',String(Math.max(cloudEpoch, _now)));
             _lastLocalSave=_now;
@@ -22627,7 +22779,7 @@ db.collection('wilmer').onSnapshot(
     if(touched){
       try{
         const _now=Date.now();
-        const persistPayload={records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,_savedAt:_now};
+        const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,_savedAt:_now};
         localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
         _lastLocalSave=_now;
         _refreshSavedHashes();
@@ -23130,7 +23282,7 @@ function bkSave(){
 function bkTakeSnapshot(label, type){
   bkLoad();
   type = type || 'auto';
-  const payload = JSON.stringify({records,paralegals,eventTypes,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta});
+  const payload = JSON.stringify({records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta});
   const entry = {id:'bk'+Date.now(), label: label||'Auto-save', ts: Date.now(), type, size: payload.length, payload};
   _bkVersions.unshift(entry);
   // Prune

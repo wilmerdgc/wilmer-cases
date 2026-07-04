@@ -15,6 +15,7 @@ rules_version = '2';
 //   wilmer/cm_<n>            — caseMeta shards (per-case files, split to stay
 //                              under Firestore's 1MB-per-document limit)
 //   wilmer/locks             — transient per-record edit locks
+//   wilmer/control           — remote-close signal ("Close app on other devices")
 //   wilmer_daynotes/{dnKey}  — per-day priorities + notes
 //
 // Everything outside those two paths is denied by default.
