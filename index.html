@@ -12971,12 +12971,12 @@ function saveAllData(){
   // GUARD: a session frozen by "Close app on other devices" must never
   // write again — its in-memory state is presumed stale.
   if(typeof _remoteClosed!=='undefined' && _remoteClosed){ return; }
-  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
+  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();// Auto-push events to Google Calendar when signed in as the target email
 try{ _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync(); }catch(e){}
 }catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypesUpdatedAt)eventTypesUpdatedAt=p.eventTypesUpdatedAt;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypesUpdatedAt)eventTypesUpdatedAt=p.eventTypesUpdatedAt;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}if(p.recordTombstones&&typeof p.recordTombstones==='object'){recordTombstones=_pruneTombstones(p.recordTombstones);}return true;}catch(e){return false;}}
 // One pending-render flag, used by both the debounced timer and the global
 // focusout listener: if the user is mid-edit when the timer fires, we set
 // the flag and re-try after they blur, so we never yank focus mid-type.
@@ -13472,6 +13472,10 @@ function renderCases(){
   list.appendChild(frag);
 }
 function closeCaseDetail(){
+  // Release any held case-edit lock — covers the Back button, tab
+  // switches, deleting the case, and search-driven closes, none of which
+  // pass through the Save/Cancel buttons.
+  try{ if(typeof releaseCaseLock==='function') releaseCaseLock(); }catch(e){}
   activeCaseClid=null;
   document.getElementById('cases-detail-view').style.display='none';
   document.getElementById('cases-add-view').style.display='none';
@@ -17549,6 +17553,10 @@ function _handleCasePhotoFile(clid, file){
 }
 
 function openCaseDetail(clid){
+  // A re-open (e.g. after saveEvent refreshes the detail) rebuilds the
+  // closure with isEditing=false — release any case lock the previous
+  // closure was holding so it can't leak with its heartbeat alive.
+  try{ if(typeof releaseCaseLock==='function') releaseCaseLock(); }catch(e){}
   activeCaseClid=clid;
   document.getElementById('cases-list-view').style.display='none';
   document.getElementById('cases-add-view').style.display='none';
@@ -18092,9 +18100,33 @@ function openCaseDetail(clid){
   }
 
   editToggle.onclick=()=>{
-    isEditing=!isEditing;editToggle.textContent=isEditing?'Cancel':'Edit';
-    renderAll2();
-    sharedActRow.style.display=isEditing?'flex':'none';
+    if(!isEditing){
+      // Entering edit mode: acquire the case-level edit lock first so a
+      // second device editing the SAME case is blocked with a warning,
+      // exactly like record locks block the event modal.
+      const _enter=()=>{
+        if(isEditing) return; // double-click guard
+        isEditing=true;editToggle.textContent='Cancel';
+        renderAll2();
+        sharedActRow.style.display='flex';
+      };
+      if(typeof acquireCaseLock==='function'){
+        const _key=(typeof _caseLockKey==='function')?_caseLockKey(clid):null;
+        const _cur=(typeof _recordLocks!=='undefined'&&_key)?_recordLocks[_key]:null;
+        if(_cur&&typeof _lockIsActive==='function'&&_cur.device!==_deviceId&&_lockIsActive(_cur)){ _showCaseLockBlocked(_cur); return; }
+        acquireCaseLock(clid).then(res=>{
+          if(!res.ok){ _showCaseLockBlocked(res.lock); return; }
+          _enter();
+        });
+        return;
+      }
+      _enter();
+    } else {
+      try{ if(typeof releaseCaseLock==='function') releaseCaseLock(); }catch(e){}
+      isEditing=false;editToggle.textContent='Edit';
+      renderAll2();
+      sharedActRow.style.display='none';
+    }
   };
   renderAll2();
 
@@ -18119,9 +18151,9 @@ function openCaseDetail(clid){
   };
   const rightCluster=document.createElement('div');rightCluster.style.cssText='display:flex;gap:8px;';
   const sharedCancel=document.createElement('button');sharedCancel.textContent='Cancel';sharedCancel.style.cssText='font-size:12px;padding:7px 18px;border:1px solid #DDD5CA;border-radius:8px;background:#F7F3ED;color:#5C5148;cursor:pointer;font-family:inherit;';
-  sharedCancel.onclick=()=>{isEditing=false;editToggle.textContent='Edit';renderAll2();sharedActRow.style.display='none';};
+  sharedCancel.onclick=()=>{try{if(typeof releaseCaseLock==='function')releaseCaseLock();}catch(e){}isEditing=false;editToggle.textContent='Edit';renderAll2();sharedActRow.style.display='none';};
   const sharedSave=document.createElement('button');sharedSave.textContent='Save';sharedSave.style.cssText='font-size:12px;font-weight:600;padding:7px 22px;border-radius:8px;background:#2C2620;color:#F7F3ED;border:none;cursor:pointer;font-family:inherit;';
-  sharedSave.onclick=()=>{doSaveAll();isEditing=false;editToggle.textContent='Edit';renderAll2();sharedActRow.style.display='none';};
+  sharedSave.onclick=()=>{doSaveAll();try{if(typeof releaseCaseLock==='function')releaseCaseLock();}catch(e){}isEditing=false;editToggle.textContent='Edit';renderAll2();sharedActRow.style.display='none';};
   rightCluster.appendChild(sharedCancel);rightCluster.appendChild(sharedSave);
   // Close case — archive as Closed (keeps the case + its events, hidden from
   // active lists; still visible in All Events under a "Case Closed" badge).
@@ -21672,6 +21704,20 @@ function applyPayload(p){
   if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);
   if(p.venues&&Array.isArray(p.venues))venues=p.venues;
   if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);
+  // Adopt deletion tombstones (newer deletedAt wins) and enforce them:
+  // any record whose tombstone is newer than its last edit is dead.
+  if(p.recordTombstones&&typeof p.recordTombstones==='object'){
+    Object.keys(p.recordTombstones).forEach(id=>{
+      if(!recordTombstones[id]||p.recordTombstones[id]>recordTombstones[id]) recordTombstones[id]=p.recordTombstones[id];
+    });
+    recordTombstones=_pruneTombstones(recordTombstones);
+    for(let i=(records||[]).length-1;i>=0;i--){
+      const r=records[i];
+      if(r&&r.id&&recordTombstones[r.id]&&recordTombstones[r.id]>(r._updatedAt||0)){
+        records.splice(i,1);
+      }
+    }
+  }
   // Re-seed the saved-hash maps so the next save's dirty check is
   // relative to this freshly-applied state (otherwise every record
   // would look "dirty" and we'd bump every _updatedAt every save).
@@ -21739,11 +21785,15 @@ function _metaContentHash(m){
 // changed vs last save. Called once per sync, just before the merge.
 function _stampUpdatedTimestamps(){
   const now = Date.now();
+  // Collect the ids of records whose content changed so the per-record
+  // fast-path sync can push exactly those to the cloud.
+  const changedRecordIds = [];
   (records||[]).forEach(r => {
     if(!r || !r.id) return;
     const h = _recordContentHash(r);
     if(_lastSavedRecordHashes.get(r.id) !== h){
       r._updatedAt = now;
+      changedRecordIds.push(r.id);
     }
   });
   Object.keys(caseMeta||{}).forEach(clid => {
@@ -21770,6 +21820,7 @@ function _stampUpdatedTimestamps(){
   if(_lastSavedEtListHash !== _etList){
     eventTypesUpdatedAt = now;
   }
+  return changedRecordIds;
 }
 // Refresh the saved-hash maps after a successful sync so the next dirty
 // check starts from this exact state.
@@ -21788,6 +21839,213 @@ function _refreshSavedHashes(){
   });
   try{ _lastSavedEtListHash = JSON.stringify(eventTypes||[]); }catch(e){}
 }
+
+// ══════════════════════════════════════════════════
+// PER-RECORD CLOUD SYNC — fast path for multi-device use
+//
+// On every save, each record whose content changed is ALSO written as
+// its own small Firestore doc: wilmer/rec_<recordId> (tagged with
+// _kind:'record'). Other devices run a live query on _kind=='record'
+// and merge incoming docs into their local records[] by _updatedAt —
+// so a record edited on one device appears on the others within about
+// a second, independent of the whole-doc channel and its 1 MB ceiling.
+// The whole-doc sync stays as the baseline: it is what boot, backups,
+// and the Restore tool read. Existing security rules already allow any
+// doc in the `wilmer` collection, so no Firebase console changes are
+// needed.
+//
+// recordTombstones ({recordId: deletedAtMs}) rides in every payload so
+// the whole-doc union merge can tell "deleted" apart from "not
+// present". Without it, a hard-deleted record (reminder children get
+// rebuilt with new ids on every edit) kept resurrecting from whichever
+// side still had a copy. Entries older than 30 days get pruned.
+// ══════════════════════════════════════════════════
+let recordTombstones = {};
+const _TOMBSTONE_TTL_MS = 30*24*60*60*1000;
+function _pruneTombstones(map){
+  const out = {};
+  const cutoff = Date.now() - _TOMBSTONE_TTL_MS;
+  Object.keys(map||{}).forEach(id => { if((map[id]||0) > cutoff) out[id] = map[id]; });
+  return out;
+}
+
+const _REC_KIND = 'record';
+let _recSyncUnavailable = false;   // set on permission-denied; app falls back to whole-doc sync
+let _recListenerStarted = false;
+let _recApplyTimer = null;
+let _recToastAt = 0;
+
+function _recDocRef(id){ return db.collection('wilmer').doc('rec_' + String(id)); }
+
+// Deep-clone a record and strip anything heavy / non-serializable so a
+// single record doc can never blow Firestore's 1 MB per-doc cap.
+function _cleanRecordForCloud(r){
+  let copy;
+  try{ copy = JSON.parse(JSON.stringify(r)); }catch(e){ return null; }
+  if(copy && Array.isArray(copy.docs)){
+    copy.docs.forEach(d => { if(d && typeof d === 'object'){ delete d.fileData; delete d.dataUrl; delete d.mimeType; } });
+  }
+  return copy;
+}
+
+// Write the changed records as individual docs (batched, ≤400 per
+// commit) and delete docs for records that were removed locally.
+// Fire-and-forget — failures degrade silently to the whole-doc channel.
+async function _recSyncPush(changedIds, deletedIds){
+  if(_recSyncUnavailable || !_fbAuthReady) return;
+  if((!changedIds || !changedIds.length) && (!deletedIds || !deletedIds.length)) return;
+  // Safety valve: if nearly every record looks "changed", the dirty-check
+  // baseline was almost certainly unseeded rather than a genuine mass
+  // edit. Skip the fast path — broadcasting bogus fresh timestamps would
+  // wholesale-replace records on every other device. The whole-doc
+  // transactional merge still carries everything.
+  const _total = (records||[]).length;
+  if(_total > 50 && changedIds && changedIds.length >= _total * 0.8){
+    console.warn('[rec-sync] skipping fast-path push: ' + changedIds.length + '/' + _total + ' records flagged changed (unseeded baseline?)');
+    return;
+  }
+  try{
+    let batch = db.batch(); let n = 0;
+    const flush = async () => { if(n > 0){ await batch.commit(); batch = db.batch(); n = 0; } };
+    for(const id of (changedIds||[])){
+      const r = (records||[]).find(x => x && x.id === id);
+      if(!r) continue;
+      const clean = _cleanRecordForCloud(r);
+      if(!clean) continue;
+      try{ if(JSON.stringify(clean).length > 900000) continue; }catch(e){ continue; }
+      clean._kind = _REC_KIND;
+      clean._deviceId = _deviceId;
+      batch.set(_recDocRef(id), clean);
+      if(++n >= 400) await flush();
+    }
+    for(const id of (deletedIds||[])){
+      batch.delete(_recDocRef(id));
+      if(++n >= 400) await flush();
+    }
+    await flush();
+  }catch(err){
+    if(err && err.code === 'permission-denied') _recSyncUnavailable = true;
+    console.warn('[rec-sync] push failed:', err && (err.code || err.message));
+  }
+}
+
+// Persist the current in-memory state to localStorage WITHOUT pushing
+// to the cloud — used when applying remote record changes so we don't
+// ping-pong. Deliberately does NOT bump wilmer_save_epoch or
+// _lastLocalSave: the epoch means "whole-doc cloud state incorporated
+// through this time", and the per-record channel only carries records —
+// inflating the epoch here would make the whole-doc listener skip
+// companion snapshots that carry config changes.
+function _persistLocalSnapshotQuiet(){
+  try{
+    const prevEpoch = parseInt(localStorage.getItem('wilmer_save_epoch')||'0') || 0;
+    const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,_savedAt:prevEpoch||Date.now()};
+    localStorage.setItem((typeof STORAGE_KEY !== 'undefined' ? STORAGE_KEY : 'casetracker_v1'), JSON.stringify(payload));
+  }catch(e){}
+}
+
+// Live query: every record doc another device writes lands here within
+// ~a second. Merge by _updatedAt (newer wins); our own writes echo back
+// with our _deviceId and are skipped.
+function _attachRecListener(){
+  if(_recListenerStarted) return;
+  _recListenerStarted = true;
+  db.collection('wilmer').where('_kind', '==', _REC_KIND).onSnapshot(
+    (snap) => {
+      if(!_dataInitialized) return;
+      let touched = 0;
+      snap.docChanges().forEach(ch => {
+        let data = null;
+        try{ data = ch.doc.data() || {}; }catch(e){ return; }
+        const rid = data.id || String(ch.doc.id||'').replace(/^rec_/, '');
+        if(!rid) return;
+        if(ch.type === 'removed'){
+          // NOTE: for a removed change, ch.doc.data() returns the doc's
+          // LAST WRITTEN content — its _deviceId identifies the last
+          // writer, NOT the deleter, so it must not be used to filter
+          // deletions. Our own deletion echoes are harmless anyway: the
+          // record was spliced locally before the push, so findIndex
+          // comes back -1 and nothing happens.
+          const idx = (records||[]).findIndex(r => r && r.id === rid);
+          if(idx >= 0){
+            // Don't drop a record that has unsynced local edits — stamp
+            // it so the pending sync re-asserts it instead.
+            let localDirty = false;
+            try{ localDirty = _lastSavedRecordHashes.get(rid) !== _recordContentHash(records[idx]); }catch(e){}
+            if(localDirty){ records[idx]._updatedAt = Date.now(); return; }
+            records.splice(idx, 1);
+            recordTombstones[rid] = Date.now();
+            try{ _lastSavedRecordHashes.delete(rid); }catch(e){}
+            touched++;
+          }
+          return;
+        }
+        if(data._deviceId === _deviceId) return; // our own echo
+        delete data._kind; delete data._deviceId;
+        // A tombstone newer than this doc means the record was deleted
+        // after this copy was written — don't re-add it.
+        if(recordTombstones[rid] && recordTombstones[rid] > (data._updatedAt||0)) return;
+        const idx = (records||[]).findIndex(r => r && r.id === rid);
+        if(idx < 0){
+          records.push(data);
+          try{ _lastSavedRecordHashes.set(rid, _recordContentHash(data)); }catch(e){}
+          touched++;
+        } else {
+          // Never overwrite a locally dirty record (an edit made in the
+          // ~2s window before its _updatedAt gets stamped would be lost
+          // silently). Stamp it now so the pending sync pushes it and
+          // wins the per-record merge.
+          let localDirty = false;
+          try{ localDirty = _lastSavedRecordHashes.get(rid) !== _recordContentHash(records[idx]); }catch(e){}
+          if(localDirty){ records[idx]._updatedAt = Date.now(); return; }
+          const lu = records[idx]._updatedAt || 0;
+          const ru = data._updatedAt || 0;
+          if(ru > lu){
+            // Merge IN PLACE so captured references (open case detail,
+            // modal closures) stay live instead of pointing at a
+            // detached object.
+            const tgt = records[idx];
+            Object.keys(tgt).forEach(k => { if(!(k in data)) delete tgt[k]; });
+            Object.assign(tgt, data);
+            try{ _lastSavedRecordHashes.set(rid, _recordContentHash(tgt)); }catch(e){}
+            touched++;
+          }
+        }
+      });
+      if(touched){
+        _persistLocalSnapshotQuiet();
+        clearTimeout(_recApplyTimer);
+        _recApplyTimer = setTimeout(() => {
+          try{ if(typeof _invalidateCasesCache === 'function') _invalidateCasesCache(); }catch(e){}
+          try{ if(typeof dirtyFilterOpts === 'function') dirtyFilterOpts(); }catch(e){}
+          try{ if(typeof dirtyCaseFilterOpts === 'function') dirtyCaseFilterOpts(); }catch(e){}
+          try{ renderAll(); }catch(e){}
+          if(Date.now() - _recToastAt > 4000){
+            _recToastAt = Date.now();
+            try{ showToast('☁ Updated from another device ✓'); }catch(e){}
+          }
+        }, 250);
+      }
+    },
+    (err) => {
+      if(err && err.code === 'permission-denied') _recSyncUnavailable = true;
+      console.warn('[rec-sync] listener error:', err && (err.code || err.message));
+    }
+  );
+}
+// The rec listener must start only after the dataset is initialized AND
+// the first whole-doc snapshot has been processed — the boot path does a
+// wholesale applyPayload of the cloud doc, which would clobber any
+// rec-channel records applied moments earlier with older whole-doc
+// copies. Polled from _attachCloudListeners.
+function _recListenerBootPoll(){
+  if(typeof _dataInitialized !== 'undefined' && _dataInitialized && typeof _booted !== 'undefined' && _booted){
+    try{ _attachRecListener(); }catch(e){ console.warn('[rec-sync] attach failed', e); }
+    return;
+  }
+  setTimeout(_recListenerBootPoll, 1000);
+}
+
 // Order-independent signature of record + caseMeta state, keyed on each
 // item's _updatedAt (which is bumped on any content change just before a
 // save). Used to tell whether an incoming merge actually changes what this
@@ -21919,6 +22177,13 @@ function _mergePayloads(cloudData, localData){
   if(!cloudData) return localData;
   if(!localData) return cloudData;
   const merged = Object.assign({}, cloudData);
+  // ── Tombstones: union both sides, newer deletedAt wins ──
+  const mergedTombs = {};
+  [cloudData.recordTombstones, localData.recordTombstones].forEach(src => {
+    Object.keys(src||{}).forEach(id => {
+      if(!mergedTombs[id] || src[id] > mergedTombs[id]) mergedTombs[id] = src[id];
+    });
+  });
   // ── Records: union by id, newer _updatedAt wins ──
   const cloudRecs = Array.isArray(cloudData.records) ? cloudData.records : [];
   const localRecs = Array.isArray(localData.records) ? localData.records : [];
@@ -21933,6 +22198,14 @@ function _mergePayloads(cloudData, localData){
     // Tie: prefer local (we just edited).
     if(lu >= cu) byId.set(r.id, r);
   });
+  // Drop any record whose tombstone is newer than its last edit — it was
+  // deleted on some device after that edit, so the union must not
+  // resurrect it. (An edit made AFTER the deletion wins and revives it.)
+  Object.keys(mergedTombs).forEach(id => {
+    const r = byId.get(id);
+    if(r && mergedTombs[id] > (r._updatedAt||0)) byId.delete(id);
+  });
+  merged.recordTombstones = _pruneTombstones(mergedTombs);
   merged.records = Array.from(byId.values());
   // ── caseMeta: per-clid merge ──
   const mergedMeta = Object.assign({}, cloudData.caseMeta || {});
@@ -22044,7 +22317,25 @@ function _syncToFirestore(savedAt){
     // Step 1: stamp _updatedAt on every record / caseMeta entry whose
     // content changed since the last successful save. This is what makes
     // the per-record / per-clid merge work.
-    try{ _stampUpdatedTimestamps(); }catch(e){ console.warn('[cloud-sync] stamp failed', e); }
+    let _recChangedIds = [];
+    try{ _recChangedIds = _stampUpdatedTimestamps() || []; }catch(e){ console.warn('[cloud-sync] stamp failed', e); }
+    // Step 1b: per-record fast path — push exactly the changed records as
+    // individual wilmer/rec_<id> docs so other devices see them within a
+    // second, and delete docs for records that vanished locally (reminder
+    // children get rebuilt with new ids on every edit). Locally-deleted
+    // ids get a tombstone so the whole-doc union merge (and the other
+    // devices) know "deleted", not "missing". Fire-and-forget; the
+    // whole-doc transaction below stays the baseline channel.
+    try{
+      const _curIds = new Set((records||[]).map(r => r && r.id).filter(Boolean));
+      const _recDeletedIds = Array.from(_lastSavedRecordHashes.keys()).filter(id => !_curIds.has(id));
+      if(_recDeletedIds.length){
+        const _delNow = Date.now();
+        _recDeletedIds.forEach(id => { recordTombstones[id] = _delNow; });
+      }
+      recordTombstones = _pruneTombstones(recordTombstones);
+      _recSyncPush(_recChangedIds, _recDeletedIds);
+    }catch(e){ console.warn('[rec-sync] push schedule failed', e); }
     // Step 2: build a clean local payload (strip fileData so base64 PDFs
     // never leave the device).
     const caseMetaClean=JSON.parse(JSON.stringify(caseMeta||{}));
@@ -22059,7 +22350,7 @@ function _syncToFirestore(savedAt){
       records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,
       caseTypes,caseTypeDocLists,caseTypeStages,
       customColumns,colVis,caseMeta:caseMetaClean,callUpTypes,judges,caseIssueTypes,
-      customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,
+      customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,
       _savedAt:savedAt||Date.now(),_deviceId:_deviceId
     }));
     // Step 2b: write caseMeta out to its own sharded docs (wilmer/cm_*).
@@ -22080,7 +22371,7 @@ function _syncToFirestore(savedAt){
       'records','paralegals','eventTypes','eventTypesUpdatedAt','eventTypeMeta',
       'caseTypes','caseTypeDocLists','caseTypeStages',
       'customColumns','colVis','callUpTypes','judges','caseIssueTypes',
-      'customChecklists','paralegalEmails','attorneys','attorneyEmails','attorneySignatures','venues','firmInfo','bondPrepQuestions',
+      'customChecklists','paralegalEmails','attorneys','attorneyEmails','attorneySignatures','venues','firmInfo','bondPrepQuestions','recordTombstones',
       '_savedAt','_deviceId'
     ];
     function _buildWritable(merged){
@@ -22255,7 +22546,7 @@ function forcePullFromCloud(){
       _dataInitialized=true; // explicit pull permits saves again
       try{
         const _now=Date.now();
-        const lp={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
+        const lp={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,_savedAt:_now};
         localStorage.setItem('casetracker_v1',JSON.stringify(lp));
         localStorage.setItem('wilmer_save_epoch',String((cloudData&&cloudData._savedAt)||_now));
       }catch(e){}
@@ -22615,6 +22906,9 @@ window._attachCloudListeners=function(){
   try{ _attachLocksListener(); }catch(e){ console.warn('[cloud-sync] locks listener attach failed', e); }
   try{ _attachDayNotesListener(); }catch(e){ console.warn('[cloud-sync] daynotes listener attach failed', e); }
   try{ _attachControlListener(); }catch(e){ console.warn('[remote-close] control listener attach failed', e); }
+  // Per-record fast channel — self-defers until _dataInitialized && _booted
+  // so its initial snapshot merges against real, boot-complete state.
+  try{ _recListenerBootPoll(); }catch(e){ console.warn('[rec-sync] boot poll failed', e); }
 };
 
 // ─── Remote close — "Close app on other devices" ────────────────────
@@ -22691,7 +22985,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         _dataInitialized=true; // cloud was applied — safe to autosave
         try{
           const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
+          const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,_savedAt:_now};
           localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
@@ -22736,7 +23030,7 @@ db.collection('wilmer').doc('data').onSnapshot(
           // re-push to Firestore and cause an infinite ping-pong loop.
           try{
             const _now=Date.now();
-            const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,venues,_savedAt:_now};
+            const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,_savedAt:_now};
             localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
             localStorage.setItem('wilmer_save_epoch',String(Math.max(cloudEpoch, _now)));
             _lastLocalSave=_now;
@@ -22779,7 +23073,7 @@ db.collection('wilmer').onSnapshot(
     if(touched){
       try{
         const _now=Date.now();
-        const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,_savedAt:_now};
+        const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,_savedAt:_now};
         localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
         _lastLocalSave=_now;
         _refreshSavedHashes();
@@ -22837,6 +23131,42 @@ function _showLockBlocked(lock){
   alert('This record is being edited on another device right now'+(ago?' (started '+ago+')':'')+'.\n\nYou can’t open it until that edit is saved or closed. If the other session was left open by mistake, it unlocks automatically after a short idle period.');
 }
 window.addEventListener('beforeunload',function(){ if(_heldLockId)_releaseLock(_heldLockId); });
+
+// ─── Case-level edit lock (case-info editor) ────────────────────────
+// Record locks guard individual events; this guards the case-info editor
+// (client name, A#, respondents, address…), which edits ALL of a case's
+// records at once. Same wilmer/locks doc, keyed 'case_<clid>', so the
+// same TTL / heartbeat / stale-lock rules apply. It has its own heartbeat
+// slot so holding a case lock and a record lock at once (case open in
+// edit + event modal) can't starve either one.
+var _caseLockId=null;
+var _caseLockTimer=null;
+function _caseLockKey(clid){ return 'case_' + String(clid); }
+function acquireCaseLock(clid){
+  var key=_caseLockKey(clid);
+  return _acquireLock(key).then(function(res){
+    if(res.ok){
+      // _acquireLock parks the id in the single-slot _heldLockId used by
+      // the record-lock system — hand that slot back; the case lock
+      // renews through its own timer below.
+      if(_heldLockId===key) _heldLockId=null;
+      _caseLockId=key;
+      if(_caseLockTimer) clearInterval(_caseLockTimer);
+      _caseLockTimer=setInterval(function(){ _refreshLock(key); }, _LOCK_HEARTBEAT_MS);
+    }
+    return res;
+  });
+}
+function releaseCaseLock(){
+  if(_caseLockTimer){ clearInterval(_caseLockTimer); _caseLockTimer=null; }
+  if(_caseLockId){ var id=_caseLockId; _caseLockId=null; _releaseLock(id); }
+}
+function _showCaseLockBlocked(lock){
+  var ago='';
+  if(lock&&lock.at){ var s=Math.max(0,Math.round((Date.now()-lock.at)/1000)); ago=s<60?(s+'s ago'):(Math.round(s/60)+'m ago'); }
+  alert('This case is being edited on another device right now'+(ago?' (started '+ago+')':'')+'.\n\nWait until that edit is saved or closed before changing it here. If the other session was left open by mistake, it unlocks automatically after a short idle period.');
+}
+window.addEventListener('beforeunload',function(){ if(_caseLockId)_releaseLock(_caseLockId); });
 
 // Step 3: Listen to day notes from other devices
 function _attachDayNotesListener(){
