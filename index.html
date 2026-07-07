@@ -3445,19 +3445,21 @@ function reminderCardHtml(r, opts){
   }
   if(dueD) dueLabel = dueD.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
   else if(r.date) dueLabel = fmtDate(r.date);
-  // Assignee avatar
-  const who = (r.assigned||'').trim();
-  const avSz = compact ? 20 : 34;
-  const avatar = who
-    ? '<div title="Assigned to '+esc(who)+'" style="width:'+avSz+'px;height:'+avSz+'px;border-radius:50%;background:#2E6B58;color:#fff;display:flex;align-items:center;justify-content:center;font-size:'+(compact?8:12)+'px;font-weight:700;letter-spacing:.03em;flex-shrink:0;">'+esc(who==='Me'?'ME':initials(who))+'</div>'
-    : '<div title="Unassigned" style="width:'+avSz+'px;height:'+avSz+'px;border-radius:50%;border:1.5px solid #D5CCC1;background:transparent;flex-shrink:0;box-sizing:border-box;"></div>';
-  return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">'
-    +   '<div style="display:flex;align-items:center;gap:'+(compact?5:8)+'px;min-width:0;">'
-    +     _reminderIconSvg(compact?13:20)
-    +     '<span style="font-size:'+(compact?8:10)+'px;font-weight:700;letter-spacing:.12em;color:#C4BAB0;flex-shrink:0;">DUE</span>'
-    +     '<span style="font-size:'+(compact?10:15)+'px;font-weight:600;color:#8A8074;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(dueLabel)+'</span>'
-    +   '</div>'
-    +   avatar
+  // Countdown to the due date, in the app's countdown-chip convention:
+  // slate normally, amber inside a week, terracotta when overdue.
+  let cdPill = '';
+  if(dueD){
+    const diffDays = Math.round((dueD - TODAY)/86400000);
+    const cdText = diffDays===0 ? 'Today' : diffDays<0 ? Math.abs(diffDays)+'d ago' : diffDays+'d left';
+    const cdColor = diffDays<0 ? '#B85C5C' : diffDays<=7 ? '#C9823A' : '#6B7FA3';
+    cdPill = '<span style="font-size:'+(compact?8:10)+'px;font-weight:700;color:'+cdColor+';background:'+cdColor+'18;padding:1px 7px;border-radius:9px;white-space:nowrap;flex-shrink:0;">'+cdText+'</span>';
+  }
+  // Fields + order per design: [icon] DUE <date> <countdown> / text / client / #id
+  return '<div style="display:flex;align-items:center;gap:'+(compact?5:8)+'px;min-width:0;">'
+    +   _reminderIconSvg(compact?13:20)
+    +   '<span style="font-size:'+(compact?8:10)+'px;font-weight:700;letter-spacing:.12em;color:#C4BAB0;flex-shrink:0;">DUE</span>'
+    +   '<span style="font-size:'+(compact?10:15)+'px;font-weight:600;color:#8A8074;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(dueLabel)+'</span>'
+    +   cdPill
     + '</div>'
     + '<div style="font-family:\'Lora\',Georgia,serif;font-size:'+(compact?11.5:16)+'px;color:#2C2620;line-height:1.45;margin:'+(compact?'4px 0 3px':'12px 0 10px')+';white-space:normal;">'+esc(text)+'</div>'
     + (r.client ? '<div style="font-family:\'Lora\',Georgia,serif;font-size:'+(compact?10.5:14)+'px;color:#2C2620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(r.client)+'</div>' : '')
