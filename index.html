@@ -3408,15 +3408,12 @@ function _makeDashedLine(){
 function debounce(fn,ms){let t;return function(...a){clearTimeout(t);t=setTimeout(()=>fn.apply(this,a),ms);};}
 const _debouncedRenderAll=debounce(()=>renderAll(),200);
 const _debouncedRenderCases=debounce(()=>{renderCasesTypeStats();renderCases();},200);
-// ── Reminder icon (finger with red string) ────────
+// ── Reminder icon (single-color grey bell) ────────
 function _reminderIconSvg(size){
   const s = size||14;
   return '<svg viewBox="0 0 20 20" width="'+s+'" height="'+s+'" style="vertical-align:-2px;flex-shrink:0;" aria-hidden="true">'
-    + '<path d="M5.5 18.5 L5.5 13.5 Q5.5 12.5 6.5 12.5 L13.5 12.5 Q14.5 12.5 14.5 13.5 L14.5 18.5 Z" fill="#F2D5B0" stroke="#B8916A" stroke-width="0.4"/>'
-    + '<rect x="8" y="3" width="4" height="10.5" rx="2" fill="#F4D9B4" stroke="#B8916A" stroke-width="0.4"/>'
-    + '<path d="M6 8.2 Q10 6.6 14 8.2 Q10 9.8 6 8.2 Z" fill="#C94A3A" stroke="#8B2E22" stroke-width="0.25"/>'
-    + '<circle cx="13.6" cy="8.15" r="1.1" fill="#8B2E22"/>'
-    + '<circle cx="13.6" cy="8.15" r="0.45" fill="#C94A3A"/>'
+    + '<path fill="#9E9186" d="M10 1.6a1.4 1.4 0 0 1 1.4 1.4v.55c2.42.62 4.2 2.8 4.2 5.4v3.55l1.5 2.3a.6.6 0 0 1-.5.93H3.4a.6.6 0 0 1-.5-.93l1.5-2.3V8.95c0-2.6 1.78-4.78 4.2-5.4V3A1.4 1.4 0 0 1 10 1.6z"/>'
+    + '<path fill="#9E9186" d="M8 16.6h4a2 2 0 0 1-4 0z"/>'
     + '</svg>';
 }
 // ── Reminder card — shared look for every view that shows a reminder ──
