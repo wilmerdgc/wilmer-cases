@@ -2142,8 +2142,8 @@ window.addEventListener('load',()=>autoGrowAllNotes());
       <div id="dv-activity-report-body" style="padding:4px 16px 12px;"></div>
     </div>
   </div>
-  <div id="view-week" style="display:none"><div class="nav-row"><button onclick="shiftWeek(-1)">&#8592;</button><span class="nav-title" id="week-title"></span><button onclick="shiftWeek(1)">&#8594;</button><button onclick="gotoTodayWeek()" title="Scroll back to this week" style="font-size:10px;font-weight:500;padding:2px 8px;border:1px solid #EDE8E0;border-radius:10px;background:transparent;color:#9E9186;cursor:pointer;font-family:inherit;margin-left:6px;">Today</button><div class="weekend-toggle-bar"><span id="wk-weekend-note" style="font-size:10px;color:#9C6D2F;display:none;">Weekend events present</span><button id="wk-weekend-toggle" class="wt-btn" onclick="toggleWeekendView()" title="Show or hide Saturday &amp; Sunday">+ Weekend</button></div></div><div class="week-grid" id="week-grid"></div><div id="empty-week" style="display:none;text-align:center;padding:3rem;color:#9E9186;font-size:13px">No tasks this week.</div><div id="week-board"></div></div>
-  <div id="view-month" style="display:none"><div class="nav-row"><button onclick="shiftMonth(-1)">&#8592;</button><span class="nav-title" id="month-title"></span><button onclick="shiftMonth(1)">&#8594;</button><button onclick="monthOffset=0;renderMonth();" title="Jump to current month" style="font-size:10px;font-weight:500;padding:2px 8px;border:1px solid #EDE8E0;border-radius:10px;background:transparent;color:#9E9186;cursor:pointer;font-family:inherit;margin-left:6px;">Today</button></div><div class="cal-day-headers"><div class="cal-day-label">Mon</div><div class="cal-day-label">Tue</div><div class="cal-day-label">Wed</div><div class="cal-day-label">Thu</div><div class="cal-day-label">Fri</div><div class="cal-day-label" title="Week of the year" style="opacity:0.5;font-size:9px;">Wk</div></div><div class="cal-grid" id="cal-grid"></div><div id="month-board"></div></div>
+  <div id="view-week" style="display:none"><div class="nav-row"><button onclick="shiftWeek(-1)" ondblclick="openMonthYearPicker(event,'week')" title="Previous week — double-click to jump to any month/year">&#8592;</button><span class="nav-title" id="week-title"></span><button onclick="shiftWeek(1)" ondblclick="openMonthYearPicker(event,'week')" title="Next week — double-click to jump to any month/year">&#8594;</button><button onclick="gotoTodayWeek()" title="Scroll back to this week" style="font-size:10px;font-weight:500;padding:2px 8px;border:1px solid #EDE8E0;border-radius:10px;background:transparent;color:#9E9186;cursor:pointer;font-family:inherit;margin-left:6px;">Today</button><div class="weekend-toggle-bar"><span id="wk-weekend-note" style="font-size:10px;color:#9C6D2F;display:none;">Weekend events present</span><button id="wk-weekend-toggle" class="wt-btn" onclick="toggleWeekendView()" title="Show or hide Saturday &amp; Sunday">+ Weekend</button></div></div><div class="week-grid" id="week-grid"></div><div id="empty-week" style="display:none;text-align:center;padding:3rem;color:#9E9186;font-size:13px">No tasks this week.</div><div id="week-board"></div></div>
+  <div id="view-month" style="display:none"><div class="nav-row"><button onclick="shiftMonth(-1)" ondblclick="openMonthYearPicker(event,'month')" title="Previous month — double-click to jump to any month/year">&#8592;</button><span class="nav-title" id="month-title"></span><button onclick="shiftMonth(1)" ondblclick="openMonthYearPicker(event,'month')" title="Next month — double-click to jump to any month/year">&#8594;</button><button onclick="monthOffset=0;renderMonth();" title="Jump to current month" style="font-size:10px;font-weight:500;padding:2px 8px;border:1px solid #EDE8E0;border-radius:10px;background:transparent;color:#9E9186;cursor:pointer;font-family:inherit;margin-left:6px;">Today</button></div><div class="cal-day-headers"><div class="cal-day-label">Mon</div><div class="cal-day-label">Tue</div><div class="cal-day-label">Wed</div><div class="cal-day-label">Thu</div><div class="cal-day-label">Fri</div><div class="cal-day-label" title="Week of the year" style="opacity:0.5;font-size:9px;">Wk</div></div><div class="cal-grid" id="cal-grid"></div><div id="month-board"></div></div>
   <div id="view-paralegals" style="display:none"><div id="para-grid"></div><div id="empty-para" style="display:none;text-align:center;padding:3rem;color:#9E9186;font-size:13px">No tasks assigned to paralegals.</div></div>
   <div id="view-me" style="display:none"><div id="me-content"></div><div id="empty-me" style="display:none;text-align:center;padding:3rem;color:#9E9186;font-size:13px">No tasks assigned to you yet.</div></div>
   <div id="view-all" style="display:none">
@@ -9509,6 +9509,77 @@ function renderMonth() {
   buildEventBoard(boardEl, monthTasks, monthFinished, monthLabel);
 }
 function shiftMonth(d) { monthOffset += d; renderMonth(); }
+
+// ── Month/year jump picker ──────────────────────────────────────
+// Double-clicking a ←/→ arrow in Week or Month view opens this popup:
+// pick a year with ‹ ›, click a month to jump straight to it. In Week
+// view it lands on the week containing the 1st of the chosen month.
+function closeMonthYearPicker(){
+  const p = document.getElementById('my-picker');
+  if(p){ p.remove(); document.removeEventListener('mousedown', _myPickerOutside, true); document.removeEventListener('keydown', _myPickerEsc, true); }
+}
+function _myPickerOutside(e){ const p=document.getElementById('my-picker'); if(p && !p.contains(e.target)) closeMonthYearPicker(); }
+function _myPickerEsc(e){ if(e.key==='Escape') closeMonthYearPicker(); }
+function openMonthYearPicker(evt, mode){
+  evt.preventDefault(); evt.stopPropagation();
+  closeMonthYearPicker();
+  const anchor = evt.currentTarget || evt.target;
+  // Start the picker on the year currently being viewed (the two single
+  // clicks that precede the dblclick have already shifted the view ±2,
+  // which is fine — picking a month overrides the offset entirely).
+  const viewed = mode==='week' ? getWeekStart(weekOffset) : new Date(TODAY.getFullYear(), TODAY.getMonth()+monthOffset, 1);
+  let pickYear = viewed.getFullYear();
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const pop = document.createElement('div');
+  pop.id = 'my-picker';
+  pop.style.cssText = 'position:fixed;z-index:9999;background:#FDFAF7;border:1px solid #DDD5CA;border-radius:12px;box-shadow:0 8px 24px rgba(44,38,32,.18);padding:10px;width:212px;font-family:inherit;';
+  function build(){
+    pop.innerHTML = '';
+    const head = document.createElement('div');
+    head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
+    const yrBtn = (txt,d)=>{
+      const b = document.createElement('button'); b.type='button'; b.textContent = txt;
+      b.style.cssText = 'border:1px solid #EDE8E0;background:transparent;border-radius:8px;color:#9E9186;cursor:pointer;font-size:13px;line-height:1;padding:3px 9px;font-family:inherit;';
+      b.onclick = e=>{ e.stopPropagation(); pickYear += d; build(); };
+      return b;
+    };
+    const yr = document.createElement('span');
+    yr.textContent = pickYear;
+    yr.style.cssText = 'font-family:\'Lora\',Georgia,serif;font-size:14px;font-weight:600;color:#2C2620;';
+    head.appendChild(yrBtn('‹',-1)); head.appendChild(yr); head.appendChild(yrBtn('›',1));
+    pop.appendChild(head);
+    const grid = document.createElement('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:5px;';
+    MONTHS.forEach((mName, mi)=>{
+      const isViewed = pickYear===viewed.getFullYear() && mi===viewed.getMonth();
+      const isNow = pickYear===TODAY.getFullYear() && mi===TODAY.getMonth();
+      const b = document.createElement('button'); b.type='button'; b.textContent = mName;
+      b.style.cssText = 'border:1px solid '+(isViewed?'#C9823A':isNow?'#DDD5CA':'#EDE8E0')+';background:'+(isViewed?'#C9823A':isNow?'#F7F3ED':'transparent')+';color:'+(isViewed?'#fff':'#5C5148')+';border-radius:8px;cursor:pointer;font-size:11px;font-weight:600;padding:6px 0;font-family:inherit;';
+      b.onclick = e=>{
+        e.stopPropagation();
+        closeMonthYearPicker();
+        if(mode==='week'){
+          const first = new Date(pickYear, mi, 1), day = first.getDay(), diff = day===0 ? -6 : 1-day;
+          const firstMonday = new Date(first); firstMonday.setDate(first.getDate()+diff); firstMonday.setHours(0,0,0,0);
+          weekOffset = Math.round((firstMonday - getWeekStart(0)) / (7*86400000));
+          renderWeek();
+        } else {
+          monthOffset = (pickYear - TODAY.getFullYear())*12 + (mi - TODAY.getMonth());
+          renderMonth();
+        }
+      };
+      grid.appendChild(b);
+    });
+    pop.appendChild(grid);
+  }
+  build();
+  document.body.appendChild(pop);
+  const r = anchor.getBoundingClientRect();
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8));
+  const top = r.bottom + 6 + pop.offsetHeight > window.innerHeight ? Math.max(8, r.top - pop.offsetHeight - 6) : r.bottom + 6;
+  pop.style.left = left + 'px'; pop.style.top = top + 'px';
+  setTimeout(()=>{ document.addEventListener('mousedown', _myPickerOutside, true); document.addEventListener('keydown', _myPickerEsc, true); }, 0);
+}
 let draggedRecordId=null;
 function _buildParaEmailText(name, allTasks, thisWeekTasks, nextWeekTasks){
   const _WDAYS_SHORT=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
