@@ -3447,37 +3447,21 @@ function reminderCardHtml(r, opts){
   else if(r.date) dueLabel = fmtDate(r.date);
   // Assignee avatar
   const who = (r.assigned||'').trim();
-  const avSz = compact ? 16 : 26;
+  const avSz = compact ? 20 : 34;
   const avatar = who
-    ? '<div title="Assigned to '+esc(who)+'" style="width:'+avSz+'px;height:'+avSz+'px;border-radius:50%;background:#2E6B58;color:#fff;display:flex;align-items:center;justify-content:center;font-size:'+(compact?7:10)+'px;font-weight:700;letter-spacing:.03em;flex-shrink:0;">'+esc(who==='Me'?'ME':initials(who))+'</div>'
+    ? '<div title="Assigned to '+esc(who)+'" style="width:'+avSz+'px;height:'+avSz+'px;border-radius:50%;background:#2E6B58;color:#fff;display:flex;align-items:center;justify-content:center;font-size:'+(compact?8:12)+'px;font-weight:700;letter-spacing:.03em;flex-shrink:0;">'+esc(who==='Me'?'ME':initials(who))+'</div>'
     : '<div title="Unassigned" style="width:'+avSz+'px;height:'+avSz+'px;border-radius:50%;border:1.5px solid #D5CCC1;background:transparent;flex-shrink:0;box-sizing:border-box;"></div>';
-  if(compact){
-    // Compact mode blends in with the other calendar chips: the same
-    // week-event / week-client / week-clid type styles every other event
-    // uses, with only the small DUE header + avatar marking it as a reminder.
-    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:2px;">'
-      +   '<div style="display:flex;align-items:center;gap:4px;min-width:0;">'
-      +     _reminderIconSvg(11)
-      +     '<span style="font-size:7px;font-weight:700;letter-spacing:.1em;color:var(--ink-faint);flex-shrink:0;">DUE</span>'
-      +     '<span style="font-size:10px;font-weight:600;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(dueLabel)+'</span>'
-      +   '</div>'
-      +   avatar
-      + '</div>'
-      + '<div class="week-event" style="white-space:normal;line-height:1.3;">'+esc(text)+'</div>'
-      + (r.client ? '<div class="week-client">'+esc(r.client)+'</div>' : '')
-      + '<div class="week-clid">#'+esc(r.clid||'—')+'</div>';
-  }
   return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">'
-    +   '<div style="display:flex;align-items:center;gap:7px;min-width:0;">'
-    +     _reminderIconSvg(16)
-    +     '<span style="font-size:9px;font-weight:700;letter-spacing:.12em;color:#C4BAB0;flex-shrink:0;">DUE</span>'
-    +     '<span style="font-size:13px;font-weight:600;color:#8A8074;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(dueLabel)+'</span>'
+    +   '<div style="display:flex;align-items:center;gap:'+(compact?5:8)+'px;min-width:0;">'
+    +     _reminderIconSvg(compact?13:20)
+    +     '<span style="font-size:'+(compact?8:10)+'px;font-weight:700;letter-spacing:.12em;color:#C4BAB0;flex-shrink:0;">DUE</span>'
+    +     '<span style="font-size:'+(compact?10:15)+'px;font-weight:600;color:#8A8074;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(dueLabel)+'</span>'
     +   '</div>'
     +   avatar
     + '</div>'
-    + '<div style="font-size:13px;font-weight:600;color:#2C2620;line-height:1.45;margin:8px 0 6px;white-space:normal;">'+esc(text)+'</div>'
-    + (r.client ? '<div style="font-size:12px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(r.client)+'</div>' : '')
-    + '<div style="font-size:10px;font-weight:600;color:#B8AFA3;margin-top:1px;">#'+esc(r.clid||'—')+'</div>';
+    + '<div style="font-family:\'Lora\',Georgia,serif;font-size:'+(compact?11.5:16)+'px;color:#2C2620;line-height:1.45;margin:'+(compact?'4px 0 3px':'12px 0 10px')+';white-space:normal;">'+esc(text)+'</div>'
+    + (r.client ? '<div style="font-family:\'Lora\',Georgia,serif;font-size:'+(compact?10.5:14)+'px;color:#2C2620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(r.client)+'</div>' : '')
+    + '<div style="font-size:'+(compact?9:11)+'px;font-weight:600;color:#B8AFA3;margin-top:1px;">#'+esc(r.clid||'—')+'</div>';
 }
 function _getReminderParentEvent(r){
   if(!r||!r._parentId) return '';
