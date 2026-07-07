@@ -3419,6 +3419,50 @@ function _reminderIconSvg(size){
     + '<circle cx="13.6" cy="8.15" r="0.45" fill="#C94A3A"/>'
     + '</svg>';
 }
+// ── Reminder card — shared look for every view that shows a reminder ──
+// Layout (per design):  [icon] DUE  Fri, Jul 31, 2026        (initials)
+//                       Reminder text in serif
+//                       Client name
+//                       #23606
+// The circle shows the initials of the person the task is ASSIGNED to;
+// unassigned reminders get an empty outlined circle.
+function reminderCardHtml(r, opts){
+  opts = opts||{};
+  const compact = !!opts.compact;
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const raw = (r.notes||'').replace(/^⏰ REMINDER:\s*/,'');
+  // Prefer the custom note (text after the — separator); fall back to the
+  // auto-generated "Task due by …" when the user didn't write one.
+  const custom = raw.includes('—') ? raw.split('—').slice(1).join('—').trim() : '';
+  const text = custom || raw;
+  // Due date: the PARENT task's date (the reminder row itself sits earlier).
+  let dueLabel = '';
+  const parent = r._parentId ? records.find(x=>x.id===r._parentId) : null;
+  let dueD = parent && parent.date ? parseDate(parent.date) : null;
+  if(!dueD){
+    const m = raw.match(/due by ([^—\n]+)/);
+    if(m){ const d = new Date(m[1].trim()); if(!isNaN(d)) dueD = d; }
+  }
+  if(dueD) dueLabel = dueD.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+  else if(r.date) dueLabel = fmtDate(r.date);
+  // Assignee avatar
+  const who = (r.assigned||'').trim();
+  const avSz = compact ? 20 : 34;
+  const avatar = who
+    ? '<div title="Assigned to '+esc(who)+'" style="width:'+avSz+'px;height:'+avSz+'px;border-radius:50%;background:#2E6B58;color:#fff;display:flex;align-items:center;justify-content:center;font-size:'+(compact?8:12)+'px;font-weight:700;letter-spacing:.03em;flex-shrink:0;">'+esc(who==='Me'?'ME':initials(who))+'</div>'
+    : '<div title="Unassigned" style="width:'+avSz+'px;height:'+avSz+'px;border-radius:50%;border:1.5px solid #D5CCC1;background:transparent;flex-shrink:0;box-sizing:border-box;"></div>';
+  return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">'
+    +   '<div style="display:flex;align-items:center;gap:'+(compact?5:8)+'px;min-width:0;">'
+    +     _reminderIconSvg(compact?13:20)
+    +     '<span style="font-size:'+(compact?8:10)+'px;font-weight:700;letter-spacing:.12em;color:#C4BAB0;flex-shrink:0;">DUE</span>'
+    +     '<span style="font-size:'+(compact?10:15)+'px;font-weight:600;color:#8A8074;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(dueLabel)+'</span>'
+    +   '</div>'
+    +   avatar
+    + '</div>'
+    + '<div style="font-family:\'Lora\',Georgia,serif;font-size:'+(compact?11.5:16)+'px;color:#2C2620;line-height:1.45;margin:'+(compact?'4px 0 3px':'12px 0 10px')+';white-space:normal;">'+esc(text)+'</div>'
+    + (r.client ? '<div style="font-family:\'Lora\',Georgia,serif;font-size:'+(compact?10.5:14)+'px;color:#2C2620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(r.client)+'</div>' : '')
+    + '<div style="font-size:'+(compact?9:11)+'px;font-weight:600;color:#B8AFA3;margin-top:1px;">#'+esc(r.clid||'—')+'</div>';
+}
 function _getReminderParentEvent(r){
   if(!r||!r._parentId) return '';
   const p = records.find(x=>x.id===r._parentId);
@@ -8950,9 +8994,7 @@ function renderWeek() {
       }
       const timeBadge = (!_isReminder && (r.timeStart||r.timeEnd)) ? `<div class="wk-time-badge">${(r.timeStart||'').slice(0,5)}${r.timeEnd?('–'+r.timeEnd.slice(0,5)):''}</div>` : '';
       if(_isReminder){
-        // Reminder: bell icon + client name + muted stripped text
-        const reminderText=(r.notes||'').replace(/^⏰ REMINDER:\s*/,'');
-        t.innerHTML = `<div class="week-event" style="color:#C9823A;">🔔</div><div class="week-client">${r.client}</div><div class="week-clid">#${r.clid || '—'}</div><div class="wk-notes" style="font-size:10px;color:var(--ink-faint);margin-top:2px;font-style:italic;line-height:1.3;opacity:0.7;">${reminderText}</div>`;
+        t.innerHTML = reminderCardHtml(r,{compact:true});
       } else {
         const es=getEventStyle(r.event||'');
         const evLabel=(es.icon?es.icon+' ':'')+( r.event||r.type);
@@ -10470,6 +10512,17 @@ function renderDeadlines(){
     // ── Task-kind events get a lighter "to-do" style card ──
     const _isTaskEv = isTaskKindEvent(r.event);
     const _isReminderEv = !!(r.notes&&r.notes.startsWith('⏰ REMINDER'));
+    // ── Reminders get the dedicated card design (icon + DUE date, assignee
+    // initials top-right, serif text, client, #id) ──
+    if(_isReminderEv){
+      const remCard=document.createElement('div');
+      remCard.style.cssText=`background:#fff;border:1px solid #EDE8E0;border-radius:14px;margin-bottom:10px;padding:16px 18px;cursor:pointer;box-shadow:0 1px 4px rgba(44,38,32,0.06);transition:box-shadow .12s;${isDone?'opacity:0.55;':''}`;
+      remCard.onmouseenter=()=>{remCard.style.boxShadow='0 3px 12px rgba(44,38,32,0.11)';};
+      remCard.onmouseleave=()=>{remCard.style.boxShadow='0 1px 4px rgba(44,38,32,0.06)';};
+      remCard.onclick=()=>openEdit(r.id);
+      remCard.innerHTML=reminderCardHtml(r,{});
+      return remCard;
+    }
     if(_isTaskEv && !_isReminderEv){
       const tCard=document.createElement('div');
       tCard.style.cssText=`display:flex;align-items:flex-start;gap:10px;background:${isDone?'#F7F3ED':'#FFFDF9'};border:1px solid ${isDone?'#EDE8E0':isOverdue?'#F0D0D0':'#EDE8E0'};border-left:3px solid ${isOverdue?'#B85C5C':isToday?'#C9823A':'#C4BAB0'};border-radius:8px;margin-bottom:8px;padding:10px 14px 10px 12px;cursor:pointer;transition:all .14s;${isDone?'opacity:0.55;':''}`;
@@ -20326,7 +20379,14 @@ function renderDayTaskList(){
     body.className = 'day-task-body';
 
     const isTaskRec = isTaskKindEvent(r.event);
-    if(isTaskRec){
+    const isRemRec = !!(r.notes&&r.notes.startsWith('⏰ REMINDER'));
+    if(isRemRec){
+      // Reminders: dedicated card design (icon + DUE date, assignee circle,
+      // serif text, client, #id). Checkbox still finishes the reminder.
+      body.innerHTML = reminderCardHtml(r,{compact:true});
+      row.appendChild(cb);
+      row.appendChild(body);
+    } else if(isTaskRec){
       // Task rows: hide the redundant "TASK" title — lead with the note, with
       // the client name beneath it. Checking the box opens the finish window
       // (the status buttons) for that task.
@@ -20526,12 +20586,18 @@ function renderDayTimeline(){
 
       const body = document.createElement('div');
       body.style.cssText = 'flex:1;min-width:0;';
+      if(r.notes && r.notes.startsWith('⏰ REMINDER')){
+        // Reminders use the dedicated card design (icon + DUE, assignee
+        // circle, serif text, client, #id) here too.
+        body.innerHTML = reminderCardHtml(r,{compact:true});
+      } else {
       body.innerHTML = `
         <div style="font-size:10px;font-weight:600;color:#9E9186;margin-bottom:2px;">${r.timeStart ? fmtTime(r.timeStart)+(r.timeEnd?' – '+fmtTime(r.timeEnd):'') : 'All day'}</div>
         <div style="font-size:12px;font-weight:700;color:#2C2620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${evLabel}</div>
         <div style="font-size:11px;color:#9E9186;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.client}${r.clid?' · #'+r.clid:''}${r.atty?' · '+r.atty:''}</div>
         ${r.notes?`<div style="font-size:10px;color:#C4BAB0;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:italic;">${r.notes.slice(0,55)}${r.notes.length>55?'…':''}</div>`:''}
       `;
+      }
       row.appendChild(makeFinishCheckBtn(r.id, 14, 'align-self:center;margin-right:2px;'));
       row.appendChild(bar);
       row.appendChild(body);
