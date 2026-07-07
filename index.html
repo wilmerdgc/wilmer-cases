@@ -3458,8 +3458,8 @@ function reminderCardHtml(r, opts){
     +   '<span style="font-size:'+(compact?10:15)+'px;font-weight:600;color:#8A8074;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(dueLabel)+'</span>'
     +   cdPill
     + '</div>'
-    + '<div style="font-family:\'Lora\',Georgia,serif;font-size:'+(compact?11.5:16)+'px;color:#2C2620;line-height:1.45;margin:'+(compact?'4px 0 3px':'12px 0 10px')+';white-space:normal;">'+esc(text)+'</div>'
-    + (r.client ? '<div style="font-family:\'Lora\',Georgia,serif;font-size:'+(compact?10.5:14)+'px;color:#2C2620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(r.client)+'</div>' : '')
+    + '<div style="font-size:'+(compact?11.5:16)+'px;color:#2C2620;line-height:1.45;margin:'+(compact?'4px 0 3px':'12px 0 10px')+';white-space:normal;">'+esc(text)+'</div>'
+    + (r.client ? '<div style="font-size:'+(compact?10.5:14)+'px;color:#2C2620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(r.client)+'</div>' : '')
     + '<div style="font-size:'+(compact?9:11)+'px;font-weight:600;color:#B8AFA3;margin-top:1px;">#'+esc(r.clid||'—')+'</div>';
 }
 function _getReminderParentEvent(r){
