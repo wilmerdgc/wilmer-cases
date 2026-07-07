@@ -8811,6 +8811,24 @@ function getWeekStart(offset) {
   d.setDate(d.getDate() + diff + offset * 7); d.setHours(0, 0, 0, 0); return d;
 }
 
+// True when the record's case is flagged as a Paper File in case information
+function isPaperFileCase(r){
+  const clid = r && (r.clid || r.client);
+  if(!clid || typeof caseMeta==='undefined' || !caseMeta[clid]) return false;
+  return caseMeta[clid].filingSystem === 'paper';
+}
+// Appends a small "⚠ Paper File" warning chip to a calendar event card
+// when the record's case is flagged Paper File in the case information.
+function appendPaperWarn(el, r, size){
+  if(!isPaperFileCase(r)) return;
+  const w = document.createElement('div');
+  w.className = 'paper-file-warn';
+  w.title = 'This case is marked as a Paper File in the case information — filings do not go through ECAS.';
+  w.style.cssText = 'display:inline-flex;align-items:center;gap:3px;font-size:'+(size||9)+'px;font-weight:700;color:#B85C5C;background:#FBF1F1;border:1px solid #E6BDBD;border-radius:4px;padding:1px 5px;margin-top:3px;line-height:1.3;white-space:nowrap;';
+  w.textContent = '⚠ Paper File';
+  el.appendChild(w);
+}
+
 // Returns the first file attachment for a SCHEDULING ORDER record, or null
 function getSoAttachment(r){
   if(r.event!=='SCHEDULING ORDER')return null;
@@ -9189,6 +9207,7 @@ function renderWeek() {
         }
       }
       appendSoMeta(t, r, 'var(--amber)');
+      appendPaperWarn(t, r, 9);
       // Hearing format indicator: link icon for virtual, pin icon for in-person
       if(!_isReminder){
         const _vlink = eventVirtualLink(r);
@@ -9452,6 +9471,7 @@ function renderMonth() {
       card.innerHTML = `<div class="cal-event-name" style="color:${fg}">${evLabel}</div><div class="cal-event-sub" style="color:${fg}">${r.client}</div>${r.assigned ? `<div style="font-size:9px;opacity:0.7;margin-top:1px;line-height:1.3;color:${fg};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">→ ${r.assigned}</div>` : ''}${r.notes ? `<div style="font-size:9px;opacity:0.65;margin-top:1px;line-height:1.3;font-style:italic;color:${fg};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.notes}</div>` : ''}`;
       if(es.color && !_isCallup) card.style.borderLeft=`3px solid ${es.color}`;
       appendSoMeta(card, r, fg);
+      appendPaperWarn(card, r, 8);
       const _vlinkM = eventVirtualLink(r);
       const _absM = 'position:absolute;top:3px;right:3px;margin:0;padding:1px;';
       if(_vlinkM){
@@ -20676,6 +20696,7 @@ function renderDayTaskList(){
     }
     body.appendChild(due);
     appendSoMeta(body, r, '#C9823A');
+    appendPaperWarn(body, r, 9);
 
     row.appendChild(cb);
     row.appendChild(body);
@@ -20836,6 +20857,7 @@ function renderDayTimeline(){
         ${r.notes?`<div style="font-size:10px;color:#C4BAB0;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:italic;">${r.notes.slice(0,55)}${r.notes.length>55?'…':''}</div>`:''}
       `;
       }
+      appendPaperWarn(body, r, 9);
       row.appendChild(makeFinishCheckBtn(r.id, 14, 'align-self:center;margin-right:2px;'));
       row.appendChild(bar);
       row.appendChild(body);
