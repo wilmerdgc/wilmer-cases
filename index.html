@@ -8930,17 +8930,18 @@ function renderWeekIndividualBanner(){
   viewBtn.onclick=()=>switchView('individual');
   banner.appendChild(viewBtn);
 }
-// ── Family Court hearings banner (shared by the week + Today calendars) ──
-// Active FC HEARING / FC TRIAL events happening from TODAY out to 30 days
-// ahead. Amber styling to match the FC orange used across the app.
-function _renderFcHearingBanner(bannerId, insertFn){
+// ── Generic upcoming-events banner (shared by the week + Today calendars) ──
+// Lists active events matching cfg.match with a date from TODAY out to
+// cfg.days ahead, as client pills sorted by date. cfg: {match(r), days,
+// noun, bg, border, accent, hover, urgentColor, viewAll}.
+function _renderUpcomingBanner(bannerId, insertFn, cfg){
   let banner=document.getElementById(bannerId);
   const upcoming=records.filter(r=>{
     if(r.deletedStatus||r.finishedStatus)return false;
-    if(r.event!=='FC HEARING'&&r.event!=='FC TRIAL')return false;
+    if(!cfg.match(r))return false;
     if(!r.date)return false;
     const diff=Math.round((parseDate(r.date)-TODAY)/86400000);
-    return diff>=0 && diff<=30;
+    return diff>=0 && diff<=cfg.days;
   }).sort((a,b)=>a.date.localeCompare(b.date));
 
   if(!upcoming.length){
@@ -8954,18 +8955,18 @@ function _renderFcHearingBanner(bannerId, insertFn){
     if(!insertFn(banner)) return;
   }
   banner.innerHTML='';
-  banner.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 14px;background:#FFF3E8;border:1px solid #E8C49A;border-radius:10px;margin-bottom:10px;flex-wrap:wrap;';
+  banner.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 14px;background:'+cfg.bg+';border:1px solid '+cfg.border+';border-radius:10px;margin-bottom:10px;flex-wrap:wrap;';
 
   const label=document.createElement('span');
-  label.style.cssText='font-size:11px;font-weight:700;color:#C9823A;white-space:nowrap;';
-  label.textContent=upcoming.length+' FC hearing'+(upcoming.length!==1?'s':'')+' · next 30 days:';
+  label.style.cssText='font-size:11px;font-weight:700;color:'+cfg.accent+';white-space:nowrap;';
+  label.textContent=upcoming.length+' '+cfg.noun+(upcoming.length!==1?'s':'')+' · next '+cfg.days+' days:';
   banner.appendChild(label);
 
   const pills=document.createElement('div');
   pills.style.cssText='display:flex;gap:5px;flex-wrap:wrap;flex:1;';
   upcoming.slice(0,5).forEach(r=>{
     const diff=Math.round((parseDate(r.date)-TODAY)/86400000);
-    const color=diff<=7?'#B85C5C':'#C9823A';
+    const color=diff<=7?(cfg.urgentColor||'#B85C5C'):cfg.accent;
     const cdText=diff===0?'Today':diff+'d';
     const pill=document.createElement('button');
     pill.style.cssText=`font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid ${color}33;background:${color}14;color:${color};cursor:pointer;font-weight:600;white-space:nowrap;font-family:inherit;transition:filter .1s;`;
@@ -8978,7 +8979,7 @@ function _renderFcHearingBanner(bannerId, insertFn){
   });
   if(upcoming.length>5){
     const more=document.createElement('span');
-    more.style.cssText='font-size:10px;color:#C9823A;padding:2px 4px;';
+    more.style.cssText='font-size:10px;color:'+cfg.accent+';padding:2px 4px;';
     more.textContent='+'+(upcoming.length-5)+' more';
     pills.appendChild(more);
   }
@@ -8986,31 +8987,48 @@ function _renderFcHearingBanner(bannerId, insertFn){
 
   const viewBtn=document.createElement('button');
   viewBtn.textContent='View all →';
-  viewBtn.style.cssText='font-size:10px;padding:2px 9px;border:1px solid #E8C49A;border-radius:6px;background:transparent;color:#C9823A;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;';
-  viewBtn.onmouseenter=()=>{viewBtn.style.background='#FAF0E6';};
+  viewBtn.style.cssText='font-size:10px;padding:2px 9px;border:1px solid '+cfg.border+';border-radius:6px;background:transparent;color:'+cfg.accent+';cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;';
+  viewBtn.onmouseenter=()=>{viewBtn.style.background=cfg.hover;};
   viewBtn.onmouseleave=()=>{viewBtn.style.background='transparent';};
-  viewBtn.onclick=()=>switchView('all');
+  viewBtn.onclick=()=>switchView(cfg.viewAll);
   banner.appendChild(viewBtn);
 }
-function renderWeekFcBanner(){
-  _renderFcHearingBanner('wk-fc-banner', b=>{
-    const grid=document.getElementById('week-grid');
-    if(grid&&grid.parentNode){ grid.parentNode.insertBefore(b,grid); return true; }
-    return false;
-  });
+// FC HEARING / FC TRIAL within 30 days — amber, matching the FC orange.
+const _FC_BANNER_CFG={
+  match:r=>r.event==='FC HEARING'||r.event==='FC TRIAL',
+  days:30, noun:'FC hearing',
+  bg:'#FFF3E8', border:'#E8C49A', accent:'#C9823A', hover:'#FAF0E6',
+  viewAll:'all'
+};
+// SCHEDULING ORDER within 15 days — violet, to read apart from the FC amber.
+const _SO_BANNER_CFG={
+  match:r=>r.event==='SCHEDULING ORDER',
+  days:15, noun:'scheduling order',
+  bg:'#F1EEF7', border:'#CCC3E2', accent:'#7A6EA0', hover:'#E9E4F2',
+  viewAll:'so'
+};
+// Insert before the week grid (banners stack in call order).
+function _wkBannerInsert(b){
+  const grid=document.getElementById('week-grid');
+  if(grid&&grid.parentNode){ grid.parentNode.insertBefore(b,grid); return true; }
+  return false;
 }
-function renderDayFcBanner(){
-  _renderFcHearingBanner('dv-fc-banner', b=>{
-    const anchor=document.getElementById('dv-individual-banner')||document.getElementById('dv-callup-banner');
-    if(anchor&&anchor.parentNode){ anchor.parentNode.insertBefore(b,anchor.nextSibling); return true; }
-    const layout=document.querySelector('#view-today > div');
-    if(layout&&layout.parentNode){ layout.parentNode.insertBefore(b,layout); return true; }
-    return false;
-  });
+// Insert after the last existing Today-view banner.
+function _dvBannerInsert(b){
+  const anchor=document.getElementById('dv-fc-banner')||document.getElementById('dv-individual-banner')||document.getElementById('dv-callup-banner');
+  if(anchor&&anchor.parentNode){ anchor.parentNode.insertBefore(b,anchor.nextSibling); return true; }
+  const layout=document.querySelector('#view-today > div');
+  if(layout&&layout.parentNode){ layout.parentNode.insertBefore(b,layout); return true; }
+  return false;
 }
+function renderWeekFcBanner(){ _renderUpcomingBanner('wk-fc-banner', _wkBannerInsert, _FC_BANNER_CFG); }
+function renderDayFcBanner(){ _renderUpcomingBanner('dv-fc-banner', _dvBannerInsert, _FC_BANNER_CFG); }
+function renderWeekSoBanner(){ _renderUpcomingBanner('wk-so-banner', _wkBannerInsert, _SO_BANNER_CFG); }
+function renderDaySoBanner(){ _renderUpcomingBanner('dv-so-banner', _dvBannerInsert, _SO_BANNER_CFG); }
 function renderWeek() {
   renderWeekIndividualBanner();
   renderWeekFcBanner();
+  renderWeekSoBanner();
   const rows = getFiltered(); updateStats(rows);
   const mon = getWeekStart(weekOffset);
   // ── Perf: pre-index rows by date string ──
@@ -20058,6 +20076,7 @@ function renderDayView(){
   renderCallUpBanner();
   renderIndividualBanner();
   renderDayFcBanner();
+  renderDaySoBanner();
   renderDayTaskList();
   renderDayTimeline();
   startNowTimer();
