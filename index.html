@@ -8862,7 +8862,155 @@ function toggleWeekendView(){
   try{ localStorage.setItem('weekShowWeekend', weekendPref?'1':'0'); }catch{}
   renderWeek();
 }
+// ── Week view: upcoming INDIVIDUAL hearings banner ──
+// Shows every active INDIVIDUAL hearing scheduled from TODAY out to 90
+// days ahead (upcoming only — overdue ones are not this banner's job),
+// so the next three months of individual hearings are visible at a
+// glance from the weekly calendar. Same component style as the Today
+// view's individuals banner.
+function renderWeekIndividualBanner(){
+  const bannerId='wk-individual-banner';
+  let banner=document.getElementById(bannerId);
+  const upcoming=records.filter(r=>{
+    if(r.deletedStatus||r.finishedStatus)return false;
+    if(r.event!=='INDIVIDUAL')return false;
+    if(!r.date)return false;
+    const diff=Math.round((parseDate(r.date)-TODAY)/86400000);
+    return diff>=0 && diff<=90;
+  }).sort((a,b)=>a.date.localeCompare(b.date));
+
+  if(!upcoming.length){
+    if(banner)banner.remove();
+    return;
+  }
+
+  if(!banner){
+    banner=document.createElement('div');
+    banner.id=bannerId;
+    const grid=document.getElementById('week-grid');
+    if(grid&&grid.parentNode) grid.parentNode.insertBefore(banner,grid);
+    else return;
+  }
+  banner.innerHTML='';
+  banner.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 14px;background:#EEF1F7;border:1px solid #B8C4DB;border-radius:10px;margin-bottom:10px;flex-wrap:wrap;';
+
+  const label=document.createElement('span');
+  label.style.cssText='font-size:11px;font-weight:700;color:#4F6A91;white-space:nowrap;';
+  label.textContent=upcoming.length+' individual'+(upcoming.length!==1?'s':'')+' · next 90 days:';
+  banner.appendChild(label);
+
+  const pills=document.createElement('div');
+  pills.style.cssText='display:flex;gap:5px;flex-wrap:wrap;flex:1;';
+  upcoming.slice(0,5).forEach(r=>{
+    const diff=Math.round((parseDate(r.date)-TODAY)/86400000);
+    const color=diff<=7?'#C9823A':diff<=30?'#6B7FA3':'#4F6A91';
+    const cdText=diff===0?'Today':diff+'d';
+    const pill=document.createElement('button');
+    pill.style.cssText=`font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid ${color}33;background:${color}14;color:${color};cursor:pointer;font-weight:600;white-space:nowrap;font-family:inherit;transition:filter .1s;`;
+    pill.textContent=(r.client||'').split(' ')[0]+' · '+cdText;
+    pill.title=r.event+' — '+r.client+' — '+fmtDate(r.date)+(r.notes?' — '+r.notes:'');
+    pill.onmouseenter=()=>pill.style.filter='brightness(0.9)';
+    pill.onmouseleave=()=>pill.style.filter='';
+    pill.onclick=()=>openEdit(r.id);
+    pills.appendChild(pill);
+  });
+  if(upcoming.length>5){
+    const more=document.createElement('span');
+    more.style.cssText='font-size:10px;color:#4F6A91;padding:2px 4px;';
+    more.textContent='+'+(upcoming.length-5)+' more';
+    pills.appendChild(more);
+  }
+  banner.appendChild(pills);
+
+  const viewBtn=document.createElement('button');
+  viewBtn.textContent='View all →';
+  viewBtn.style.cssText='font-size:10px;padding:2px 9px;border:1px solid #B8C4DB;border-radius:6px;background:transparent;color:#4F6A91;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;';
+  viewBtn.onmouseenter=()=>{viewBtn.style.background='#E3EAF3';};
+  viewBtn.onmouseleave=()=>{viewBtn.style.background='transparent';};
+  viewBtn.onclick=()=>switchView('individual');
+  banner.appendChild(viewBtn);
+}
+// ── Family Court hearings banner (shared by the week + Today calendars) ──
+// Active FC HEARING / FC TRIAL events happening from TODAY out to 30 days
+// ahead. Amber styling to match the FC orange used across the app.
+function _renderFcHearingBanner(bannerId, insertFn){
+  let banner=document.getElementById(bannerId);
+  const upcoming=records.filter(r=>{
+    if(r.deletedStatus||r.finishedStatus)return false;
+    if(r.event!=='FC HEARING'&&r.event!=='FC TRIAL')return false;
+    if(!r.date)return false;
+    const diff=Math.round((parseDate(r.date)-TODAY)/86400000);
+    return diff>=0 && diff<=30;
+  }).sort((a,b)=>a.date.localeCompare(b.date));
+
+  if(!upcoming.length){
+    if(banner)banner.remove();
+    return;
+  }
+
+  if(!banner){
+    banner=document.createElement('div');
+    banner.id=bannerId;
+    if(!insertFn(banner)) return;
+  }
+  banner.innerHTML='';
+  banner.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 14px;background:#FFF3E8;border:1px solid #E8C49A;border-radius:10px;margin-bottom:10px;flex-wrap:wrap;';
+
+  const label=document.createElement('span');
+  label.style.cssText='font-size:11px;font-weight:700;color:#C9823A;white-space:nowrap;';
+  label.textContent=upcoming.length+' FC hearing'+(upcoming.length!==1?'s':'')+' · next 30 days:';
+  banner.appendChild(label);
+
+  const pills=document.createElement('div');
+  pills.style.cssText='display:flex;gap:5px;flex-wrap:wrap;flex:1;';
+  upcoming.slice(0,5).forEach(r=>{
+    const diff=Math.round((parseDate(r.date)-TODAY)/86400000);
+    const color=diff<=7?'#B85C5C':'#C9823A';
+    const cdText=diff===0?'Today':diff+'d';
+    const pill=document.createElement('button');
+    pill.style.cssText=`font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid ${color}33;background:${color}14;color:${color};cursor:pointer;font-weight:600;white-space:nowrap;font-family:inherit;transition:filter .1s;`;
+    pill.textContent=(r.client||'').split(' ')[0]+' · '+cdText;
+    pill.title=r.event+' — '+r.client+' — '+fmtDate(r.date)+(r.notes?' — '+r.notes:'');
+    pill.onmouseenter=()=>pill.style.filter='brightness(0.9)';
+    pill.onmouseleave=()=>pill.style.filter='';
+    pill.onclick=()=>openEdit(r.id);
+    pills.appendChild(pill);
+  });
+  if(upcoming.length>5){
+    const more=document.createElement('span');
+    more.style.cssText='font-size:10px;color:#C9823A;padding:2px 4px;';
+    more.textContent='+'+(upcoming.length-5)+' more';
+    pills.appendChild(more);
+  }
+  banner.appendChild(pills);
+
+  const viewBtn=document.createElement('button');
+  viewBtn.textContent='View all →';
+  viewBtn.style.cssText='font-size:10px;padding:2px 9px;border:1px solid #E8C49A;border-radius:6px;background:transparent;color:#C9823A;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;';
+  viewBtn.onmouseenter=()=>{viewBtn.style.background='#FAF0E6';};
+  viewBtn.onmouseleave=()=>{viewBtn.style.background='transparent';};
+  viewBtn.onclick=()=>switchView('all');
+  banner.appendChild(viewBtn);
+}
+function renderWeekFcBanner(){
+  _renderFcHearingBanner('wk-fc-banner', b=>{
+    const grid=document.getElementById('week-grid');
+    if(grid&&grid.parentNode){ grid.parentNode.insertBefore(b,grid); return true; }
+    return false;
+  });
+}
+function renderDayFcBanner(){
+  _renderFcHearingBanner('dv-fc-banner', b=>{
+    const anchor=document.getElementById('dv-individual-banner')||document.getElementById('dv-callup-banner');
+    if(anchor&&anchor.parentNode){ anchor.parentNode.insertBefore(b,anchor.nextSibling); return true; }
+    const layout=document.querySelector('#view-today > div');
+    if(layout&&layout.parentNode){ layout.parentNode.insertBefore(b,layout); return true; }
+    return false;
+  });
+}
 function renderWeek() {
+  renderWeekIndividualBanner();
+  renderWeekFcBanner();
   const rows = getFiltered(); updateStats(rows);
   const mon = getWeekStart(weekOffset);
   // ── Perf: pre-index rows by date string ──
@@ -19909,6 +20057,7 @@ function renderDayView(){
   renderMiniCal();
   renderCallUpBanner();
   renderIndividualBanner();
+  renderDayFcBanner();
   renderDayTaskList();
   renderDayTimeline();
   startNowTimer();
