@@ -1438,6 +1438,12 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
   margin-top: 3px;
 }
 
+/* Upcoming-banner pill strips: horizontal scroll with a slim scrollbar */
+.banner-pill-strip::-webkit-scrollbar{height:5px;}
+.banner-pill-strip::-webkit-scrollbar-thumb{background:#D8CFC2;border-radius:3px;}
+.banner-pill-strip::-webkit-scrollbar-thumb:hover{background:#C4BAB0;}
+.banner-pill-strip::-webkit-scrollbar-track{background:transparent;}
+
 /* Mini calendar */
 .mini-cal {
   padding: 8px 12px 6px;
@@ -8924,6 +8930,18 @@ function toggleWeekendView(){
 // so the next three months of individual hearings are visible at a
 // glance from the weekly calendar. Same component style as the Today
 // view's individuals banner.
+// Scrollable pill strip for the upcoming-events banners: every matching
+// case gets a pill, and when they don't fit the strip scrolls horizontally
+// (the mouse wheel scrolls it too) instead of hiding cases behind "+N more".
+function _bannerPillStrip(){
+  const pills=document.createElement('div');
+  pills.className='banner-pill-strip';
+  pills.style.cssText='display:flex;gap:5px;flex:1;min-width:0;overflow-x:auto;flex-wrap:nowrap;align-items:center;scrollbar-width:thin;';
+  pills.addEventListener('wheel',e=>{
+    if(!e.deltaX && e.deltaY && pills.scrollWidth>pills.clientWidth){ pills.scrollLeft+=e.deltaY; e.preventDefault(); }
+  },{passive:false});
+  return pills;
+}
 function renderWeekIndividualBanner(){
   const bannerId='wk-individual-banner';
   let banner=document.getElementById(bannerId);
@@ -8955,9 +8973,8 @@ function renderWeekIndividualBanner(){
   label.textContent=upcoming.length+' individual'+(upcoming.length!==1?'s':'')+' · next 90 days:';
   banner.appendChild(label);
 
-  const pills=document.createElement('div');
-  pills.style.cssText='display:flex;gap:5px;flex-wrap:wrap;flex:1;';
-  upcoming.slice(0,5).forEach(r=>{
+  const pills=_bannerPillStrip();
+  upcoming.forEach(r=>{
     const diff=Math.round((parseDate(r.date)-TODAY)/86400000);
     const color=diff<=7?'#C9823A':diff<=30?'#6B7FA3':'#4F6A91';
     const cdText=diff===0?'Today':diff+'d';
@@ -8970,12 +8987,6 @@ function renderWeekIndividualBanner(){
     pill.onclick=()=>openEdit(r.id);
     pills.appendChild(pill);
   });
-  if(upcoming.length>5){
-    const more=document.createElement('span');
-    more.style.cssText='font-size:10px;color:#4F6A91;padding:2px 4px;';
-    more.textContent='+'+(upcoming.length-5)+' more';
-    pills.appendChild(more);
-  }
   banner.appendChild(pills);
 
   const viewBtn=document.createElement('button');
@@ -9018,9 +9029,8 @@ function _renderUpcomingBanner(bannerId, insertFn, cfg){
   label.textContent=upcoming.length+' '+cfg.noun+(upcoming.length!==1?'s':'')+' · next '+cfg.days+' days:';
   banner.appendChild(label);
 
-  const pills=document.createElement('div');
-  pills.style.cssText='display:flex;gap:5px;flex-wrap:wrap;flex:1;';
-  upcoming.slice(0,5).forEach(r=>{
+  const pills=_bannerPillStrip();
+  upcoming.forEach(r=>{
     const diff=Math.round((parseDate(r.date)-TODAY)/86400000);
     const color=diff<=7?(cfg.urgentColor||'#B85C5C'):cfg.accent;
     const cdText=diff===0?'Today':diff+'d';
@@ -9033,12 +9043,6 @@ function _renderUpcomingBanner(bannerId, insertFn, cfg){
     pill.onclick=()=>openEdit(r.id);
     pills.appendChild(pill);
   });
-  if(upcoming.length>5){
-    const more=document.createElement('span');
-    more.style.cssText='font-size:10px;color:'+cfg.accent+';padding:2px 4px;';
-    more.textContent='+'+(upcoming.length-5)+' more';
-    pills.appendChild(more);
-  }
   banner.appendChild(pills);
 
   const viewBtn=document.createElement('button');
@@ -20397,9 +20401,8 @@ function renderCallUpBanner(){
   label.textContent='Call-ups:';
   banner.appendChild(label);
 
-  const pills=document.createElement('div');
-  pills.style.cssText='display:flex;gap:5px;flex-wrap:wrap;flex:1;';
-  urgentCallUps.slice(0,5).forEach(r=>{
+  const pills=_bannerPillStrip();
+  urgentCallUps.forEach(r=>{
     const diff=Math.round((parseDate(r.date)-TODAY)/86400000);
     const color=diff<0?'#B85C5C':diff===0?'#C9823A':'#6B7FA3';
     const cdText=diff===0?'Today':diff<0?Math.abs(diff)+'d overdue':diff+'d left';
@@ -20412,12 +20415,6 @@ function renderCallUpBanner(){
     pill.onclick=()=>openEdit(r.id);
     pills.appendChild(pill);
   });
-  if(urgentCallUps.length>5){
-    const more=document.createElement('span');
-    more.style.cssText='font-size:10px;color:#C9823A;padding:2px 4px;';
-    more.textContent='+'+(urgentCallUps.length-5)+' more';
-    pills.appendChild(more);
-  }
   banner.appendChild(pills);
 
   const viewBtn=document.createElement('button');
@@ -20469,9 +20466,8 @@ function renderIndividualBanner(){
   label.textContent=upcoming.length+' individual'+(upcoming.length!==1?'s':'')+':';
   banner.appendChild(label);
 
-  const pills=document.createElement('div');
-  pills.style.cssText='display:flex;gap:5px;flex-wrap:wrap;flex:1;';
-  upcoming.slice(0,5).forEach(r=>{
+  const pills=_bannerPillStrip();
+  upcoming.forEach(r=>{
     const diff=Math.round((parseDate(r.date)-TODAY)/86400000);
     const color=diff<0?'#B85C5C':diff<=7?'#C9823A':diff<=30?'#6B7FA3':'#4F6A91';
     const cdText=diff===0?'Today':diff<0?Math.abs(diff)+'d overdue':diff+'d';
@@ -20484,12 +20480,6 @@ function renderIndividualBanner(){
     pill.onclick=()=>openEdit(r.id);
     pills.appendChild(pill);
   });
-  if(upcoming.length>5){
-    const more=document.createElement('span');
-    more.style.cssText='font-size:10px;color:#4F6A91;padding:2px 4px;';
-    more.textContent='+'+(upcoming.length-5)+' more';
-    pills.appendChild(more);
-  }
   banner.appendChild(pills);
 
   const viewBtn=document.createElement('button');
