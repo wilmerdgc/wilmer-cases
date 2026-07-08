@@ -1962,7 +1962,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
         <button id="tab-cases" onclick="switchTab('cases')" ondblclick="closeCaseDetail()">Cases</button>
         <button id="tab-workflows" onclick="switchTab('workflows')">Workflows</button>
         <button id="tab-settings" onclick="switchTab('settings')">Settings</button>
-        <button id="tab-inbox" onclick="switchTab('inbox')">✉ Inbox</button>
+        <button id="tab-inbox" onclick="switchTab('inbox')">✉ Inbox</button><button id="tab-inbox-popout" onclick="openInboxWindow(event)" title="Open Inbox in a new window" style="padding:8px 6px 8px 0;font-size:11px;color:#C4BAB0;margin-left:-12px;">↗</button>
         <button id="tab-tools" onclick="switchTab('tools')">📋 Tools &amp; Forms</button>
       </div>
     </div>
@@ -3570,6 +3570,12 @@ function switchTab(t){currentTab=t;
 }
 
 // ── Inbox action helpers ──
+// Opens the Inbox in its own browser window. The #inbox hash makes the new
+// window boot straight into the Inbox tab (see the deep-link check at boot).
+function openInboxWindow(e){
+  if(e) e.stopPropagation();
+  window.open(location.origin+location.pathname+'#inbox','wilmer-inbox','width=1200,height=850');
+}
 function inboxOpenAddEvent(){ openAdd(); }
 // Add Task — opens the same Add modal but preset to a standalone task
 // (PERSONAL TASK) so the client/case rows are hidden and it lands as a
@@ -23656,6 +23662,9 @@ db.collection('wilmer_daynotes').doc(dnKey).onSnapshot(
 // Attach now if the anonymous sign-in already resolved while this file was
 // parsing; otherwise the sign-in .then() in the boot block attaches them.
 if(_fbAuthReady) window._attachCloudListeners();
+// Deep link: a window opened via the Inbox popout (#inbox) boots straight
+// into the Inbox tab.
+if(location.hash==='#inbox'){ try{ switchTab('inbox'); }catch(e){} }
 // ── Perf: debounce filter inputs ──
 ['f-search','f-atty','f-type','f-category'].forEach(id=>{
   const el=document.getElementById(id);
