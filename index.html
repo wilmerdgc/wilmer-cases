@@ -8355,8 +8355,8 @@ function showEventPopover(r, anchorEl){
     const clid2 = r.clid || r.client;
     const isSJC2 = (r.type||'').includes('Special Juvenile');
     const judgeSlots = isSJC2
-      ? [{key:'judgeIC',label:'Judge (Immigration Court)'},{key:'judgeFC',label:'Judge / Referee (Family Court)'}]
-      : [{key:'judgeIC',label:'Judge'}];
+      ? [{key:'judgeICId',label:'IJ — Removal Proceedings'},{key:'judgeFCId',label:'FC J — Family Court'}]
+      : [{key:'judgeId',label:'Judge'}];
 
     const meta2 = caseMeta[clid2]||{};
     let hasJudge = false;
@@ -13606,7 +13606,7 @@ function restoreData(event){const file=event.target.files[0];if(!file)return;con
     if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);
     if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);
     if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);
-    if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);
+    if(p.caseMeta){Object.assign(caseMeta,p.caseMeta);_normalizeAllLegacyJudgeKeys();}
     if(p.customColumns){const existKeys=new Set(customColumns.map(c=>c.key));p.customColumns.forEach(c=>{if(!existKeys.has(c.key))customColumns.push(c);});}
     showToast('Merged '+newRecs.length+' new records ✓');
   } else {
@@ -13621,7 +13621,7 @@ function restoreData(event){const file=event.target.files[0];if(!file)return;con
     if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);
     if(p.customColumns)customColumns=p.customColumns;
     if(p.colVis)Object.assign(colVis,p.colVis);
-    if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);
+    if(p.caseMeta){Object.assign(caseMeta,p.caseMeta);_normalizeAllLegacyJudgeKeys();}
     showToast('Data replaced ✓');
   }
   // Invalidate all caches on data reload
@@ -18411,7 +18411,7 @@ function openCaseDetail(clid){
       const sh=document.createElement('div');sh.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;margin-bottom:10px;';sh.textContent='Shared (all clients)';sc.appendChild(sh);
       const sg=document.createElement('div');sg.className='case-info-grid';
       const tIS=mkSel2(caseTypes,base.type);infoBody._typeInputShared=tIS;mkInfoCell(sg,'Case Type',base.type,()=>tIS);
-      mkJudgeCell(sg,'Judge / Referee','judgeIC',-1);
+      mkJudgeCell(sg,'Judge / Referee','judgeId',-1);
       // Paralegal intentionally omitted — it lives in the Case Information grid above.
       sc.appendChild(sg);L2.appendChild(sc);
 
@@ -18708,7 +18708,7 @@ function openCaseDetail(clid){
     let judgeBadge='';
     const isCourtEvent=['MASTER','INDIVIDUAL','MERITS','BOND','SCHEDULING ORDER'].some(h=>(r.event||'').toUpperCase().includes(h));
     if(isCourtEvent){
-      const jId=(caseMeta[clid]||{}).judgeICId||(caseMeta[clid]||{}).judgeFCId;
+      const jId=(caseMeta[clid]||{}).judgeICId||(caseMeta[clid]||{}).judgeId||(caseMeta[clid]||{}).judgeFCId;
       const jObj=jId?judges.find(x=>x.id===jId):null;
       if(jObj&&jObj.difficulty){
         const dc={high:{bg:'#F9EDED',c:'#B85C5C',icon:'🔴'},medium:{bg:'#FAF0E6',c:'#C9823A',icon:'🟡'},low:{bg:'#EBF1EB',c:'#6A8C6E',icon:'🟢'}}[jObj.difficulty];
@@ -21153,7 +21153,7 @@ function renderDayTimeline(){
       if(_mTypes.has(r.event)){
         const cm = caseMeta[r.clid||r.client]||{};
         const isSJC3 = (r.type||'').includes('Special Juvenile');
-        const jKeys = isSJC3 ? ['judgeIC','judgeFC'] : ['judgeIC'];
+        const jKeys = isSJC3 ? ['judgeICId','judgeFCId'] : ['judgeId'];
         if(r.hearingMode){
           const hmIcon = r.hearingMode==='virtual'?'📡':'🏛';
           judgeHtml += `<div style="font-size:9px;color:${color};opacity:0.9;margin-top:1px;">${hmIcon} ${r.hearingMode==='virtual'?'Virtual':'In Person'}</div>`;
@@ -22077,7 +22077,7 @@ function applyPayload(p){
   if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);
   if(p.customColumns)customColumns=p.customColumns;
   if(p.colVis)Object.assign(colVis,p.colVis);
-  if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);
+  if(p.caseMeta){Object.assign(caseMeta,p.caseMeta);_normalizeAllLegacyJudgeKeys();}
   if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}
   if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}
   if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}
@@ -22477,9 +22477,47 @@ function _stripMhpAttachments(m){
 }
 // Merge incoming caseMeta into target by clid, newer _updatedAt wins, never
 // dropping a clid that exists on either side.
+// Normalizes one case-file entry in place: judges saved under the legacy
+// 'judgeIC' / 'judgeFC' keys (the old consolidated shared card wrote those)
+// move to the Id-suffixed keys every reader uses (judgeICId / judgeFCId /
+// judgeId). Idempotent and cheap — it runs on every load and merge, because
+// a one-time migration pass would be silently undone the next time an older
+// cloud copy of the entry merges back in.
+function _normalizeLegacyJudgeKeys(m, isSJ){
+  if(!m) return false;
+  let changed=false;
+  if(m.judgeIC){
+    const target=isSJ?'judgeICId':'judgeId';
+    if(!m[target]) m[target]=m.judgeIC;
+    delete m.judgeIC; changed=true;
+  }
+  if(m.judgeFC){
+    if(!m.judgeFCId) m.judgeFCId=m.judgeFC;
+    delete m.judgeFC; changed=true;
+  }
+  return changed;
+}
+function _caseIsSJ(clid){
+  const rec=(records||[]).find(r=>(r.clid||r.client)===clid&&r.type);
+  return !!rec&&(rec.type||'').includes('Special Juvenile');
+}
+// Sweep every loaded case file. Returns how many entries were fixed.
+function _normalizeAllLegacyJudgeKeys(){
+  let touched=0;
+  Object.keys(caseMeta||{}).forEach(clid=>{
+    const m=caseMeta[clid];
+    if(!m||(!m.judgeIC&&!m.judgeFC)) return;
+    if(_normalizeLegacyJudgeKeys(m,_caseIsSJ(clid))){ m._updatedAt=Date.now(); touched++; }
+  });
+  if(touched&&typeof markUnsaved==='function') markUnsaved();
+  return touched;
+}
 function _mergeCaseMetaInto(target, incoming){
   Object.keys(incoming||{}).forEach(clid=>{
     const im=incoming[clid], ex=target[clid];
+    // Normalize the incoming entry BEFORE merging so a cloud copy that
+    // still carries the legacy judge keys can't reintroduce them locally.
+    if(im&&(im.judgeIC||im.judgeFC)) _normalizeLegacyJudgeKeys(im,_caseIsSJ(clid));
     if(!ex){ target[clid]=im; return; }
     if(((im&&im._updatedAt)||0) >= ((ex&&ex._updatedAt)||0)) target[clid]=im;
   });
@@ -23044,6 +23082,12 @@ const loaded=loadSavedData();
   try{localStorage.setItem('migration_respondent_paralegal_v1','done');}catch(e){}
   if(touched) markUnsaved();
 })();
+
+// Legacy judge keys ('judgeIC' / 'judgeFC' from the old consolidated shared
+// card) → the Id-suffixed keys everything reads. Runs on every boot — no
+// one-time flag, because an older cloud copy can merge the legacy keys back
+// (see _normalizeLegacyJudgeKeys, which also guards the merge path itself).
+_normalizeAllLegacyJudgeKeys();
 // Always re-apply SIJ workflow so changes are reflected regardless of localStorage
 (function(){
   const K='Special Juvenile in Court';
@@ -24095,7 +24139,7 @@ function bkDoRestore(id){
     if(p.caseTypeStages) Object.assign(caseTypeStages,p.caseTypeStages);
     if(p.customColumns) customColumns=p.customColumns;
     if(p.colVis) Object.assign(colVis,p.colVis);
-    if(p.caseMeta) Object.assign(caseMeta,p.caseMeta);
+    if(p.caseMeta){ Object.assign(caseMeta,p.caseMeta); _normalizeAllLegacyJudgeKeys(); }
     Object.keys(_pdCache).forEach(k=>delete _pdCache[k]);
     _invalidateCasesCache(); dirtyFilterOpts(); saveAllData();
     showToast('Restored to: '+v.label+' \u2713');
