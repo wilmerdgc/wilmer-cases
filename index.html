@@ -1438,11 +1438,10 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
   margin-top: 3px;
 }
 
-/* Upcoming-banner pill strips: horizontal scroll with a slim scrollbar */
-.banner-pill-strip::-webkit-scrollbar{height:5px;}
-.banner-pill-strip::-webkit-scrollbar-thumb{background:#D8CFC2;border-radius:3px;}
-.banner-pill-strip::-webkit-scrollbar-thumb:hover{background:#C4BAB0;}
-.banner-pill-strip::-webkit-scrollbar-track{background:transparent;}
+/* Upcoming-banner pill strips: horizontal scroll, scrollbar hidden
+   (wheel / trackpad / touch still scroll the strip) */
+.banner-pill-strip{-ms-overflow-style:none;}
+.banner-pill-strip::-webkit-scrollbar{display:none;}
 
 /* Mini calendar */
 .mini-cal {
@@ -8936,7 +8935,7 @@ function toggleWeekendView(){
 function _bannerPillStrip(){
   const pills=document.createElement('div');
   pills.className='banner-pill-strip';
-  pills.style.cssText='display:flex;gap:5px;flex:1;min-width:0;overflow-x:auto;flex-wrap:nowrap;align-items:center;scrollbar-width:thin;';
+  pills.style.cssText='display:flex;gap:5px;flex:1;min-width:0;overflow-x:auto;flex-wrap:nowrap;align-items:center;scrollbar-width:none;';
   pills.addEventListener('wheel',e=>{
     if(!e.deltaX && e.deltaY && pills.scrollWidth>pills.clientWidth){ pills.scrollLeft+=e.deltaY; e.preventDefault(); }
   },{passive:false});
