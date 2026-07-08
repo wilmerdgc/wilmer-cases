@@ -18376,19 +18376,8 @@ function openCaseDetail(clid){
           content.appendChild(jrow);
         }
 
-        // Paralegal inline — skip on lead in view mode (already shown in Case Information above)
-        if(showPara){
-          const pv3=cl._isBase?base.atty:(cl.atty||'');
-          const skipLeadParalegal = !isEditing && cl._isBase;
-          const skipEmptyInView = !isEditing && !pv3;
-          if(!skipLeadParalegal && !skipEmptyInView){
-            const prow=document.createElement('div');prow.style.cssText='display:flex;align-items:baseline;gap:6px;margin-top:2px;';
-            const plbl=document.createElement('span');plbl.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;';plbl.textContent='Paralegal';prow.appendChild(plbl);
-            if(isEditing){const pI=mkSel2(paralegals,pv3);pI.style.cssText='font-size:11px;color:#5C5148;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;cursor:pointer;max-width:160px;';cl._paraInput=pI;prow.appendChild(pI);}
-            else{const pv2=document.createElement('span');pv2.style.cssText='font-size:11px;color:#5C5148;';pv2.textContent=pv3;prow.appendChild(pv2);}
-            content.appendChild(prow);
-          }
-        }
+        // Paralegal is case-level information — shown and edited only in the
+        // Case Information grid above, never on individual client cards.
       }
 
       // Edit/remove buttons for non-lead respondents
@@ -18404,12 +18393,12 @@ function openCaseDetail(clid){
     }
 
     if(!isConsolidated){
-      // Each client: Name, A#, Case Type, Judge, Paralegal
+      // Each client: Name, A#, Case Type, Judge
       allClients.forEach((cl,ci)=>L2.appendChild(clientCard(cl,ci,true,true,true,false)));
       if(isEditing){const ab=document.createElement('button');ab.textContent='+ Add client';ab.style.cssText='font-size:11px;padding:6px 14px;border:1px dashed #B4CCAD;border-radius:8px;background:transparent;color:#6A8C6E;cursor:pointer;font-family:inherit;align-self:flex-start;';ab.onclick=()=>openAddClient(-1);L2.appendChild(ab);}
 
     } else if(!isSJC){
-      // Each client: Name, A# only; shared: Case Type, Judge, Paralegal
+      // Each client: Name, A# only; shared: Case Type, Judge
       const cg=document.createElement('div');cg.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;';
       allClients.forEach((cl,ci)=>cg.appendChild(clientCard(cl,ci,false,false,false,true)));
       if(isEditing){const ab=document.createElement('button');ab.textContent='+ Add client';ab.style.cssText='font-size:11px;padding:8px 12px;border:1px dashed #B4CCAD;border-radius:10px;background:transparent;color:#6A8C6E;cursor:pointer;font-family:inherit;min-height:80px;';ab.onclick=()=>openAddClient(-1);cg.appendChild(ab);}
@@ -18420,11 +18409,11 @@ function openCaseDetail(clid){
       const sg=document.createElement('div');sg.className='case-info-grid';
       const tIS=mkSel2(caseTypes,base.type);infoBody._typeInputShared=tIS;mkInfoCell(sg,'Case Type',base.type,()=>tIS);
       mkJudgeCell(sg,'Judge / Referee','judgeIC',-1);
-      const pIS=mkSel2(paralegals,base.atty);infoBody._paraInputShared=pIS;mkInfoCell(sg,'Paralegal',base.atty,()=>pIS);
+      // Paralegal intentionally omitted — it lives in the Case Information grid above.
       sc.appendChild(sg);L2.appendChild(sc);
 
     } else {
-      // Consolidated SJC: each client full (Name, A#, Case Type, Judge IC, Judge FC, Paralegal)
+      // Consolidated SJC: each client full (Name, A#, Case Type, Judge IC, Judge FC)
       allClients.forEach((cl,ci)=>L2.appendChild(clientCard(cl,ci,true,true,true,false)));
       if(isEditing){const ab=document.createElement('button');ab.textContent='+ Add client';ab.style.cssText='font-size:11px;padding:6px 14px;border:1px dashed #B4CCAD;border-radius:8px;background:transparent;color:#6A8C6E;cursor:pointer;font-family:inherit;align-self:flex-start;';ab.onclick=()=>openAddClient(-1);L2.appendChild(ab);}
     }
@@ -18457,12 +18446,10 @@ function openCaseDetail(clid){
     if(infoBody._clCountryInput)caseMeta[clid].clientCountry=infoBody._clCountryInput.value.trim();
     if(infoBody._clCobInput)caseMeta[clid].clientCountryOfBirth=infoBody._clCobInput.value.trim();
     if(infoBody._typeInputShared){const nv=infoBody._typeInputShared.value;allRecs.forEach(r=>r.type=nv);base.type=nv;}
-    if(infoBody._paraInputShared){const nv=infoBody._paraInputShared.value;allRecs.forEach(r=>r.atty=nv);base.atty=nv;}
     clients.forEach(cl=>{
       if(cl._nameInput){const nv=cl._nameInput.value.trim();if(cl._isBase){allRecs.forEach(r=>r.client=nv);base.client=nv;}else if(cl.idx>=0)caseMeta[clid].respondents[cl.idx].name=nv;}
       if(cl._anumInput){const nv=cl._anumInput.value.trim();if(cl._isBase){allRecs.forEach(r=>r.anum=nv);base.anum=nv;}else if(cl.idx>=0)caseMeta[clid].respondents[cl.idx].anum=nv;}
       if(cl._typeInput){const nv=cl._typeInput.value;if(cl._isBase){allRecs.forEach(r=>r.type=nv);base.type=nv;}else if(cl.idx>=0)caseMeta[clid].respondents[cl.idx].type=nv;}
-      if(cl._paraInput){const nv=cl._paraInput.value;if(cl._isBase){allRecs.forEach(r=>r.atty=nv);base.atty=nv;}else if(cl.idx>=0)caseMeta[clid].respondents[cl.idx].atty=nv;}
       if(cl._dobInput){const nv=cl._dobInput.value;if(cl._isBase){if(!caseMeta[clid])caseMeta[clid]={};caseMeta[clid].clientDob=nv;}else if(cl.idx>=0)caseMeta[clid].respondents[cl.idx].dob=nv;}
     });
     markUnsaved();
@@ -23029,6 +23016,30 @@ const loaded=loadSavedData();
   });
   try{localStorage.setItem('migration_resync_record_client_v1','done');}catch(e){}
   if(changed){ markUnsaved(); }
+})();
+
+// ── One-time migration: paralegal is case-level information. Any paralegal
+// stored on an individual client (respondent) moves up to the case's
+// paralegal when the case has none, and is then removed from the client so
+// it can't reappear on the client cards.
+(function _migrateRespondentParalegals(){
+  if(localStorage.getItem('migration_respondent_paralegal_v1')==='done') return;
+  let touched=0;
+  Object.keys(caseMeta||{}).forEach(clid=>{
+    const m=caseMeta[clid];
+    if(!m||!Array.isArray(m.respondents)) return;
+    const riderAtty=m.respondents.map(r=>r&&r.atty).find(Boolean);
+    if(riderAtty){
+      const caseRecs=records.filter(r=>(r.clid||r.client)===clid);
+      if(caseRecs.length && !caseRecs.some(r=>r.atty)){
+        caseRecs.forEach(r=>{r.atty=riderAtty;});
+        touched++;
+      }
+    }
+    m.respondents.forEach(r=>{ if(r&&r.atty){ delete r.atty; touched++; } });
+  });
+  try{localStorage.setItem('migration_respondent_paralegal_v1','done');}catch(e){}
+  if(touched) markUnsaved();
 })();
 // Always re-apply SIJ workflow so changes are reflected regardless of localStorage
 (function(){
