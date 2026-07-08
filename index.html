@@ -249,6 +249,12 @@ button.btn-sm { font-size: 11px; padding: 4px 11px; }
   border-bottom: 2px solid var(--ink);
   font-weight: 600;
 }
+/* Inbox popout (#inbox): show only the Inbox pane — no tabs, header bar,
+   divider, or the multi-window warning (the popout always coexists with
+   the main window, so that banner is just noise there). */
+body.inbox-only .top-bar,
+body.inbox-only #app > .divider,
+body.inbox-only #multitab-banner { display: none !important; }
 
 /* ── Divider ───────────────────────────────────── */
 .divider { height: 1px; background: var(--border); margin: 10px 0 24px; }
@@ -3544,7 +3550,14 @@ window.addEventListener('beforeunload', () => {
     try{ clearTimeout(window._autoSaveTimer); window._autoSaveTimer = null; saveAllData(); }catch(err){}
   }
 });
-function switchTab(t){currentTab=t;
+function switchTab(t){
+  // Inbox popout shows only the Inbox — anything else (e.g. "Open case"
+  // from an email) belongs to the full app, in its own window.
+  if(t!=='inbox' && document.body.classList.contains('inbox-only')){
+    window.open(location.origin+location.pathname,'_blank');
+    return;
+  }
+  currentTab=t;
   document.getElementById('pane-dashboard').style.display=t==='dashboard'?'':'none';
   document.getElementById('pane-cases').style.display=t==='cases'?'':'none';
   document.getElementById('pane-workflows').style.display=t==='workflows'?'':'none';
@@ -23663,8 +23676,9 @@ db.collection('wilmer_daynotes').doc(dnKey).onSnapshot(
 // parsing; otherwise the sign-in .then() in the boot block attaches them.
 if(_fbAuthReady) window._attachCloudListeners();
 // Deep link: a window opened via the Inbox popout (#inbox) boots straight
-// into the Inbox tab.
-if(location.hash==='#inbox'){ try{ switchTab('inbox'); }catch(e){} }
+// into the Inbox tab, with every other pane and the app chrome hidden
+// (body.inbox-only — see the CSS next to .tab-nav).
+if(location.hash==='#inbox'){ try{ document.body.classList.add('inbox-only'); switchTab('inbox'); }catch(e){} }
 // ── Perf: debounce filter inputs ──
 ['f-search','f-atty','f-type','f-category'].forEach(id=>{
   const el=document.getElementById(id);
