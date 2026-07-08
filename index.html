@@ -3150,6 +3150,16 @@ function ensureFCEventTypes(){
   eventTypes.sort();
 }
 let caseTypes=[...new Set(records.map(r=>r.type).filter(Boolean))].sort();
+// A saved caseTypes list can arrive empty or stale (it was once saved blank,
+// which wiped the Case Type dropdowns on every boot). Whenever a payload is
+// applied, union it with the types actually used by records so a type in use
+// can never disappear from the app.
+function _withRecordCaseTypes(list){
+  // PERSONAL / OFFICE are standalone-task markers, not legal case types —
+  // the Personal-or-Office case category covers that distinction.
+  const all=[...(Array.isArray(list)?list:[]), ...records.map(r=>r.type)];
+  return [...new Set(all.filter(t=>t&&t!=='PERSONAL'&&t!=='OFFICE'))].sort();
+}
 let caseTypeDocLists={};
 (function(){const K='Defensive Asylum';if(!caseTypeDocLists[K]){caseTypeDocLists[K]=[{sectionName:'Story of Persecution',docs:[{name:'Client\'s personal declaration (narrative)'},{name:'Draft story — version 1'},{name:'Draft story — revised'},{name:'Final signed declaration'}]},{sectionName:'Issues',docs:[{name:'One Year Bar — brief / argument'},{name:'CLP — criminal record documents'},{name:'ACA — motion to pretermit'},{name:'CAAR — motion to pretermit'},{name:'HAAv — motion to pretermit'}]},{"sectionName":"Identity & Entry","docs":[{"name":"Passport (all pages)"},{"name":"Birth Certificate + certified translation"},{"name":"National ID card"},{"name":"I-94 Arrival/Departure Record"},{"name":"Visa / Entry documents"}]},{"sectionName":"Application","docs":[{"name":"I-589 (signed, filed copy)"},{"name":"I-589 Amendments (if any)"},{"name":"Proof of service on DHS counsel"}]},{"sectionName":"Court Documents","docs":[{"name":"Notice to Appear (NTA)"},{"name":"Prior immigration court orders"},{"name":"Hearing notice / scheduling order"}]},{"sectionName":"Respondent's Evidence","docs":[{"name":"Personal declaration (respondent)"},{"name":"Witness declarations"},{"name":"Medical / psychological evaluation"},{"name":"Police reports from home country"},{"name":"Court documents from home country"},{"name":"Arrest warrants / threatening communications"},{"name":"Photos of injuries or harm"}]},{"sectionName":"Country Conditions","docs":[{"name":"State Department Human Rights Report"},{"name":"UNHCR country guidance"},{"name":"Human Rights Watch / Amnesty International reports"},{"name":"Expert witness report (if applicable)"},{"name":"News articles supporting the claim"}]},{"sectionName":"Hearing Day","docs":[{"name":"Exhibit list (tabbed and paginated)"},{"name":"Witness list (submitted to court)"},{"name":"Interpreter confirmation (if private)"},{"name":"Copies for judge, DHS counsel, and respondent"}]},{"sectionName":"Financial","docs":[{"name":"Tax returns (last 3 years)"}]},{"sectionName":"Supporting / Optional","docs":[{"name":"Letters of support (community, religious, employer)"},{"name":"Evidence of U.S. ties"},{"name":"Prior asylum denial in third country (if applicable)"}]}];}})();
 (function(){
@@ -13313,7 +13323,7 @@ _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();// Auto-push events to Google Calendar when signed in as the target email
 try{ _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync(); }catch(e){}
 }catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypesUpdatedAt)eventTypesUpdatedAt=p.eventTypesUpdatedAt;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);if(p.caseTypes)caseTypes=p.caseTypes;if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}if(p.recordTombstones&&typeof p.recordTombstones==='object'){recordTombstones=_pruneTombstones(p.recordTombstones);}return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypesUpdatedAt)eventTypesUpdatedAt=p.eventTypesUpdatedAt;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);caseTypes=_withRecordCaseTypes(p.caseTypes);if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}if(p.recordTombstones&&typeof p.recordTombstones==='object'){recordTombstones=_pruneTombstones(p.recordTombstones);}return true;}catch(e){return false;}}
 // One pending-render flag, used by both the debounced timer and the global
 // focusout listener: if the user is mid-edit when the timer fires, we set
 // the flag and re-try after they blur, so we never yank focus mid-type.
@@ -13592,7 +13602,7 @@ function restoreData(event){const file=event.target.files[0];if(!file)return;con
     // Merge arrays (union, no duplicates)
     if(p.paralegals)paralegals=[...new Set([...paralegals,...p.paralegals])];
     if(p.eventTypes)eventTypes=[...new Set([...eventTypes,...p.eventTypes])];
-    if(p.caseTypes)caseTypes=[...new Set([...caseTypes,...p.caseTypes])];
+    caseTypes=_withRecordCaseTypes([...caseTypes,...(p.caseTypes||[])]);
     if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);
     if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);
     if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);
@@ -13605,7 +13615,7 @@ function restoreData(event){const file=event.target.files[0];if(!file)return;con
     if(p.records)records=p.records;
     if(p.paralegals)paralegals=p.paralegals;
     if(p.eventTypes)eventTypes=p.eventTypes;
-    if(p.caseTypes)caseTypes=p.caseTypes;
+    caseTypes=_withRecordCaseTypes(p.caseTypes);
     if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);
     if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);
     if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);
@@ -22072,7 +22082,7 @@ function applyPayload(p){
   }
   eventTypeMeta = _pEtMeta;
   ensureFCEventTypes();
-  if(p.caseTypes)caseTypes=p.caseTypes;
+  caseTypes=_withRecordCaseTypes(p.caseTypes);
   if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);
   if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);
   if(p.customColumns)customColumns=p.customColumns;
@@ -24066,7 +24076,7 @@ function bkDoRestore(id){
     if(p.paralegals) paralegals=p.paralegals;
     if(p.eventTypes) eventTypes=p.eventTypes;
     if(p.eventTypeMeta) Object.assign(eventTypeMeta,p.eventTypeMeta);
-    if(p.caseTypes) caseTypes=p.caseTypes;
+    caseTypes=_withRecordCaseTypes(p.caseTypes);
     if(p.caseTypeDocLists) Object.assign(caseTypeDocLists,p.caseTypeDocLists);
     if(p.caseTypeStages) Object.assign(caseTypeStages,p.caseTypeStages);
     if(p.customColumns) customColumns=p.customColumns;
