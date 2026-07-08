@@ -18862,31 +18862,11 @@ function openCaseDetail(clid){
         const origIdx=ms.indexOf(m);
         const row=document.createElement('div');
         row.style.cssText='display:flex;align-items:baseline;gap:8px;padding:4px 0;border-bottom:1px solid #F7F3ED;';
+        // Dates are read-only here on purpose — changing a milestone's date
+        // requires the ✎ edit button so it can't happen by accident.
         const dateEl=document.createElement('span');
-        dateEl.style.cssText='font-size:11px;color:#9E9186;white-space:nowrap;min-width:80px;flex-shrink:0;cursor:pointer;';
+        dateEl.style.cssText='font-size:11px;color:#9E9186;white-space:nowrap;min-width:80px;flex-shrink:0;';
         dateEl.textContent=m.date?fmtDate(m.date):'—';
-        // Click the date to change it in place — no need for the ✎ edit button.
-        dateEl.title='Click to change the date';
-        dateEl.onmouseenter=()=>{dateEl.style.textDecoration='underline';dateEl.style.color='#5C5148';};
-        dateEl.onmouseleave=()=>{dateEl.style.textDecoration='';dateEl.style.color='#9E9186';};
-        dateEl.onclick=()=>{
-          const inp=document.createElement('input');
-          inp.type='date';
-          inp.value=m.date||'';
-          inp.style.cssText='font-size:11px;padding:1px 4px;border:1px solid #DDD5CA;border-radius:5px;color:#5C5148;background:#fff;width:130px;flex-shrink:0;font-family:inherit;';
-          row.replaceChild(inp,dateEl);
-          let done=false;
-          const commit=()=>{
-            if(done)return;done=true;
-            if(inp.value!==(m.date||'')){ checkWeekendDate(inp.value); ms[origIdx].date=inp.value; markUnsaved(); }
-            renderProcMilestones();
-          };
-          inp.onchange=commit;
-          inp.onblur=commit;
-          inp.onkeydown=e=>{ if(e.key==='Escape'){ done=true; renderProcMilestones(); } else if(e.key==='Enter'){ commit(); } };
-          inp.focus();
-          try{ if(inp.showPicker) inp.showPicker(); }catch(e){}
-        };
         const titleEl=document.createElement('span');
         titleEl.style.cssText='font-size:12px;color:#2C2620;flex:1;line-height:1.4;';
         titleEl.textContent=m.title;
