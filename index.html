@@ -18351,13 +18351,13 @@ function openCaseDetail(clid){
         // Judge row(s) — inline into same content area
         if(showJudge){
           const jrow=document.createElement('div');jrow.style.cssText='display:flex;gap:14px;flex-wrap:wrap;margin-top:3px;';
-          function inlineJudge(labelText2, judgeKey){
+          function inlineJudge(labelText2, judgeKey, titleText){
             const jid=cl.idx===-1?caseMeta[clid][judgeKey]:((caseMeta[clid].respondents[cl.idx]||{})[judgeKey]);
             const jj=jid?judges.find(x=>x.id===jid):null;
             // View mode: skip when no judge assigned (no point showing "Not assigned")
             if(!isEditing && !jj) return;
             const jw=document.createElement('span');jw.style.cssText='display:flex;align-items:center;gap:4px;';
-            const jlbl=document.createElement('span');jlbl.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;';jlbl.textContent=labelText2;jw.appendChild(jlbl);
+            const jlbl=document.createElement('span');jlbl.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;';jlbl.textContent=labelText2;if(titleText)jlbl.title=titleText;jw.appendChild(jlbl);
             if(jj){
               const wb=jj.webex==='yes'?'📡':jj.webex==='no'?'🏛':jj.webex==='depends'?'❓':'';
               const nb=document.createElement('button');nb.textContent=(wb?wb+' ':'')+jj.name.split(',')[0];nb.style.cssText='font-size:11px;color:#6B7FA3;background:transparent;border:none;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px;white-space:nowrap;';
@@ -18371,7 +18371,10 @@ function openCaseDetail(clid){
             if(isEditing&&jj){const xb2=document.createElement('button');xb2.textContent='×';xb2.style.cssText='font-size:11px;color:#C4BAB0;background:transparent;border:none;cursor:pointer;padding:0;';xb2.onmouseenter=()=>xb2.style.color='#B85C5C';xb2.onmouseleave=()=>xb2.style.color='#C4BAB0';xb2.onclick=()=>{if(cl.idx===-1){delete caseMeta[clid][judgeKey];}else if(caseMeta[clid].respondents[cl.idx]){delete caseMeta[clid].respondents[cl.idx][judgeKey];}markUnsaved();renderAll2();};jw.appendChild(xb2);}
             jrow.appendChild(jw);
           }
-          if(isSJC){inlineJudge('IC','judgeICId');inlineJudge('FC','judgeFCId');}
+          // Special Juvenile in Court runs in two courts at once, so it gets
+          // two judge slots: IJ (Immigration Judge — Removal Proceedings) and
+          // FC J (Family Court Judge / Referee).
+          if(isSJC){inlineJudge('IJ','judgeICId','Immigration Judge — Removal Proceedings');inlineJudge('FC J','judgeFCId','Family Court Judge / Referee');}
           else{inlineJudge('Judge','judgeId');}
           content.appendChild(jrow);
         }
