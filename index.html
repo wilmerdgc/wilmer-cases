@@ -2022,6 +2022,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
       <select id="f-event" multiple style="display:none;"></select>
     </div>
     <select id="f-type" style="width:auto"><option value="">All case types</option></select>
+    <select id="f-category" title="Filter by case category — Office or Personal" style="width:auto"><option value="">Personal &amp; Office</option><option value="Office">Office</option><option value="Personal">Personal</option></select>
     <input id="f-search" type="text" placeholder="Search client, A# or Cl ID" style="width:180px"/>
   </div>
   <!-- DAY VIEW -->
@@ -2348,11 +2349,20 @@ window.addEventListener('load',()=>autoGrowAllNotes());
       <!-- Case details card -->
       <div style="background:#FDFAF7;border:1px solid #EDE8E0;border-radius:14px;padding:20px 22px;margin-bottom:16px;">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;margin-bottom:14px;">Case Details</div>
-        <div style="margin-bottom:13px;">
-          <label class="nc-label">Case Type <span style="color:#B85C5C">*</span></label>
-          <select id="ncp-type" class="nc-input" oninput="this.style.borderColor='#DDD5CA'">
-            <option value="">Select case type…</option>
-          </select>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px;">
+          <div>
+            <label class="nc-label">Case Type <span style="color:#B85C5C">*</span></label>
+            <select id="ncp-type" class="nc-input" oninput="this.style.borderColor='#DDD5CA'">
+              <option value="">Select case type…</option>
+            </select>
+          </div>
+          <div>
+            <label class="nc-label">Personal or Office</label>
+            <select id="ncp-category" class="nc-input">
+              <option value="Office">Office</option>
+              <option value="Personal">Personal</option>
+            </select>
+          </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px;">
           <div>
@@ -8192,13 +8202,15 @@ function getFiltered(){
   const q=((document.getElementById('f-search')||{}).value||'').toLowerCase();
   const te=document.getElementById('f-type');
   const ctype=te?te.value:'';
-  if(!atty&&!evtSet.size&&!ctype&&!q) return records.filter(r=>!r.finishedStatus&&!r.deletedStatus&&!_isBlankAnchor(r));
+  const cat=(document.getElementById('f-category')||{}).value||'';
+  if(!atty&&!evtSet.size&&!ctype&&!cat&&!q) return records.filter(r=>!r.finishedStatus&&!r.deletedStatus&&!_isBlankAnchor(r));
   return records.filter(r=>{
     if(r.finishedStatus||r.deletedStatus)return false;
     if(_isBlankAnchor(r))return false;
     if(atty&&r.atty!==atty)return false;
     if(evtSet.size&&!evtSet.has(r.event))return false;
     if(ctype&&r.type!==ctype)return false;
+    if(cat&&caseCategoryOf(r)!==cat)return false;
     if(q&&!r.client.toLowerCase().includes(q)&&!(r.anum||'').toLowerCase().includes(q)&&!(r.clid||'').toLowerCase().includes(q))return false;
     return true;
   });
@@ -8213,11 +8225,13 @@ function getFilteredFinished(){
   const q=((document.getElementById('f-search')||{}).value||'').toLowerCase();
   const te=document.getElementById('f-type');
   const ctype=te?te.value:'';
+  const cat=(document.getElementById('f-category')||{}).value||'';
   return records.filter(r=>{
     if(!r.finishedStatus||r.deletedStatus||!r.date)return false;
     if(atty&&r.atty!==atty)return false;
     if(evtSet.size&&!evtSet.has(r.event))return false;
     if(ctype&&r.type!==ctype)return false;
+    if(cat&&caseCategoryOf(r)!==cat)return false;
     if(q&&!r.client.toLowerCase().includes(q)&&!(r.anum||'').toLowerCase().includes(q)&&!(r.clid||'').toLowerCase().includes(q))return false;
     return true;
   });
@@ -8809,6 +8823,20 @@ function buildEventBoard(boardEl, rows, finishedRows, periodLabel) {
 function getWeekStart(offset) {
   const d = new Date(TODAY), day = d.getDay(), diff = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diff + offset * 7); d.setHours(0, 0, 0, 0); return d;
+}
+
+// Case category: every case is either Office (a firm case) or Personal.
+// Cases store it in caseMeta[clid].caseCategory; standalone PERSONAL TASK /
+// OFFICE TASK records are categorized by their event type. Cases with no
+// explicit category count as Office — firm cases are office cases.
+function caseCategoryOf(r){
+  if(r){
+    if(r.event==='PERSONAL TASK'||r.client==='Personal') return 'Personal';
+    if(r.event==='OFFICE TASK'||r.client==='Office') return 'Office';
+    const clid=r.clid||r.client;
+    if(clid&&typeof caseMeta!=='undefined'&&caseMeta[clid]&&caseMeta[clid].caseCategory) return caseMeta[clid].caseCategory;
+  }
+  return 'Office';
 }
 
 // True when the record's case is flagged as a Paper File in case information
@@ -18112,6 +18140,29 @@ function openCaseDetail(clid){
         : '<span style="color:#6B7FA3;font-weight:600;">ECAS</span>';
       fsItem.appendChild(fsV);L1.appendChild(fsItem);
     }
+    // Personal or Office — the case's category, separate from the legal
+    // case type (Defensive Asylum, etc.). Unset counts as Office.
+    const _catNow = (caseMeta[clid] && caseMeta[clid].caseCategory) || 'Office';
+    if(isEditing){
+      const catItem=document.createElement('div');catItem.className='case-info-item';catItem.style.cssText='background:#fff;border:1px solid #DDD5CA;border-radius:8px;padding:6px 9px;';
+      const catLbl=document.createElement('div');catLbl.className='case-info-label';catLbl.textContent='Personal or Office';catItem.appendChild(catLbl);
+      const catSel=document.createElement('select');
+      catSel.style.cssText='width:100%;font-size:13px;font-weight:500;color:#2C2620;border:none;outline:none;background:transparent;padding:0;font-family:inherit;cursor:pointer;';
+      [['Office','Office'],['Personal','Personal']].forEach(([v,lbl])=>{
+        const o=document.createElement('option');o.value=v;o.textContent=lbl;if(v===_catNow)o.selected=true;catSel.appendChild(o);
+      });
+      catSel.onchange=()=>{ if(!caseMeta[clid])caseMeta[clid]={}; caseMeta[clid].caseCategory=catSel.value; markUnsaved(); };
+      catItem.appendChild(catSel);
+      L1.appendChild(catItem);
+    } else {
+      const catItem=document.createElement('div');catItem.className='case-info-item';
+      const catLbl=document.createElement('div');catLbl.className='case-info-label';catLbl.textContent='Personal or Office';catItem.appendChild(catLbl);
+      const catV=document.createElement('div');catV.className='case-info-value';
+      catV.innerHTML = _catNow==='Personal'
+        ? '<span style="color:#7A6EA0;font-weight:600;">Personal</span>'
+        : '<span style="color:#6A8C6E;font-weight:600;">Office</span>';
+      catItem.appendChild(catV);L1.appendChild(catItem);
+    }
     // Consolidated
     if(isEditing){
       const consItem=document.createElement('div');consItem.className='case-info-item';consItem.style.cssText='background:#fff;border:1px solid #DDD5CA;';
@@ -21749,6 +21800,10 @@ function openAddCasePage(){
   typeEl.innerHTML='<option value="">Select case type…</option>';
   caseTypes.forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=t;typeEl.appendChild(o);});
 
+  // Reset case category to the default (Office)
+  const catEl=document.getElementById('ncp-category');
+  if(catEl) catEl.value='Office';
+
   // Populate paralegal
   const attyEl=document.getElementById('ncp-atty');
   attyEl.innerHTML='<option value="">None</option>';
@@ -21872,6 +21927,7 @@ function saveAddCasePage(){
   caseMeta[caseId].clientFirstName=firstName;
   if(middleName) caseMeta[caseId].clientMiddleName=middleName;
   if(email) caseMeta[caseId].clientEmail=email;
+  caseMeta[caseId].caseCategory=(document.getElementById('ncp-category')||{value:'Office'}).value||'Office';
 
   if(type&&!caseTypes.includes(type)) caseTypes.push(type);
   if(atty&&!paralegals.includes(atty)) paralegals.push(atty);
@@ -21902,6 +21958,7 @@ function openNewCaseModal(){
   // Clear fields
   ['nc-lastName','nc-firstName','nc-middleName','nc-clid','nc-anum','nc-email','nc-countryOfBirth','nc-notes'].forEach(id => {const e=document.getElementById(id);if(e)e.value='';});
   typeEl.value = ''; attyEl.value = '';
+  const catElM = document.getElementById('nc-category'); if(catElM) catElM.value = 'Office';
 
   // Reset + render the linked-events and additional-clients sections.
   if(typeof _ncResetExtras==='function')_ncResetExtras('modal');
@@ -21978,6 +22035,7 @@ function saveNewCase(){
   if(middleName) caseMeta[_cid].clientMiddleName=middleName;
   if(email) caseMeta[_cid].clientEmail=email;
   if(countryOfBirth) caseMeta[_cid].clientCountryOfBirth=countryOfBirth;
+  caseMeta[_cid].caseCategory=(document.getElementById('nc-category')||{value:'Office'}).value||'Office';
 
   // Add new case type / paralegal if not already in lists
   if(type && !caseTypes.includes(type)) caseTypes.push(type);
@@ -23126,7 +23184,7 @@ markDefaultViewButton(bootView);
 // Per-view filter state — must exist before the boot switchView() call below,
 // because the hoisted _saveCurrentViewFilters / _applyFiltersToInputs helpers
 // reference `viewFilters` and would otherwise hit a TDZ ReferenceError.
-const _DEFAULT_VIEW_FILTERS = {search:'', atty:'', eventTypes:[], type:''};
+const _DEFAULT_VIEW_FILTERS = {search:'', atty:'', eventTypes:[], type:'', category:''};
 let viewFilters = {};
 try{ const _vfs = localStorage.getItem('view_filters_v1'); if(_vfs) viewFilters = JSON.parse(_vfs)||{}; }catch(e){}
 
@@ -23514,7 +23572,7 @@ db.collection('wilmer_daynotes').doc(dnKey).onSnapshot(
 // parsing; otherwise the sign-in .then() in the boot block attaches them.
 if(_fbAuthReady) window._attachCloudListeners();
 // ── Perf: debounce filter inputs ──
-['f-search','f-atty','f-type'].forEach(id=>{
+['f-search','f-atty','f-type','f-category'].forEach(id=>{
   const el=document.getElementById(id);
   if(el) el.addEventListener('input',_debouncedRenderAll);
 });
@@ -23535,7 +23593,8 @@ function _captureCurrentFilters(){
     search: (document.getElementById('f-search')||{}).value || '',
     atty:   (document.getElementById('f-atty')||{}).value   || '',
     eventTypes: sel ? Array.from(sel.selectedOptions).map(o=>o.value).filter(Boolean) : [],
-    type:   (document.getElementById('f-type')||{}).value   || ''
+    type:   (document.getElementById('f-type')||{}).value   || '',
+    category: (document.getElementById('f-category')||{}).value || ''
   };
 }
 function _applyFiltersToInputs(state){
@@ -23543,6 +23602,7 @@ function _applyFiltersToInputs(state){
   const s = document.getElementById('f-search'); if(s) s.value = state.search;
   const a = document.getElementById('f-atty');   if(a) a.value = state.atty;
   const t = document.getElementById('f-type');   if(t) t.value = state.type;
+  const cg = document.getElementById('f-category'); if(cg) cg.value = state.category;
   const sel = document.getElementById('f-event');
   if(sel){
     const wanted = new Set(state.eventTypes||[]);
@@ -23555,7 +23615,7 @@ function _saveCurrentViewFilters(){
   viewFilters[currentView] = _captureCurrentFilters();
   try{ localStorage.setItem('view_filters_v1', JSON.stringify(viewFilters)); }catch(e){}
 }
-['f-search','f-atty','f-type'].forEach(id=>{
+['f-search','f-atty','f-type','f-category'].forEach(id=>{
   const el = document.getElementById(id);
   if(el) el.addEventListener('input', _saveCurrentViewFilters);
 });
@@ -23823,6 +23883,15 @@ function saveNewTask(){
       <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Case Type <span style="color:#B85C5C">*</span></label>
       <select id="nc-type" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;background:#fff;" oninput="document.getElementById('nc-type').style.borderColor='#DDD5CA'">
         <option value="">Select case type…</option>
+      </select>
+    </div>
+
+    <!-- Personal or Office -->
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Personal or Office</label>
+      <select id="nc-category" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;background:#fff;">
+        <option value="Office">Office</option>
+        <option value="Personal">Personal</option>
       </select>
     </div>
 
