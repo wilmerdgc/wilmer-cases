@@ -3387,6 +3387,16 @@ let eventTypeMeta={
   'FILING DEADLINE':  {color:'#B85C5C'},
   'PRIORITY DAY':     {color:'#3D7A6B'},
 };
+// Built-in deadline meta, used by the Deadlines view and as the calendar
+// fallback styling (see getEventStyle): these four types always draw as
+// framed call-up labels, even on a device where the Settings category was
+// never assigned or hasn't synced yet.
+const DL_META = {
+  '90-DAY DEADLINE': { label:'90-Day',  short:'90d', color:'#6B7FA3', bg:'#EEF1F7', icon:'📆' },
+  '60-DAY DEADLINE': { label:'60-Day',  short:'60d', color:'#7A6EA0', bg:'#F3F0F9', icon:'📆' },
+  '30-DAY DEADLINE': { label:'30-Day',  short:'30d', color:'#C9823A', bg:'#FFF3E8', icon:'📆' },
+  'CALL UP DEADLINE':{ label:'Call-Up', short:'CU',  color:'#B85C5C', bg:'#F9EDED', icon:'📋' },
+};
 const BUILTIN_COLUMNS=[{key:'clid',label:'Cl ID'},{key:'client',label:'Client',always:true},{key:'anum',label:'A-number'},{key:'type',label:'Case type'},{key:'atty',label:'Paralegal'},{key:'event',label:'Event'},{key:'date',label:'Deadline'},{key:'assigned',label:'Assigned'},{key:'notes',label:'Notes'}];
 let colVis={clid:true,client:true,anum:true,type:true,atty:true,event:true,date:true,assigned:true,notes:true};
 let currentView='list',weekOffset=0,monthOffset=0,editingId=null,currentTab='dashboard',editingRowId=null;
@@ -3396,8 +3406,13 @@ function uid(){return'r'+Date.now()+Math.random().toString(36).slice(2,6);}
 const _categoryColors={hearing:'#6A8C6E',callup:'#C9823A',stage:'#6B7FA3'};
 function getEventStyle(eventName){
   const m=eventTypeMeta[eventName]||{};
-  const catColor=m.category?(_categoryColors[m.category]||''):'';
-  return{color:m.color||catColor||'',icon:m.icon||'',category:m.category||''};
+  // The built-in deadline types always style as call-ups so the framed
+  // calendar labels look the same on every PC, without needing the
+  // Settings category to be assigned (or synced) on each device.
+  const dl=DL_META[eventName];
+  const category=m.category||(dl?'callup':'');
+  const catColor=category?(_categoryColors[category]||''):'';
+  return{color:m.color||(dl?dl.color:'')||catColor||'',icon:m.icon||'',category};
 }
 function eventLabel(eventName){
   const{icon}=getEventStyle(eventName);
@@ -10631,13 +10646,8 @@ let callUpTypes = (()=>{
 function saveCallUpTypes(){ try{localStorage.setItem(_CALLUP_STORAGE_KEY,JSON.stringify(callUpTypes));}catch{} }
 // Keep backward-compat alias
 Object.defineProperty(window,'DEADLINE_TYPES',{get:()=>callUpTypes,configurable:true});
-
-const DL_META = {
-  '90-DAY DEADLINE': { label:'90-Day',  short:'90d', color:'#6B7FA3', bg:'#EEF1F7', icon:'📆' },
-  '60-DAY DEADLINE': { label:'60-Day',  short:'60d', color:'#7A6EA0', bg:'#F3F0F9', icon:'📆' },
-  '30-DAY DEADLINE': { label:'30-Day',  short:'30d', color:'#C9823A', bg:'#FFF3E8', icon:'📆' },
-  'CALL UP DEADLINE':{ label:'Call-Up', short:'CU',  color:'#B85C5C', bg:'#F9EDED', icon:'📋' },
-};
+// DL_META (per-deadline-type label/color meta) is declared up top, next to
+// eventTypeMeta, because getEventStyle uses it as the calendar fallback.
 
 function updateDeadlinesBadge(){
   const count = records.filter(r =>
