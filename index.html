@@ -895,9 +895,13 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .case-info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 10px; margin-bottom: 6px; }
 /* View mode: no card chrome — just the label + value. Edit mode adds an
    inline white background + border via JS so the inputs read as fields. */
-.case-info-item { padding: 4px 0; }
+/* min-width:0 lets a grid cell actually shrink below its content width;
+   without it a long unbroken value (e.g. an email address) overflows the
+   cell and paints over the neighboring column. overflow-wrap on the value
+   then breaks the long string inside its own cell instead. */
+.case-info-item { padding: 4px 0; min-width: 0; overflow: hidden; }
 .case-info-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint); margin-bottom: 2px; }
-.case-info-value { font-size: 12px; font-weight: 500; color: var(--ink); font-family: var(--font-display); line-height: 1.3; }
+.case-info-value { font-size: 12px; font-weight: 500; color: var(--ink); font-family: var(--font-display); line-height: 1.3; overflow-wrap: anywhere; word-break: break-word; }
 /* ── Respondents section ─────────────────────── */
 .respondent-card {
   background: #fff;
