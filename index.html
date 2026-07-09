@@ -10613,6 +10613,14 @@ function copySchedulingOrdersText(){
 // ══════════════════════════════════════════════════
 const _CALLUP_STORAGE_KEY = 'callup_types_v1';
 const _DEFAULT_CALLUP_TYPES = ['90-DAY DEADLINE','60-DAY DEADLINE','30-DAY DEADLINE','CALL UP DEADLINE'];
+// What each deadline is FOR — the firm's standard workflow description,
+// auto-filled into the notes whenever one of these events is created
+// with blank notes (call-up generator, event modal, boot backfill).
+const _DEADLINE_DEFAULT_NOTES = {
+  '90-DAY DEADLINE': 'Client must provide ALL evidence. Paralegal: put it in a call-up for the attorney to review. Attorney: return corrections and a list of any other evidence needed.',
+  '60-DAY DEADLINE': 'Send the corrections and the new evidence. Include the Witness List and the Motion for witnesses to appear via Webex.',
+  '30-DAY DEADLINE': 'Final limit to send all documents to the court.'
+};
 let callUpTypes = (()=>{
   try{
     const saved = localStorage.getItem(_CALLUP_STORAGE_KEY);
@@ -11773,7 +11781,7 @@ function refreshIndividualCallupPanel(fromInput){
       const chosenDate=dateInp.value;
       if(!chosenDate){alert('Set a date for this row first.');return;}
       const nid=uid();
-      records.push({id:nid,clid,client,type:ctype,anum,atty:para,event:cu.eventType,date:chosenDate,timeStart:'',timeEnd:'',assigned,notes:'',hearingMode:'',checklist:[],docs:[],soIssueDate:'',history:[]});
+      records.push({id:nid,clid,client,type:ctype,anum,atty:para,event:cu.eventType,date:chosenDate,timeStart:'',timeEnd:'',assigned,notes:(_DEADLINE_DEFAULT_NOTES[cu.eventType]||''),hearingMode:'',checklist:[],docs:[],soIssueDate:'',history:[]});
       _invalidateCasesCache();dirtyCaseFilterOpts();markUnsaved();
       showToast(cu.label+' added');
       addBtn.textContent='✓ Added';addBtn.style.background='#6A8C6E';addBtn.style.color='#fff';addBtn.style.borderColor='#6A8C6E';addBtn.disabled=true;
@@ -12580,6 +12588,10 @@ window.saveEvent=function(){
   let _vhd={hearingJudgeId:'',virtualLink:''};
   if(_isHearingEvt&&(hearingMode==='virtual'||hearingMode==='in-person')){const _d=getVirtualHearingDetails();_vhd.hearingJudgeId=_d.hearingJudgeId;_vhd.virtualLink=(hearingMode==='virtual')?_d.virtualLink:'';}
   const data={clid:document.getElementById('fc-clid').value.trim(),client,type,anum:document.getElementById('fc-anum').value.trim(),atty:document.getElementById('fc-paralegal').value,event:document.getElementById('fc-eventtype').value,date:document.getElementById('fc-date').value,timeStart:tOn?document.getElementById('fc-time-start').value:'',timeEnd:tOn?document.getElementById('fc-time-end').value:'',assigned:document.getElementById('fc-assigned').value,notes:document.getElementById('fc-notes').value.trim(),hearingMode:_isHearingEvt?hearingMode:'',hearingJudgeId:_vhd.hearingJudgeId,virtualLink:_vhd.virtualLink,checklist:modalChecklist.filter(x=>x.trim()),docs:modalDocs.filter(x=>(x.name||x||'').trim()),soIssueDate:(document.getElementById('fc-eventtype').value==='SCHEDULING ORDER'?(document.getElementById('so-issue-date')||{}).value||'':'')};  customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);data[c.key]=el?el.value:'';});
+  // New 90/60/30-day deadlines with blank notes get the firm's standard
+  // workflow description so everyone knows what the deadline is for.
+  // Creation only — an edit that clears the notes stays cleared.
+  if(!editingId && !data.notes && _DEADLINE_DEFAULT_NOTES[data.event]) data.notes=_DEADLINE_DEFAULT_NOTES[data.event];
   if(editingId){
     const idx=records.findIndex(r=>r.id===editingId);
     if(idx>-1){
@@ -23205,6 +23217,23 @@ const loaded=loadSavedData();
   });
   try{localStorage.setItem('migration_clientFirstName_v1','done');}catch(e){}
   markUnsaved();
+})();
+
+// Backfill: active 90/60/30-day deadline events created before the
+// standard workflow descriptions existed have blank notes — fill them
+// with the default so the calendar rows explain what each deadline is
+// for. Idempotent (only touches blank notes on active events), so it's
+// safe to run every boot; the per-record sync propagates the filled
+// notes to the other devices.
+(function _backfillDeadlineNotes(){
+  let n=0;
+  (records||[]).forEach(r=>{
+    if(!r || r.finishedStatus || r.deletedStatus) return;
+    if(r.notes && r.notes.trim()) return;
+    const def=_DEADLINE_DEFAULT_NOTES[r.event];
+    if(def){ r.notes=def; n++; }
+  });
+  if(n){ try{ markUnsaved(); }catch(e){} }
 })();
 
 // One-time migration: uppercase every existing clientLastName so display
