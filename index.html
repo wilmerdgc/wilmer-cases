@@ -6306,6 +6306,23 @@ async function gmailLoadPendingImages(){
   }
 }
 
+// RFC 2047 encoded-word for MIME headers. Header values are assumed
+// ASCII by mail clients — raw UTF-8 in a Subject renders as mojibake
+// ("—" became "Ã¢Â€Â”"). Non-ASCII values get wrapped as
+// =?UTF-8?B?<base64>?= words, chunked by code point (never splitting a
+// surrogate pair) and folded so each word stays under the 75-char cap.
+function _encodeMimeHeader(s){
+  const str = String(s||'');
+  if(!/[^\x00-\x7F]/.test(str)) return str;
+  const chars = Array.from(str);
+  const parts = [];
+  for(let i = 0; i < chars.length; i += 20){
+    const seg = chars.slice(i, i + 20).join('');
+    parts.push('=?UTF-8?B?' + btoa(unescape(encodeURIComponent(seg))) + '?=');
+  }
+  return parts.join('\r\n ');
+}
+
 async function gmailSendMessage(to, subject, body, threadId, inReplyTo, cc, attachments){
   const atts = (attachments && attachments.length) ? attachments : null;
   let mime;
@@ -6316,7 +6333,7 @@ async function gmailSendMessage(to, subject, body, threadId, inReplyTo, cc, atta
     mime += 'From: ' + _gmailUserEmail + '\r\n';
     mime += 'To: ' + to + '\r\n';
     if(cc) mime += 'Cc: ' + cc + '\r\n';
-    mime += 'Subject: ' + subject + '\r\n';
+    mime += 'Subject: ' + _encodeMimeHeader(subject) + '\r\n';
     if(inReplyTo){
       mime += 'In-Reply-To: ' + inReplyTo + '\r\n';
       mime += 'References: ' + inReplyTo + '\r\n';
@@ -6344,7 +6361,7 @@ async function gmailSendMessage(to, subject, body, threadId, inReplyTo, cc, atta
     mime += 'From: ' + _gmailUserEmail + '\r\n';
     mime += 'To: ' + to + '\r\n';
     if(cc) mime += 'Cc: ' + cc + '\r\n';
-    mime += 'Subject: ' + subject + '\r\n';
+    mime += 'Subject: ' + _encodeMimeHeader(subject) + '\r\n';
     if(inReplyTo){
       mime += 'In-Reply-To: ' + inReplyTo + '\r\n';
       mime += 'References: ' + inReplyTo + '\r\n';
