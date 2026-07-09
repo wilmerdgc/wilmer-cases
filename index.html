@@ -12197,11 +12197,73 @@ function _renderReadOnlyView(r){
     + (otherHistoryNotes.length ? row('Other notes', otherHistoryNotes.join('\n\n'), 'fc-history-note', 'multiline') : '')
     + customRows
     + `</div>`;
-  host.innerHTML = hero + grid;
+  // Email actions: notify the client about this scheduled event (fully
+  // in Spanish) and a straight-to-the-point follow-up to the paralegal.
+  const _clidRo = r.clid || r.client || '';
+  const _clientEmailRo = ((caseMeta[_clidRo]||{}).clientEmail||'').trim();
+  const _paraEmailRo = (r.atty && paralegalEmails && paralegalEmails[r.atty]) || '';
+  const actions = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--cream-dark);">
+    <button type="button" onclick="emailEventToClientES('${String(r.id).replace(/'/g,"\\'")}')" ${_clientEmailRo?'':'disabled'} title="${_clientEmailRo?'Email the client about this event — everything in Spanish':'No client email on file'}" style="font-size:11px;font-weight:600;padding:6px 14px;border:1px solid var(--sage);border-radius:16px;background:var(--sage-light);color:var(--sage);cursor:${_clientEmailRo?'pointer':'not-allowed'};font-family:inherit;opacity:${_clientEmailRo?'1':'.45'};">✉ Enviar al cliente (ES)</button>
+    <button type="button" onclick="emailEventFollowUp('${String(r.id).replace(/'/g,"\\'")}')" ${_paraEmailRo?'':'disabled'} title="${_paraEmailRo?'Ask the paralegal for a status update on this event':'No email on file for this paralegal — add one in Settings'}" style="font-size:11px;font-weight:600;padding:6px 14px;border:1px solid var(--slate);border-radius:16px;background:var(--slate-light);color:var(--slate);cursor:${_paraEmailRo?'pointer':'not-allowed'};font-family:inherit;opacity:${_paraEmailRo?'1':'.45'};">✉ Follow up (paralegal)</button>
+  </div>`;
+  host.innerHTML = hero + grid + actions;
   host.querySelectorAll('.ro-value').forEach(el=>{
     const fid = el.getAttribute('data-focus');
     el.addEventListener('click', ()=>enterEditMode(fid));
     el.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); enterEditMode(fid); } });
+  });
+}
+
+// Email the client about one scheduled event — subject and body entirely
+// in Spanish. Event details reuse formatEventForEmailES so dates, times,
+// hearing format, judge, and reminders come out in the same Spanish
+// wording the calendar emails use.
+function emailEventToClientES(recordId){
+  const r=(records||[]).find(x=>x&&x.id===recordId);
+  if(!r){ showToast('Event not found'); return; }
+  const clid=r.clid||r.client||'';
+  const meta=caseMeta[clid]||{};
+  const clientEmail=(meta.clientEmail||'').trim();
+  if(!clientEmail){ showToast('No client email on file'); return; }
+  const clientFirst=(meta.clientFirstName||'').trim()||String(r.client||'').split(/\s+/)[0]||'';
+  const greet=clientFirst?('Estimado/a '+clientFirst+':'):'Estimado/a cliente:';
+  const details=(typeof formatEventForEmailES==='function')?formatEventForEmailES(r,clid,r.atty||''):('Evento: '+(r.event||'')+'\nFecha: '+fmtDate(r.date));
+  const body=greet+'\n\n'
+    +'Le escribimos de The Romero Firm para informarle sobre un evento programado en su caso. Estos son los detalles:\n\n'
+    +details+'\n'
+    +'Por favor, guarde esta fecha. Si tiene alguna pregunta, o si no puede asistir, comuníquese con nosotros lo antes posible.\n\n'
+    +'Gracias,';
+  openEmailComposeModal({
+    to: clientEmail,
+    subject: 'Evento programado en su caso — '+(r.event||'evento')+(r.date?(' — '+fmtDate(r.date)):''),
+    body: body,
+    _clid: clid,
+    _addSignature: true
+  });
+}
+
+// Quick status-check email to the paralegal assigned to this event.
+// Deliberately short: "How is this going?" plus just enough detail to
+// identify the event.
+function emailEventFollowUp(recordId){
+  const r=(records||[]).find(x=>x&&x.id===recordId);
+  if(!r){ showToast('Event not found'); return; }
+  const paraName=r.atty||'';
+  const paraEmail=(paraName&&paralegalEmails&&paralegalEmails[paraName])||'';
+  if(!paraEmail){ showToast('No email on file for '+(paraName||'this paralegal')+' — add one in Settings'); return; }
+  const firstName=paraName.split(/\s+/)[0]||paraName;
+  const body='Hi '+firstName+',\n\n'
+    +'How is this going?\n\n'
+    +(r.event||'Event')+' — '+(r.client||'')+(r.clid?(' (#'+r.clid+')'):'')+'\n'
+    +(r.date?('Due: '+fmtDate(r.date)+'\n'):'')
+    +(r.notes?('Notes: '+r.notes+'\n'):'')
+    +'\nThanks,';
+  openEmailComposeModal({
+    to: paraEmail,
+    subject: 'Follow up — '+(r.event||'event')+' — '+(r.client||'')+(r.date?(' — '+fmtDate(r.date)):''),
+    body: body,
+    _clid: r.clid||r.client||'',
+    _addSignature: true
   });
 }
 function copyEventText(){
@@ -18894,7 +18956,7 @@ function openCaseDetail(clid){
   // event type (Individual / Master / Task) already selected.
   const quickAddRow=document.createElement('div');
   quickAddRow.style.cssText='display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;';
-  [['Individual','INDIVIDUAL','#6B7FA3'],['Master','MASTER','#6A8C6E'],['Task','TASK','#B07B4F']].forEach(([label,evType,fallback])=>{
+  [['Individual','INDIVIDUAL','#6B7FA3'],['Master','MASTER','#6A8C6E'],['Task','TASK','#B07B4F'],['Sched. Order','SCHEDULING ORDER','#C9823A']].forEach(([label,evType,fallback])=>{
     // Color each button with the event type's color configured in
     // Settings → Event types; fall back to the default if none is set.
     const col=getEventStyle(evType).color||fallback;
