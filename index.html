@@ -12892,19 +12892,84 @@ function openEmailComposeModal(opts){
   setTimeout(()=>{const el=document.getElementById('emc-body');if(el){el.focus();el.setSelectionRange(0,0);}},80);
 }
 
-// Append the pre-built Spanish body (stored on window._emcSpanishBody by
-// openEmailComposeModal) to the compose textarea under a clear separator.
+// Machine-translate English text to plain Spanish. Chunks by paragraph
+// (the free endpoints cap request size), tries Google's public gtx
+// endpoint first and falls back to MyMemory. Returns null when both
+// fail (offline / rate-limited) so the caller can tell the user.
+async function _translateToSpanish(text){
+  const src = String(text||'').trim();
+  if(!src) return '';
+  // Split into chunks of whole paragraphs, ≤1500 chars each.
+  const paras = src.split(/\n/);
+  const chunks = [];
+  let cur = '';
+  paras.forEach(p => {
+    if((cur + '\n' + p).length > 1500 && cur){ chunks.push(cur); cur = p; }
+    else cur = cur ? cur + '\n' + p : p;
+  });
+  if(cur) chunks.push(cur);
+  const out = [];
+  for(const chunk of chunks){
+    let translated = null;
+    // 1. Google translate (unofficial gtx endpoint — free, CORS-enabled).
+    try{
+      const res = await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=es&dt=t&q=' + encodeURIComponent(chunk));
+      if(res.ok){
+        const data = await res.json();
+        if(Array.isArray(data) && Array.isArray(data[0])){
+          translated = data[0].map(seg => (seg && seg[0]) ? seg[0] : '').join('');
+        }
+      }
+    }catch(e){}
+    // 2. MyMemory fallback (free, ~5k chars/day anonymous).
+    if(!translated){
+      try{
+        const res2 = await fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(chunk.slice(0,4900)) + '&langpair=en|es');
+        if(res2.ok){
+          const d = await res2.json();
+          const t = d && d.responseData && d.responseData.translatedText;
+          if(t) translated = t;
+        }
+      }catch(e){}
+    }
+    if(translated == null) return null; // both providers failed — bail
+    out.push(translated);
+  }
+  return out.join('\n');
+}
+
+// Append a Spanish version of the email under a clear separator when the
+// client is added as a recipient. Two sources, in priority order:
+//   1. window._emcSpanishBody — the pre-built, hand-templated Spanish
+//      version (calendar-email drafts build one via formatEventForEmailES).
+//      Highest quality, used verbatim when present.
+//   2. Machine translation of the WHOLE current body (everything above
+//      the signature) into plain Spanish, so any email — not just
+//      calendar drafts — goes out bilingual when the client is on it.
 // Inserts before the signature if one has already been appended, so the
-// signature remains at the very bottom. No-op if Spanish body missing or
+// signature remains at the very bottom. No-op if the Spanish block is
 // already present.
-function _appendSpanishEmailBody(){
+async function _appendSpanishEmailBody(){
   const bodyEl=document.getElementById('emc-body');
   if(!bodyEl) return;
-  const es=window._emcSpanishBody||'';
-  if(!es) return;
   const marker='\n\n──── ESPAÑOL ────\n\n';
   if(bodyEl.value.includes(marker)) return;
+  let es=window._emcSpanishBody||'';
+  if(!es){
+    // Translate the current English body (minus the signature block).
+    const current=bodyEl.value;
+    const sigIdx=current.indexOf('\n--\n');
+    const english=(sigIdx>=0?current.slice(0,sigIdx):current).trim();
+    if(!english) return;
+    showToast('🌐 Traduciendo al español…');
+    es = await _translateToSpanish(english);
+    if(!es){ showToast('No se pudo traducir — revisa la conexión e inténtalo de nuevo'); return; }
+    es += '\n\n(Traducción automática — revísela antes de enviar)';
+  }
+  // Re-read the body — the user may have kept typing while the
+  // translation request was in flight.
   const current=bodyEl.value;
+  if(current.includes(marker)) return;
   const sigIdx=current.indexOf('\n--\n');
   const insertion=marker+es+'\n';
   if(sigIdx>=0){
@@ -12912,6 +12977,7 @@ function _appendSpanishEmailBody(){
   }else{
     bodyEl.value=current.replace(/\s+$/,'')+insertion;
   }
+  showToast('✓ Versión en español añadida');
 }
 
 function renderQuickAddRecipients(clid){
