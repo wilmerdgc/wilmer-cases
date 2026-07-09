@@ -12675,6 +12675,65 @@ function offerCalendarEmailDraft(savedData){
   setTimeout(()=>{const el=document.getElementById('calendar-email-toast');if(el)el.remove();},15000);
 }
 
+// After the case's paralegal changes, offer to email the client an
+// introduction to their new paralegal. Mirrors the calendar-email offer
+// card: floating bottom-right, Draft Email / Skip, auto-dismisses.
+function offerParalegalIntroEmail(clid, oldName, newName){
+  if(!clid || !newName) return;
+  const clientEmail=((caseMeta[clid]||{}).clientEmail||'').trim();
+  if(!clientEmail){
+    showToast('Paralegal updated — no client email on file to send an introduction');
+    return;
+  }
+  const old=document.getElementById('paralegal-intro-toast'); if(old) old.remove();
+  const card=document.createElement('div');
+  card.id='paralegal-intro-toast';
+  card.style.cssText='position:fixed;bottom:20px;right:20px;background:#fff;border:1px solid var(--sage-mid);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);padding:14px 18px;z-index:9999;display:flex;align-items:center;gap:12px;max-width:420px;animation:fadeIn .2s;';
+  card.innerHTML=`
+    <div style="flex:1;">
+      <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:2px;">Paralegal changed to ${escHtml(newName)}</div>
+      <div style="font-size:11px;color:var(--ink-muted);">Send the client an email introducing their new paralegal?</div>
+    </div>
+    <button onclick="buildParalegalIntroEmail('${String(clid).replace(/'/g,"\\'")}','${String(newName).replace(/'/g,"\\'")}');this.parentElement.remove();" style="font-size:11px;font-weight:600;padding:7px 14px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;">Draft Email</button>
+    <button onclick="this.parentElement.remove();" style="font-size:11px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Skip</button>`;
+  document.body.appendChild(card);
+  setTimeout(()=>{const el=document.getElementById('paralegal-intro-toast');if(el)el.remove();},20000);
+}
+
+// Open the compose modal pre-filled with a bilingual (EN + ES)
+// introduction of the new paralegal, addressed to the client. The
+// Spanish half is hand-templated (not machine translation) so it reads
+// naturally; the user's Gmail signature is appended by the modal.
+function buildParalegalIntroEmail(clid, newName){
+  const meta=caseMeta[clid]||{};
+  const clientEmail=(meta.clientEmail||'').trim();
+  const clientFirst=(meta.clientFirstName||'').trim()
+    || (((records||[]).find(r=>(r.clid||r.client)===clid)||{}).client||'').split(/\s+/)[0]
+    || '';
+  const paraEmail=(paralegalEmails&&paralegalEmails[newName])||'';
+  const greetEn=clientFirst?('Dear '+clientFirst+','):'Dear client,';
+  const bodyEn=greetEn+'\n\n'
+    +'We want to let you know about a change to your team at The Romero Firm.\n\n'
+    +newName+' is now the paralegal assigned to your case. From now on, '+newName+' will be helping you with appointments, documents, and any questions about your case.\n\n'
+    +(paraEmail?('You can reach '+newName+' at '+paraEmail+'.\n\n'):'')
+    +'Your attorney remains the same, and this change does not affect your case in any way.\n\n'
+    +'Thank you,';
+  const greetEs=clientFirst?('Estimado/a '+clientFirst+':'):'Estimado/a cliente:';
+  const bodyEs=greetEs+'\n\n'
+    +'Queremos informarle sobre un cambio en su equipo de The Romero Firm.\n\n'
+    +newName+' es ahora el/la paralegal asignado/a a su caso. De ahora en adelante, '+newName+' le ayudará con las citas, los documentos y cualquier pregunta sobre su caso.\n\n'
+    +(paraEmail?('Puede comunicarse con '+newName+' escribiendo a '+paraEmail+'.\n\n'):'')
+    +'Su abogado sigue siendo el mismo y este cambio no afecta su caso de ninguna manera.\n\n'
+    +'Gracias,';
+  openEmailComposeModal({
+    to: clientEmail,
+    subject: 'Your new paralegal at The Romero Firm — '+newName+' / Su nuevo paralegal',
+    body: bodyEn+'\n\n──── ESPAÑOL ────\n\n'+bodyEs,
+    _clid: clid,
+    _addSignature: true
+  });
+}
+
 function formatEventForEmail(ev, clid, defaultParalegal){
   let txt='';
   const isHearing=['MASTER','INDIVIDUAL','MERITS','BOND'].some(h=>(ev.event||'').toUpperCase().includes(h));
@@ -18541,6 +18600,7 @@ function openCaseDetail(clid){
   // ── Save handler ──
   function doSaveAll(){
     const clients=infoBody._allClients||[];
+    const _prevPara=base.atty||'';
     if(infoBody._clidInput){const nv=infoBody._clidInput.value.trim();allRecs.forEach(r=>r.clid=nv);base.clid=nv;}
     if(infoBody._paraInput){const nv=infoBody._paraInput.value;allRecs.forEach(r=>r.atty=nv);base.atty=nv;}
     if(infoBody._clientEmailInput){if(!caseMeta[clid])caseMeta[clid]={};caseMeta[clid].clientEmail=infoBody._clientEmailInput.value.trim();}
@@ -18571,6 +18631,14 @@ function openCaseDetail(clid){
     });
     markUnsaved();
     {const _m=caseMeta[clid]||{};const _c=[_m.clientFirstName,_m.clientMiddleName,_m.clientLastName].filter(Boolean).join(' ');document.getElementById('case-detail-title').textContent=_c||base.client||clid;}
+    // Paralegal changed → offer to email the client an introduction to
+    // their new paralegal (bilingual, pre-drafted; user reviews + sends).
+    try{
+      const _newPara=base.atty||'';
+      if(_newPara && _newPara!==_prevPara && typeof offerParalegalIntroEmail==='function'){
+        offerParalegalIntroEmail(clid,_prevPara,_newPara);
+      }
+    }catch(e){}
   }
 
   editToggle.onclick=()=>{
