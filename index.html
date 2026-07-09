@@ -18763,7 +18763,16 @@ function openCaseDetail(clid){
         if(dc) judgeBadge=`<span style="font-size:9px;font-weight:600;padding:1px 6px;border-radius:4px;background:${dc.bg};color:${dc.c};margin-left:5px;white-space:nowrap;" title="${jObj.name} — ${jObj.difficulty} difficulty">${dc.icon}</span>`;
       }
     }
-    row.innerHTML=`<div class="case-event-left"><div class="case-event-name" style="${colorStyle}font-weight:600;">${evLabel}${cdHtml}${judgeBadge}</div><div class="case-event-sub">${r.notes?escHtml(r.notes):'—'}</div></div><div style="flex-shrink:0">${sb2}</div>`;
+    // Reminders get the same treatment as the calendar views: an amber
+    // 🔔 instead of the "⏰ Reminder" event title, the "⏰ REMINDER: "
+    // prefix stripped from the text, and the rest muted + italic.
+    const _isRemRow=!!(r.notes&&r.notes.startsWith('⏰ REMINDER'));
+    if(_isRemRow){
+      const reminderText=(r.notes||'').replace(/^⏰ REMINDER:\s*/,'');
+      row.innerHTML=`<div class="case-event-left"><div class="case-event-name" style="color:#C9823A;font-weight:600;">🔔 Reminder</div><div class="case-event-sub" style="font-style:italic;color:var(--ink-faint);opacity:.85;">${escHtml(reminderText)}</div></div><div style="flex-shrink:0">${sb2}</div>`;
+    } else {
+      row.innerHTML=`<div class="case-event-left"><div class="case-event-name" style="${colorStyle}font-weight:600;">${evLabel}${cdHtml}${judgeBadge}</div><div class="case-event-sub">${r.notes?escHtml(r.notes):'—'}</div></div><div style="flex-shrink:0">${sb2}</div>`;
+    }
     appendSoMeta(row.querySelector('.case-event-left'),r,'#C9823A');
     // Per-event finish checkbox — clicking it opens the finish options
     // (Attended / Completed / Cancelled / Reschedule / Delete) for this event
@@ -18835,7 +18844,7 @@ function openCaseDetail(clid){
   }
 
   // Finished events (collapsible)
-  if(finished.length){const fp=document.createElement('div');fp.className='case-notes-panel';fp.style.marginBottom='8px';const fh=document.createElement('div');fh.className='case-notes-panel-header';fh.innerHTML=`<div class="case-notes-panel-title">Finished Events <span style="font-weight:400;font-size:10px;color:#9E9186">(${finished.length})</span></div><span class="case-notes-panel-toggle">▾</span>`;fh.onclick=()=>fp.classList.toggle('open');const fb=document.createElement('div');fb.className='case-notes-body';fb.style.padding='8px 10px';[...finished].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{const row=document.createElement('div');row.className='case-event-row';row.onclick=()=>openEdit(r.id);row.innerHTML=`<div class="case-event-left"><div class="case-event-name">${r.event||'(No event)'}</div><div class="case-event-sub">${r.notes?escHtml(r.notes):'—'}</div></div><span class="finished-status-badge" style="background:#EBF1EB;color:#6A8C6E;flex-shrink:0;">${r.finishedStatus}</span>`;fb.appendChild(row);});fp.appendChild(fh);fp.appendChild(fb);body.appendChild(fp);}
+  if(finished.length){const fp=document.createElement('div');fp.className='case-notes-panel';fp.style.marginBottom='8px';const fh=document.createElement('div');fh.className='case-notes-panel-header';fh.innerHTML=`<div class="case-notes-panel-title">Finished Events <span style="font-weight:400;font-size:10px;color:#9E9186">(${finished.length})</span></div><span class="case-notes-panel-toggle">▾</span>`;fh.onclick=()=>fp.classList.toggle('open');const fb=document.createElement('div');fb.className='case-notes-body';fb.style.padding='8px 10px';[...finished].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{const row=document.createElement('div');row.className='case-event-row';row.onclick=()=>openEdit(r.id);const _isRemFin=!!(r.notes&&r.notes.startsWith('⏰ REMINDER'));const _finName=_isRemFin?'<span style="color:#C9823A;">🔔 Reminder</span>':(r.event||'(No event)');const _finSub=_isRemFin?`<span style="font-style:italic;color:var(--ink-faint);opacity:.85;">${escHtml((r.notes||'').replace(/^⏰ REMINDER:\s*/,''))}</span>`:(r.notes?escHtml(r.notes):'—');row.innerHTML=`<div class="case-event-left"><div class="case-event-name">${_finName}</div><div class="case-event-sub">${_finSub}</div></div><span class="finished-status-badge" style="background:#EBF1EB;color:#6A8C6E;flex-shrink:0;">${r.finishedStatus}</span>`;fb.appendChild(row);});fp.appendChild(fh);fp.appendChild(fb);body.appendChild(fp);}
 
   // Case Notes panels
   const notesSec=document.createElement('div');notesSec.className='case-detail-section';
