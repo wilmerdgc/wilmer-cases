@@ -12729,8 +12729,14 @@ function buildParalegalIntroEmail(clid, newName){
     +(paraEmail?('Puede comunicarse con '+newName+' escribiendo a '+paraEmail+'.\n\n'):'')
     +'Su abogado sigue siendo el mismo y este cambio no afecta su caso de ninguna manera.\n\n'
     +'Gracias,';
+  // CC the new paralegal so the introduction reaches them too and the
+  // client can simply hit Reply-All to start the conversation.
+  if(!paraEmail){
+    showToast('No email on file for '+newName+' — add one in Settings to CC them');
+  }
   openEmailComposeModal({
     to: clientEmail,
+    cc: paraEmail,
     subject: 'Your new paralegal at The Romero Firm — '+newName+' / Su nuevo paralegal',
     body: bodyEn+'\n\n──── ESPAÑOL ────\n\n'+bodyEs,
     _clid: clid,
