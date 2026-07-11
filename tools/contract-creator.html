@@ -1,0 +1,853 @@
+<!-- FILE: contract-creator.html | Wilmer Gonzalez Colina, Esq. — Contract Creator
+     Reproduces the firm's engagement-agreement suite: the Part 1215 (22 NYCRR)
+     Acuerdo de Representación / Engagement Agreement letter (numbered sections,
+     ES + EN), the Declaración de los Derechos del Cliente / Statement of
+     Client's Rights, and an Account Statement built from the fee schedule and
+     payments recorded on the case. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contract Creator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Georgia, serif; background: #f7f4ef; color: #2c2720; font-size: 14px; }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex; gap: 0; align-items: center; flex-wrap: wrap;
+    border-bottom: 2px solid #d4c9b8; background: #f0ece4;
+    padding: 0 30px; position: sticky; top: 0; z-index: 50;
+  }
+  .tab {
+    font-family: Arial, sans-serif; font-size: 11px; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 0.07em;
+    padding: 11px 22px; cursor: pointer; color: #9a8872;
+    border: none; border-bottom: 2px solid transparent; margin-bottom: -2px;
+    background: none; transition: color 0.15s;
+  }
+  .tab.active { color: #2c2720; border-bottom: 2px solid #2c2720; }
+  .tab:hover { color: #4a3c2c; }
+  .bar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+  .tab-save {
+    font-family: Arial, sans-serif; font-size: 10px; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 5px 14px; border-radius: 2px; cursor: pointer;
+    background: #2c2720; color: #fffdf9; border: none;
+  }
+  .tab-save:hover { opacity: 0.85; }
+  .tab-save.saved { background: #3a6b3a; }
+
+  /* ── LAYOUT ── */
+  .page { max-width: 980px; margin: 0 auto; padding: 22px 30px 80px; }
+  .section {
+    background: #fffdf9; border: 1px solid #e4dbc8; border-radius: 3px;
+    padding: 16px 18px; margin-bottom: 14px;
+  }
+  .sec-title {
+    font-family: Arial, sans-serif; font-size: 10px; font-weight: bold;
+    letter-spacing: 0.1em; text-transform: uppercase; color: #9a8872;
+    margin-bottom: 12px; border-bottom: 1px solid #efe8da; padding-bottom: 6px;
+  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+  .full { grid-column: 1 / -1; }
+  label.fld {
+    display: block; font-family: Arial, sans-serif; font-size: 9px; font-weight: bold;
+    letter-spacing: 0.08em; text-transform: uppercase; color: #9a8872; margin-bottom: 3px;
+  }
+  input[type=text], input[type=date], input[type=number], select, textarea {
+    width: 100%; font-family: Georgia, serif; font-size: 13px; color: #2c2720;
+    background: #fff; border: 1px solid #cfc4b0; border-radius: 2px;
+    padding: 7px 9px; outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: #a0865a; }
+  textarea { resize: vertical; line-height: 1.5; }
+  .hint { font-family: Arial, sans-serif; font-size: 10px; color: #b0a28c; margin-top: 3px; }
+
+  /* ── FEE / PAYMENT TABLES ── */
+  table.rows { width: 100%; border-collapse: collapse; }
+  table.rows th {
+    font-family: Arial, sans-serif; font-size: 9px; font-weight: bold; text-align: left;
+    letter-spacing: 0.08em; text-transform: uppercase; color: #9a8872;
+    padding: 4px 6px 6px; border-bottom: 1px solid #e4dbc8;
+  }
+  table.rows td { padding: 4px 4px; vertical-align: middle; }
+  table.rows input { padding: 6px 8px; font-size: 13px; }
+  .row-x {
+    font-family: Arial, sans-serif; font-size: 11px; background: none;
+    border: 1px solid #cfc4b0; color: #9a8872; width: 22px; height: 22px;
+    border-radius: 2px; cursor: pointer;
+  }
+  .row-x:hover { color: #b05050; border-color: #b05050; }
+  .add-row {
+    font-family: Arial, sans-serif; font-size: 10px; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px;
+    padding: 5px 12px; border-radius: 2px; cursor: pointer;
+    background: none; border: 1px dashed #b0a090; color: #9a8872;
+  }
+  .add-row:hover { color: #6b5a3e; border-color: #6b5a3e; }
+  .totals {
+    display: flex; gap: 22px; justify-content: flex-end; flex-wrap: wrap;
+    margin-top: 12px; padding-top: 10px; border-top: 1px solid #e4dbc8;
+    font-family: Arial, sans-serif; font-size: 12px;
+  }
+  .totals .t-lbl { font-size: 9px; font-weight: bold; letter-spacing: 0.08em; text-transform: uppercase; color: #9a8872; display: block; }
+  .totals .t-val { font-family: Georgia, serif; font-size: 17px; font-weight: bold; }
+  .totals .due .t-val { color: #8a4a2a; }
+  .totals .ok .t-val { color: #3a6b3a; }
+
+  .chk-line { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 7px; font-size: 13px; }
+  .chk-line input[type=checkbox] { width: auto; margin-top: 3px; }
+
+  /* ── DOCUMENT TAB ── */
+  .doc-toolbar { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 14px; }
+  .doc-toolbar .tb-item { min-width: 190px; }
+  .doc-btn {
+    font-family: Arial, sans-serif; font-size: 10px; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 8px 16px; border-radius: 2px; cursor: pointer;
+    background: #2c2720; color: #fffdf9; border: 1px solid #2c2720;
+  }
+  .doc-btn.alt { background: #fffdf9; color: #6b5a3e; border: 1px solid #cfc4b0; }
+  .doc-btn:hover { opacity: 0.85; }
+  #doc-preview-wrap { background: #e9e3d7; border: 1px solid #d4c9b8; border-radius: 3px; padding: 22px; overflow-x: auto; }
+  .sheet {
+    background: #fff; max-width: 8.5in; margin: 0 auto;
+    padding: 0.85in 0.95in; box-shadow: 0 2px 10px rgba(60,48,30,.18);
+    font-family: Garamond, Georgia, 'Times New Roman', serif; font-size: 12pt; line-height: 1.45; color: #111;
+  }
+  .empty-note { font-family: Arial, sans-serif; font-size: 11px; color: #b0a28c; font-style: italic; }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <button class="tab active" data-tab="details" onclick="ctcTab('details')">1 · Case &amp; Client</button>
+  <button class="tab" data-tab="scope" onclick="ctcTab('scope')">2 · Representation</button>
+  <button class="tab" data-tab="fees" onclick="ctcTab('fees')">3 · Fees &amp; Bills</button>
+  <button class="tab" data-tab="doc" onclick="ctcTab('doc')">4 · Document</button>
+  <div class="bar-right"><button id="save-btn" class="tab-save" onclick="ctcSaveNow()">Save</button></div>
+</div>
+
+<!-- ═══════════ 1 · CASE & CLIENT ═══════════ -->
+<div class="page" id="page-details">
+  <div class="section">
+    <div class="sec-title">Attorney (letter header)</div>
+    <div class="grid">
+      <div><label class="fld">Firm line (optional, above attorney)</label><input type="text" id="f-firm" placeholder="e.g. Law Office of Wilmer Gonzalez" value=""></div>
+      <div><label class="fld">Attorney</label><input type="text" id="f-atty" value="Wilmer Gonzalez Colina, Esq."></div>
+      <div><label class="fld">Email</label><input type="text" id="f-email" value="wilmerdgcolina@gmail.com"></div>
+      <div><label class="fld">Phone</label><input type="text" id="f-phone" value="9177713687"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sec-title">Client</div>
+    <div class="grid">
+      <div><label class="fld">Salutation</label><input type="text" id="c-salut" placeholder="Mr. / Ms. / Sr. / Sra."></div>
+      <div><label class="fld">Full name</label><input type="text" id="c-name"></div>
+      <div><label class="fld">A-Number</label><input type="text" id="c-anum" placeholder="e.g. 244563139"></div>
+      <div><label class="fld">Email (letter is “Sent by email to …”)</label><input type="text" id="c-email"></div>
+      <div><label class="fld">Phone</label><input type="text" id="c-phone"></div>
+      <div><label class="fld">Client ID</label><input type="text" id="c-clid"></div>
+      <div><label class="fld">Letter date</label><input type="date" id="c-date"></div>
+      <div><label class="fld">Case type (reference)</label><input type="text" id="c-casetype"></div>
+      <div class="full">
+        <label class="fld">Family members / derivatives included (one per line, optional)</label>
+        <textarea id="c-family" rows="2" placeholder="Name — A# — relationship"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 2 · REPRESENTATION ═══════════ -->
+<div class="page" id="page-scope" style="display:none">
+  <div class="section">
+    <div class="sec-title">§1 — Description of the representation</div>
+    <div class="grid">
+      <div><label class="fld">Template</label>
+        <select id="s-preset">
+          <option value="custom">Custom / blank</option>
+          <option value="master">Master (Preliminary) Hearing</option>
+          <option value="asylum-court">Defensive Asylum — Immigration Court</option>
+          <option value="asylum-uscis">Asylum petition — USCIS</option>
+          <option value="sij">Special Immigrant Juvenile (SIJ)</option>
+          <option value="motion-terminate">Motion to Terminate</option>
+          <option value="bond">Bond Hearing</option>
+          <option value="aos">Adjustment of Status (I-485)</option>
+          <option value="appeal">BIA Appeal</option>
+          <option value="workpermit">Work Permit (I-765)</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:flex-end;"><button class="add-row" style="margin-top:0;" onclick="ctcApplyPreset(true)">↻ Fill from template (current language)</button></div>
+      <div class="full"><label class="fld">Retained in connection with (completes “…in connection with your ___”)</label>
+        <input type="text" id="s-matter" placeholder="e.g. MASTER CALENDAR HEARING"></div>
+      <div class="full"><label class="fld">This contract only includes (one item per line — becomes a. b. c. …)</label>
+        <textarea id="s-includes" rows="5"></textarea></div>
+      <div class="full"><label class="fld">This contract does not include (paragraph)</label>
+        <textarea id="s-excludes" rows="3"></textarea></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sec-title">Standard sections of the letter</div>
+    <div class="chk-line"><input type="checkbox" id="t-warn" checked><span>§3 Warnings — limited-scope risks; no continuing professional relationship without a new written agreement.</span></div>
+    <div class="chk-line"><input type="checkbox" id="t-auth" checked><span>§4 Authority allocation &amp; confidentiality — attorney abides by Client's decisions on scope; privileged communications.</span></div>
+    <div class="chk-line"><input type="checkbox" id="t-endrep" checked><span>§5 End of representation — Client may terminate by email; termination does not erase fees already incurred; attorney may withdraw, including for unpaid statements.</span></div>
+    <div class="chk-line"><input type="checkbox" id="t-edata" checked><span>§6 Electronic data communication and storage — consent to Gmail / Office 365 / OneDrive / Dropbox and similar providers.</span></div>
+    <div class="chk-line"><input type="checkbox" id="t-retain" checked><span>§7 File retention and destruction — files kept 7 years after closing, digital-only storage allowed, destruction authorized afterward.</span></div>
+    <div style="margin-top:10px;"><label class="fld">Additional terms (optional, one paragraph per line)</label>
+      <textarea id="t-extra" rows="3"></textarea></div>
+  </div>
+</div>
+
+<!-- ═══════════ 3 · FEES & BILLS ═══════════ -->
+<div class="page" id="page-fees" style="display:none">
+  <div class="section">
+    <div class="sec-title">§2 — Legal fees (installments)</div>
+    <table class="rows" id="fee-table">
+      <thead><tr><th style="width:52%">What the payment is for</th><th style="width:18%">Amount (USD)</th><th style="width:24%">Due</th><th></th></tr></thead>
+      <tbody id="fee-rows"></tbody>
+    </table>
+    <button class="add-row" onclick="ctcAddFee()">＋ Add fee / installment</button>
+    <div class="grid" style="margin-top:14px;">
+      <div class="full"><label class="fld">This fee covers the following services (one per line, optional)</label>
+        <textarea id="s-covers" rows="4"></textarea></div>
+      <div class="full"><label class="fld">This fee does not cover (one per line)</label>
+        <textarea id="s-notcover" rows="5"></textarea></div>
+    </div>
+    <div class="chk-line" style="margin-top:8px;"><input type="checkbox" id="t-disb" checked><span>Include the disbursements sentence (filing fees, postage, courier, travel, copying, and outside providers billed in addition to services).</span></div>
+  </div>
+
+  <div class="section">
+    <div class="sec-title">Payments received (account / bills)</div>
+    <table class="rows" id="pay-table">
+      <thead><tr><th style="width:20%">Date</th><th style="width:18%">Amount (USD)</th><th style="width:20%">Method</th><th style="width:36%">Note / receipt #</th><th></th></tr></thead>
+      <tbody id="pay-rows"></tbody>
+    </table>
+    <button class="add-row" onclick="ctcAddPay()">＋ Record payment</button>
+    <div class="totals">
+      <div><span class="t-lbl">Total fees</span><span class="t-val" id="tot-fees">$0.00</span></div>
+      <div class="ok"><span class="t-lbl">Total paid</span><span class="t-val" id="tot-paid">$0.00</span></div>
+      <div class="due"><span class="t-lbl">Balance due</span><span class="t-val" id="tot-due">$0.00</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 4 · DOCUMENT ═══════════ -->
+<div class="page" id="page-doc" style="display:none">
+  <div class="doc-toolbar">
+    <div class="tb-item"><label class="fld">Document</label>
+      <select id="d-type" onchange="ctcRenderDoc()">
+        <option value="contract">Engagement Agreement (contract)</option>
+        <option value="rights">Statement of Client's Rights</option>
+        <option value="statement">Account Statement (bill)</option>
+      </select>
+    </div>
+    <div class="tb-item"><label class="fld">Language</label>
+      <select id="d-lang" onchange="ctcRenderDoc()">
+        <option value="both">Spanish + English (like the firm's PDFs)</option>
+        <option value="es">Español only</option>
+        <option value="en">English only</option>
+      </select>
+    </div>
+    <button class="doc-btn" onclick="ctcPrint()">🖨 Print / PDF</button>
+    <button class="doc-btn alt" onclick="ctcDownloadDoc()">⬇ Download .doc</button>
+    <button class="doc-btn alt" onclick="ctcCopyText()">⧉ Copy text</button>
+  </div>
+  <div id="doc-preview-wrap"><div class="sheet" id="doc-preview"></div></div>
+</div>
+
+<script>
+'use strict';
+/* ══════════════════════════════════════════════════════════════════
+   CONTRACT CREATOR — Wilmer Gonzalez Colina, Esq.
+   The generated letters mirror the firm's real documents:
+   · "Acuerdo de Representación / Engagement Agreement" — Part 1215 of
+     Title 22 NYCRR letter with numbered sections (description of the
+     representation with includes/excludes, fees & billing practices,
+     limited-scope warnings, authority & confidentiality, end of
+     representation, electronic-data consent, 7-year file retention),
+     produced in Spanish, English, or both versions in one document.
+   · "Declaración de los Derechos del Cliente / Statement of Client's
+     Rights" (22 NYCRR 1210.1).
+   · "Account Statement" — charges vs. payments recorded on the case.
+   Embedded by the case tracker in an iframe (ctc-ready / ctc-load /
+   ctc-state / ctc-doc postMessage bridge) but also works standalone
+   (state kept in localStorage).
+   ══════════════════════════════════════════════════════════════════ */
+
+// ── Scope templates (matter + includes + excludes + fee-row skeletons), EN and ES ──
+const EXCL_STD = {
+  en: "This contract does not include appeals. It does not include bond requests or proceedings resulting from detention. It does not include extra or travel expenses. This contract only covers the hours of service.",
+  es: "Este contrato no incluye apelaciones. No incluye solicitudes de fianzas o procedimientos producto de la detención. Tampoco incluye gastos extras o de viaje. Este contrato solo cubre las horas de servicio."
+};
+const CTC_PRESETS = {
+  'master': {
+    en: { matter: 'MASTER CALENDAR HEARING (Preliminary Hearing)',
+      includes: ["Motions to appear virtually","Briefs in opposition to the government's motions to terminate the case","Update of the asylum application (Form I-589)","Preparation for the preliminary (master) hearing"],
+      excludes: EXCL_STD.en,
+      fees: ["To open the case and prepare everything, including the motion to appear virtually","The day before the hearing, or upon an order to file Written Pleadings"] },
+    es: { matter: 'AUDIENCIA PRELIMINAR (Master Calendar Hearing)',
+      includes: ["Mociones para aparecer virtualmente","Escritos de oposición a las mociones del gobierno para terminar el caso","Actualización del formulario de asilo (I-589)","Preparación para la audiencia preliminar"],
+      excludes: EXCL_STD.es,
+      fees: ["Para iniciar el caso y preparar todo, incluida la moción para comparecer de manera virtual","El día antes de la audiencia o de una orden para enviar los Alegatos Escritos (Written Pleadings)"] }
+  },
+  'asylum-court': {
+    en: { matter: 'DEFENSIVE ASYLUM CASE before the Immigration Court',
+      includes: ["Review of the NTA (Notice to Appear) and advice on the Removal Proceedings","Preparation and filing of Form I-589 (Application for Asylum and for Withholding of Removal) with supporting documents","E-28 (Entry of Appearance), Written Pleadings, and applicable motions as deemed necessary by Attorney","Preparation of the Client for testimony","Appearance at the Master Calendar and Individual Hearings, in person or virtually"],
+      excludes: EXCL_STD.en,
+      fees: ["At the signing of this agreement, to open the case","Before the Individual Hearing"] },
+    es: { matter: 'CASO DE ASILO DEFENSIVO ante la Corte de Inmigración',
+      includes: ["Revisión de la NTA (Notificación de Comparecencia) y asesoría sobre el Proceso de Deportación","Preparación y presentación del Formulario I-589 (Solicitud de Asilo y Suspensión de Deportación) con documentos de apoyo","E-28 (Comparecencia de Abogado), Alegatos Escritos y las mociones que el Abogado considere necesarias","Preparación del Cliente para su testimonio","Comparecencia en las Audiencias Preliminares e Individual, en persona o virtualmente"],
+      excludes: EXCL_STD.es,
+      fees: ["A la firma de este acuerdo, para iniciar el caso","Antes de la Audiencia Individual"] }
+  },
+  'asylum-uscis': {
+    en: { matter: 'ASYLUM PETITION before USCIS',
+      includes: ["Document Consultation/Review","Change of Jurisdiction Request (including Form AR-11)","Humanitarian Parole Request","Interview Assistance (by phone only, if not rescheduled)","Preparation of Asylum Documents"],
+      excludes: "This representation does not cover any custody or bond proceedings. It is limited to the Asylum petition and interview before USCIS. It does not include any further representation or participation before the Immigration Court or the Board of Immigration Appeals, including briefs, oral arguments, objections in hearing, mediation, or settlements.",
+      fees: ["Initial payment, required to begin","Remaining balance, due 15 days before the interview"] },
+    es: { matter: 'PETICIÓN DE ASILO ante USCIS',
+      includes: ["Consulta y revisión de documentos","Solicitud de cambio de jurisdicción (incluido el Formulario AR-11)","Solicitud de Parole Humanitario","Asistencia para la entrevista (solo por teléfono, si no se reprograma)","Preparación de los documentos de asilo"],
+      excludes: "Esta representación no cubre procedimientos de custodia o fianza. Se limita a la petición de asilo y la entrevista ante USCIS. No incluye representación o participación adicional ante la Corte de Inmigración o la Junta de Apelaciones de Inmigración, incluidos escritos, alegatos orales, objeciones en audiencia, mediación o acuerdos.",
+      fees: ["Pago inicial, requerido para comenzar","Saldo restante, pagadero 15 días antes de la entrevista"] }
+  },
+  'sij': {
+    en: { matter: 'SPECIAL IMMIGRANT JUVENILE (SIJ) CASE',
+      includes: ["Advice on eligibility for Special Immigrant Juvenile (SIJ) classification","Preparation and filing of the Family Court petition for the SIJ predicate order (Special Findings Order)","Preparation and filing of Form I-360 (Petition for Special Immigrant Juvenile) with USCIS","E-28 (Entry of Appearance) and Written Pleadings before the Immigration Court, if in proceedings","Appearances at Family Court and Immigration Court, in person or virtually"],
+      excludes: EXCL_STD.en,
+      fees: ["At the signing of this agreement — Family Court petition and SIJ predicate order","Upon filing of Form I-360"] },
+    es: { matter: 'CASO DE JOVEN INMIGRANTE ESPECIAL (SIJ)',
+      includes: ["Asesoría sobre la elegibilidad para la clasificación de Joven Inmigrante Especial (SIJ)","Preparación y presentación de la petición en la Corte de Familia para la orden previa de SIJ (Orden de Determinaciones Especiales)","Preparación y presentación del Formulario I-360 (Petición de Joven Inmigrante Especial) ante USCIS","E-28 (Comparecencia de Abogado) y Alegatos Escritos ante la Corte de Inmigración, si hay proceso abierto","Comparecencias en la Corte de Familia y la Corte de Inmigración, en persona o virtualmente"],
+      excludes: EXCL_STD.es,
+      fees: ["A la firma de este acuerdo — petición en la Corte de Familia y orden previa de SIJ","Al presentar el Formulario I-360"] }
+  },
+  'motion-terminate': {
+    en: { matter: 'MOTION TO TERMINATE before the Immigration Court',
+      includes: ["Review of the NTA (Notice to Appear) and advice on the Removal Proceedings","E-28 (Entry of Appearance); E-33 (Change of Address) if applicable; Written Pleadings","Motion to Terminate / Motion for Administrative Closure, and applicable motions as deemed necessary by Attorney","Appearance at Immigration Court, in person or virtually, to move for Termination or make other necessary arguments"],
+      excludes: EXCL_STD.en,
+      fees: ["At the signing of this agreement","Prior to appearance in Immigration Court (only if an appearance is required)"] },
+    es: { matter: 'MOCIÓN DE TERMINACIÓN ante la Corte de Inmigración',
+      includes: ["Revisión de la NTA (Notificación de Comparecencia) y asesoría sobre el Proceso de Deportación","E-28 (Comparecencia de Abogado); E-33 (Cambio de Dirección) si aplica; Alegatos Escritos","Moción de Terminación / Moción de Cierre Administrativo, y las mociones que el Abogado considere necesarias","Comparecencia ante la Corte de Inmigración, en persona o virtualmente, para solicitar la Terminación o presentar los demás argumentos necesarios"],
+      excludes: EXCL_STD.es,
+      fees: ["A la firma de este acuerdo","Antes de la comparecencia en la Corte de Inmigración (solo si se requiere comparecer)"] }
+  },
+  'bond': {
+    en: { matter: 'BOND HEARING',
+      includes: ["Review of the Client's custody circumstances and advice on eligibility for bond","Preparation and filing of a Motion for Bond Redetermination with supporting documents","E-28 (Entry of Appearance) and applicable motions as deemed necessary by Attorney","Appearance at the Bond Hearing, in person or virtually"],
+      excludes: "This contract does not include appeals, the merits of the removal case, or any other hearings beyond the bond hearing. It does not include extra or travel expenses. This contract only covers the hours of service.",
+      fees: ["At the signing of this agreement — bond motion and hearing"] },
+    es: { matter: 'AUDIENCIA DE FIANZA',
+      includes: ["Revisión de las circunstancias de detención del Cliente y asesoría sobre su elegibilidad para fianza","Preparación y presentación de una Moción de Redeterminación de Fianza con documentos de apoyo","E-28 (Comparecencia de Abogado) y las mociones que el Abogado considere necesarias","Comparecencia en la Audiencia de Fianza, en persona o virtualmente"],
+      excludes: "Este contrato no incluye apelaciones, el fondo del caso de deportación, ni otras audiencias más allá de la audiencia de fianza. Tampoco incluye gastos extras o de viaje. Este contrato solo cubre las horas de servicio.",
+      fees: ["A la firma de este acuerdo — moción y audiencia de fianza"] }
+  },
+  'aos': {
+    en: { matter: 'ADJUSTMENT OF STATUS (Form I-485) before USCIS',
+      includes: ["Advice on eligibility for Adjustment of Status","Preparation and filing of Form I-485 and accompanying forms as applicable (I-130 / I-360, I-765, I-131) with supporting documents","Responses to Requests for Evidence (RFEs) as necessary","Preparation for and attendance at the USCIS interview"],
+      excludes: EXCL_STD.en,
+      fees: ["At the signing of this agreement","Before the USCIS interview"] },
+    es: { matter: 'AJUSTE DE ESTATUS (Formulario I-485) ante USCIS',
+      includes: ["Asesoría sobre la elegibilidad para el Ajuste de Estatus","Preparación y presentación del Formulario I-485 y los formularios correspondientes según aplique (I-130 / I-360, I-765, I-131) con documentos de apoyo","Respuestas a las Solicitudes de Evidencia (RFE) según sea necesario","Preparación para la entrevista de USCIS y asistencia a ella"],
+      excludes: EXCL_STD.es,
+      fees: ["A la firma de este acuerdo","Antes de la entrevista de USCIS"] }
+  },
+  'appeal': {
+    en: { matter: 'APPEAL before the Board of Immigration Appeals (BIA)',
+      includes: ["Review of the Immigration Judge's decision and advice on appellate options","Timely filing of the Notice of Appeal (Form EOIR-26)","Preparation and filing of the appellate brief"],
+      excludes: "This contract does not include oral arguments, motions to reopen or reconsider, petitions for review before the Circuit Court, or any proceedings beyond the BIA appeal described above. It does not include extra or travel expenses. This contract only covers the hours of service.",
+      fees: ["At the signing of this agreement — Notice of Appeal","Upon filing of the appellate brief"] },
+    es: { matter: 'APELACIÓN ante la Junta de Apelaciones de Inmigración (BIA)',
+      includes: ["Revisión de la decisión del Juez de Inmigración y asesoría sobre las opciones de apelación","Presentación a tiempo de la Notificación de Apelación (Formulario EOIR-26)","Preparación y presentación del escrito de apelación"],
+      excludes: "Este contrato no incluye alegatos orales, mociones de reapertura o reconsideración, peticiones de revisión ante la Corte de Circuito, ni procedimientos más allá de la apelación ante la BIA descrita arriba. Tampoco incluye gastos extras o de viaje. Este contrato solo cubre las horas de servicio.",
+      fees: ["A la firma de este acuerdo — Notificación de Apelación","Al presentar el escrito de apelación"] }
+  },
+  'workpermit': {
+    en: { matter: 'APPLICATION FOR EMPLOYMENT AUTHORIZATION (Form I-765)',
+      includes: ["Advice on eligibility for employment authorization","Preparation and filing of Form I-765 with supporting documents","Responses to Requests for Evidence (RFEs) as necessary"],
+      excludes: EXCL_STD.en,
+      fees: ["At the signing of this agreement"] },
+    es: { matter: 'SOLICITUD DE AUTORIZACIÓN DE EMPLEO (Formulario I-765)',
+      includes: ["Asesoría sobre la elegibilidad para la autorización de empleo","Preparación y presentación del Formulario I-765 con documentos de apoyo","Respuestas a las Solicitudes de Evidencia (RFE) según sea necesario"],
+      excludes: EXCL_STD.es,
+      fees: ["A la firma de este acuerdo"] }
+  },
+  'custom': { en: { matter: '', includes: [], excludes: EXCL_STD.en, fees: [] },
+              es: { matter: '', includes: [], excludes: EXCL_STD.es, fees: [] } }
+};
+
+// "This fee does not cover" default list — from the firm's engagement letter.
+const NOTCOVER_STD = {
+  en: ["Any government filing fees (e.g., USCIS or EOIR fees)","Translation, interpretation, or certified translations of documents","Costs for mailing, courier, or copying services","Travel expenses (if in-person attendance becomes necessary)","Additional hearings, appeals, or motions beyond the services listed above","Any representation before other agencies or courts not expressly mentioned"],
+  es: ["Tarifas gubernamentales de presentación (p. ej., USCIS o EOIR)","Traducción, interpretación o traducciones certificadas de documentos","Costos de envío, mensajería o copiado","Gastos de viaje (si fuera necesaria la asistencia en persona)","Audiencias, apelaciones o mociones adicionales más allá de los servicios listados","Representación ante otras agencias o cortes no mencionadas expresamente"]
+};
+
+// ── Fixed letter text, both languages (verbatim from the firm's documents) ──
+const CTC_TXT = {
+  en: {
+    versionTag: '[English version]',
+    reContract: 'Re: Engagement Agreement',
+    reRights: "Re: Statement of Client's Rights",
+    reStmt: 'Re: Statement of Account',
+    sentTo: 'Sent by email to',
+    intro: "I am pleased that you have agreed to retain my firm as your counsel. This letter is intended to set forth the basic terms of our engagement as required by Part 1215 of Title 22 of the Official Compilations of Codes, Rules and Regulations of the State of New York.",
+    s1h: '1. Description of Engagement.',
+    s1a: function (m) { return "You have retained me to represent you in connection with your " + m + ". This contract only includes:"; },
+    s2h: '2. Fees and Disbursement Policies and Billing Practices.',
+    total: function (t) { return "The total legal fee is " + t + ", payable as follows:"; },
+    covers: 'This fee covers the following services:',
+    notCovers: 'This fee does not cover the following:',
+    disb: "In addition to services, I will bill you for all disbursements, such as filing fees, postage, federal express, messengers, traveling costs, duplicating costs, and the charges of all outside service providers such as printers, translators, interpreters, appraisers, accountants, and other experts and professionals.",
+    s3h: '3. Warnings.',
+    s3: "Please take notice that the limited scope of this representation can present some risks to you, especially regarding the lack of continuity in the representation between the lawyer that writes the appellate brief and the person that is going to perform the oral arguments. If you want the oral argument to be performed by me, that will have another basis for legal fees than the ones stated here.\nTherefore, when this matter is completed, you and I will have no continuing professional relationship unless a further written understanding concerning the additional representation of you by me is signed by both you and me.",
+    s4h: '4. Authority Allocation & Confidentiality.',
+    s4: "I will abide by the Client's decisions concerning the scope of the representation and may take such action on behalf of the Client as is impliedly authorized to carry out the representation. The communications between the Client and the Attorney will be covered by privilege and confidentiality.",
+    s5h: '5. End of Representation.',
+    s5: function (em) { return "If there is a conflict of interest between the Client and his representative regarding the documentation product of this limited scope representation, the Client would have the authority to end the representation. Client needs to inform this decision by email to " + em + ".\nYou shall have the right to terminate my representation of you at any time, but such termination shall not affect your agreement to pay for legal services and/or disbursements incurred on your behalf. Subject to applicable rules, I will also have the right to terminate our relationship and may discontinue legal services, including if my statements are not paid."; },
+    s6h: '6. Electronic Data Communication and Storage.',
+    s6: "In the interest of facilitating services to you, we may communicate with you or others by email, facsimile transmission, send data over the Internet, store electronic data via computer software applications hosted remotely on the Internet, or allow access to data through third-party vendors' portals or clouds. Electronic data that is confidential to your case may be transmitted or stored using these methods. In using these data communication and storage methods, you specifically agree and consent to the use of Gmail, Microsoft Office 365/OneDrive, Dropbox and other similar available email, internet cloud providers and portals and other electronic devices and applications. You recognize and accept that I have no control over the unauthorized interception or breach of any communications or data; however, I will take commercially reasonable efforts to keep such communications and data access secure in accordance with my obligations under applicable laws and professional standards. You should be aware that communicating on any device provided by your employer or any computer, smart phone, tablet computer or other device or account shared with someone else may limit the confidentiality of any of our communications.",
+    s7h: '7. File Retention and Destruction.',
+    s7: "After the conclusion of your matter, it is my office policy to retain your legal files for a period of 7 years after I close your file, except if I determine it is otherwise appropriate under applicable law. You grant me the right in my discretion to save your files solely in a digitalized manner. At the expiration of the 7-year period, you grant me the permission to destroy all your files unless you notify me in writing prior thereto that you wish to take possession of them; however, in my discretion I may retain your files and shall not be obligated to destroy them. I reserve the right to charge administrative fees and costs associated with researching, retrieving, copying and delivering your files.",
+    closing: "If you do wish to proceed, please sign the enclosed copy of this letter, and return it to me to confirm your agreement to the terms of our engagement. The signed document will be considered as informed consent.\nI look forward to working with you,",
+    sincerely: 'Sincerely,',
+    agreed: 'AGREED TO AND ACCEPTED:',
+    clientLbl: 'Client', dateLbl: 'Date:',
+    famLbl: 'This agreement also covers the following family members / derivatives:',
+    rights: [
+      "You are entitled to be treated with courtesy and consideration at all times by your lawyer and the other lawyers and personnel in your lawyer's office.",
+      "You are entitled to an attorney capable of handling your legal matter competently and diligently, in accordance with the highest standards of the profession. If you are not satisfied with how your matter is being handled, you have the right to withdraw from the attorney-client relationship at any time (court approval may be required in some matters, and your attorney may have a claim against you for the value of services rendered to you up to the point of discharge).",
+      "You are entitled to your lawyer's independent professional judgment and undivided loyalty uncompromised by conflicts of interest.",
+      "You are entitled to be charged a reasonable fee and to have your lawyer explain at the outset how the fee will be computed and the manner and frequency of billing. You are entitled to request and receive a written itemized bill from your attorney at reasonable intervals. You may refuse to enter into any fee arrangement that you find unsatisfactory. In the event of a fee dispute, you may have the right to seek arbitration; your attorney will provide you with the necessary information regarding arbitration in the event of a fee dispute, or upon your request.",
+      "You are entitled to have your questions and concerns addressed in a prompt manner and to have your telephone calls, emails, faxes and letters returned promptly.",
+      "You are entitled to be kept informed as to the status of your matter and to request and receive copies of papers. You are entitled to sufficient information to allow you to participate meaningfully in the development of your matter.",
+      "You are entitled to have your legitimate objectives respected by your attorney, including whether or not to settle your matter (court approval of a settlement is required in some matters).",
+      "You have the right to privacy in your dealings with your lawyer and to have your secrets and confidences preserved to the extent permitted by law.",
+      "You are entitled to have your attorney conduct himself or herself ethically in accordance with the New York Rules of Professional Conduct.",
+      "You may not be refused representation on the basis of race, creed, color, religion, sex, sexual orientation, gender identity, gender expression, age, national origin or disability."
+    ],
+    stmt: { preparedFor: 'Prepared for', asOf: 'As of', charges: 'Charges', payments: 'Payments received',
+      desc: 'Description', due: 'Due', amount: 'Amount', date: 'Date', method: 'Method', note: 'Note',
+      totalFees: 'Total legal fees', totalPaid: 'Total paid', balance: 'Balance due',
+      noCharges: 'No charges recorded.', noPayments: 'No payments recorded.' }
+  },
+  es: {
+    versionTag: '[Spanish version]',
+    reContract: 'Re: Acuerdo de Representación',
+    reRights: 'Re: Declaración de los Derechos del Cliente',
+    reStmt: 'Re: Estado de Cuenta',
+    sentTo: 'Enviado a',
+    intro: "Me complace que haya decidido contratarme como su abogado. La presente carta tiene como finalidad establecer los términos básicos de nuestra representación, conforme a la Parte 1215 del Título 22 de la Compilación Oficial de Códigos, Reglas y Reglamentos del Estado de Nueva York.",
+    s1h: '1. Descripción de la representación.',
+    s1a: function (m) { return "Usted me ha contratado para representarlo en relación con su " + m + ". Este contrato solo incluye:"; },
+    s2h: '2. Honorarios, políticas de desembolso y prácticas de facturación.',
+    total: function (t) { return "El costo total de los honorarios es de " + t + ", pagadero de la siguiente manera:"; },
+    covers: 'Estos honorarios cubren los siguientes servicios:',
+    notCovers: 'Estos honorarios no cubren lo siguiente:',
+    disb: "Además de los servicios, le facturaré todos los desembolsos, tales como tarifas de presentación, franqueo, mensajería, costos de viaje, costos de copiado y los cargos de todos los proveedores externos, tales como imprentas, traductores, intérpretes, tasadores, contadores y otros expertos y profesionales.",
+    s3h: '3. Advertencias.',
+    s3: "Tenga en cuenta que el alcance limitado de esta representación puede presentar ciertos riesgos para usted, especialmente en lo relativo a la falta de continuidad entre el abogado que redacta el escrito de apelación y la persona que realiza el alegato oral. Si desea que yo mismo realice dicho alegato, ello generará honorarios adicionales distintos a los aquí establecidos.\nPor lo tanto, al concluir este asunto, usted y yo no tendremos una relación profesional continua a menos que firmemos un nuevo acuerdo escrito que regule esa representación adicional.",
+    s4h: '4. Autoridad y confidencialidad.',
+    s4: "Respetaré las decisiones del Cliente sobre el alcance de la representación y podré tomar aquellas acciones implícitamente autorizadas para llevarla a cabo. Las comunicaciones entre Cliente y Abogado estarán protegidas por el privilegio abogado-cliente y la confidencialidad.",
+    s5h: '5. Terminación de la representación.',
+    s5: function (em) { return "En caso de surgir un conflicto de interés entre el Cliente y su representante respecto de la documentación producto de esta representación limitada, el Cliente tendrá autoridad para dar por terminada la representación. El Cliente deberá notificar esta decisión por correo electrónico a " + em + ".\nUsted tiene el derecho de terminar mi representación en cualquier momento, pero dicha terminación no lo exime de su obligación de pagar por los servicios legales y/o desembolsos ya incurridos en su nombre. Sujeto a las reglas aplicables, yo también tendré derecho a terminar nuestra relación y a suspender los servicios legales, incluyendo en caso de falta de pago de mis facturas."; },
+    s6h: '6. Comunicación y almacenamiento electrónico de datos.',
+    s6: "Para facilitar los servicios, podremos comunicarnos con usted u otros mediante correo electrónico, fax, transmisión de datos por Internet, almacenamiento en aplicaciones de software alojadas en la nube o acceso mediante portales de terceros. Datos confidenciales de su caso podrán transmitirse o almacenarse por estos medios. Al aceptarlo, usted consiente el uso de Gmail, Microsoft Office 365/OneDrive, Dropbox y otros proveedores similares de correo y nube. Usted reconoce que no tengo control sobre intercepciones no autorizadas o vulneraciones de seguridad; no obstante, tomaré medidas comercialmente razonables para mantener la seguridad conforme a la ley y los estándares profesionales. Debe estar consciente de que usar dispositivos proporcionados por su empleador o compartidos con otras personas puede limitar la confidencialidad de nuestras comunicaciones.",
+    s7h: '7. Conservación y destrucción de archivos.',
+    s7: "Una vez concluido su asunto, la política de mi oficina es conservar sus expedientes legales durante 7 años desde el cierre del caso, salvo que la ley disponga otra cosa. Usted me otorga el derecho de conservarlos únicamente en formato digital. Transcurrido el período de 7 años, me autoriza a destruir sus archivos salvo que me notifique por escrito que desea retirarlos; sin embargo, a mi discreción, puedo conservarlos y no estoy obligado a destruirlos. Me reservo el derecho de cobrar tarifas administrativas por la búsqueda, copia y entrega de sus archivos.",
+    closing: "Si desea continuar, por favor firme la copia adjunta de esta carta y devuélvamela para confirmar su aceptación de los términos de nuestra representación. El documento firmado se considerará consentimiento informado.\nEspero trabajar con usted.",
+    sincerely: 'Atentamente,',
+    agreed: 'ACEPTADO Y ACORDADO:',
+    clientLbl: 'Cliente', dateLbl: 'Fecha:',
+    famLbl: 'Este acuerdo también cubre a los siguientes familiares / derivados:',
+    rights: [
+      "Derecho a recibir trato cordial y considerado de su abogado y de todo el personal en su despacho.",
+      "Derecho al manejo competente y diligente de sus asuntos legales, conforme a los altos criterios de la profesión. Si no le satisface el manejo de su caso, tiene derecho a despedir a su abogado y revocar el vínculo entre abogado y cliente en cualquier momento (algunos casos requieren previa aprobación del juez, y su abogado puede hacer reclamos en contra suya por honorarios de servicios prestados hasta esa fecha).",
+      "Derecho a recibir asesoría profesional e imparcial de su abogado, y plena lealtad inafectada por conflictos de interés.",
+      "Derecho a que se le cobren honorarios y tarifas razonables. Antes o al comienzo de su representación legal, usted tiene derecho de recibir explicación detallada sobre cómo su abogado calcula los honorarios y gastos, incluyendo el esquema de facturación, el método, y la frecuencia de los pagos. Usted tiene derecho a solicitar y recibir facturas desglosadas a intervalos razonables. Usted puede negarse a concertar todo acuerdo de honorarios y gastos que no le complazca. Puede solicitar arbitraje en caso de alguna disputa sobre honorarios. Ya sea por petición suya o en caso de alguna disputa por honorarios, su abogado le ofrecerá la información necesaria respecto al arbitraje.",
+      "Derecho a la pronta respuesta de sus preguntas e inquietudes, ya sea por correo postal, llamadas telefónicas, correos electrónicos, faxes u otros medios de comunicación.",
+      "Derecho a recibir información actualizada sobre el estado de su caso, y a recibir puntuales respuestas a toda solicitud razonable de información, incluyendo solicitudes de copias y documentos relevantes. Usted tiene derecho a recibir suficiente información, lo cual facilita la toma de decisiones fundamentadas y su participación sustanciosa en el desarrollo del caso.",
+      "Derecho a que su abogado respete sus objetivos legítimos. Particularmente la decisión de llegar a un acuerdo judicial, esta decisión es suya, no de su abogado. (Algunos convenios requieren previa aprobación del juez.)",
+      "Derecho a la comunicación privada entre usted y su abogado, y a que su abogado trate su información de forma confidencial en la medida exigida por la ley.",
+      "Derecho al comportamiento ético de su abogado conforme al Código de Conducta Profesional del estado de Nueva York.",
+      "No deben negarle representación legal por su raza, credo, color, religión, sexo, orientación sexual, identidad de género, expresión de género, edad, origen nacional o discapacidad."
+    ],
+    stmt: { preparedFor: 'Preparado para', asOf: 'Al', charges: 'Cargos', payments: 'Pagos recibidos',
+      desc: 'Descripción', due: 'Vence', amount: 'Monto', date: 'Fecha', method: 'Método', note: 'Nota',
+      totalFees: 'Total de honorarios', totalPaid: 'Total pagado', balance: 'Saldo pendiente',
+      noCharges: 'Sin cargos registrados.', noPayments: 'Sin pagos registrados.' }
+  }
+};
+
+// ── State ──
+let feeRows = [];   // {desc, amount, due}
+let payRows = [];   // {date, amount, method, note}
+let _ctcClid = null, _ctcLoading = false, _ctcSaveTimer = null;
+const STANDALONE = (function () { try { return window.parent === window; } catch (e) { return true; } })();
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function money(n) { const v = parseFloat(n); return '$' + (isFinite(v) ? v : 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+function niceDate(iso, lang) {
+  if (!iso) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  try { return d.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' }); } catch (e) { return iso; }
+}
+function lines(id) { return $(id).value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean); }
+
+// ── Tabs ──
+function ctcTab(name) {
+  ['details', 'scope', 'fees', 'doc'].forEach(function (t) {
+    $('page-' + t).style.display = (t === name) ? '' : 'none';
+  });
+  document.querySelectorAll('.tab').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === name); });
+  if (name === 'doc') ctcRenderDoc();
+}
+
+// ── Fee / payment rows ──
+function ctcAddFee(row) { feeRows.push(row || { desc: '', amount: '', due: '' }); renderFees(); sched(); }
+function ctcAddPay(row) { payRows.push(row || { date: new Date().toISOString().slice(0, 10), amount: '', method: '', note: '' }); renderPays(); sched(); }
+function ctcDelFee(i) { feeRows.splice(i, 1); renderFees(); sched(); }
+function ctcDelPay(i) { payRows.splice(i, 1); renderPays(); sched(); }
+function ctcFeeEdit(i, k, v) { if (feeRows[i]) { feeRows[i][k] = v; updateTotals(); sched(); } }
+function ctcPayEdit(i, k, v) { if (payRows[i]) { payRows[i][k] = v; updateTotals(); sched(); } }
+
+function renderFees() {
+  $('fee-rows').innerHTML = feeRows.map(function (r, i) {
+    return '<tr>' +
+      '<td><input type="text" value="' + esc(r.desc) + '" oninput="ctcFeeEdit(' + i + ',\'desc\',this.value)"></td>' +
+      '<td><input type="number" min="0" step="50" value="' + esc(r.amount) + '" oninput="ctcFeeEdit(' + i + ',\'amount\',this.value)"></td>' +
+      '<td><input type="text" value="' + esc(r.due) + '" placeholder="e.g. at signing / 2026-08-01" oninput="ctcFeeEdit(' + i + ',\'due\',this.value)"></td>' +
+      '<td><button class="row-x" title="Remove" onclick="ctcDelFee(' + i + ')">✕</button></td></tr>';
+  }).join('') || '<tr><td colspan="4"><span class="empty-note">No fees yet — add an installment below, or fill from a template on the Representation tab.</span></td></tr>';
+  updateTotals();
+}
+function renderPays() {
+  $('pay-rows').innerHTML = payRows.map(function (r, i) {
+    return '<tr>' +
+      '<td><input type="date" value="' + esc(r.date) + '" oninput="ctcPayEdit(' + i + ',\'date\',this.value)"></td>' +
+      '<td><input type="number" min="0" step="50" value="' + esc(r.amount) + '" oninput="ctcPayEdit(' + i + ',\'amount\',this.value)"></td>' +
+      '<td><input type="text" value="' + esc(r.method) + '" placeholder="Cash / Zelle / Check…" oninput="ctcPayEdit(' + i + ',\'method\',this.value)"></td>' +
+      '<td><input type="text" value="' + esc(r.note) + '" oninput="ctcPayEdit(' + i + ',\'note\',this.value)"></td>' +
+      '<td><button class="row-x" title="Remove" onclick="ctcDelPay(' + i + ')">✕</button></td></tr>';
+  }).join('') || '<tr><td colspan="5"><span class="empty-note">No payments recorded yet.</span></td></tr>';
+  updateTotals();
+}
+function sumRows(rows) { return rows.reduce(function (t, r) { const v = parseFloat(r.amount); return t + (isFinite(v) ? v : 0); }, 0); }
+function updateTotals() {
+  const f = sumRows(feeRows), p = sumRows(payRows);
+  $('tot-fees').textContent = money(f);
+  $('tot-paid').textContent = money(p);
+  $('tot-due').textContent = money(Math.max(0, f - p));
+}
+
+// ── Presets ──
+function ctcGuessPreset(caseType) {
+  const t = String(caseType || '').toLowerCase();
+  if (t.indexOf('asylum') >= 0) return 'asylum-court';
+  if (t.indexOf('juvenile') >= 0 || t.indexOf('sij') >= 0) return 'sij';
+  if (t.indexOf('bond') >= 0) return 'bond';
+  if (t.indexOf('terminat') >= 0) return 'motion-terminate';
+  if (t.indexOf('adjust') >= 0 || t.indexOf('485') >= 0) return 'aos';
+  if (t.indexOf('appeal') >= 0 || t.indexOf('bia') >= 0) return 'appeal';
+  if (t.indexOf('work') >= 0 || t.indexOf('765') >= 0) return 'workpermit';
+  if (t.indexOf('master') >= 0 || t.indexOf('prelim') >= 0) return 'master';
+  return 'custom';
+}
+// Which language the editable text is drafted in. "both"/"es" → Spanish first,
+// matching how the firm sends its letters.
+function draftLang() { return ($('d-lang').value === 'en') ? 'en' : 'es'; }
+// Fill matter/includes/excludes (+ fee-row skeleton and not-covered list) from
+// the selected template. `manual` = user clicked, so confirm before overwriting.
+function ctcApplyPreset(manual) {
+  const key = $('s-preset').value;
+  const p = CTC_PRESETS[key] || CTC_PRESETS.custom;
+  const lang = draftLang();
+  const L = p[lang] || p.en;
+  if (manual && ($('s-matter').value.trim() || $('s-includes').value.trim())) {
+    if (!confirm('Replace the current description of the representation with the "' + key + '" template?')) return;
+  }
+  $('s-matter').value = L.matter || '';
+  $('s-includes').value = (L.includes || []).join('\n');
+  $('s-excludes').value = L.excludes || '';
+  if (!$('s-notcover').value.trim()) $('s-notcover').value = NOTCOVER_STD[lang].join('\n');
+  if (L.fees && L.fees.length && (manual || !feeRows.length)) {
+    feeRows = L.fees.map(function (d) { return { desc: d, amount: '', due: '' }; });
+    renderFees();
+  }
+  sched();
+}
+
+// ── Serialize / apply ──
+const FIELD_IDS = ['f-firm', 'f-atty', 'f-email', 'f-phone',
+  'c-salut', 'c-name', 'c-anum', 'c-email', 'c-phone', 'c-clid', 'c-date', 'c-casetype', 'c-family',
+  's-preset', 's-matter', 's-includes', 's-excludes', 's-covers', 's-notcover', 't-extra', 'd-type', 'd-lang'];
+const CHECK_IDS = ['t-warn', 't-auth', 't-endrep', 't-edata', 't-retain', 't-disb'];
+
+function ctcGetState() {
+  const s = { v: 2, fields: {}, checks: {}, feeRows: feeRows, payRows: payRows };
+  FIELD_IDS.forEach(function (id) { s.fields[id] = $(id).value; });
+  CHECK_IDS.forEach(function (id) { s.checks[id] = $(id).checked; });
+  return s;
+}
+function ctcApplyState(s) {
+  if (!s) return;
+  const f = s.fields || {}, c = s.checks || {};
+  FIELD_IDS.forEach(function (id) { if (f[id] != null) $(id).value = f[id]; });
+  CHECK_IDS.forEach(function (id) { if (c[id] != null) $(id).checked = !!c[id]; });
+  feeRows = Array.isArray(s.feeRows) ? s.feeRows : [];
+  payRows = Array.isArray(s.payRows) ? s.payRows : [];
+  renderFees(); renderPays();
+}
+function ctcApplyPrefill(p) {
+  if (!p) return;
+  const cl = p.client || {};
+  $('c-name').value = cl.full || '';
+  $('c-anum').value = cl.anum || '';
+  $('c-email').value = cl.email || '';
+  $('c-phone').value = cl.phone || '';
+  $('c-clid').value = p.clid || '';
+  $('c-casetype').value = p.caseType || '';
+  $('c-family').value = (p.respondents || []).map(function (r) {
+    return [r.name, r.anum ? 'A# ' + r.anum : '', r.relationship].filter(Boolean).join(' — ');
+  }).join('\n');
+  $('s-preset').value = ctcGuessPreset(p.caseType);
+  ctcApplyPreset(false);
+}
+
+// ── Persist: post to parent (case tracker) or localStorage when standalone ──
+function sched() {
+  if (_ctcLoading) return;
+  clearTimeout(_ctcSaveTimer);
+  _ctcSaveTimer = setTimeout(ctcSaveNow, 700);
+}
+function ctcSaveNow() {
+  clearTimeout(_ctcSaveTimer);
+  const state = ctcGetState();
+  if (STANDALONE) {
+    try { localStorage.setItem('ctc-standalone-state', JSON.stringify(state)); } catch (e) {}
+  } else {
+    try { window.parent.postMessage({ type: 'ctc-state', clid: _ctcClid, state: state }, '*'); } catch (e) {}
+  }
+  const b = $('save-btn');
+  b.classList.add('saved'); b.textContent = '✓ Saved';
+  setTimeout(function () { b.classList.remove('saved'); b.textContent = 'Save'; }, 1600);
+}
+document.addEventListener('input', function (e) { if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) sched(); });
+
+// ══════════════ DOCUMENT BUILDER ══════════════
+// The letters use plain paragraph styling (Word-safe inline markup only).
+function P(txt, style) { return '<p style="margin:9px 0;text-align:justify;' + (style || '') + '">' + txt + '</p>'; }
+function multiP(txt) { return String(txt).split('\n').map(function (t) { return P(esc(t)); }).join(''); }
+function H(txt) { return P('<strong>' + esc(txt) + '</strong>', 'margin-top:13px;'); }
+
+function docVals() {
+  return {
+    firm: $('f-firm').value.trim(), atty: $('f-atty').value.trim(),
+    fEmail: $('f-email').value.trim(), fPhone: $('f-phone').value.trim(),
+    salut: $('c-salut').value.trim(), name: $('c-name').value.trim(),
+    anum: $('c-anum').value.trim(), email: $('c-email').value.trim(),
+    clid: $('c-clid').value.trim(), date: $('c-date').value,
+    matter: $('s-matter').value.trim(),
+    includes: lines('s-includes'), excludes: $('s-excludes').value.trim(),
+    covers: lines('s-covers'), notcover: lines('s-notcover'),
+    family: lines('c-family'), extra: lines('t-extra')
+  };
+}
+// Letter header: attorney block left, date right, then the client block —
+// exactly like the firm's letters.
+function headerHtml(v, lang) {
+  const T = CTC_TXT[lang];
+  let h = '<table style="width:100%;border-collapse:collapse;"><tr>' +
+    '<td style="vertical-align:top;">' +
+    (v.firm ? '<strong>' + esc(v.firm) + '</strong><br>' : '') +
+    esc(v.atty || 'Wilmer Gonzalez Colina, Esq.') + '<br>' +
+    '<u>' + esc(v.fEmail) + '</u><br>' + esc(v.fPhone) +
+    '</td>' +
+    '<td style="vertical-align:top;text-align:right;">' + esc(v.date ? niceDate(v.date, lang) : '') + '</td>' +
+    '</tr></table>';
+  const who = [v.salut, v.name || '_________________________'].filter(Boolean).join(' ');
+  h += '<p style="margin:22px 0 4px;">' + esc(who) +
+    (v.anum ? '<br>A ' + esc(v.anum) : '') +
+    (v.clid ? '<br>Client ID ' + esc(v.clid) : '') +
+    (v.email ? '<br>' + T.sentTo + ' ' + esc(v.email) : '') + '</p>';
+  return h;
+}
+function letterListHtml(items, lettered) {
+  return '<ul style="margin:6px 0 10px 30px;' + (lettered ? 'list-style-type:lower-alpha;' : '') + '">' +
+    items.map(function (t) { return '<li style="margin:4px 0;text-align:justify;">' + esc(t) + '</li>'; }).join('') + '</ul>';
+}
+// One language version of the Engagement Agreement.
+function contractVersion(v, lang, showTag) {
+  const T = CTC_TXT[lang];
+  let h = headerHtml(v, lang);
+  if (showTag) h += P(esc(T.versionTag), 'text-align:center;margin:14px 0 4px;');
+  h += P('<strong>' + esc(T.reContract) + '</strong>', 'margin-top:14px;');
+  h += P(esc(T.intro));
+  // §1 description
+  h += H(T.s1h);
+  h += P(esc(T.s1a(v.matter || '____________________')));
+  if (v.includes.length) h += letterListHtml(v.includes, true);
+  if (v.excludes) h += multiP(v.excludes);
+  if (v.family.length) { h += P(esc(T.famLbl)); h += letterListHtml(v.family, false); }
+  // §2 fees
+  h += H(T.s2h);
+  const rows = feeRows.filter(function (r) { return (r.desc || '').trim() || r.amount; });
+  if (rows.length) {
+    h += P(esc(T.total(money(sumRows(feeRows)))));
+    h += letterListHtml(rows.map(function (r) {
+      const due = (r.due || '').trim();
+      return (r.amount !== '' ? money(r.amount) + ' — ' : '') + (r.desc || '') +
+        (due ? (lang === 'es' ? ' (vence: ' : ' (due: ') + (/^\d{4}-\d{2}-\d{2}$/.test(due) ? niceDate(due, lang) : due) + ')' : '');
+    }), false);
+  }
+  if (v.covers.length) { h += P(esc(T.covers)); h += letterListHtml(v.covers, false); }
+  if (v.notcover.length) { h += P(esc(T.notCovers)); h += letterListHtml(v.notcover, false); }
+  if ($('t-disb').checked) h += P(esc(T.disb));
+  // §§3–7
+  if ($('t-warn').checked) { h += H(T.s3h); h += multiP(T.s3); }
+  if ($('t-auth').checked) { h += H(T.s4h); h += multiP(T.s4); }
+  if ($('t-endrep').checked) { h += H(T.s5h); h += multiP(T.s5(v.fEmail || 'wilmerdgcolina@gmail.com')); }
+  if ($('t-edata').checked) { h += H(T.s6h); h += multiP(T.s6); }
+  if ($('t-retain').checked) { h += H(T.s7h); h += multiP(T.s7); }
+  v.extra.forEach(function (x) { h += P(esc(x)); });
+  // closing + signatures
+  h += multiP(T.closing);
+  h += P(esc(T.sincerely), 'margin-top:16px;');
+  h += P('_____________________________<br>' + esc(v.atty || 'Wilmer Gonzalez, Esq.'), 'margin-top:34px;');
+  h += P('<strong>' + esc(T.agreed) + '</strong>', 'margin-top:26px;');
+  h += P('_____________________________ &nbsp;&nbsp; ' + esc(T.dateLbl) + ' ________________<br>' +
+    esc(T.clientLbl) + (v.name ? ' — ' + esc(v.name) : ''), 'margin-top:30px;');
+  return h;
+}
+// One language version of the Statement of Client's Rights.
+function rightsVersion(v, lang, showTag) {
+  const T = CTC_TXT[lang];
+  let h = headerHtml(v, lang);
+  if (showTag) h += P(esc(T.versionTag), 'text-align:center;margin:14px 0 4px;');
+  h += P('<strong>' + esc(T.reRights) + '</strong>', 'margin-top:14px;');
+  h += '<ol style="margin:10px 0 10px 30px;">' +
+    T.rights.map(function (t) { return '<li style="margin:8px 0;text-align:justify;">' + esc(t) + '</li>'; }).join('') + '</ol>';
+  return h;
+}
+// Account statement — charges vs. payments and the running balance.
+function statementVersion(v, lang) {
+  const T = CTC_TXT[lang], S = T.stmt;
+  const today = new Date().toISOString().slice(0, 10);
+  let h = headerHtml(v, lang);
+  h += P('<strong>' + esc(T.reStmt) + '</strong>', 'margin-top:14px;');
+  h += P(esc(S.asOf) + ' ' + esc(niceDate(today, lang)) + (v.matter ? ' · ' + esc(v.matter) : ''));
+  const th = 'border-bottom:1.5px solid #111;text-align:left;padding:4px 6px;font-size:10pt;text-transform:uppercase;';
+  const td = 'border-bottom:1px solid #bbb;padding:5px 6px;';
+  const amt = 'text-align:right;white-space:nowrap;';
+  h += H(S.charges);
+  const rows = feeRows.filter(function (r) { return (r.desc || '').trim() || r.amount; });
+  if (!rows.length) h += P('<em>' + esc(S.noCharges) + '</em>');
+  else {
+    h += '<table style="width:100%;border-collapse:collapse;margin:8px 0 12px;font-size:11pt;">' +
+      '<tr><th style="' + th + '">' + S.desc + '</th><th style="' + th + '">' + S.due + '</th><th style="' + th + amt + '">' + S.amount + '</th></tr>' +
+      rows.map(function (r) {
+        return '<tr><td style="' + td + '">' + esc(r.desc) + '</td><td style="' + td + '">' + esc(/^\d{4}-\d{2}-\d{2}$/.test(r.due) ? niceDate(r.due, lang) : r.due) + '</td><td style="' + td + amt + '">' + (r.amount !== '' ? money(r.amount) : '') + '</td></tr>';
+      }).join('') +
+      '<tr><td colspan="2" style="border-top:2px solid #111;padding:5px 6px;font-weight:bold;">' + S.totalFees + '</td><td style="border-top:2px solid #111;padding:5px 6px;font-weight:bold;' + amt + '">' + money(sumRows(feeRows)) + '</td></tr></table>';
+  }
+  h += H(S.payments);
+  const pays = payRows.filter(function (r) { return r.amount || (r.note || '').trim(); });
+  if (!pays.length) h += P('<em>' + esc(S.noPayments) + '</em>');
+  else {
+    h += '<table style="width:100%;border-collapse:collapse;margin:8px 0 12px;font-size:11pt;">' +
+      '<tr><th style="' + th + '">' + S.date + '</th><th style="' + th + '">' + S.method + '</th><th style="' + th + '">' + S.note + '</th><th style="' + th + amt + '">' + S.amount + '</th></tr>' +
+      pays.map(function (r) {
+        return '<tr><td style="' + td + '">' + esc(niceDate(r.date, lang)) + '</td><td style="' + td + '">' + esc(r.method) + '</td><td style="' + td + '">' + esc(r.note) + '</td><td style="' + td + amt + '">' + money(r.amount) + '</td></tr>';
+      }).join('') +
+      '<tr><td colspan="3" style="border-top:2px solid #111;padding:5px 6px;font-weight:bold;">' + S.totalPaid + '</td><td style="border-top:2px solid #111;padding:5px 6px;font-weight:bold;' + amt + '">' + money(sumRows(payRows)) + '</td></tr></table>';
+  }
+  h += P('<strong>' + esc(S.balance) + ': ' + money(Math.max(0, sumRows(feeRows) - sumRows(payRows))) + '</strong>', 'font-size:13pt;margin-top:14px;');
+  return h;
+}
+const PAGE_BREAK = '<div style="page-break-before:always;margin-top:40px;border-top:1px dashed #ccc;"></div>';
+function currentDocHtml() {
+  const v = docVals();
+  const type = $('d-type').value, langSel = $('d-lang').value;
+  const langs = (langSel === 'both') ? ['es', 'en'] : [langSel];
+  const both = langs.length > 1;
+  if (type === 'statement') return statementVersion(v, langs[0] === 'en' ? 'en' : (langSel === 'both' ? 'es' : langs[0]));
+  const build = (type === 'rights') ? rightsVersion : contractVersion;
+  return langs.map(function (l) { return build(v, l, both); }).join(PAGE_BREAK);
+}
+function ctcRenderDoc() { $('doc-preview').innerHTML = currentDocHtml(); }
+
+const SHEET_CSS = 'body{font-family:Garamond,Georgia,"Times New Roman",serif;font-size:12pt;line-height:1.45;color:#111;margin:0.85in 0.95in;}';
+
+function docTitleAndFile() {
+  const v = docVals();
+  const type = $('d-type').value;
+  const names = { contract: ['Engagement Agreement', 'Contract'], rights: ["Statement of Client's Rights", 'Clients Rights'], statement: ['Account Statement', 'Statement'] };
+  const n = names[type] || names.contract;
+  const who = v.name || 'Client';
+  const safe = who.replace(/[\\/:*?"<>|]+/g, ' ').trim();
+  return { title: n[0] + ' — ' + who, filename: n[1] + ' - ' + safe + ' - ' + new Date().toISOString().slice(0, 10) + '.doc', kind: n[0] };
+}
+function ctcPrint() {
+  const w = window.open('', '_blank');
+  if (!w) { alert('Pop-up blocked — allow pop-ups to print.'); return; }
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(docTitleAndFile().title) + '</title><style>' + SHEET_CSS + '</style></head><body>' + currentDocHtml() + '</body></html>');
+  w.document.close();
+  setTimeout(function () { try { w.focus(); w.print(); } catch (e) {} }, 250);
+}
+function ctcDownloadDoc() {
+  const meta = docTitleAndFile();
+  const html = '﻿<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>' + esc(meta.title) + '</title><style>' + SHEET_CSS + '</style></head><body>' + currentDocHtml() + '</body></html>';
+  const blob = new Blob([html], { type: 'application/msword' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = meta.filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 400);
+  if (!STANDALONE) { try { window.parent.postMessage({ type: 'ctc-doc', clid: _ctcClid, info: meta }, '*'); } catch (e) {} }
+}
+function ctcCopyText() {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = currentDocHtml();
+  tmp.querySelectorAll('li').forEach(function (li) { li.textContent = '• ' + li.textContent + '\n'; });
+  tmp.querySelectorAll('p,div,td').forEach(function (el) { el.appendChild(document.createTextNode('\n')); });
+  const text = tmp.textContent.replace(/\n{3,}/g, '\n\n').trim();
+  (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(
+    function () { alert('Document text copied.'); },
+    function () { window.prompt('Copy the document text:', text); }
+  );
+}
+
+// ── Handshake with the case tracker (mirrors the Master Hearing Prep bridge) ──
+window.addEventListener('message', function (e) {
+  const d = e.data || {};
+  if (d.type !== 'ctc-load') return;
+  _ctcLoading = true;
+  _ctcClid = d.clid || null;
+  try {
+    if (d.state) { ctcApplyState(d.state); }
+    else if (d.prefill) { ctcApplyPrefill(d.prefill); }
+  } catch (err) { try { console.warn('[ctc-bridge] load failed', err); } catch (e2) {} }
+  setTimeout(function () { _ctcLoading = false; }, 60);
+});
+window.addEventListener('load', function () {
+  $('c-date').value = new Date().toISOString().slice(0, 10);
+  renderFees(); renderPays();
+  if (STANDALONE) {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem('ctc-standalone-state') || 'null'); } catch (e) {}
+    _ctcLoading = true;
+    if (saved) ctcApplyState(saved);
+    else { $('s-excludes').value = EXCL_STD.es; $('s-notcover').value = NOTCOVER_STD.es.join('\n'); }
+    setTimeout(function () { _ctcLoading = false; }, 60);
+  } else {
+    try { window.parent.postMessage({ type: 'ctc-ready' }, '*'); } catch (e) {}
+  }
+});
+</script>
+</body>
+</html>
