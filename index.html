@@ -15301,6 +15301,7 @@ function renderBriefGenerator(){
     <div id="bg-doctype" style="display:flex;gap:8px;margin-bottom:18px;">
       <button id="bg-dt-motion" type="button" onclick="_briefSetDocType('motion')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--sage);border-radius:20px;background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Motion / Brief</button>
       <button id="bg-dt-witness" type="button" onclick="_briefSetDocType('witness')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Witness List</button>
+      <button id="bg-dt-asylumfee" type="button" onclick="_briefSetDocType('asylumfee')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Asylum Fee</button>
     </div>
 
     <!-- Case picker -->
@@ -15329,6 +15330,9 @@ function renderBriefGenerator(){
 
     <!-- Witness List mode -->
     <div id="bg-witness-panel" style="display:none;"></div>
+
+    <!-- Asylum Fee mode -->
+    <div id="bg-asylumfee-panel" style="display:none;"></div>
   `;
   window._briefClid = null;
   window._briefValues = {};
@@ -15337,6 +15341,7 @@ function renderBriefGenerator(){
     window._witnesses = [_blankWitness()];
   }
   if(!window._wlOpts) window._wlOpts = { cover:true, cert:true };
+  if(!window._afOpts) window._afOpts = { feeType:'initial', receipt:'', cover:true, cert:true };
   _briefRenderForm();
 }
 
@@ -15347,20 +15352,23 @@ function _blankWitness(){
   return { name:'', role:'', residence:'', summary:'', language:'', length:'', phone:'', other:'', videoMotion:false };
 }
 
-// Switch the creator between Motion/Brief mode and Witness List mode. The
-// case picker at the top is shared (it pre-fills the respondent caption +
-// filename for the witness list too); only the form body and the Generate
-// button swap out.
+// Switch the creator between Motion/Brief mode, Witness List mode and
+// Asylum Fee mode. The case picker at the top is shared (it pre-fills the
+// respondent caption + filename for every mode); only the form body and
+// the Generate button swap out.
 function _briefSetDocType(type){
   window._briefDocType = type;
   const isWitness = type === 'witness';
+  const isAsylumFee = type === 'asylumfee';
+  const isMotion = !isWitness && !isAsylumFee;
   const show = (id, on) => { const el = document.getElementById(id); if(el) el.style.display = on ? '' : 'none'; };
-  show('bg-form', !isWitness);
-  show('bg-motion-generate', !isWitness);
+  show('bg-form', isMotion);
+  show('bg-motion-generate', isMotion);
   show('bg-witness-panel', isWitness);
+  show('bg-asylumfee-panel', isAsylumFee);
   // Multi-respondent picker / paper-file warning are motion concepts —
-  // keep them out of the witness view.
-  if(isWitness){
+  // keep them out of the witness / asylum-fee views.
+  if(!isMotion){
     show('bg-respondents-panel', false);
     show('bg-paper-warn', false);
   } else {
@@ -15371,15 +15379,14 @@ function _briefSetDocType(type){
     }
   }
   // Tab button styling.
-  const mBtn = document.getElementById('bg-dt-motion');
-  const wBtn = document.getElementById('bg-dt-witness');
-  if(mBtn && wBtn){
-    const active = 'font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--sage);border-radius:20px;background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;';
-    const idle   = 'font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;';
-    mBtn.style.cssText = isWitness ? idle : active;
-    wBtn.style.cssText = isWitness ? active : idle;
-  }
+  const active = 'font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--sage);border-radius:20px;background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;';
+  const idle   = 'font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;';
+  const style = (id, on) => { const b = document.getElementById(id); if(b) b.style.cssText = on ? active : idle; };
+  style('bg-dt-motion', isMotion);
+  style('bg-dt-witness', isWitness);
+  style('bg-dt-asylumfee', isAsylumFee);
   if(isWitness) _renderWitnessPanel();
+  if(isAsylumFee) _renderAsylumFeePanel();
 }
 
 // ── Witness List editor ────────────────────────────────────────────
@@ -15482,6 +15489,50 @@ function _witnessGoToVideoMotion(i){
   if(status){ status.textContent = 'Motion for Video Appearance pre-filled from the case — review the fields and click Generate.'; status.style.color = 'var(--ink-muted)'; }
   const form = document.getElementById('bg-form');
   if(form && form.scrollIntoView) form.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+// ── Asylum Fee editor ──────────────────────────────────────────────
+// A short filing package for the EOIR asylum fee: a cover letter to the
+// Immigration Judge (same motion-style caption used by the Witness List
+// cover letter) enclosing proof of payment of the Initial or Annual
+// Asylum Fee, plus a certificate of service. Deliberately NO proposed
+// order and NO attorney affirmation — the fee filing doesn't need them.
+function _renderAsylumFeePanel(){
+  const panel = document.getElementById('bg-asylumfee-panel');
+  if(!panel) return;
+  if(!window._afOpts) window._afOpts = { feeType:'initial', receipt:'', cover:true, cert:true };
+  const o = window._afOpts;
+  panel.innerHTML = `
+    <div style="font-size:12px;color:var(--ink-muted);margin-bottom:14px;line-height:1.5;">Pick a case above to caption the document, choose the fee type, then Generate. The package is a <b>cover letter</b> enclosing the proof of payment plus a <b>certificate of service</b> — no proposed order or attorney affirmation is included.</div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px;padding:10px 14px;background:var(--cream);border-radius:var(--radius-md);border:1px solid var(--border);">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;font-weight:600;">
+        <input type="radio" name="af-feetype" value="initial" ${o.feeType!=='annual'?'checked':''} onchange="window._afOpts.feeType='initial'" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Initial Asylum Fee
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;font-weight:600;">
+        <input type="radio" name="af-feetype" value="annual" ${o.feeType==='annual'?'checked':''} onchange="window._afOpts.feeType='annual'" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Annual Asylum Fee
+      </label>
+    </div>
+    <div style="margin-bottom:16px;max-width:420px;">
+      <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">Payment receipt number (optional)</label>
+      <input type="text" value="${escHtml(o.receipt||'')}" placeholder="e.g. Pay.gov receipt / tracking ID" oninput="window._afOpts.receipt=this.value"
+        style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+    </div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px;padding:10px 14px;background:var(--cream);border-radius:var(--radius-md);border:1px solid var(--border);">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.cover?'checked':''} onchange="window._afOpts.cover=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include cover letter
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.cert?'checked':''} onchange="window._afOpts.cert=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include certificate of service
+      </label>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <button type="button" onclick="generateAsylumFee()" id="bg-asylumfee-btn" style="font-size:13px;font-weight:600;padding:9px 22px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Generate .docx</button>
+      <span id="bg-asylumfee-status" style="font-size:11px;color:var(--ink-muted);"></span>
+    </div>`;
 }
 
 // Return suggestions for a field — case-derived where it makes sense
@@ -16419,6 +16470,212 @@ async function generateWitnessList(){
     setStatus('✓ Downloaded — open it in Word to review.', false);
   }catch(e){
     console.error('generateWitnessList', e);
+    setStatus('Failed: ' + (e && e.message ? e.message : 'unknown error'), true);
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = 'Generate .docx'; }
+  }
+}
+
+// ── Asylum Fee generator ───────────────────────────────────────────
+// Builds the Initial / Annual Asylum Fee filing package from scratch with
+// JSZip (same approach as the Witness List): a cover letter to the
+// Immigration Judge — led by the EOIR court caption used by the
+// motion-webex template — enclosing the proof of payment, then a
+// certificate of service on its own page. No proposed order and no
+// attorney affirmation, by design.
+async function generateAsylumFee(){
+  const btn = document.getElementById('bg-asylumfee-btn');
+  const status = document.getElementById('bg-asylumfee-status');
+  const setStatus = (msg, err) => { if(status){ status.textContent = msg; status.style.color = err ? '#B85C5C' : 'var(--sage)'; } };
+  if(typeof JSZip === 'undefined'){ setStatus('JSZip not loaded — refresh the page and try again.', true); return; }
+  const opts = window._afOpts || { feeType:'initial', receipt:'', cover:true, cert:true };
+  if(!opts.cover && !opts.cert){ setStatus('Check at least the cover letter or the certificate of service.', true); return; }
+  const v = window._briefValues || {};
+  const respLine = (v.field5 || '').split('\n')[0].trim();
+  if(!respLine){ setStatus('Pick a case first so the letter is captioned.', true); return; }
+  if(btn){ btn.disabled = true; btn.textContent = 'Generating…'; }
+  setStatus('', false);
+  try{
+    const esc = (typeof _escXml === 'function') ? _escXml : (s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+    const run = (text, opt) => {
+      const o = opt || {};
+      const rpr = (o.bold ? '<w:b/>' : '') + (o.underline ? '<w:u w:val="single"/>' : '')
+        + (o.sz ? '<w:sz w:val="' + o.sz + '"/><w:szCs w:val="' + o.sz + '"/>' : '');
+      const parts = String(text==null?'':text).split('\n');
+      const runs = parts.map(p => '<w:t xml:space="preserve">' + esc(p) + '</w:t>').join('<w:br/>');
+      return '<w:r>' + (rpr ? '<w:rPr>' + rpr + '</w:rPr>' : '') + runs + '</w:r>';
+    };
+    const para = (inner, opt) => {
+      const o = opt || {};
+      const ind = (o.left != null || o.hanging != null)
+        ? '<w:ind' + (o.left != null ? ' w:left="' + o.left + '"' : '') + (o.hanging != null ? ' w:hanging="' + o.hanging + '"' : '') + '/>'
+        : '';
+      const ppr = (o.jc ? '<w:jc w:val="' + o.jc + '"/>' : '') + ind + (o.after != null ? '<w:spacing w:after="' + o.after + '"/>' : '');
+      return '<w:p>' + (ppr ? '<w:pPr>' + ppr + '</w:pPr>' : '') + (inner || '') + '</w:p>';
+    };
+    const tcell = (w, inner, borders) => '<w:tc><w:tcPr><w:tcW w:w="' + w + '" w:type="dxa"/>'
+      + (borders ? '<w:tcBorders>' + borders + '</w:tcBorders>' : '') + '</w:tcPr>' + (inner || para('')) + '</w:tc>';
+
+    const anum = (v.field6 || '').trim();
+    const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
+    const respWord = plural ? 'Respondents' : 'Respondent';
+    const addr = (typeof _briefSplitAddr === 'function') ? _briefSplitAddr(v.field4 || '') : [String(v.field4||''), ''];
+    const judgeLast = String(v.field14 || '').split(',')[0].trim();
+    const feeLabel = (opts.feeType === 'annual') ? 'Annual Asylum Fee' : 'Initial Asylum Fee';
+    const receipt = String(opts.receipt || '').trim();
+    const pageBreak = para('<w:r><w:br w:type="page"/></w:r>');
+    const sigBlock = String(v.field20 || '').split('\n').filter(l => l.trim()).map(l => para(run(l), { after:0 })).join('');
+    const blank = (n) => Array.from({ length:n||1 }, () => para('', { after:0 })).join('');
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const longDate = (s) => {
+      const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s||'').trim());
+      if(m){ const d = new Date(+m[3], +m[1]-1, +m[2]); if(!isNaN(d)) return MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); }
+      return String(s||'').trim();
+    };
+    // Submission date / place come from Field 16 ("MM/DD/YYYY, Place").
+    const subParts = String(v.field16 || '').split(',');
+    const subDateRaw = (subParts[0] || '').trim();
+    const subPlace = subParts.slice(1).join(',').trim();
+    let coverDate = longDate(subDateRaw);
+    if(!coverDate){ const t = new Date(); coverDate = MONTHS[t.getMonth()] + ' ' + t.getDate() + ', ' + t.getFullYear(); }
+
+    // Same EOIR court caption block the Witness List cover letter uses.
+    const captionBlock = () => {
+      let c = '';
+      c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
+      c += para(run('EXECUTIVE OFFICE FOR IMMIGRATION REVIEW'), { jc:'center', after:0 });
+      c += para(run((v.field3 || 'IMMIGRATION COURT')), { jc:'center', after:0 });
+      if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
+      if(addr[1]) c += para(run(addr[1]), { jc:'center', after:120 });
+      c += para(run('In the Matter of:'), { after:40 });
+      const leftInner = para(run(respLine || '____________', { bold:true }), { after:0 })
+        + para('', { after:0 })
+        + para(run('In Removal Proceedings,'), { after:0 })
+        + para(run('       ' + respWord + '.'), { after:0 });
+      const rightInner = para(run('File No.: ' + (anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________')), { after:0 });
+      const leftCell = tcell(5040, leftInner, '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>');
+      const rightCell = tcell(4320, rightInner, '');
+      c += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
+        + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
+        + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="4320"/></w:tblGrid>'
+        + '<w:tr>' + leftCell + rightCell + '</w:tr></w:tbl>';
+      c += para('', { after:200 });
+      return c;
+    };
+
+    // ── Cover letter ──────────────────────────────────────────────
+    let coverLetter = '';
+    if(opts.cover){
+      coverLetter += captionBlock();
+      coverLetter += para(run(coverDate), { after:200 });
+      coverLetter += para(run('Re: ', { bold:true }) + run('Proof of Payment of the ' + feeLabel, { bold:true }), { after:200 });
+      coverLetter += para(run('Dear ' + (judgeLast ? 'Honorable Immigration Judge ' + judgeLast : 'Honorable Immigration Judge') + ':'), { after:200 });
+      let body = 'Please find enclosed proof of payment of the ' + feeLabel + ' of the ' + respWord + ' in the above-referenced matter';
+      if(receipt) body += ' (Receipt No. ' + receipt + ')';
+      if(v.field15) body += ', in advance of the hearing scheduled for ' + v.field15;
+      body += '. The ' + respWord + ' respectfully ' + (plural ? 'request' : 'requests') + ' that the enclosed proof of payment be made part of the record of proceedings.';
+      coverLetter += para(run(body), { jc:'both', after:200 });
+      coverLetter += para(run('Thank you for your attention to this matter.'), { jc:'both', after:200 });
+      coverLetter += para(run('Respectfully submitted,'), { after:0 });
+      coverLetter += blank(2);
+      coverLetter += sigBlock;
+    }
+
+    // ── Certificate of service ────────────────────────────────────
+    let certificate = '';
+    if(opts.cert){
+      const svc = String(v.field18 || 'ECAS');
+      const isECAS = /ecas/i.test(svc);
+      const isICE  = /ice|efiling|e-filing/i.test(svc);
+      const isMail = /mail/i.test(svc) && !isICE;
+      const isPersonal = /personal/i.test(svc);
+      const box = (on) => on ? '☒ ' : '☐ ';
+      if(opts.cover) certificate += pageBreak;
+      certificate += para(run('CERTIFICATE OF SERVICE', { bold:true, sz:'28' }), { jc:'center', after:240 });
+      certificate += para(run('Matter of: ', { bold:true }) + run(respLine || '____________')
+        + run('          File No.: ', { bold:true }) + run(anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________'), { after:200 });
+      certificate += para(run('I hereby certify that the foregoing PROOF OF PAYMENT OF THE ' + feeLabel.toUpperCase() + ' and any attached pages were served on the Department of Homeland Security, Office of the Chief Counsel, by:'), { jc:'both', after:120 });
+      certificate += para(run(box(isMail) + 'United States Postal Service to the person and address below.'), { left:360, after:0 });
+      certificate += para(run(box(isICE) + 'Serving notice through the ICE E-Filing System.'), { left:360, after:0 });
+      certificate += para(run(box(isECAS) + 'Serving notice through the ECAS.'), { left:360, after:0 });
+      certificate += para(run(box(isPersonal) + 'Personal service to the person and address below.'), { left:360, after:200 });
+      certificate += para(run('I declare under penalty of perjury that the foregoing is true and correct.'), { jc:'both', after:200 });
+      const dateLine = [coverDate, subPlace].filter(Boolean).join(', ');
+      certificate += para(run(dateLine), { after:0 });
+      certificate += blank(2);
+      certificate += sigBlock;
+    }
+
+    const sectPr = '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>'
+      + '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
+
+    const documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+      + '<w:body>' + coverLetter + certificate + sectPr + '</w:body></w:document>';
+
+    const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      + '<Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+      + '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+      + '</Types>';
+    const rootRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+      + '</Relationships>';
+    const docRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+      + '</Relationships>';
+    const stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+      + '<w:docDefaults><w:rPrDefault><w:rPr>'
+      + '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>'
+      + '<w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>'
+      + '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>'
+      + '</w:styles>';
+
+    const zip = new JSZip();
+    zip.file('[Content_Types].xml', contentTypes);
+    zip.folder('_rels').file('.rels', rootRels);
+    const wordDir = zip.folder('word');
+    wordDir.file('document.xml', documentXml);
+    wordDir.file('styles.xml', stylesXml);
+    wordDir.folder('_rels').file('document.xml.rels', docRels);
+    const outBlob = await zip.generateAsync({ type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+
+    // Filename: "<Cl ID> <LASTNAME> <First> Initial Asylum Fee.docx" —
+    // same space-only, punctuation-stripped house style as the motions.
+    const clean = s => String(s||'').replace(/['’"”“]/g,'').replace(/[,\-–—\\/:*?<>|]/g,' ').replace(/\s+/g,' ').trim();
+    const segs = [];
+    if(window._briefClid) segs.push(clean(window._briefClid));
+    let last = '', first = '';
+    if(window._briefClid && caseMeta[window._briefClid]){
+      last = (caseMeta[window._briefClid].clientLastName||'').trim();
+      first = (caseMeta[window._briefClid].clientFirstName||'').trim();
+    }
+    if(!last && !first && respLine){
+      const comma = respLine.indexOf(',');
+      if(comma > 0){ last = respLine.slice(0,comma).trim(); first = respLine.slice(comma+1).trim().split(/\s+/)[0] || ''; }
+      else { const p = respLine.split(/\s+/); if(p.length>=2){ last = p[p.length-1]; first = p.slice(0,-1).join(' '); } else last = respLine; }
+    }
+    if(last)  segs.push(clean(last).toUpperCase());
+    if(first) segs.push(clean(first));
+    segs.push(feeLabel);
+    const fname = (segs.join(' ').replace(/\s+/g,' ').trim() || feeLabel) + '.docx';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(outBlob);
+    a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    // Log the created document into the case's Documents tab.
+    if(window._briefClid && typeof recordCreatedDoc==='function'){
+      recordCreatedDoc(window._briefClid, { kind:'Asylum Fee', title:feeLabel, filename:fname });
+    }
+    setStatus('✓ Downloaded — open it in Word to review.', false);
+  }catch(e){
+    console.error('generateAsylumFee', e);
     setStatus('Failed: ' + (e && e.message ? e.message : 'unknown error'), true);
   }finally{
     if(btn){ btn.disabled = false; btn.textContent = 'Generate .docx'; }
@@ -17841,7 +18098,7 @@ function renderCaseDocuments(clid){
   const docs=((caseMeta[clid]||{}).createdDocs||[]).slice();
   const intro=document.createElement('div');
   intro.style.cssText='font-size:12px;color:#9E9186;line-height:1.5;margin-bottom:14px;';
-  intro.textContent='Documents created for this case from the Motion and Brief Creator and the Witness List tool are logged here.';
+  intro.textContent='Documents created for this case from the Motion and Brief Creator (motions, witness lists, asylum fee filings) are logged here.';
   body.appendChild(intro);
   if(!docs.length){
     const e=document.createElement('div');
@@ -17853,7 +18110,7 @@ function renderCaseDocuments(clid){
   docs.forEach((d,i)=>{
     const row=document.createElement('div');
     row.style.cssText='display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #EDE8E0;border-radius:10px;background:#fff;margin-bottom:8px;cursor:pointer;transition:border-color .12s,box-shadow .12s;';
-    row.title='Open the '+((d.kind==='Witness List')?'Witness List tool':'Motion and Brief Creator')+' for this case to generate another';
+    row.title='Open the '+((d.kind==='Witness List')?'Witness List tool':(d.kind==='Asylum Fee')?'Asylum Fee tool':'Motion and Brief Creator')+' for this case to generate another';
     row.onmouseenter=()=>{row.style.borderColor='#6A8C6E';row.style.boxShadow='0 1px 4px rgba(0,0,0,.06)';};
     row.onmouseleave=()=>{row.style.borderColor='#EDE8E0';row.style.boxShadow='none';};
     row.onclick=()=>openCreatedDocTool(clid,d.kind,d.title);
@@ -17902,6 +18159,10 @@ function openCreatedDocTool(clid, kind, title){
   if(typeof _briefPickCase==='function')_briefPickCase(clid, disp);
   if(kind==='Witness List'){
     if(typeof _briefSetDocType==='function')_briefSetDocType('witness');
+  } else if(kind==='Asylum Fee'){
+    if(!window._afOpts)window._afOpts={feeType:'initial',receipt:'',cover:true,cert:true};
+    window._afOpts.feeType=/annual/i.test(title||'')?'annual':'initial';
+    if(typeof _briefSetDocType==='function')_briefSetDocType('asylumfee');
   } else {
     if(typeof _briefSetDocType==='function')_briefSetDocType('motion');
     if(title){
