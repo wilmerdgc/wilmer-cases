@@ -16516,9 +16516,9 @@ async function generateWitnessList(){
 // JSZip (same approach as the Witness List). Page 1 mirrors the first
 // page of the motion-webex template: attorney heading + detained status
 // over the EOIR court caption, the Immigration Judge / Next Hearing box
-// and the bold title. Then a certificate of service, a table of
-// exhibits, and an Exhibit A tab page (a large centered "A") the
-// payment receipt gets inserted after. No proposed order and no
+// and the bold title. Then a table of exhibits and an Exhibit A tab
+// page (a large centered "A") the payment receipt gets inserted after,
+// and the certificate of service last. No proposed order and no
 // attorney affirmation, by design.
 async function generateAsylumFee(){
   const btn = document.getElementById('bg-asylumfee-btn');
@@ -16555,8 +16555,10 @@ async function generateAsylumFee(){
 
     const anum = (v.field6 || '').trim();
     const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
-    const respWord = plural ? 'Respondents' : 'Respondent';
     const addr = (typeof _briefSplitAddr === 'function') ? _briefSplitAddr(v.field4 || '') : [String(v.field4||''), ''];
+    // All cover tables use zero left/right cell margins so text sits
+    // flush with the page margin, like the approved sample filing.
+    const cellMar0 = '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>';
     const feeLabel = (opts.feeType === 'annual') ? 'Annual Asylum Fee' : 'Initial Asylum Fee';
     // Bold centered document title, pluralized like the motion titles.
     const feeTitle = (plural ? "RESPONDENTS'" : "RESPONDENT'S")
@@ -16578,14 +16580,14 @@ async function generateAsylumFee(){
     let coverDate = longDate(subDateRaw);
     if(!coverDate){ const t = new Date(); coverDate = MONTHS[t.getMonth()] + ' ' + t.getDate() + ', ' + t.getFullYear(); }
 
-    // Same EOIR court caption the motion-webex template uses. The
-    // respondent box is bordered on the top, right and bottom only — no
-    // line on its left side — with a bordered spacer column separating
-    // it from the "File No.:" column. Inside the box: "In the Matter of:"
-    // on the first line, the respondent's name on the middle line (with
-    // "File No.:" and the A-number on that same middle line, outside the
-    // box), then "In Removal Proceedings," and "Respondent." on the last
-    // line. Single-spaced throughout (spacing after = 0 on every line).
+    // Same EOIR court caption the motion-webex template and the approved
+    // sample filing use. The respondent box is bordered on the top, right
+    // and bottom only — no line on its left side. Inside the box, single
+    // spaced: "In the Matter of:" on the first line, two blank lines, the
+    // respondent's name in bold on the middle line, two blank lines,
+    // "In Removal Proceedings," and one blank line above the bottom
+    // border. "File No.: A#" is one left-aligned string in the right
+    // column, on the same middle line as the name.
     const captionBlock = () => {
       let c = '';
       c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
@@ -16593,30 +16595,30 @@ async function generateAsylumFee(){
       c += para(run((v.field3 || 'IMMIGRATION COURT')), { jc:'center', after:0 });
       if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
       if(addr[1]) c += para(run(addr[1]), { jc:'center', after:0 });
-      c += para('', { after:0 });
+      c += para('', { after:160 });
       const bT = '<w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
       const bB = '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
       const bR = '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
       const bL = '<w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
-      const boxRow = (leftInner, midInner, rightInner, extras) => '<w:tr>'
+      const boxRow = (leftInner, rightInner, extras) => '<w:tr>'
         + tcell(5040, leftInner, (extras||'') + bR)
-        + tcell(1165, midInner || para('', { after:0 }), bL)
+        + tcell(1165, para('', { after:0 }), bL)
         + tcell(3145, rightInner || para('', { after:0 }), '')
         + '</w:tr>';
-      const fileNoVal = anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________';
-      c += '<w:tbl><w:tblPr><w:tblW w:w="9350" w:type="dxa"/><w:jc w:val="center"/>'
+      const fileNo = 'File No.: ' + (anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________');
+      c += '<w:tbl><w:tblPr><w:tblW w:w="9350" w:type="dxa"/><w:jc w:val="center"/>' + cellMar0
         + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
         + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="1165"/><w:gridCol w:w="3145"/></w:tblGrid>'
-        + boxRow(para(run('In the Matter of:'), { after:0 }), null, null, bT)
+        + boxRow(para(run('In the Matter of:'), { after:0 }), null, bT)
         + boxRow(para('', { after:0 }))
-        + boxRow(para(run(respLine || '____________'), { after:0 }),
-                 para(run('File No.:  '), { jc:'right', after:0 }),
-                 para(run(fileNoVal), { after:0 }))
+        + boxRow(para('', { after:0 }))
+        + boxRow(para(run(respLine || '____________', { bold:true }), { after:0 }), para(run(fileNo), { after:0 }))
+        + boxRow(para('', { after:0 }))
         + boxRow(para('', { after:0 }))
         + boxRow(para(run('In Removal Proceedings,'), { after:0 }))
-        + boxRow(para(run(respWord + '.'), { left:1440, after:0 }), null, null, bB)
+        + boxRow(para('', { after:0 }), null, bB)
         + '</w:tbl>';
-      c += para('', { after:200 });
+      c += para('', { after:120 });
       return c;
     };
 
@@ -16631,23 +16633,24 @@ async function generateAsylumFee(){
       const attyInner = String(v.field20 || '').split('\n').filter(l => l.trim())
         .map(l => para(run(l), { after:0 })).join('') || para('');
       const statusInner = para(run((v.field2 || 'NON-DETAINED'), { bold:true }), { jc:'right', after:0 });
-      coverLetter += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
+      coverLetter += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>' + cellMar0
         + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
         + '<w:tblGrid><w:gridCol w:w="6240"/><w:gridCol w:w="3120"/></w:tblGrid>'
         + '<w:tr>' + tcell(6240, attyInner, '') + tcell(3120, statusInner, '') + '</w:tr></w:tbl>';
       coverLetter += para('', { after:200 });
       coverLetter += captionBlock();
-      // Immigration Judge / Next Hearing box.
+      // Immigration Judge / Next Hearing box. The right column starts at
+      // the same x-position as the caption's "File No.:" column.
       const jhHead = para(run('Immigration Judge', { bold:true }), { after:0 });
       const nhHead = para(run('Next Hearing', { bold:true }), { after:0 });
       const jhVal  = para(run(v.field14 || ''), { after:0 });
       const nhVal  = para(run(v.field15 || ''), { after:0 });
-      coverLetter += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
+      coverLetter += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>' + cellMar0
         + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
-        + '<w:tblGrid><w:gridCol w:w="4680"/><w:gridCol w:w="4680"/></w:tblGrid>'
-        + '<w:tr>' + tcell(4680, jhHead, '') + tcell(4680, nhHead, '') + '</w:tr>'
-        + '<w:tr>' + tcell(4680, jhVal, '') + tcell(4680, nhVal, '') + '</w:tr></w:tbl>';
-      coverLetter += blank(2);
+        + '<w:tblGrid><w:gridCol w:w="6210"/><w:gridCol w:w="3150"/></w:tblGrid>'
+        + '<w:tr>' + tcell(6210, jhHead, '') + tcell(3150, nhHead, '') + '</w:tr>'
+        + '<w:tr>' + tcell(6210, jhVal, '') + tcell(3150, nhVal, '') + '</w:tr></w:tbl>';
+      coverLetter += blank(9);
       coverLetter += para(run(feeTitle, { bold:true }), { jc:'center', after:240 });
     }
 
@@ -16660,7 +16663,7 @@ async function generateAsylumFee(){
       const isMail = /mail/i.test(svc) && !isICE;
       const isPersonal = /personal/i.test(svc);
       const box = (on) => on ? '☒ ' : '☐ ';
-      if(opts.cover) certificate += pageBreak;
+      if(opts.cover || opts.exhibits) certificate += pageBreak;
       certificate += para(run('CERTIFICATE OF SERVICE', { bold:true, sz:'28' }), { jc:'center', after:240 });
       certificate += para(run('Matter of: ', { bold:true }) + run(respLine || '____________')
         + run('          File No.: ', { bold:true }) + run(anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________'), { after:200 });
@@ -16682,9 +16685,11 @@ async function generateAsylumFee(){
     // The proof of payment is Exhibit A: an index page listing it, then
     // a separator page with a large centered "A" — the physical receipt
     // gets inserted right after that tab when the filing is assembled.
+    // These pages come right after the cover; the certificate of
+    // service goes last, matching the approved sample filing.
     let exhibits = '';
     if(opts.exhibits){
-      if(opts.cover || opts.cert) exhibits += pageBreak;
+      if(opts.cover) exhibits += pageBreak;
       exhibits += para(run('TABLE OF EXHIBITS', { bold:true, sz:'28' }), { jc:'center', after:360 });
       exhibits += para(run('Exhibit A:', { bold:true })
         + run('  Proof of Payment of the ' + feeLabel + (receipt ? ' (Receipt No. ' + receipt + ')' : '')), { left:720, hanging:720, after:120 });
@@ -16698,7 +16703,7 @@ async function generateAsylumFee(){
 
     const documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
       + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-      + '<w:body>' + coverLetter + certificate + exhibits + sectPr + '</w:body></w:document>';
+      + '<w:body>' + coverLetter + exhibits + certificate + sectPr + '</w:body></w:document>';
 
     const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
       + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
