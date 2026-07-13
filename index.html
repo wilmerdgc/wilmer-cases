@@ -15492,18 +15492,19 @@ function _witnessGoToVideoMotion(i){
 }
 
 // ── Asylum Fee editor ──────────────────────────────────────────────
-// A short filing package for the EOIR asylum fee: a cover letter to the
-// Immigration Judge (same motion-style caption used by the Witness List
-// cover letter) enclosing proof of payment of the Initial or Annual
-// Asylum Fee, plus a certificate of service. Deliberately NO proposed
-// order and NO attorney affirmation — the fee filing doesn't need them.
+// A short filing package for the EOIR asylum fee: the same two cover
+// pages the motions open with (attorney heading + EOIR court caption +
+// judge box + title, then caption + submission paragraph) enclosing
+// proof of payment of the Initial or Annual Asylum Fee, plus a
+// certificate of service. Deliberately NO proposed order and NO
+// attorney affirmation — the fee filing doesn't need them.
 function _renderAsylumFeePanel(){
   const panel = document.getElementById('bg-asylumfee-panel');
   if(!panel) return;
   if(!window._afOpts) window._afOpts = { feeType:'initial', receipt:'', cover:true, cert:true };
   const o = window._afOpts;
   panel.innerHTML = `
-    <div style="font-size:12px;color:var(--ink-muted);margin-bottom:14px;line-height:1.5;">Pick a case above to caption the document, choose the fee type, then Generate. The package is a <b>cover letter</b> enclosing the proof of payment plus a <b>certificate of service</b> — no proposed order or attorney affirmation is included.</div>
+    <div style="font-size:12px;color:var(--ink-muted);margin-bottom:14px;line-height:1.5;">Pick a case above to caption the document, choose the fee type, then Generate. The package opens with the <b>same two cover pages as the motions</b> (attorney heading + court caption + title, then caption + submission paragraph) and closes with a <b>certificate of service</b> — no proposed order or attorney affirmation is included.</div>
     <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px;padding:10px 14px;background:var(--cream);border-radius:var(--radius-md);border:1px solid var(--border);">
       <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;font-weight:600;">
         <input type="radio" name="af-feetype" value="initial" ${o.feeType!=='annual'?'checked':''} onchange="window._afOpts.feeType='initial'" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
@@ -15522,7 +15523,7 @@ function _renderAsylumFeePanel(){
     <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px;padding:10px 14px;background:var(--cream);border-radius:var(--radius-md);border:1px solid var(--border);">
       <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
         <input type="checkbox" ${o.cover?'checked':''} onchange="window._afOpts.cover=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
-        Include cover letter
+        Include cover pages (caption)
       </label>
       <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
         <input type="checkbox" ${o.cert?'checked':''} onchange="window._afOpts.cert=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
@@ -16478,11 +16479,13 @@ async function generateWitnessList(){
 
 // ── Asylum Fee generator ───────────────────────────────────────────
 // Builds the Initial / Annual Asylum Fee filing package from scratch with
-// JSZip (same approach as the Witness List): a cover letter to the
-// Immigration Judge — led by the EOIR court caption used by the
-// motion-webex template — enclosing the proof of payment, then a
-// certificate of service on its own page. No proposed order and no
-// attorney affirmation, by design.
+// JSZip (same approach as the Witness List). The document mirrors the two
+// initial pages of the motion-webex template: page 1 is the attorney
+// heading + detained status over the EOIR court caption, the Immigration
+// Judge / Next Hearing box and the bold title; page 2 repeats the caption
+// + title over a short submission paragraph. A certificate of service
+// follows on its own page. No proposed order and no attorney affirmation,
+// by design.
 async function generateAsylumFee(){
   const btn = document.getElementById('bg-asylumfee-btn');
   const status = document.getElementById('bg-asylumfee-status');
@@ -16520,8 +16523,10 @@ async function generateAsylumFee(){
     const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
     const respWord = plural ? 'Respondents' : 'Respondent';
     const addr = (typeof _briefSplitAddr === 'function') ? _briefSplitAddr(v.field4 || '') : [String(v.field4||''), ''];
-    const judgeLast = String(v.field14 || '').split(',')[0].trim();
     const feeLabel = (opts.feeType === 'annual') ? 'Annual Asylum Fee' : 'Initial Asylum Fee';
+    // Bold centered document title, pluralized like the motion titles.
+    const feeTitle = (plural ? "RESPONDENTS'" : "RESPONDENT'S")
+      + ' PROOF OF PAYMENT OF THE ' + feeLabel.toUpperCase();
     const receipt = String(opts.receipt || '').trim();
     const pageBreak = para('<w:r><w:br w:type="page"/></w:r>');
     const sigBlock = String(v.field20 || '').split('\n').filter(l => l.trim()).map(l => para(run(l), { after:0 })).join('');
@@ -16563,20 +16568,52 @@ async function generateAsylumFee(){
       return c;
     };
 
-    // ── Cover letter ──────────────────────────────────────────────
+    // ── Cover pages ───────────────────────────────────────────────
+    // Mirror the two initial pages of the motion-webex template (the same
+    // ones the Motion to Reopen opens with): PAGE 1 is the attorney
+    // heading (signature block left, detained status right) over the EOIR
+    // court caption, the Immigration Judge / Next Hearing box and the
+    // bold document title; PAGE 2 repeats the caption + title over a
+    // short submission paragraph that closes with the signature block.
     let coverLetter = '';
     if(opts.cover){
+      // Page 1 — attorney heading + caption + judge box + title.
+      const attyInner = String(v.field20 || '').split('\n').filter(l => l.trim())
+        .map(l => para(run(l), { after:0 })).join('') || para('');
+      const statusInner = para(run((v.field2 || 'NON-DETAINED'), { bold:true }), { jc:'right', after:0 });
+      coverLetter += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
+        + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
+        + '<w:tblGrid><w:gridCol w:w="6240"/><w:gridCol w:w="3120"/></w:tblGrid>'
+        + '<w:tr>' + tcell(6240, attyInner, '') + tcell(3120, statusInner, '') + '</w:tr></w:tbl>';
+      coverLetter += para('', { after:200 });
       coverLetter += captionBlock();
-      coverLetter += para(run(coverDate), { after:200 });
-      coverLetter += para(run('Re: ', { bold:true }) + run('Proof of Payment of the ' + feeLabel, { bold:true }), { after:200 });
-      coverLetter += para(run('Dear ' + (judgeLast ? 'Honorable Immigration Judge ' + judgeLast : 'Honorable Immigration Judge') + ':'), { after:200 });
-      let body = 'Please find enclosed proof of payment of the ' + feeLabel + ' of the ' + respWord + ' in the above-referenced matter';
+      // Immigration Judge / Next Hearing box.
+      const jhHead = para(run('Immigration Judge', { bold:true }), { after:0 });
+      const nhHead = para(run('Next Hearing', { bold:true }), { after:0 });
+      const jhVal  = para(run(v.field14 || ''), { after:0 });
+      const nhVal  = para(run(v.field15 || ''), { after:0 });
+      coverLetter += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
+        + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
+        + '<w:tblGrid><w:gridCol w:w="4680"/><w:gridCol w:w="4680"/></w:tblGrid>'
+        + '<w:tr>' + tcell(4680, jhHead, '') + tcell(4680, nhHead, '') + '</w:tr>'
+        + '<w:tr>' + tcell(4680, jhVal, '') + tcell(4680, nhVal, '') + '</w:tr></w:tbl>';
+      coverLetter += blank(2);
+      coverLetter += para(run(feeTitle, { bold:true }), { jc:'center', after:240 });
+      coverLetter += pageBreak;
+      // Page 2 — caption + title + submission paragraph + signature.
+      coverLetter += captionBlock();
+      coverLetter += para(run(feeTitle, { bold:true }), { jc:'center', after:240 });
+      let body = respWord + ', by and through undersigned counsel, respectfully '
+        + (plural ? 'submit' : 'submits') + ' the enclosed proof of payment of the ' + feeLabel;
       if(receipt) body += ' (Receipt No. ' + receipt + ')';
+      body += ' in the above-captioned matter';
       if(v.field15) body += ', in advance of the hearing scheduled for ' + v.field15;
-      body += '. The ' + respWord + ' respectfully ' + (plural ? 'request' : 'requests') + ' that the enclosed proof of payment be made part of the record of proceedings.';
+      body += ', and respectfully ' + (plural ? 'request' : 'requests')
+        + ' that it be made part of the record of proceedings.';
       coverLetter += para(run(body), { jc:'both', after:200 });
-      coverLetter += para(run('Thank you for your attention to this matter.'), { jc:'both', after:200 });
-      coverLetter += para(run('Respectfully submitted,'), { after:0 });
+      coverLetter += para(run('Respectfully submitted,'), { after:200 });
+      const subLine = [String(v.field16 || '').trim() || coverDate].filter(Boolean).join('');
+      coverLetter += para(run(subLine), { after:0 });
       coverLetter += blank(2);
       coverLetter += sigBlock;
     }
@@ -16594,7 +16631,9 @@ async function generateAsylumFee(){
       certificate += para(run('CERTIFICATE OF SERVICE', { bold:true, sz:'28' }), { jc:'center', after:240 });
       certificate += para(run('Matter of: ', { bold:true }) + run(respLine || '____________')
         + run('          File No.: ', { bold:true }) + run(anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________'), { after:200 });
-      certificate += para(run('I hereby certify that the foregoing PROOF OF PAYMENT OF THE ' + feeLabel.toUpperCase() + ' and any attached pages were served on the Department of Homeland Security, Office of the Chief Counsel, by:'), { jc:'both', after:120 });
+      certificate += para(run('I hereby certify that the foregoing:'), { jc:'both', after:120 });
+      certificate += para(run(feeTitle, { bold:true }), { jc:'center', after:120 });
+      certificate += para(run('and any attached pages were served on the Department of Homeland Security, Office of the Chief Counsel, by:'), { jc:'both', after:120 });
       certificate += para(run(box(isMail) + 'United States Postal Service to the person and address below.'), { left:360, after:0 });
       certificate += para(run(box(isICE) + 'Serving notice through the ICE E-Filing System.'), { left:360, after:0 });
       certificate += para(run(box(isECAS) + 'Serving notice through the ECAS.'), { left:360, after:0 });
