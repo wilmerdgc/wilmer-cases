@@ -16581,32 +16581,40 @@ async function generateAsylumFee(){
     // Same EOIR court caption the motion-webex template uses. The
     // respondent box is bordered on the top, right and bottom only — no
     // line on its left side — with a bordered spacer column separating
-    // it from the "File No.:" column, and the table is centered.
+    // it from the "File No.:" column. Inside the box: "In the Matter of:"
+    // on the first line, the respondent's name on the middle line (with
+    // "File No.:" and the A-number on that same middle line, outside the
+    // box), then "In Removal Proceedings," and "Respondent." on the last
+    // line. Single-spaced throughout (spacing after = 0 on every line).
     const captionBlock = () => {
       let c = '';
       c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
       c += para(run('EXECUTIVE OFFICE FOR IMMIGRATION REVIEW'), { jc:'center', after:0 });
       c += para(run((v.field3 || 'IMMIGRATION COURT')), { jc:'center', after:0 });
       if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
-      if(addr[1]) c += para(run(addr[1]), { jc:'center', after:120 });
-      c += para(run('In the Matter of:'), { after:40 });
+      if(addr[1]) c += para(run(addr[1]), { jc:'center', after:0 });
+      c += para('', { after:0 });
       const bT = '<w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
       const bB = '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
       const bR = '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
       const bL = '<w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
-      const boxRow = (leftInner, rightInner, extras) => '<w:tr>'
+      const boxRow = (leftInner, midInner, rightInner, extras) => '<w:tr>'
         + tcell(5040, leftInner, (extras||'') + bR)
-        + tcell(1165, para('', { after:0 }), bL)
+        + tcell(1165, midInner || para('', { after:0 }), bL)
         + tcell(3145, rightInner || para('', { after:0 }), '')
         + '</w:tr>';
-      const fileNo = 'File No.: ' + (anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________');
+      const fileNoVal = anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________';
       c += '<w:tbl><w:tblPr><w:tblW w:w="9350" w:type="dxa"/><w:jc w:val="center"/>'
         + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
         + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="1165"/><w:gridCol w:w="3145"/></w:tblGrid>'
-        + boxRow(para(run(respLine || '____________', { bold:true }), { after:0 }), para(run(fileNo), { after:0 }), bT)
-        + boxRow(para('', { after:0 }), null)
-        + boxRow(para(run('In Removal Proceedings,'), { after:0 }), null)
-        + boxRow(para(run('       ' + respWord + '.'), { after:0 }), null, bB)
+        + boxRow(para(run('In the Matter of:'), { after:0 }), null, null, bT)
+        + boxRow(para('', { after:0 }))
+        + boxRow(para(run(respLine || '____________'), { after:0 }),
+                 para(run('File No.:  '), { jc:'right', after:0 }),
+                 para(run(fileNoVal), { after:0 }))
+        + boxRow(para('', { after:0 }))
+        + boxRow(para(run('In Removal Proceedings,'), { after:0 }))
+        + boxRow(para(run(respWord + '.'), { left:1440, after:0 }), null, null, bB)
         + '</w:tbl>';
       c += para('', { after:200 });
       return c;
