@@ -15341,7 +15341,7 @@ function renderBriefGenerator(){
     window._witnesses = [_blankWitness()];
   }
   if(!window._wlOpts) window._wlOpts = { cover:true, cert:true };
-  if(!window._afOpts) window._afOpts = { feeType:'initial', receipt:'', cover:true, cert:true };
+  if(!window._afOpts) window._afOpts = { feeType:'initial', receipt:'', cover:true, cert:true, exhibits:true };
   _briefRenderForm();
 }
 
@@ -15501,10 +15501,23 @@ function _witnessGoToVideoMotion(i){
 function _renderAsylumFeePanel(){
   const panel = document.getElementById('bg-asylumfee-panel');
   if(!panel) return;
-  if(!window._afOpts) window._afOpts = { feeType:'initial', receipt:'', cover:true, cert:true };
+  if(!window._afOpts) window._afOpts = { feeType:'initial', receipt:'', cover:true, cert:true, exhibits:true };
   const o = window._afOpts;
+  const v = window._briefValues || {};
+  // Judge / Next Hearing pickers — same suggestion sources as the motion
+  // form (saved judges sorted by the case's venue; the case's upcoming
+  // hearings), each over a free-text input so the user can adjust.
+  const pick = (fieldKey, inputId, label) => {
+    const sugg = (typeof _briefSuggestions === 'function') ? _briefSuggestions(fieldKey) : [];
+    if(!sugg.length) return '';
+    return '<select onchange="if(this.value){_briefApplySuggestion(\'' + fieldKey + '\',this.value);var i=document.getElementById(\'' + inputId + '\');if(i)i.value=window._briefValues[\'' + fieldKey + '\']||\'\';this.selectedIndex=0;}" '
+      + 'style="font-size:11px;padding:4px 8px;border:1px solid #B8C4DB;border-radius:6px;background:#fff;color:#4F6A91;font-family:inherit;cursor:pointer;max-width:100%;margin-bottom:5px;">'
+      + '<option value="">' + label + '</option>'
+      + sugg.map(s => '<option value="' + escHtml(s.value).replace(/"/g,'&quot;') + '">' + escHtml(s.label) + '</option>').join('')
+      + '</select>';
+  };
   panel.innerHTML = `
-    <div style="font-size:12px;color:var(--ink-muted);margin-bottom:14px;line-height:1.5;">Pick a case above to caption the document, choose the fee type, then Generate. The package opens with the <b>same two cover pages as the motions</b> (attorney heading + court caption + title, then caption + submission paragraph) and closes with a <b>certificate of service</b> — no proposed order or attorney affirmation is included.</div>
+    <div style="font-size:12px;color:var(--ink-muted);margin-bottom:14px;line-height:1.5;">Pick a case above to caption the document, choose the fee type, then Generate. The package is the <b>motion-style cover page</b> (attorney heading + court caption + title), a <b>certificate of service</b>, a <b>table of exhibits</b> and an <b>Exhibit A tab page</b> — no proposed order or attorney affirmation is included.</div>
     <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px;padding:10px 14px;background:var(--cream);border-radius:var(--radius-md);border:1px solid var(--border);">
       <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;font-weight:600;">
         <input type="radio" name="af-feetype" value="initial" ${o.feeType!=='annual'?'checked':''} onchange="window._afOpts.feeType='initial'" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
@@ -15515,19 +15528,37 @@ function _renderAsylumFeePanel(){
         Annual Asylum Fee
       </label>
     </div>
-    <div style="margin-bottom:16px;max-width:420px;">
-      <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">Payment receipt number (optional)</label>
-      <input type="text" value="${escHtml(o.receipt||'')}" placeholder="e.g. Pay.gov receipt / tracking ID" oninput="window._afOpts.receipt=this.value"
-        style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div>
+        <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">Immigration Judge</label>
+        ${pick('field14','af-judge','👤 Pick a judge…')}
+        <input id="af-judge" type="text" value="${escHtml(v.field14||'').replace(/"/g,'&quot;')}" placeholder="e.g. Bartleson, Thomas" oninput="window._briefValues['field14']=this.value"
+          style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+      </div>
+      <div>
+        <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">Next Hearing</label>
+        ${pick('field15','af-hearing','📅 Pick from case events…')}
+        <input id="af-hearing" type="text" value="${escHtml(v.field15||'').replace(/"/g,'&quot;')}" placeholder="e.g. April 1, 2026, at 8.30 AM" oninput="window._briefValues['field15']=this.value"
+          style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+      </div>
+      <div>
+        <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">Payment receipt number (optional)</label>
+        <input type="text" value="${escHtml(o.receipt||'').replace(/"/g,'&quot;')}" placeholder="e.g. Pay.gov receipt / tracking ID" oninput="window._afOpts.receipt=this.value"
+          style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+      </div>
     </div>
     <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px;padding:10px 14px;background:var(--cream);border-radius:var(--radius-md);border:1px solid var(--border);">
       <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
         <input type="checkbox" ${o.cover?'checked':''} onchange="window._afOpts.cover=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
-        Include cover pages (caption)
+        Include cover page (caption)
       </label>
       <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
         <input type="checkbox" ${o.cert?'checked':''} onchange="window._afOpts.cert=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
         Include certificate of service
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.exhibits?'checked':''} onchange="window._afOpts.exhibits=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include table of exhibits + Exhibit A tab page
       </label>
     </div>
     <div style="display:flex;gap:10px;align-items:center;">
@@ -15940,6 +15971,9 @@ function _briefPickCase(clid, displayName){
   }
   _briefRenderRespondentsPanel();
   _briefRenderForm();
+  // The Asylum Fee panel shows case-derived inputs (judge / next hearing)
+  // — refresh it so a case picked while that tab is open fills them in.
+  if(window._briefDocType==='asylumfee' && typeof _renderAsylumFeePanel==='function') _renderAsylumFeePanel();
 }
 
 // Show the multi-respondent picker if the case has 2+ clients. Each row
@@ -16479,20 +16513,20 @@ async function generateWitnessList(){
 
 // ── Asylum Fee generator ───────────────────────────────────────────
 // Builds the Initial / Annual Asylum Fee filing package from scratch with
-// JSZip (same approach as the Witness List). The document mirrors the two
-// initial pages of the motion-webex template: page 1 is the attorney
-// heading + detained status over the EOIR court caption, the Immigration
-// Judge / Next Hearing box and the bold title; page 2 repeats the caption
-// + title over a short submission paragraph. A certificate of service
-// follows on its own page. No proposed order and no attorney affirmation,
-// by design.
+// JSZip (same approach as the Witness List). Page 1 mirrors the first
+// page of the motion-webex template: attorney heading + detained status
+// over the EOIR court caption, the Immigration Judge / Next Hearing box
+// and the bold title. Then a certificate of service, a table of
+// exhibits, and an Exhibit A tab page (a large centered "A") the
+// payment receipt gets inserted after. No proposed order and no
+// attorney affirmation, by design.
 async function generateAsylumFee(){
   const btn = document.getElementById('bg-asylumfee-btn');
   const status = document.getElementById('bg-asylumfee-status');
   const setStatus = (msg, err) => { if(status){ status.textContent = msg; status.style.color = err ? '#B85C5C' : 'var(--sage)'; } };
   if(typeof JSZip === 'undefined'){ setStatus('JSZip not loaded — refresh the page and try again.', true); return; }
-  const opts = window._afOpts || { feeType:'initial', receipt:'', cover:true, cert:true };
-  if(!opts.cover && !opts.cert){ setStatus('Check at least the cover letter or the certificate of service.', true); return; }
+  const opts = window._afOpts || { feeType:'initial', receipt:'', cover:true, cert:true, exhibits:true };
+  if(!opts.cover && !opts.cert && !opts.exhibits){ setStatus('Check at least one section to include.', true); return; }
   const v = window._briefValues || {};
   const respLine = (v.field5 || '').split('\n')[0].trim();
   if(!respLine){ setStatus('Pick a case first so the letter is captioned.', true); return; }
@@ -16544,7 +16578,10 @@ async function generateAsylumFee(){
     let coverDate = longDate(subDateRaw);
     if(!coverDate){ const t = new Date(); coverDate = MONTHS[t.getMonth()] + ' ' + t.getDate() + ', ' + t.getFullYear(); }
 
-    // Same EOIR court caption block the Witness List cover letter uses.
+    // Same EOIR court caption the motion-webex template uses. The
+    // respondent box is bordered on the top, right and bottom only — no
+    // line on its left side — with a bordered spacer column separating
+    // it from the "File No.:" column, and the table is centered.
     const captionBlock = () => {
       let c = '';
       c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
@@ -16553,31 +16590,36 @@ async function generateAsylumFee(){
       if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
       if(addr[1]) c += para(run(addr[1]), { jc:'center', after:120 });
       c += para(run('In the Matter of:'), { after:40 });
-      const leftInner = para(run(respLine || '____________', { bold:true }), { after:0 })
-        + para('', { after:0 })
-        + para(run('In Removal Proceedings,'), { after:0 })
-        + para(run('       ' + respWord + '.'), { after:0 });
-      const rightInner = para(run('File No.: ' + (anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________')), { after:0 });
-      const leftCell = tcell(5040, leftInner, '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>');
-      const rightCell = tcell(4320, rightInner, '');
-      c += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
+      const bT = '<w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+      const bB = '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+      const bR = '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+      const bL = '<w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+      const boxRow = (leftInner, rightInner, extras) => '<w:tr>'
+        + tcell(5040, leftInner, (extras||'') + bR)
+        + tcell(1165, para('', { after:0 }), bL)
+        + tcell(3145, rightInner || para('', { after:0 }), '')
+        + '</w:tr>';
+      const fileNo = 'File No.: ' + (anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________');
+      c += '<w:tbl><w:tblPr><w:tblW w:w="9350" w:type="dxa"/><w:jc w:val="center"/>'
         + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
-        + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="4320"/></w:tblGrid>'
-        + '<w:tr>' + leftCell + rightCell + '</w:tr></w:tbl>';
+        + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="1165"/><w:gridCol w:w="3145"/></w:tblGrid>'
+        + boxRow(para(run(respLine || '____________', { bold:true }), { after:0 }), para(run(fileNo), { after:0 }), bT)
+        + boxRow(para('', { after:0 }), null)
+        + boxRow(para(run('In Removal Proceedings,'), { after:0 }), null)
+        + boxRow(para(run('       ' + respWord + '.'), { after:0 }), null, bB)
+        + '</w:tbl>';
       c += para('', { after:200 });
       return c;
     };
 
-    // ── Cover pages ───────────────────────────────────────────────
-    // Mirror the two initial pages of the motion-webex template (the same
-    // ones the Motion to Reopen opens with): PAGE 1 is the attorney
-    // heading (signature block left, detained status right) over the EOIR
-    // court caption, the Immigration Judge / Next Hearing box and the
-    // bold document title; PAGE 2 repeats the caption + title over a
-    // short submission paragraph that closes with the signature block.
+    // ── Cover page ────────────────────────────────────────────────
+    // Mirrors the first page of the motion-webex template (the same one
+    // the Motion to Reopen opens with): the attorney heading (signature
+    // block left, detained status right) over the EOIR court caption,
+    // the Immigration Judge / Next Hearing box and the bold document
+    // title. One page only.
     let coverLetter = '';
     if(opts.cover){
-      // Page 1 — attorney heading + caption + judge box + title.
       const attyInner = String(v.field20 || '').split('\n').filter(l => l.trim())
         .map(l => para(run(l), { after:0 })).join('') || para('');
       const statusInner = para(run((v.field2 || 'NON-DETAINED'), { bold:true }), { jc:'right', after:0 });
@@ -16599,23 +16641,6 @@ async function generateAsylumFee(){
         + '<w:tr>' + tcell(4680, jhVal, '') + tcell(4680, nhVal, '') + '</w:tr></w:tbl>';
       coverLetter += blank(2);
       coverLetter += para(run(feeTitle, { bold:true }), { jc:'center', after:240 });
-      coverLetter += pageBreak;
-      // Page 2 — caption + title + submission paragraph + signature.
-      coverLetter += captionBlock();
-      coverLetter += para(run(feeTitle, { bold:true }), { jc:'center', after:240 });
-      let body = respWord + ', by and through undersigned counsel, respectfully '
-        + (plural ? 'submit' : 'submits') + ' the enclosed proof of payment of the ' + feeLabel;
-      if(receipt) body += ' (Receipt No. ' + receipt + ')';
-      body += ' in the above-captioned matter';
-      if(v.field15) body += ', in advance of the hearing scheduled for ' + v.field15;
-      body += ', and respectfully ' + (plural ? 'request' : 'requests')
-        + ' that it be made part of the record of proceedings.';
-      coverLetter += para(run(body), { jc:'both', after:200 });
-      coverLetter += para(run('Respectfully submitted,'), { after:200 });
-      const subLine = [String(v.field16 || '').trim() || coverDate].filter(Boolean).join('');
-      coverLetter += para(run(subLine), { after:0 });
-      coverLetter += blank(2);
-      coverLetter += sigBlock;
     }
 
     // ── Certificate of service ────────────────────────────────────
@@ -16645,12 +16670,27 @@ async function generateAsylumFee(){
       certificate += sigBlock;
     }
 
+    // ── Table of exhibits + Exhibit A tab page ────────────────────
+    // The proof of payment is Exhibit A: an index page listing it, then
+    // a separator page with a large centered "A" — the physical receipt
+    // gets inserted right after that tab when the filing is assembled.
+    let exhibits = '';
+    if(opts.exhibits){
+      if(opts.cover || opts.cert) exhibits += pageBreak;
+      exhibits += para(run('TABLE OF EXHIBITS', { bold:true, sz:'28' }), { jc:'center', after:360 });
+      exhibits += para(run('Exhibit A:', { bold:true })
+        + run('  Proof of Payment of the ' + feeLabel + (receipt ? ' (Receipt No. ' + receipt + ')' : '')), { left:720, hanging:720, after:120 });
+      exhibits += pageBreak;
+      exhibits += blank(9);
+      exhibits += para(run('A', { bold:true, sz:'144' }), { jc:'center', after:0 });
+    }
+
     const sectPr = '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>'
       + '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
 
     const documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
       + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-      + '<w:body>' + coverLetter + certificate + sectPr + '</w:body></w:document>';
+      + '<w:body>' + coverLetter + certificate + exhibits + sectPr + '</w:body></w:document>';
 
     const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
       + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
@@ -18199,7 +18239,7 @@ function openCreatedDocTool(clid, kind, title){
   if(kind==='Witness List'){
     if(typeof _briefSetDocType==='function')_briefSetDocType('witness');
   } else if(kind==='Asylum Fee'){
-    if(!window._afOpts)window._afOpts={feeType:'initial',receipt:'',cover:true,cert:true};
+    if(!window._afOpts)window._afOpts={feeType:'initial',receipt:'',cover:true,cert:true,exhibits:true};
     window._afOpts.feeType=/annual/i.test(title||'')?'annual':'initial';
     if(typeof _briefSetDocType==='function')_briefSetDocType('asylumfee');
   } else {
