@@ -16555,7 +16555,6 @@ async function generateAsylumFee(){
 
     const anum = (v.field6 || '').trim();
     const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
-    const respWord = plural ? 'Respondents' : 'Respondent';
     const addr = (typeof _briefSplitAddr === 'function') ? _briefSplitAddr(v.field4 || '') : [String(v.field4||''), ''];
     const feeLabel = (opts.feeType === 'annual') ? 'Annual Asylum Fee' : 'Initial Asylum Fee';
     // Bold centered document title, pluralized like the motion titles.
@@ -16582,6 +16581,11 @@ async function generateAsylumFee(){
     // respondent box is bordered on the top, right and bottom only — no
     // line on its left side — with a bordered spacer column separating
     // it from the "File No.:" column, and the table is centered.
+    // Inside the box (matching the template's paragraph marks): one blank
+    // line, "In the Matter of:", two blanks, the bold respondent name,
+    // two blanks, "In Removal Proceedings," and one closing blank. The
+    // "File No.:" column is padded with blanks so it sits level with the
+    // respondent's name.
     const captionBlock = () => {
       let c = '';
       c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
@@ -16589,25 +16593,28 @@ async function generateAsylumFee(){
       c += para(run((v.field3 || 'IMMIGRATION COURT')), { jc:'center', after:0 });
       if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
       if(addr[1]) c += para(run(addr[1]), { jc:'center', after:120 });
-      c += para(run('In the Matter of:'), { after:40 });
       const bT = '<w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
       const bB = '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
       const bR = '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
       const bL = '<w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
-      const boxRow = (leftInner, rightInner, extras) => '<w:tr>'
-        + tcell(5040, leftInner, (extras||'') + bR)
-        + tcell(1165, para('', { after:0 }), bL)
-        + tcell(3145, rightInner || para('', { after:0 }), '')
-        + '</w:tr>';
+      const blankP = para('', { after:0 });
+      const boxInner = blankP
+        + para(run('In the Matter of:'), { after:0 })
+        + blankP + blankP
+        + para(run(respLine || '____________', { bold:true }), { after:0 })
+        + blankP + blankP
+        + para(run('In Removal Proceedings,'), { after:0 })
+        + blankP;
       const fileNo = 'File No.: ' + (anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________');
+      const fileInner = blankP + blankP + blankP + blankP + para(run(fileNo), { after:0 });
       c += '<w:tbl><w:tblPr><w:tblW w:w="9350" w:type="dxa"/><w:jc w:val="center"/>'
         + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
         + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="1165"/><w:gridCol w:w="3145"/></w:tblGrid>'
-        + boxRow(para(run(respLine || '____________', { bold:true }), { after:0 }), para(run(fileNo), { after:0 }), bT)
-        + boxRow(para('', { after:0 }), null)
-        + boxRow(para(run('In Removal Proceedings,'), { after:0 }), null)
-        + boxRow(para(run('       ' + respWord + '.'), { after:0 }), null, bB)
-        + '</w:tbl>';
+        + '<w:tr>'
+        + tcell(5040, boxInner, bT + bB + bR)
+        + tcell(1165, blankP, bL)
+        + tcell(3145, fileInner, '')
+        + '</w:tr></w:tbl>';
       c += para('', { after:200 });
       return c;
     };
