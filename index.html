@@ -12391,6 +12391,27 @@ function renderJudges(){
     if(q){const blob=(j.name+j.venue+j.role+j.email+j.clerk+j.master+j.individual+j.bond+j.motion+j.notes).toLowerCase();if(!blob.includes(q))return false;}
     return true;
   }).sort((a,b)=>a.name.localeCompare(b.name));
+  // ── Cases & hearings before each judge ──
+  // A judge "has" a case when the case's Info section assigns them
+  // (judgeId / judgeICId / judgeFCId in caseMeta) or when any of the
+  // case's events names them as hearing judge (hearingJudgeId). The
+  // hearing list is the active (not finished / deleted) events naming
+  // the judge, split into upcoming and past around today.
+  const _jCases={},_jHearings={},_clidName={};
+  const _addJCase=(jid,clid)=>{if(!jid||!clid)return;(_jCases[jid]=_jCases[jid]||new Set()).add(String(clid));};
+  Object.entries(typeof caseMeta!=='undefined'?caseMeta:{}).forEach(([clid,m])=>{
+    if(!m)return;
+    [m.judgeId,m.judgeICId,m.judgeFCId].forEach(jid=>_addJCase(jid,clid));
+  });
+  (typeof records!=='undefined'?records:[]).forEach(r=>{
+    if(r.clid&&r.client&&!_clidName[r.clid])_clidName[r.clid]=r.client;
+    if(!r.hearingJudgeId||r.deletedStatus)return;
+    _addJCase(r.hearingJudgeId,r.clid);
+    if(r.finishedStatus||!r.date)return;
+    if((r.notes||'').startsWith('⏰ REMINDER'))return; // reminders cloned from hearings aren't hearings
+    (_jHearings[r.hearingJudgeId]=_jHearings[r.hearingJudgeId]||[]).push(r);
+  });
+  const _jShortDate=s=>{const d=parseDate(s);return d?d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):s;};
   const tbl=document.getElementById('judges-grid');
   const empty=document.getElementById('judges-empty');
   tbl.innerHTML='';
@@ -12402,6 +12423,7 @@ function renderJudges(){
     <th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;padding:6px 10px 8px;">Venue</th>
     <th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;padding:6px 10px 8px;">Clerk</th>
     <th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;padding:6px 10px 8px;">Webex</th>
+    <th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;padding:6px 10px 8px;">Cases & Hearings</th>
     <th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;padding:6px 10px 8px;">Notes</th>
     <th style="padding:6px 0 8px;"></th>
   </tr></thead>`;
@@ -12423,6 +12445,30 @@ function renderJudges(){
       j.notes&&{label:'Notes',text:j.notes},
     ].filter(Boolean);
     const notesHtml=noteFields.map(f=>`<span style="color:#C4BAB0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">${f.label}:</span> <span style="color:#5C5148;font-size:12px;">${f.text}</span>`).join('<br>');
+    // Cases & hearings cell: a count line, then up to 3 upcoming hearings
+    // (click → open the case). With no upcoming hearings, the case names
+    // themselves are listed so the judge's caseload is still visible.
+    const _cset=_jCases[j.id]||new Set();
+    const _hrs=(_jHearings[j.id]||[]).slice().sort((a,b)=>a.date<b.date?-1:1);
+    const _up=_hrs.filter(r=>parseDate(r.date)>=TODAY);
+    const _past=_hrs.length-_up.length;
+    let casesHtml='';
+    if(_cset.size||_hrs.length){
+      const bits=[`${_cset.size} case${_cset.size===1?'':'s'}`];
+      if(_up.length)bits.push(`<span style="color:#6A8C6E;">${_up.length} upcoming</span>`);
+      if(_past)bits.push(`${_past} past`);
+      casesHtml=`<div style="font-size:11px;font-weight:600;color:#5C5148;white-space:nowrap;margin-bottom:3px;">${bits.join(' · ')}</div>`;
+      _up.slice(0,3).forEach(r=>{
+        casesHtml+=`<div onclick="goToCase('${r.clid}')" title="Open case — ${escHtml(r.client||r.clid)}" style="font-size:11px;color:#6B7FA3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px;cursor:pointer;line-height:1.7;">${_jShortDate(r.date)} · ${escHtml(r.event||'')} · ${escHtml(r.client||r.clid)}</div>`;
+      });
+      if(_up.length>3)casesHtml+=`<div style="font-size:10px;color:#C4BAB0;">+${_up.length-3} more upcoming</div>`;
+      if(!_up.length){
+        [..._cset].slice(0,3).forEach(clid=>{
+          casesHtml+=`<div onclick="goToCase('${clid}')" title="Open case" style="font-size:11px;color:#6B7FA3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px;cursor:pointer;line-height:1.7;">${escHtml(_clidName[clid]||('Case '+clid))}</div>`;
+        });
+        if(_cset.size>3)casesHtml+=`<div style="font-size:10px;color:#C4BAB0;">+${_cset.size-3} more cases</div>`;
+      }
+    }
     const tr=document.createElement('tr');
     tr.style.cssText='border-bottom:1px solid #F0EBE4;';
     tr.onmouseenter=()=>tr.style.background='#FDFAF7';
@@ -12435,6 +12481,7 @@ function renderJudges(){
       <td style="padding:10px;vertical-align:top;font-size:12px;color:#9E9186;white-space:nowrap;line-height:1.4;">${j.venue||'—'}${j.venueCity?'<br><span style="color:#C4BAB0;">'+j.venueCity+'</span>':''}</td>
       <td style="padding:10px;vertical-align:top;font-size:12px;color:#9E9186;white-space:nowrap;">${j.clerk||'—'}</td>
       <td style="padding:10px;vertical-align:top;">${webexBadge}</td>
+      <td style="padding:10px;vertical-align:top;min-width:150px;">${casesHtml||'<span style="color:#C4BAB0;font-size:12px;">—</span>'}</td>
       <td style="padding:10px;vertical-align:top;max-width:380px;line-height:1.6;">${notesHtml||'<span style="color:#C4BAB0;font-size:12px;">—</span>'}</td>
       <td style="padding:10px 0 10px 10px;vertical-align:top;white-space:nowrap;">
         <button onclick="openJudgeModal('${j.id}')" style="font-size:10px;padding:2px 9px;border:1px solid #DDD5CA;border-radius:5px;background:transparent;color:#9E9186;cursor:pointer;margin-right:4px;">Edit</button>
