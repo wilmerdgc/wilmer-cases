@@ -21239,12 +21239,29 @@ function _openTaskFinish(id){
     const ss=document.getElementById('modal-status-section'); if(ss) ss.style.display='block';
     const t=document.getElementById('modal-title'); if(t) t.textContent='Finish event';
   };
-  // Acquire the per-record edit lock first (same gate as enterEditMode).
+  // Same lock gate as enterEditMode, but the finish view is shown right
+  // away and the lock is acquired in the background — waiting for the
+  // Firestore roundtrip before switching views made the modal flash the
+  // read-only "Event" window first and then swap to "Finish event",
+  // which read as two windows opening back to back.
   if(editingId && typeof _heldLockId!=='undefined' && _heldLockId!==editingId){
     const cur=(typeof _recordLocks!=='undefined')?_recordLocks[editingId]:null;
     if(cur && typeof _lockIsActive==='function' && cur.device!==_deviceId && _lockIsActive(cur)){ _showLockBlocked(cur); return; }
     if(typeof _acquireLock==='function'){
-      _acquireLock(editingId).then(res=>{ if(!res.ok){ _showLockBlocked(res.lock); return; } if(typeof _startLockHeartbeat==='function')_startLockHeartbeat(editingId); proceed(); });
+      proceed();
+      const lockId=editingId;
+      _acquireLock(lockId).then(res=>{
+        if(!res.ok){
+          // Another device grabbed the lock first — fall back to read-only.
+          const m=document.getElementById('modal');
+          if(m) m.classList.remove('finish-only');
+          const r=records.find(x=>x.id===lockId);
+          if(r && typeof enterReadOnlyMode==='function') enterReadOnlyMode(r);
+          _showLockBlocked(res.lock);
+          return;
+        }
+        if(typeof _startLockHeartbeat==='function')_startLockHeartbeat(lockId);
+      });
       return;
     }
   }
