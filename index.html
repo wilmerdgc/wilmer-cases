@@ -2459,7 +2459,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
     <div class="settings-section-title">Event types</div>
     <div style="font-size:11px;color:var(--ink-muted);line-height:1.55;margin-bottom:14px;background:#EEF1F7;border:1px solid #CBD5E8;border-radius:8px;padding:10px 12px;">
       <div style="font-weight:700;color:#6B7FA3;text-transform:uppercase;letter-spacing:.05em;font-size:10px;margin-bottom:5px;">📡 Hearing category — rules</div>
-      Tag a type as <strong>Hearing</strong> (category dropdown on the right) to treat it as a court hearing. When a hearing type is chosen, the Add / Edit event form requires a <strong>format (Virtual / In Person)</strong>, a <strong>judge</strong>, and a <strong>start time</strong> before it can be saved, and the event's View shows the format, judge, and Webex link.<br>
+      Tag a type as <strong>Hearing</strong> (category dropdown on the right) to treat it as a court hearing. When a hearing type is chosen, the Add / Edit event form requires a <strong>format (Virtual / In Person / At the Office)</strong>, a <strong>start time</strong>, and — for Virtual / In Person — a <strong>judge</strong> before it can be saved, and the event's View shows the format, judge, and Webex link. <strong>MASTER PREP</strong> is the exception: it can be a plain office appointment (e.g. an intention to settle), so format and time are optional there unless you assign them.<br>
       Types whose name contains <strong>MASTER, INDIVIDUAL, MERITS, BOND, HEARING,</strong> or <strong>TRIAL</strong> are detected as hearings automatically, even without the tag. For virtual hearings, the judge's saved Webex room link is filled in for you (and can be overridden per event).
     </div>
     <div id="eventtype-tags"></div>
@@ -2945,6 +2945,10 @@ window.addEventListener('load',()=>autoGrowAllNotes());
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;transition:all .15s;" id="hm-label-inperson">
               <input type="radio" name="hearing-mode" id="hm-inperson" value="in-person" onchange="onHearingModeChange()" style="width:auto;margin:0;cursor:pointer;"/>
               🏛 In Person
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;transition:all .15s;" id="hm-label-office">
+              <input type="radio" name="hearing-mode" id="hm-office" value="office" onchange="onHearingModeChange()" style="width:auto;margin:0;cursor:pointer;"/>
+              🏢 At the Office
             </label>
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;transition:all .15s;" id="hm-label-none">
               <input type="radio" name="hearing-mode" id="hm-none" value="" onchange="onHearingModeChange()" style="width:auto;margin:0;cursor:pointer;" checked/>
@@ -8420,6 +8424,9 @@ function showEventPopover(r, anchorEl){
       if(r.hearingMode==='virtual'){
         hmBadge.style.cssText='font-size:11px;font-weight:600;background:#EEF1F7;color:#6B7FA3;border-radius:8px;padding:3px 10px;';
         hmBadge.textContent='📡 Virtual';
+      } else if(r.hearingMode==='office'){
+        hmBadge.style.cssText='font-size:11px;font-weight:600;background:#FAF0E6;color:#C9823A;border-radius:8px;padding:3px 10px;';
+        hmBadge.textContent='🏢 At the Office';
       } else {
         hmBadge.style.cssText='font-size:11px;font-weight:600;background:#EBF1EB;color:#6A8C6E;border-radius:8px;padding:3px 10px;';
         hmBadge.textContent='🏛 In Person';
@@ -10200,7 +10207,7 @@ function renderIndividualView(){
     // Hearing mode
     const hm=document.createElement('div');
     hm.style.cssText='font-size:10px;color:#6B7FA3;text-transform:uppercase;letter-spacing:.05em;font-weight:600;';
-    hm.textContent=r.hearingMode?(r.hearingMode==='virtual'?'📡 Webex':r.hearingMode==='in-person'?'🏛 In Person':r.hearingMode):'—';
+    hm.textContent=r.hearingMode?(r.hearingMode==='virtual'?'📡 Webex':r.hearingMode==='in-person'?'🏛 In Person':r.hearingMode==='office'?'🏢 At the Office':r.hearingMode):'—';
     card.appendChild(hm);
     // Notes
     const nt=document.createElement('div');
@@ -11289,22 +11296,33 @@ function isHearingEventType(val){
   if(meta.category === 'hearing') return true;
   return /\b(MASTER|INDIVIDUAL|MERITS|BOND|HEARING|TRIAL)\b/i.test(val);
 }
+// MASTER PREP / PREP MASTER can be a court hearing, but can also be an
+// office appointment with the client (e.g. an intention to settle) — so the
+// hearing requirements (format / judge / time) are optional for preps and
+// only kick in when a court format is actually assigned.
+function isMasterPrepType(val){
+  return /\bMASTER\b/i.test(val||'') && /\bPREP\b/i.test(val||'');
+}
 function setHearingMode(mode){
   const r1=document.getElementById('hm-virtual');
   const r2=document.getElementById('hm-inperson');
   const r3=document.getElementById('hm-none');
+  const r4=document.getElementById('hm-office');
   if(!r1)return;
   if(mode==='virtual'){r1.checked=true;}
   else if(mode==='in-person'){r2.checked=true;}
+  else if(mode==='office'&&r4){r4.checked=true;}
   else{r3.checked=true;}
   onHearingModeChange();
 }
 function getHearingMode(){
   const r1=document.getElementById('hm-virtual');
   const r2=document.getElementById('hm-inperson');
+  const r4=document.getElementById('hm-office');
   if(!r1)return'';
   if(r1.checked)return'virtual';
   if(r2.checked)return'in-person';
+  if(r4&&r4.checked)return'office';
   return'';
 }
 function onHearingModeChange(){
@@ -11312,10 +11330,11 @@ function onHearingModeChange(){
   const styles={
     virtual:{bg:'#EEF1F7',border:'#6B7FA3',color:'#6B7FA3'},
     'in-person':{bg:'#EBF1EB',border:'#6A8C6E',color:'#6A8C6E'},
+    office:{bg:'#FAF0E6',border:'#C9823A',color:'#C9823A'},
     '':{bg:'#fff',border:'var(--border)',color:'var(--ink-soft)'}
   };
-  ['virtual','in-person',''].forEach(v=>{
-    const id=v===''?'none':v==='in-person'?'inperson':'virtual';
+  ['virtual','in-person','office',''].forEach(v=>{
+    const id=v===''?'none':v==='in-person'?'inperson':v;
     const lbl=document.getElementById('hm-label-'+id);
     if(!lbl)return;
     const sel=(mode===v);
@@ -11325,8 +11344,9 @@ function onHearingModeChange(){
     lbl.style.color=sel?s.color:'var(--ink-soft)';
     lbl.style.fontWeight=sel?'600':'400';
   });
-  // Show the hearing-details panel for ANY chosen format so the judge is
-  // always asked. The Webex link + "virtual" labels stay virtual-only.
+  // Show the hearing-details panel for court formats so the judge is asked.
+  // "At the office" is a client appointment — no judge, so no details panel.
+  // The Webex link + "virtual" labels stay virtual-only.
   const _isHearingMode=(mode==='virtual'||mode==='in-person');
   const vd=document.getElementById('modal-virtual-details');
   if(vd) vd.style.display=_isHearingMode?'block':'none';
@@ -11643,7 +11663,9 @@ function onEventTypeChange(val){
   // If the chosen event type is a hearing, force-open the time range
   // panel so the user is prompted for the hearing time. The save
   // validation below also rejects hearings that leave the time empty.
-  if(isHearingEventType(val)){
+  // MASTER PREP is exempt — time is optional there (it may just be an
+  // office appointment), so it isn't forced or required.
+  if(isHearingEventType(val) && !isMasterPrepType(val)){
     const tt=document.getElementById('fc-time-toggle');
     const panel2=document.getElementById('time-range-panel');
     if(tt){ tt.checked=true; }
@@ -12173,6 +12195,7 @@ function _renderReadOnlyView(r){
   if(typeof isHearingEventType==='function' && isHearingEventType(r.event||'')){
     const fmtVal = r.hearingMode==='virtual' ? '📡 Virtual'
                  : r.hearingMode==='in-person' ? '🏛 In Person'
+                 : r.hearingMode==='office' ? '🏢 At the Office'
                  : 'Not set';
     hearingRows += row('Format', fmtVal, 'hm-virtual');
     const _hj = r.hearingJudgeId ? (typeof judges!=='undefined'?judges:[]).find(x=>x.id===r.hearingJudgeId) : null;
@@ -12609,27 +12632,34 @@ window.saveEvent=function(){
   // event out (a status change or the compact finish dialog) — those fields
   // are hidden there and aren't needed to mark a hearing done.
   const _finishing = !!pendingStatus || !!(document.getElementById('modal') && document.getElementById('modal').classList.contains('finish-only'));
-  // Hearings always need a format (Virtual / In Person) and a judge.
+  // Hearings always need a format (Virtual / In Person / At the Office) and —
+  // for court formats — a judge. MASTER PREP is exempt from the format/time
+  // requirements (it can be a plain office appointment), but if a court
+  // format IS assigned to a prep, it's a real hearing and needs its judge.
+  const _isMasterPrep=isMasterPrepType(_evt);
   if(isHearingEventType(_evt) && !_finishing){
     const _hm=getHearingMode();
-    if(_hm!=='virtual' && _hm!=='in-person'){
-      alert('Hearings always need a format.\n\nChoose Virtual or In Person for this hearing.');
+    if(!_isMasterPrep && _hm!=='virtual' && _hm!=='in-person' && _hm!=='office'){
+      alert('Hearings always need a format.\n\nChoose Virtual, In Person, or At the Office for this hearing.');
       const _hmsEl=document.getElementById('modal-hearing-mode-section');
       if(_hmsEl){ try{ _hmsEl.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
       return;
     }
-    const _jsel=document.getElementById('vh-judge');
-    if(!_jsel || !_jsel.value){
-      alert('Hearings always need a judge.\n\nSelect the judge for this hearing.');
-      const _vd=document.getElementById('modal-virtual-details');
-      if(_vd){ try{ _vd.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
-      if(_jsel){ try{ _jsel.focus(); }catch(e){} }
-      return;
+    if(_hm==='virtual' || _hm==='in-person'){
+      const _jsel=document.getElementById('vh-judge');
+      if(!_jsel || !_jsel.value){
+        alert('Hearings always need a judge.\n\nSelect the judge for this hearing.');
+        const _vd=document.getElementById('modal-virtual-details');
+        if(_vd){ try{ _vd.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
+        if(_jsel){ try{ _jsel.focus(); }catch(e){} }
+        return;
+      }
     }
   }
   // Hearings always need a time — surface a clear alert and bounce the
   // user back to the time picker if they tried to save without one.
-  if(isHearingEventType(_evt) && !_finishing){
+  // MASTER PREP is exempt: a time is only kept if the user sets one.
+  if(isHearingEventType(_evt) && !_isMasterPrep && !_finishing){
     const _tt=document.getElementById('fc-time-toggle');
     const _tsEl=document.getElementById('fc-time-start');
     const _ts=(_tsEl&&_tsEl.value||'').trim();
@@ -12848,7 +12878,10 @@ function formatEventForEmail(ev, clid, defaultParalegal){
   }
   txt+='\n';
   // Format / Hearing mode
-  if(ev.hearingMode) txt+='Format: '+ev.hearingMode.charAt(0).toUpperCase()+ev.hearingMode.slice(1)+'\n';
+  if(ev.hearingMode){
+    const _fmtMap={'virtual':'Virtual','in-person':'In person','office':'At the office'};
+    txt+='Format: '+(_fmtMap[ev.hearingMode]||(ev.hearingMode.charAt(0).toUpperCase()+ev.hearingMode.slice(1)))+'\n';
+  }
   // Judge (any hearing format) + Webex link (virtual only)
   const _judge=eventJudgeName(ev);
   if(_judge) txt+='Judge: '+_judge+'\n';
@@ -12887,7 +12920,7 @@ function formatEventForEmailES(ev, clid, defaultParalegal){
   }
   txt+='\n';
   if(ev.hearingMode){
-    const modeMap={'virtual':'Virtual','in-person':'En persona','inperson':'En persona','phone':'Teléfono','telephone':'Teléfono','webex':'Webex'};
+    const modeMap={'virtual':'Virtual','in-person':'En persona','inperson':'En persona','office':'En la oficina','phone':'Teléfono','telephone':'Teléfono','webex':'Webex'};
     const key=String(ev.hearingMode).toLowerCase();
     const modeEs=modeMap[key]||(ev.hearingMode.charAt(0).toUpperCase()+ev.hearingMode.slice(1));
     txt+='Formato: '+modeEs+'\n';
@@ -14807,7 +14840,7 @@ function _mhpBuildPrefill(clid){
   if(h){
     hearing.date=h.date||'';
     hearing.time=h.timeStart||'';
-    hearing.format = h.hearingMode==='virtual'?'Webex':(h.hearingMode==='in-person'?'In-person':'');
+    hearing.format = h.hearingMode==='virtual'?'Webex':(h.hearingMode==='in-person'?'In-person':(h.hearingMode==='office'?'At the office':''));
     if(h.hearingJudgeId&&typeof judges!=='undefined'){
       const j=judges.find(x=>x.id===h.hearingJudgeId);
       if(j){ hearing.judge=j.name||''; hearing.court=j.venue||''; }
@@ -14849,7 +14882,7 @@ function _mhpBuildHearings(clid){
         date:r.date||'',
         time:r.timeStart||'',
         timeEnd:r.timeEnd||'',
-        format:r.hearingMode==='virtual'?'Webex':(r.hearingMode==='in-person'?'In-person':''),
+        format:r.hearingMode==='virtual'?'Webex':(r.hearingMode==='in-person'?'In-person':(r.hearingMode==='office'?'At the office':'')),
         judge:(j&&j.name)||'',
         court:(j&&j.venue)||''
       };
@@ -21775,8 +21808,9 @@ function renderDayTimeline(){
         const isSJC3 = (r.type||'').includes('Special Juvenile');
         const jKeys = isSJC3 ? ['judgeICId','judgeFCId'] : ['judgeId'];
         if(r.hearingMode){
-          const hmIcon = r.hearingMode==='virtual'?'📡':'🏛';
-          judgeHtml += `<div style="font-size:9px;color:${color};opacity:0.9;margin-top:1px;">${hmIcon} ${r.hearingMode==='virtual'?'Virtual':'In Person'}</div>`;
+          const hmIcon = r.hearingMode==='virtual'?'📡':r.hearingMode==='office'?'🏢':'🏛';
+          const hmText = r.hearingMode==='virtual'?'Virtual':r.hearingMode==='office'?'At the Office':'In Person';
+          judgeHtml += `<div style="font-size:9px;color:${color};opacity:0.9;margin-top:1px;">${hmIcon} ${hmText}</div>`;
         }
         jKeys.forEach(k=>{
           const jj = cm[k] ? judges.find(x=>x.id===cm[k]) : null;
