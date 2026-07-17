@@ -19249,6 +19249,16 @@ function openCaseDetail(clid){
     });
   };
   atRow.appendChild(emailClientBtn);
+  // Send the case's full upcoming schedule to the client — everything
+  // in Spanish. Sits right next to Email Client since both address the
+  // client directly.
+  const schedClientBtn=document.createElement('button');
+  schedClientBtn.className='btn-sm';
+  schedClientBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#C9823A;color:#C9823A;margin-left:4px;font-weight:600;';
+  schedClientBtn.textContent='📅 Schedule → Client';
+  schedClientBtn.title='Email the client every upcoming event on this case, written in Spanish';
+  schedClientBtn.onclick=()=>emailScheduleToClient(clid);
+  atRow.appendChild(schedClientBtn);
 
   // Email Case button (general case email, default to paralegal)
   const emailCaseBtn=document.createElement('button');emailCaseBtn.className='btn-sm';emailCaseBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#B4CCAD;color:#6A8C6E;margin-left:4px;font-weight:600;';emailCaseBtn.textContent='✉ Email Case';
@@ -19271,16 +19281,6 @@ function openCaseDetail(clid){
     });
   };
   atRow.appendChild(emailCaseBtn);
-  // Send the case's full upcoming schedule to the client — everything
-  // in Spanish. Mirrors the calendar email to Loly but addressed to the
-  // client with the Spanish event formatter.
-  const schedClientBtn=document.createElement('button');
-  schedClientBtn.className='btn-sm';
-  schedClientBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#C9823A;color:#C9823A;margin-left:4px;font-weight:600;';
-  schedClientBtn.textContent='📅 Schedule → Client';
-  schedClientBtn.title='Email the client every upcoming event on this case, written in Spanish';
-  schedClientBtn.onclick=()=>emailScheduleToClient(clid);
-  atRow.appendChild(schedClientBtn);
   // Folder badge — when a directory is linked we show "📁 <Folder name>"
   // (click opens the in-app file viewer — best the browser can do for
   // "see where the folder is in Windows" since the File System Access API
