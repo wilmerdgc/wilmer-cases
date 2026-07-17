@@ -3156,7 +3156,7 @@ let records=[];
 // local storage.
 let _dataInitialized=false;
 let paralegals=[...new Set(records.map(r=>r.atty).filter(Boolean))].sort();
-let eventTypes=[...new Set([...records.map(r=>r.event).filter(Boolean),'90-DAY DEADLINE','60-DAY DEADLINE','30-DAY DEADLINE','CALL UP DEADLINE','PRIORITY DAY','FC HEARING','FC TRIAL','FC TASK','FC INITIAL PETITION','FC SERVICE','PERSONAL TASK','OFFICE TASK'])].sort();
+let eventTypes=[...new Set([...records.map(r=>r.event).filter(Boolean),'90-DAY DEADLINE','60-DAY DEADLINE','30-DAY DEADLINE','CALL UP DEADLINE','PRIORITY DAY','FC HEARING','FC TRIAL','FC TASK','FC INITIAL PETITION','FC SERVICE','PERSONAL TASK','OFFICE TASK','360 PETITION'])].sort();
 // Event types restricted to specific case types (if not listed here, available to all)
 const SIJ_CASE_TYPES=['Special Juvenile in Court','Special Juvenile Not in Immigration Court','Special Juvenile in Immigration Court'];
 const eventTypeCaseFilter={
@@ -3168,7 +3168,7 @@ const eventTypeCaseFilter={
   'FC SERVICE':SIJ_CASE_TYPES
 };
 function ensureFCEventTypes(){
-  ['FC HEARING','FC TRIAL','FC TASK','FC INITIAL PETITION','FC SERVICE','PERSONAL TASK','OFFICE TASK'].forEach(t=>{
+  ['FC HEARING','FC TRIAL','FC TASK','FC INITIAL PETITION','FC SERVICE','PERSONAL TASK','OFFICE TASK','360 PETITION'].forEach(t=>{
     if(!eventTypes.includes(t)) eventTypes.push(t);
   });
   eventTypes.sort();
@@ -12786,9 +12786,18 @@ window.saveEvent=function(){
       }
     }
   }
+  const _finStatus=pendingStatus; // capture before closeModal resets it
   closeModal();_miniCalLastKey='';_invalidateCasesCache();dirtyCaseFilterOpts();markUnsaved();showToast('Changes saved');
   if(currentTab==='settings')renderSettings();else renderAll();
   if(activeCaseClid&&document.getElementById('cases-detail-view').style.display!=='none'){openCaseDetail(activeCaseClid);}
+  // A family-court hearing marked attended/completed usually means SIJ
+  // findings were granted — offer the I-360 follow-up chain.
+  try{
+    if((_finStatus==='attended'||_finStatus==='completed')
+       && /^(FC HEARING|FC TRIAL|FAMILY COURT|FAMILY COURT TRIAL)$/.test((data.event||'').trim())){
+      offer360FollowUps(data);
+    }
+  }catch(e){}
   // Offer to draft calendar email
   offerCalendarEmailDraft(data);
 };
@@ -12809,6 +12818,95 @@ function offerCalendarEmailDraft(savedData){
     <button onclick="this.parentElement.remove();" style="font-size:11px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Skip</button>`;
   document.body.appendChild(draftBtn);
   setTimeout(()=>{const el=document.getElementById('calendar-email-toast');if(el)el.remove();},15000);
+}
+
+// Add N months to a YYYY-MM-DD string (clamps day overflow, e.g.
+// Jan 31 + 1 month → Feb 28/29).
+function _addMonthsStr(dateStr, months){
+  const d = parseDate(dateStr) || new Date();
+  const day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + months);
+  const maxDay = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+  d.setDate(Math.min(day, maxDay));
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+// After a family-court hearing is marked attended/completed, offer the
+// I-360 follow-up chain: file the 360 PETITION, then check for the
+// receipt (~2 months later), then check for approval (~6 months later).
+// Each row has a checkbox + editable suggested date; only checked rows
+// are created.
+function offer360FollowUps(savedData){
+  const clid=savedData.clid||savedData.client;
+  if(!clid) return;
+  const anchor=savedData.date||todayStr();
+  const rows=[
+    { event:'360 PETITION', notes:'File the I-360 petition with USCIS.', date:addDateDays(anchor,14), label:'360 Petition' },
+    { event:'TASK', notes:'Check if we have receipt', date:_addMonthsStr(anchor,2), label:'Task: Check if we have receipt' },
+    { event:'TASK', notes:'Check if 360 is approved', date:_addMonthsStr(anchor,6), label:'Task: Check if 360 is approved' }
+  ];
+  const old=document.getElementById('fc360-offer-card'); if(old) old.remove();
+  const card=document.createElement('div');
+  card.id='fc360-offer-card';
+  card.style.cssText='position:fixed;bottom:20px;right:20px;background:#fff;border:1px solid var(--sage-mid);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);padding:16px 18px;z-index:9999;max-width:440px;animation:fadeIn .2s;';
+  const title=document.createElement('div');
+  title.style.cssText='font-size:12px;font-weight:600;color:var(--ink);margin-bottom:2px;';
+  title.textContent='FC hearing finished — add the I-360 follow-ups?';
+  const sub=document.createElement('div');
+  sub.style.cssText='font-size:11px;color:var(--ink-muted);margin-bottom:10px;';
+  sub.textContent=(savedData.client||clid)+' — dates are suggestions, edit before adding.';
+  card.appendChild(title); card.appendChild(sub);
+  const inputs=[];
+  rows.forEach(row=>{
+    const line=document.createElement('div');
+    line.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:6px;';
+    const chk=document.createElement('input');
+    chk.type='checkbox'; chk.checked=true;
+    chk.style.cssText='width:14px;height:14px;accent-color:var(--sage);cursor:pointer;flex-shrink:0;';
+    const lbl=document.createElement('span');
+    lbl.style.cssText='flex:1;font-size:12px;color:var(--ink);';
+    lbl.textContent=row.label;
+    const dt=document.createElement('input');
+    dt.type='date'; dt.value=row.date;
+    dt.style.cssText='font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-family:inherit;color:var(--ink);flex-shrink:0;';
+    line.appendChild(chk); line.appendChild(lbl); line.appendChild(dt);
+    card.appendChild(line);
+    inputs.push({row, chk, dt});
+  });
+  const btnRow=document.createElement('div');
+  btnRow.style.cssText='display:flex;gap:8px;justify-content:flex-end;margin-top:10px;';
+  const addBtn=document.createElement('button');
+  addBtn.textContent='Add selected';
+  addBtn.style.cssText='font-size:11px;font-weight:600;padding:7px 16px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;';
+  addBtn.onclick=()=>{
+    let added=0;
+    inputs.forEach(x=>{
+      if(!x.chk.checked || !x.dt.value) return;
+      records.push({
+        id:uid(), clid:savedData.clid, client:savedData.client, type:savedData.type,
+        anum:savedData.anum, atty:savedData.atty, assigned:savedData.assigned,
+        event:x.row.event, date:x.dt.value, timeStart:'', timeEnd:'', hearingMode:'',
+        notes:x.row.notes, checklist:[], docs:[], history:[]
+      });
+      added++;
+    });
+    card.remove();
+    if(added){
+      _invalidateCasesCache(); dirtyCaseFilterOpts(); markUnsaved();
+      try{ renderAll(); }catch(e){}
+      try{ if(activeCaseClid&&document.getElementById('cases-detail-view').style.display!=='none') openCaseDetail(activeCaseClid); }catch(e){}
+      showToast(added+' follow-up event'+(added===1?'':'s')+' added ✓');
+    }
+  };
+  const skipBtn=document.createElement('button');
+  skipBtn.textContent='Skip';
+  skipBtn.style.cssText='font-size:11px;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;';
+  skipBtn.onclick=()=>card.remove();
+  btnRow.appendChild(skipBtn); btnRow.appendChild(addBtn);
+  card.appendChild(btnRow);
+  document.body.appendChild(card);
+  setTimeout(()=>{const el=document.getElementById('fc360-offer-card');if(el)el.remove();},60000);
 }
 
 // After the case's paralegal changes, offer to email the client an
@@ -23691,6 +23789,10 @@ function forcePullFromCloud(){
 }
 
 const loaded=loadSavedData();
+// Register any newly-shipped built-in event types (360 PETITION, FC*,
+// PERSONAL/OFFICE TASK) on localStorage boots too — applyPayload does
+// this for cloud applies, but the device that saved last never runs it.
+try{ ensureFCEventTypes(); }catch(e){}
 // One-time migration: for each case with a client string but no clientFirstName in caseMeta,
 // copy the client value into clientFirstName so the name parts are populated.
 (function _migrateClientNames(){
