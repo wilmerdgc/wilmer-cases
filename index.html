@@ -12986,6 +12986,39 @@ function buildCalendarEmailDraft(clid, clientName){
   });
 }
 
+// Email the case's full upcoming schedule directly TO the client —
+// subject and body entirely in Spanish. Same event collection as the
+// Loly calendar email; formatting via formatEventForEmailES so dates,
+// times, hearing formats, judges and reminders read naturally.
+function emailScheduleToClient(clid){
+  const meta=caseMeta[clid]||{};
+  const clientEmail=(meta.clientEmail||'').trim();
+  if(!clientEmail){ showToast('No client email on file — add one in Case Information first'); return; }
+  const clientEvents=records.filter(r=>{
+    return (r.clid||r.client)===clid && !r.finishedStatus && !r.deletedStatus && r.date
+      && !(r.notes&&r.notes.startsWith('⏰ REMINDER'));
+  }).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  if(!clientEvents.length){ showToast('No planned events to send'); return; }
+  const base=clientEvents[0];
+  const clientName=base.client||clid;
+  const clientFirst=(meta.clientFirstName||'').trim()||String(clientName).split(/\s+/)[0]||'';
+  let body='Estimado/a '+(clientFirst||clientName)+':\n\n'
+    +'Le escribimos de The Romero Firm para compartirle el calendario de los próximos eventos de su caso. Por favor, guarde estas fechas:\n\n'
+    +clientName+' — ID del cliente: '+(base.clid||clid);
+  if(base.anum) body+=' — A#: '+base.anum;
+  body+='\n\n';
+  clientEvents.forEach(ev=>{ body+=formatEventForEmailES(ev,clid,base.atty||''); });
+  body+='Si tiene alguna pregunta sobre alguna de estas fechas, o si no puede asistir a alguna cita, comuníquese con nosotros lo antes posible.\n\n'
+    +'Gracias,';
+  openEmailComposeModal({
+    to: clientEmail,
+    subject: 'Calendario de su caso — '+clientName+(base.clid?' ('+base.clid+')':''),
+    body: body,
+    _clid: clid,
+    _addSignature: true
+  });
+}
+
 // ── Gmail signature cache ──
 let _gmailSignature=null;
 let _gmailSignatureFetched=false;
@@ -19238,6 +19271,16 @@ function openCaseDetail(clid){
     });
   };
   atRow.appendChild(emailCaseBtn);
+  // Send the case's full upcoming schedule to the client — everything
+  // in Spanish. Mirrors the calendar email to Loly but addressed to the
+  // client with the Spanish event formatter.
+  const schedClientBtn=document.createElement('button');
+  schedClientBtn.className='btn-sm';
+  schedClientBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#C9823A;color:#C9823A;margin-left:4px;font-weight:600;';
+  schedClientBtn.textContent='📅 Schedule → Client';
+  schedClientBtn.title='Email the client every upcoming event on this case, written in Spanish';
+  schedClientBtn.onclick=()=>emailScheduleToClient(clid);
+  atRow.appendChild(schedClientBtn);
   // Folder badge — when a directory is linked we show "📁 <Folder name>"
   // (click opens the in-app file viewer — best the browser can do for
   // "see where the folder is in Windows" since the File System Access API
