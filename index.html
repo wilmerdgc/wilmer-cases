@@ -12847,38 +12847,57 @@ function offer360FollowUps(savedData){
     { event:'TASK', notes:'Check if 360 is approved', date:_addMonthsStr(anchor,6), label:'Task: Check if 360 is approved' }
   ];
   const old=document.getElementById('fc360-offer-card'); if(old) old.remove();
+  // Centered modal with a dim backdrop so the dates get reviewed rather
+  // than glanced at in a corner.
+  const overlay=document.createElement('div');
+  overlay.id='fc360-offer-card';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(44,38,32,0.35);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(1px);';
+  overlay.onclick=(e)=>{ if(e.target===overlay) overlay.remove(); };
   const card=document.createElement('div');
-  card.id='fc360-offer-card';
-  card.style.cssText='position:fixed;bottom:20px;right:20px;background:#fff;border:1px solid var(--sage-mid);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);padding:16px 18px;z-index:9999;max-width:440px;animation:fadeIn .2s;';
+  card.style.cssText='background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:22px 24px;width:460px;max-width:92vw;max-height:86vh;overflow-y:auto;animation:fadeIn .2s;';
+  overlay.appendChild(card);
   const title=document.createElement('div');
-  title.style.cssText='font-size:12px;font-weight:600;color:var(--ink);margin-bottom:2px;';
+  title.style.cssText="font-family:var(--font-display);font-size:16px;font-weight:600;color:var(--ink);margin-bottom:3px;";
   title.textContent='FC hearing finished — add the I-360 follow-ups?';
   const sub=document.createElement('div');
-  sub.style.cssText='font-size:11px;color:var(--ink-muted);margin-bottom:10px;';
-  sub.textContent=(savedData.client||clid)+' — dates are suggestions, edit before adding.';
+  sub.style.cssText='font-size:12px;color:var(--ink-muted);margin-bottom:16px;';
+  sub.textContent=(savedData.client||clid)+' — dates are suggestions, change any of them before adding.';
   card.appendChild(title); card.appendChild(sub);
   const inputs=[];
   rows.forEach(row=>{
-    const line=document.createElement('div');
-    line.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:6px;';
+    const block=document.createElement('div');
+    block.style.cssText='padding:10px 12px;border:1px solid var(--cream-dark);border-radius:8px;margin-bottom:8px;background:#FDFAF7;';
+    // Line 1: checkbox + full label (no cramped wrapping)
+    const line1=document.createElement('label');
+    line1.style.cssText='display:flex;align-items:center;gap:9px;cursor:pointer;margin-bottom:7px;';
     const chk=document.createElement('input');
     chk.type='checkbox'; chk.checked=true;
-    chk.style.cssText='width:14px;height:14px;accent-color:var(--sage);cursor:pointer;flex-shrink:0;';
+    chk.style.cssText='width:15px;height:15px;accent-color:var(--sage);cursor:pointer;flex-shrink:0;';
     const lbl=document.createElement('span');
-    lbl.style.cssText='flex:1;font-size:12px;color:var(--ink);';
+    lbl.style.cssText='font-size:13px;font-weight:600;color:var(--ink);';
     lbl.textContent=row.label;
+    line1.appendChild(chk); line1.appendChild(lbl);
+    // Line 2: date input + live formatted reference ("Mon, Jun 15, 2026")
+    const line2=document.createElement('div');
+    line2.style.cssText='display:flex;align-items:center;gap:10px;padding-left:24px;flex-wrap:wrap;';
     const dt=document.createElement('input');
     dt.type='date'; dt.value=row.date;
-    dt.style.cssText='font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-family:inherit;color:var(--ink);flex-shrink:0;';
-    line.appendChild(chk); line.appendChild(lbl); line.appendChild(dt);
-    card.appendChild(line);
+    dt.style.cssText='font-size:13px;padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-family:inherit;color:var(--ink);background:#fff;';
+    const ref=document.createElement('span');
+    ref.style.cssText='font-size:12px;font-weight:600;color:var(--sage);';
+    const updateRef=()=>{ ref.textContent = dt.value ? fmtDate(dt.value) : 'Pick a date'; ref.style.color = dt.value ? 'var(--sage)' : '#B85C5C'; };
+    updateRef();
+    dt.oninput=updateRef;
+    line2.appendChild(dt); line2.appendChild(ref);
+    block.appendChild(line1); block.appendChild(line2);
+    card.appendChild(block);
     inputs.push({row, chk, dt});
   });
   const btnRow=document.createElement('div');
-  btnRow.style.cssText='display:flex;gap:8px;justify-content:flex-end;margin-top:10px;';
+  btnRow.style.cssText='display:flex;gap:8px;justify-content:flex-end;margin-top:14px;';
   const addBtn=document.createElement('button');
   addBtn.textContent='Add selected';
-  addBtn.style.cssText='font-size:11px;font-weight:600;padding:7px 16px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;';
+  addBtn.style.cssText='font-size:13px;font-weight:600;padding:9px 20px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;';
   addBtn.onclick=()=>{
     let added=0;
     inputs.forEach(x=>{
@@ -12891,7 +12910,7 @@ function offer360FollowUps(savedData){
       });
       added++;
     });
-    card.remove();
+    overlay.remove();
     if(added){
       _invalidateCasesCache(); dirtyCaseFilterOpts(); markUnsaved();
       try{ renderAll(); }catch(e){}
@@ -12901,12 +12920,11 @@ function offer360FollowUps(savedData){
   };
   const skipBtn=document.createElement('button');
   skipBtn.textContent='Skip';
-  skipBtn.style.cssText='font-size:11px;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;';
-  skipBtn.onclick=()=>card.remove();
+  skipBtn.style.cssText='font-size:13px;padding:9px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;';
+  skipBtn.onclick=()=>overlay.remove();
   btnRow.appendChild(skipBtn); btnRow.appendChild(addBtn);
   card.appendChild(btnRow);
-  document.body.appendChild(card);
-  setTimeout(()=>{const el=document.getElementById('fc360-offer-card');if(el)el.remove();},60000);
+  document.body.appendChild(overlay);
 }
 
 // After the case's paralegal changes, offer to email the client an
