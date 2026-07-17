@@ -10629,8 +10629,15 @@ const _DEADLINE_DEFAULT_NOTES = {
   '30-DAY DEADLINE': 'Final limit to send all documents to the court.',
   'INDIVIDUAL PREP': 'Paralegal: please schedule a PREP with the client for this week.',
   // Both spellings exist in the data — map them to the same instruction.
-  'PREP MASTER': 'Have ready any relief, I-589, Fee, and personal statement of the client.',
-  'MASTER PREP': 'Have ready any relief, I-589, Fee, and personal statement of the client.'
+  'PREP MASTER': 'Have ready any relief, I-589, Fee, and personal statement of the client. Attorney: meet or call the client to explain the process.',
+  'MASTER PREP': 'Have ready any relief, I-589, Fee, and personal statement of the client. Attorney: meet or call the client to explain the process.'
+};
+// Older wordings of the defaults above. The boot backfill upgrades any
+// event whose notes exactly match a superseded default to the current
+// text — user-edited notes never match and are left alone.
+const _DEADLINE_PREV_DEFAULTS = {
+  'PREP MASTER': ['Have ready any relief, I-589, Fee, and personal statement of the client.'],
+  'MASTER PREP': ['Have ready any relief, I-589, Fee, and personal statement of the client.']
 };
 let callUpTypes = (()=>{
   try{
@@ -23712,9 +23719,15 @@ const loaded=loadSavedData();
   let n=0;
   (records||[]).forEach(r=>{
     if(!r || r.finishedStatus || r.deletedStatus) return;
-    if(r.notes && r.notes.trim()) return;
     const def=_DEADLINE_DEFAULT_NOTES[r.event];
-    if(def){ r.notes=def; n++; }
+    if(!def) return;
+    const cur=(r.notes||'').trim();
+    // Fill blank notes; also upgrade notes that exactly match an older
+    // wording of the default (user-edited notes never match).
+    const prev=_DEADLINE_PREV_DEFAULTS[r.event]||[];
+    if(!cur || prev.includes(cur)){
+      if(cur!==def){ r.notes=def; n++; }
+    }
   });
   if(n){ try{ markUnsaved(); }catch(e){} }
 })();
