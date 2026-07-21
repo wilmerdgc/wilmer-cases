@@ -9352,8 +9352,9 @@ function renderWeek() {
     });
     col.addEventListener('dblclick', e => {
       if(e.target.closest('.week-task')) return;
-      openAdd();
-      setTimeout(() => { document.getElementById('fc-date').value = dayStr; }, 30);
+      openNewTaskModal();
+      const dEl = document.getElementById('nt-date');
+      if(dEl) dEl.value = dayStr;
     });
     frag.appendChild(col);
   });
@@ -9592,8 +9593,9 @@ function renderMonth() {
     });
     cell.addEventListener('dblclick', e => {
       if(e.target.closest('.cal-event-card')) return;
-      openAdd();
-      setTimeout(() => { document.getElementById('fc-date').value = dayStr2; }, 30);
+      openNewTaskModal();
+      const dEl = document.getElementById('nt-date');
+      if(dEl) dEl.value = dayStr2;
     });
     frag.appendChild(cell);
     // Every 5 day cells (Mon–Fri) we append a week-number cell to fill the 6th column
