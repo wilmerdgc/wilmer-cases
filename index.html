@@ -9223,7 +9223,10 @@ function renderWeek() {
     const sortedTasks = tasks.slice().sort((a,b)=>{
       const ta = isTaskKindEvent(a.event)?1:0, tb = isTaskKindEvent(b.event)?1:0;
       if(ta!==tb) return ta - tb;
-      // Within the same kind, surface actual hearings (not prep) to the top.
+      // Within the same kind, user-set priority wins (high → medium → none → low)…
+      const pa = priorityRank(a), pb = priorityRank(b);
+      if(pa!==pb) return pa - pb;
+      // …then surface actual hearings (not prep) to the top.
       const _isHearingType = ev => (typeof isHearingEventType==='function') && isHearingEventType(ev||'') && !/\bPREP\b/i.test(ev||'');
       const ha = _isHearingType(a.event)?0:1, hb = _isHearingType(b.event)?0:1;
       return ha - hb;
@@ -9235,6 +9238,7 @@ function renderWeek() {
       // PREP / MASTER PREP / PREP MASTER all match the hearing name regex).
       const _isHearing = !isTask && !_isReminder && (typeof isHearingEventType==='function') && isHearingEventType(r.event||'') && !/\bPREP\b/i.test(r.event||'');
       const t = document.createElement('div'); t.className = 'week-task' + (isTask?' task-kind':'') + (_isHearing?' week-hearing':''); t.onclick = () => openEdit(r.id);
+      if(!_isReminder) t.addEventListener('contextmenu', e => openPriorityMenu(e, r.id));
       // Drag-and-drop to reschedule (disabled for reminders — they follow their parent)
       if(!_isReminder){
         t.setAttribute('draggable','true');
@@ -9286,7 +9290,7 @@ function renderWeek() {
         if(isTask){
           // Tasks: no "TASK" label — lead with the note, client beneath.
           // Clicking the box opens the finish window (the status buttons).
-          t.innerHTML = `<span class="task-check" data-rid="${r.id}" title="Finish this task" style="position:absolute;left:4px;top:6px;width:14px;height:14px;border:2px solid #C4BAB0;border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;transition:all .12s;background:#fff;">&check;</span><div class="week-event" style="white-space:normal;line-height:1.3;">${r.notes||'(no description)'}</div>${r.client?`<div class="week-client">${r.client}</div>`:''}${timeBadge}`;
+          t.innerHTML = `<span class="task-check" data-rid="${r.id}" title="Finish this task" style="position:absolute;left:4px;top:6px;width:14px;height:14px;border:2px solid #C4BAB0;border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;transition:all .12s;background:#fff;">&check;</span>${priorityBadgeHtml(r)}<div class="week-event" style="white-space:normal;line-height:1.3;">${r.notes||'(no description)'}</div>${r.client?`<div class="week-client">${r.client}</div>`:''}${timeBadge}`;
           const chk=t.querySelector('.task-check');
           if(chk){
             chk.onmouseenter=()=>{chk.style.borderColor='#6A8C6E';chk.style.color='#6A8C6E';};
@@ -9294,7 +9298,7 @@ function renderWeek() {
             chk.onclick=(e)=>{e.stopPropagation();_openTaskFinish(r.id);};
           }
         } else {
-          t.innerHTML = `<div class="week-event"${(!_isHearing&&evColor)?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div><div class="week-clid">#${r.clid || '—'}</div>${timeBadge}${cdHtml}${r.notes ? `<div class="wk-notes" style="font-size:10px;color:var(--ink-faint);margin-top:2px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
+          t.innerHTML = `${priorityBadgeHtml(r)}<div class="week-event"${(!_isHearing&&evColor)?` style="color:${evColor}"`:''}>${evLabel}</div><div class="week-client">${r.client}</div><div class="week-clid">#${r.clid || '—'}</div>${timeBadge}${cdHtml}${r.notes ? `<div class="wk-notes" style="font-size:10px;color:var(--ink-faint);margin-top:2px;font-style:italic;line-height:1.3;">${r.notes}</div>` : ''}`;
           t.style.paddingLeft='28px';
           t.appendChild(makeFinishCheckBtn(r.id, 14, 'position:absolute;left:5px;top:9px;'));
         }
@@ -9508,6 +9512,65 @@ function copyWeeklySummary(){
   }).catch(()=>{ alert(txt); });
 }
 
+// ── Record priority (set by right-clicking a card in Week/Month view) ──
+// Stored as r.priority = 'high' | 'medium' | 'low'; absent = normal.
+const PRIORITY_LEVELS = [
+  {key:'high',   label:'High',   color:'#B85C5C', icon:'▲'},
+  {key:'medium', label:'Medium', color:'#C9823A', icon:'◆'},
+  {key:'low',    label:'Low',    color:'#6B7FA3', icon:'▽'},
+];
+function priorityInfo(p){ return PRIORITY_LEVELS.find(l=>l.key===p)||null; }
+// Sort rank: high(0) → medium(1) → no priority(1.5) → low(2)
+function priorityRank(r){ const i=PRIORITY_LEVELS.findIndex(l=>l.key===r.priority); return i===-1?1.5:i; }
+function priorityBadgeHtml(r,fs){
+  const pi=priorityInfo(r.priority); if(!pi) return '';
+  return `<span style="display:inline-block;font-size:${fs||8.5}px;font-weight:700;color:${pi.color};background:${pi.color}1A;border:1px solid ${pi.color}55;padding:0 4px;border-radius:4px;margin-bottom:2px;letter-spacing:.04em;line-height:1.6;">${pi.icon} ${pi.label.toUpperCase()}</span>`;
+}
+function closePriorityMenu(){
+  const m=document.getElementById('priority-menu');
+  if(m){ m.remove(); document.removeEventListener('mousedown', _prioOutside, true); document.removeEventListener('keydown', _prioEsc, true); }
+}
+function _prioOutside(e){ const m=document.getElementById('priority-menu'); if(m && !m.contains(e.target)) closePriorityMenu(); }
+function _prioEsc(e){ if(e.key==='Escape') closePriorityMenu(); }
+function openPriorityMenu(evt, rid){
+  evt.preventDefault(); evt.stopPropagation();
+  closePriorityMenu();
+  const rec=records.find(r=>r.id===rid); if(!rec) return;
+  const menu=document.createElement('div');
+  menu.id='priority-menu';
+  menu.style.cssText='position:fixed;z-index:9999;background:#FDFAF7;border:1px solid #DDD5CA;border-radius:10px;box-shadow:0 8px 24px rgba(44,38,32,.18);padding:5px;min-width:150px;font-family:inherit;';
+  const head=document.createElement('div');
+  head.textContent='Priority';
+  head.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9E9186;padding:4px 9px 5px;';
+  menu.appendChild(head);
+  const mkRow=(label,color,icon,onPick,active)=>{
+    const b=document.createElement('button'); b.type='button';
+    b.innerHTML=`<span style="width:15px;display:inline-block;color:${color||'#C4BAB0'};">${icon}</span><span>${label}</span>${active?'<span style="margin-left:auto;color:#6A8C6E;">✓</span>':''}`;
+    b.style.cssText='display:flex;align-items:center;gap:5px;width:100%;text-align:left;border:none;background:transparent;font-size:12.5px;color:#2C2620;padding:6px 9px;border-radius:7px;cursor:pointer;font-family:inherit;';
+    b.onmouseenter=()=>b.style.background='#F1EDE6';
+    b.onmouseleave=()=>b.style.background='transparent';
+    b.onclick=e=>{ e.stopPropagation(); onPick(); };
+    menu.appendChild(b);
+  };
+  PRIORITY_LEVELS.forEach(l=>{
+    mkRow(l.label, l.color, l.icon, ()=>{ rec.priority=l.key; _afterPriorityChange(l.label); }, rec.priority===l.key);
+  });
+  mkRow('None', '', '—', ()=>{ delete rec.priority; _afterPriorityChange(null); }, !rec.priority);
+  document.body.appendChild(menu);
+  // Position at the cursor, nudged to stay inside the viewport
+  menu.style.left=Math.min(evt.clientX, window.innerWidth-menu.offsetWidth-8)+'px';
+  menu.style.top=Math.min(evt.clientY, window.innerHeight-menu.offsetHeight-8)+'px';
+  document.addEventListener('mousedown', _prioOutside, true);
+  document.addEventListener('keydown', _prioEsc, true);
+}
+function _afterPriorityChange(label){
+  closePriorityMenu();
+  _invalidateCasesCache();
+  markUnsaved();
+  showToast(label ? ('Priority set: '+label) : 'Priority cleared');
+  if(typeof renderAll==='function') renderAll();
+}
+
 function getMonthDates(offset) {
   const base = new Date(TODAY.getFullYear(), TODAY.getMonth() + offset, 1);
   const year = base.getFullYear(), month = base.getMonth();
@@ -9553,7 +9616,7 @@ function renderMonth() {
       switchView('today');
     });
     cell.appendChild(num);
-    tasks.forEach(r => {
+    tasks.slice().sort((a,b)=>priorityRank(a)-priorityRank(b)).forEach(r => {
       const s = status(parseDate(r.date));
       const es=getEventStyle(r.event||'');
       // Call-up: color only as a frame around the title — no card fill.
@@ -9562,7 +9625,8 @@ function renderMonth() {
       const fg = es.color || cardColor[s] || '#9E9186';
       const evLabel=(es.icon?es.icon+' ':'')+( r.event||r.type);
       const card = document.createElement('div'); card.className = 'cal-event-card'+(_isCallup?' cal-callup':''); card.style.background = bg; card.style.position='relative'; if(_isCallup)card.style.setProperty('--cal-callup-color',es.color); card.onclick = () => openEdit(r.id);
-      card.innerHTML = `<div class="cal-event-name" style="color:${fg}">${evLabel}</div><div class="cal-event-sub" style="color:${fg}">${r.client}</div>${r.assigned ? `<div style="font-size:9px;opacity:0.7;margin-top:1px;line-height:1.3;color:${fg};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">→ ${r.assigned}</div>` : ''}${r.notes ? `<div style="font-size:9px;opacity:0.65;margin-top:1px;line-height:1.3;font-style:italic;color:${fg};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.notes}</div>` : ''}`;
+      if(!(r.notes&&r.notes.startsWith('⏰ REMINDER'))) card.addEventListener('contextmenu', e => openPriorityMenu(e, r.id));
+      card.innerHTML = `${priorityBadgeHtml(r,8)}<div class="cal-event-name" style="color:${fg}">${evLabel}</div><div class="cal-event-sub" style="color:${fg}">${r.client}</div>${r.assigned ? `<div style="font-size:9px;opacity:0.7;margin-top:1px;line-height:1.3;color:${fg};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">→ ${r.assigned}</div>` : ''}${r.notes ? `<div style="font-size:9px;opacity:0.65;margin-top:1px;line-height:1.3;font-style:italic;color:${fg};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.notes}</div>` : ''}`;
       if(es.color && !_isCallup) card.style.borderLeft=`3px solid ${es.color}`;
       appendSoMeta(card, r, fg);
       appendPaperWarn(card, r, 8);
