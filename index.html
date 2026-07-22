@@ -78,7 +78,7 @@ firebase.auth().signInAnonymously().then(()=>{
 // ── Gmail API Configuration ──
 // PASTE YOUR OAUTH CLIENT ID HERE (from Google Cloud Console)
 const GMAIL_CLIENT_ID = '861569441296-88uroovr20c81vhiitj09i39mhnnlbp8.apps.googleusercontent.com';
-const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.file';
+const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar.events';
 // Auto-sync calendar target — only runs when signed in as this email.
 const CALENDAR_AUTO_SYNC_EMAIL = 'wilmerdgcolina@gmail.com';
 // Pinned target calendar — all auto-sync writes land here regardless of
@@ -5332,10 +5332,6 @@ function _gmailHasCalendarScope(){
   return _gmailGrantedScopes.indexOf('https://www.googleapis.com/auth/calendar.events') >= 0
       || _gmailGrantedScopes.indexOf('https://www.googleapis.com/auth/calendar') >= 0;
 }
-function _gmailHasDriveScope(){
-  return _gmailGrantedScopes.indexOf('https://www.googleapis.com/auth/drive.file') >= 0
-      || _gmailGrantedScopes.indexOf('https://www.googleapis.com/auth/drive') >= 0;
-}
 
 // Default flow: let GIS pick (silent if it can). Pass {force:true} to
 // require a fresh consent screen — used by the "Grant calendar access"
@@ -5350,128 +5346,6 @@ function gmailSignIn(opts){
 // consent screen so the Calendar checkbox is presented for approval.
 function gmailGrantCalendarAccess(){
   gmailSignIn({ force: true });
-}
-
-// ── Google Drive sync for case documents ─────────────────────────────
-// Uses the same OAuth token with the drive.file scope (the app can only
-// see files and folders it created itself — nothing else in the user's
-// Drive). Folder layout: "Wilmer Cases" / "<LASTNAME FirstName ClID>" /
-// <documents>. Uploaded docs remember their Drive file id
-// (doc.driveFileId) so re-syncing only uploads what's new; the case
-// folder id rides on caseMeta.driveFolderId so every device reuses the
-// same folder.
-async function driveApi(path, opts={}){
-  if(!_gmailAccessToken){ showToast('Sign in with Google first'); return null; }
-  const res = await fetch('https://www.googleapis.com/drive/v3/' + path, {
-    ...opts,
-    headers: { 'Authorization':'Bearer '+_gmailAccessToken, 'Content-Type':'application/json', ...(opts.headers||{}) }
-  });
-  if(res.status===401){ gmailSignOut(); showToast('Google session expired — sign in again'); return null; }
-  if(!res.ok){ const txt=await res.text(); console.error('Drive API error', res.status, txt); return {_error:res.status,_body:txt}; }
-  if(res.status===204) return {};
-  return res.json();
-}
-
-async function _driveFindOrCreateFolder(name, parentId){
-  const q = "mimeType='application/vnd.google-apps.folder' and trashed=false and name='" + String(name).replace(/'/g,"\\'") + "'" + (parentId ? " and '"+parentId+"' in parents" : "");
-  const found = await driveApi('files?q=' + encodeURIComponent(q) + '&fields=files(id,name)&pageSize=5');
-  if(found && !found._error && found.files && found.files.length) return found.files[0].id;
-  const meta = { name: String(name), mimeType: 'application/vnd.google-apps.folder' };
-  if(parentId) meta.parents = [parentId];
-  const created = await driveApi('files?fields=id', { method:'POST', body: JSON.stringify(meta) });
-  return (created && created.id) ? created.id : null;
-}
-
-async function _driveEnsureCaseFolder(clid){
-  // Root "Wilmer Cases" folder — id cached per device, verified on use.
-  let rootId = null;
-  try{ rootId = localStorage.getItem('wilmer_drive_root_id') || null; }catch(e){}
-  if(rootId){
-    const chk = await driveApi('files/' + rootId + '?fields=id,trashed');
-    if(!chk || chk._error || chk.trashed) rootId = null;
-  }
-  if(!rootId){
-    rootId = await _driveFindOrCreateFolder('Wilmer Cases', null);
-    if(rootId){ try{ localStorage.setItem('wilmer_drive_root_id', rootId); }catch(e){} }
-  }
-  if(!rootId) return null;
-  // Case folder — id remembered on caseMeta so other devices reuse it.
-  const meta = caseMeta[clid] || (caseMeta[clid] = {});
-  if(meta.driveFolderId){
-    const chk = await driveApi('files/' + meta.driveFolderId + '?fields=id,trashed');
-    if(chk && !chk._error && !chk.trashed) return meta.driveFolderId;
-    meta.driveFolderId = null;
-  }
-  const name = (typeof _gmailCaseLabelName === 'function') ? _gmailCaseLabelName(clid) : String(clid);
-  const fid = await _driveFindOrCreateFolder(name, rootId);
-  if(fid){ meta.driveFolderId = fid; markUnsaved(); }
-  return fid;
-}
-
-// Upload one case document (multipart: JSON metadata + base64 content).
-// fileData is either a data URL or raw base64 with doc.mimeType.
-async function _driveUploadDoc(folderId, doc){
-  let b64 = '', mime = doc.mimeType || 'application/octet-stream';
-  const fd = doc.fileData || '';
-  const m = /^data:([^;]+);base64,(.+)$/.exec(fd);
-  if(m){ mime = m[1]; b64 = m[2]; }
-  else if(fd && !/^data:/.test(fd)) b64 = fd;
-  if(!b64) return { skipped:true };
-  const boundary = '-------wilmer' + Date.now() + Math.random().toString(36).slice(2,8);
-  const metadata = { name: doc.name || 'document', parents: [folderId] };
-  const body = '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'
-    + JSON.stringify(metadata) + '\r\n'
-    + '--'+boundary+'\r\nContent-Type: '+mime+'\r\nContent-Transfer-Encoding: base64\r\n\r\n'
-    + b64 + '\r\n--'+boundary+'--';
-  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
-    method:'POST',
-    headers: { 'Authorization':'Bearer '+_gmailAccessToken, 'Content-Type':'multipart/related; boundary='+boundary },
-    body
-  });
-  if(res.status===401){ gmailSignOut(); return { error:401 }; }
-  if(!res.ok){ const txt=await res.text(); console.error('Drive upload error', res.status, txt); return { error:res.status }; }
-  const data = await res.json();
-  return { id: data.id };
-}
-
-// Sync every not-yet-uploaded document on a case to its Drive folder.
-async function driveSyncCaseDocs(clid){
-  if(!clid){ showToast('No case selected'); return; }
-  if(!_gmailAccessToken){ showToast('Connect Gmail first (Inbox tab)'); return; }
-  if(!_gmailHasDriveScope()){
-    if(confirm('Google Drive access hasn\'t been granted yet.\n\nRe-authorize Google now? The consent screen will include a checkbox for Drive — make sure it\'s ticked.')){
-      gmailSignIn({ force:true });
-    }
-    return;
-  }
-  const meta = caseMeta[clid] || {};
-  const docs = [];
-  (meta.docSections||[]).forEach(sec => (sec.docs||[]).forEach(d => { if(d) docs.push(d); }));
-  const uploadable = docs.filter(d => d.fileData && !d.driveFileId);
-  const already = docs.filter(d => d.driveFileId).length;
-  const nameOnly = docs.filter(d => !d.fileData && !d.driveFileId).length;
-  if(!uploadable.length){
-    showToast(already ? 'All case documents are already in Drive ✓' : ('No documents with files to upload' + (nameOnly ? ' — the checklist items have no files attached' : '')));
-    return;
-  }
-  showToast('☁ Uploading '+uploadable.length+' document(s) to Drive…');
-  const folderId = await _driveEnsureCaseFolder(clid);
-  if(!folderId){ showToast('Could not create the Drive folder — see console'); return; }
-  let ok=0, fail=0;
-  for(const d of uploadable){
-    const res = await _driveUploadDoc(folderId, d);
-    if(res && res.id){ d.driveFileId = res.id; d.driveSyncedAt = Date.now(); ok++; }
-    else if(!res || !res.skipped) fail++;
-  }
-  if(ok) markUnsaved();
-  showToast('☁ Drive: '+ok+' uploaded'+(fail?(', '+fail+' failed'):'')+(nameOnly?(', '+nameOnly+' skipped (no file)'):''));
-}
-
-// Open the case's Drive folder in a new tab.
-function driveOpenCaseFolder(clid){
-  const fid = (caseMeta[clid]||{}).driveFolderId;
-  if(!fid){ showToast('No Drive folder yet — click ⬆ Drive to sync first'); return; }
-  window.open('https://drive.google.com/drive/folders/' + fid, '_blank', 'noopener');
 }
 
 function gmailSignOut(){
@@ -19555,16 +19429,6 @@ function openCaseDetail(clid){
   folderBtn.dataset.folderForClid = String(clid);
   folderBtn.style.cssText='font-size:11px;padding:3px 11px;border-radius:20px;border-color:#B8C4DB;color:#4F6A91;margin-left:4px;font-weight:600;display:none;';
   atRow.appendChild(folderBtn);
-  // Google Drive sync — uploads this case's documents to
-  // "Wilmer Cases/<client>" in the signed-in account's Drive.
-  // Shift-click opens the Drive folder in a new tab.
-  const driveBtn=document.createElement('button');
-  driveBtn.className='btn-sm';
-  driveBtn.style.cssText='font-size:11px;padding:3px 11px;border-radius:20px;border-color:#B8C4DB;color:#4F6A91;margin-left:4px;font-weight:600;';
-  driveBtn.textContent='⬆ Drive';
-  driveBtn.title='Upload this case\'s documents to Google Drive (Wilmer Cases/'+((typeof _gmailCaseLabelName==='function')?_gmailCaseLabelName(clid):clid)+'). Shift-click to open the Drive folder.';
-  driveBtn.onclick=(e)=>{ if(e.shiftKey){ driveOpenCaseFolder(clid); } else { driveSyncCaseDocs(clid); } };
-  atRow.appendChild(driveBtn);
   // Discreet unlink chip — only when editing AND a folder is linked.
   const folderUnlinkBtn = document.createElement('button');
   folderUnlinkBtn.type='button';
