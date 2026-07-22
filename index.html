@@ -9352,8 +9352,9 @@ function renderWeek() {
     });
     col.addEventListener('dblclick', e => {
       if(e.target.closest('.week-task')) return;
-      openAdd();
-      setTimeout(() => { document.getElementById('fc-date').value = dayStr; }, 30);
+      // Double-click on empty week space opens the ADD TASK window with
+      // that day pre-filled (events are added via the + Add event button).
+      openNewTaskModal(dayStr);
     });
     frag.appendChild(col);
   });
@@ -9592,8 +9593,9 @@ function renderMonth() {
     });
     cell.addEventListener('dblclick', e => {
       if(e.target.closest('.cal-event-card')) return;
-      openAdd();
-      setTimeout(() => { document.getElementById('fc-date').value = dayStr2; }, 30);
+      // Double-click on empty month space opens the ADD TASK window with
+      // that day pre-filled (events are added via the + Add event button).
+      openNewTaskModal(dayStr2);
     });
     frag.appendChild(cell);
     // Every 5 day cells (Mon–Fri) we append a week-number cell to fill the 6th column
@@ -24642,7 +24644,7 @@ if(csEl) csEl.addEventListener('input',function(){
 // Lightweight task creation: description + assignee (Me or paralegal) +
 // optional due date and linked case. Task stored as a record with
 // event='TASK'. Keeps the full event modal out of the way for quick capture.
-function openNewTaskModal(){
+function openNewTaskModal(presetDate){
   const existing=document.getElementById('new-task-modal');
   if(existing) existing.remove();
 
@@ -24695,7 +24697,7 @@ function openNewTaskModal(){
   document.body.appendChild(ov);
 
   // Default due date = today (but empty is allowed)
-  const dateEl=document.getElementById('nt-date'); if(dateEl) dateEl.value=todayStr();
+  const dateEl=document.getElementById('nt-date'); if(dateEl) dateEl.value=presetDate||todayStr();
 
   document.getElementById('nt-close').onclick=()=>ov.remove();
   document.getElementById('nt-cancel').onclick=()=>ov.remove();
