@@ -1255,9 +1255,10 @@ function drawOver(){
 
       // Unanswered: red border highlight
       if(!v || v===''){
-        // Only mark visible, non-hidden fields
+        // Only mark visible, non-hidden fields (a blocked checkbox belongs to
+        // an already-answered group — not unanswered)
         const el=document.getElementById('fr-'+f.id);
-        const hidden=el&&el.classList.contains('hidden');
+        const hidden=(el&&el.classList.contains('hidden'))||(window._cbBlockedSet&&window._cbBlockedSet.has(f.id));
         if(!hidden){
           if(f.type==='checkbox'){
             ctx.strokeStyle='rgba(184,92,92,.55)';
@@ -1717,6 +1718,7 @@ let revFilter = 'all';
 
 function updateProg(){
   const visible = FD.filter(f => {
+    if(window._cbBlockedSet&&window._cbBlockedSet.has(f.id)) return false; // group already answered
     const el = document.getElementById('fr-'+f.id);
     return !el || !el.classList.contains('hidden');
   });
@@ -3276,6 +3278,10 @@ function saveLabelEdit(){
   _tplChanged();
 }
 
+// ── U.S. GEO SUGGESTIONS (top 1,000 cities by population + states) ─────────
+const _US_STATES=["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Puerto Rico","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"];
+const _US_CITIES=["New York|New York","Los Angeles|California","Chicago|Illinois","Houston|Texas","Philadelphia|Pennsylvania","Phoenix|Arizona","San Antonio|Texas","San Diego|California","Dallas|Texas","San Jose|California","Austin|Texas","Indianapolis|Indiana","Jacksonville|Florida","San Francisco|California","Columbus|Ohio","Charlotte|North Carolina","Fort Worth|Texas","Detroit|Michigan","El Paso|Texas","Memphis|Tennessee","Seattle|Washington","Denver|Colorado","Washington|District of Columbia","Boston|Massachusetts","Nashville|Tennessee","Baltimore|Maryland","Oklahoma City|Oklahoma","Louisville|Kentucky","Portland|Oregon","Las Vegas|Nevada","Milwaukee|Wisconsin","Albuquerque|New Mexico","Tucson|Arizona","Fresno|California","Sacramento|California","Long Beach|California","Kansas City|Missouri","Mesa|Arizona","Virginia Beach|Virginia","Atlanta|Georgia","Colorado Springs|Colorado","Omaha|Nebraska","Raleigh|North Carolina","Miami|Florida","Oakland|California","Minneapolis|Minnesota","Tulsa|Oklahoma","Cleveland|Ohio","Wichita|Kansas","Arlington|Texas","New Orleans|Louisiana","Bakersfield|California","Tampa|Florida","Honolulu|Hawaii","Aurora|Colorado","Anaheim|California","Santa Ana|California","St. Louis|Missouri","Riverside|California","Corpus Christi|Texas","Lexington-Fayette|Kentucky","Pittsburgh|Pennsylvania","Anchorage|Alaska","Stockton|California","Cincinnati|Ohio","St. Paul|Minnesota","Toledo|Ohio","Greensboro|North Carolina","Newark|New Jersey","Plano|Texas","Henderson|Nevada","Lincoln|Nebraska","Buffalo|New York","Jersey City|New Jersey","Chula Vista|California","Fort Wayne|Indiana","Orlando|Florida","St. Petersburg|Florida","Chandler|Arizona","Laredo|Texas","Norfolk|Virginia","Durham|North Carolina","Madison|Wisconsin","Lubbock|Texas","Irvine|California","Winston-Salem|North Carolina","Glendale|Arizona","Garland|Texas","Hialeah|Florida","Reno|Nevada","Chesapeake|Virginia","Gilbert|Arizona","Baton Rouge|Louisiana","Irving|Texas","Scottsdale|Arizona","North Las Vegas|Nevada","Fremont|California","Boise City|Idaho","Richmond|Virginia","San Bernardino|California","Birmingham|Alabama","Spokane|Washington","Rochester|New York","Des Moines|Iowa","Modesto|California","Fayetteville|North Carolina","Tacoma|Washington","Oxnard|California","Fontana|California","Columbus|Georgia","Montgomery|Alabama","Moreno Valley|California","Shreveport|Louisiana","Aurora|Illinois","Yonkers|New York","Akron|Ohio","Huntington Beach|California","Little Rock|Arkansas","Augusta-Richmond County|Georgia","Amarillo|Texas","Glendale|California","Mobile|Alabama","Grand Rapids|Michigan","Salt Lake City|Utah","Tallahassee|Florida","Huntsville|Alabama","Grand Prairie|Texas","Knoxville|Tennessee","Worcester|Massachusetts","Newport News|Virginia","Brownsville|Texas","Overland Park|Kansas","Santa Clarita|California","Providence|Rhode Island","Garden Grove|California","Chattanooga|Tennessee","Oceanside|California","Jackson|Mississippi","Fort Lauderdale|Florida","Santa Rosa|California","Rancho Cucamonga|California","Port St. Lucie|Florida","Tempe|Arizona","Ontario|California","Vancouver|Washington","Cape Coral|Florida","Sioux Falls|South Dakota","Springfield|Missouri","Peoria|Arizona","Pembroke Pines|Florida","Elk Grove|California","Salem|Oregon","Lancaster|California","Corona|California","Eugene|Oregon","Palmdale|California","Salinas|California","Springfield|Massachusetts","Pasadena|Texas","Fort Collins|Colorado","Hayward|California","Pomona|California","Cary|North Carolina","Rockford|Illinois","Alexandria|Virginia","Escondido|California","McKinney|Texas","Kansas City|Kansas","Joliet|Illinois","Sunnyvale|California","Torrance|California","Bridgeport|Connecticut","Lakewood|Colorado","Hollywood|Florida","Paterson|New Jersey","Naperville|Illinois","Syracuse|New York","Mesquite|Texas","Dayton|Ohio","Savannah|Georgia","Clarksville|Tennessee","Orange|California","Pasadena|California","Fullerton|California","Killeen|Texas","Frisco|Texas","Hampton|Virginia","McAllen|Texas","Warren|Michigan","Bellevue|Washington","West Valley City|Utah","Columbia|South Carolina","Olathe|Kansas","Sterling Heights|Michigan","New Haven|Connecticut","Miramar|Florida","Waco|Texas","Thousand Oaks|California","Cedar Rapids|Iowa","Charleston|South Carolina","Visalia|California","Topeka|Kansas","Elizabeth|New Jersey","Gainesville|Florida","Thornton|Colorado","Roseville|California","Carrollton|Texas","Coral Springs|Florida","Stamford|Connecticut","Simi Valley|California","Concord|California","Hartford|Connecticut","Kent|Washington","Lafayette|Louisiana","Midland|Texas","Surprise|Arizona","Denton|Texas","Victorville|California","Evansville|Indiana","Santa Clara|California","Abilene|Texas","Athens-Clarke County|Georgia","Vallejo|California","Allentown|Pennsylvania","Norman|Oklahoma","Beaumont|Texas","Independence|Missouri","Murfreesboro|Tennessee","Ann Arbor|Michigan","Springfield|Illinois","Berkeley|California","Peoria|Illinois","Provo|Utah","El Monte|California","Columbia|Missouri","Lansing|Michigan","Fargo|North Dakota","Downey|California","Costa Mesa|California","Wilmington|North Carolina","Arvada|Colorado","Inglewood|California","Miami Gardens|Florida","Carlsbad|California","Westminster|Colorado","Rochester|Minnesota","Odessa|Texas","Manchester|New Hampshire","Elgin|Illinois","West Jordan|Utah","Round Rock|Texas","Clearwater|Florida","Waterbury|Connecticut","Gresham|Oregon","Fairfield|California","Billings|Montana","Lowell|Massachusetts","San Buenaventura (Ventura)|California","Pueblo|Colorado","High Point|North Carolina","West Covina|California","Richmond|California","Murrieta|California","Cambridge|Massachusetts","Antioch|California","Temecula|California","Norwalk|California","Centennial|Colorado","Everett|Washington","Wichita Falls|Texas","Palm Bay|Florida","Green Bay|Wisconsin","Daly City|California","Burbank|California","Richardson|Texas","Pompano Beach|Florida","North Charleston|South Carolina","Broken Arrow|Oklahoma","Boulder|Colorado","West Palm Beach|Florida","Santa Maria|California","El Cajon|California","Davenport|Iowa","Rialto|California","Las Cruces|New Mexico","San Mateo|California","Lewisville|Texas","South Bend|Indiana","Lakeland|Florida","Erie|Pennsylvania","Tyler|Texas","Pearland|Texas","College Station|Texas","Kenosha|Wisconsin","Sandy Springs|Georgia","Clovis|California","Flint|Michigan","Roanoke|Virginia","Albany|New York","Jurupa Valley|California","Compton|California","San Angelo|Texas","Hillsboro|Oregon","Lawton|Oklahoma","Renton|Washington","Vista|California","Davie|Florida","Greeley|Colorado","Mission Viejo|California","Portsmouth|Virginia","Dearborn|Michigan","South Gate|California","Tuscaloosa|Alabama","Livonia|Michigan","New Bedford|Massachusetts","Vacaville|California","Brockton|Massachusetts","Roswell|Georgia","Beaverton|Oregon","Quincy|Massachusetts","Sparks|Nevada","Yakima|Washington","Lee's Summit|Missouri","Federal Way|Washington","Carson|California","Santa Monica|California","Hesperia|California","Allen|Texas","Rio Rancho|New Mexico","Yuma|Arizona","Westminster|California","Orem|Utah","Lynn|Massachusetts","Redding|California","Spokane Valley|Washington","Miami Beach|Florida","League City|Texas","Lawrence|Kansas","Santa Barbara|California","Plantation|Florida","Sandy|Utah","Sunrise|Florida","Macon|Georgia","Longmont|Colorado","Boca Raton|Florida","San Marcos|California","Greenville|North Carolina","Waukegan|Illinois","Fall River|Massachusetts","Chico|California","Newton|Massachusetts","San Leandro|California","Reading|Pennsylvania","Norwalk|Connecticut","Fort Smith|Arkansas","Newport Beach|California","Asheville|North Carolina","Nashua|New Hampshire","Edmond|Oklahoma","Whittier|California","Nampa|Idaho","Bloomington|Minnesota","Deltona|Florida","Hawthorne|California","Duluth|Minnesota","Carmel|Indiana","Suffolk|Virginia","Clifton|New Jersey","Citrus Heights|California","Livermore|California","Tracy|California","Alhambra|California","Kirkland|Washington","Trenton|New Jersey","Ogden|Utah","Hoover|Alabama","Cicero|Illinois","Fishers|Indiana","Sugar Land|Texas","Danbury|Connecticut","Meridian|Idaho","Indio|California","Concord|North Carolina","Menifee|California","Champaign|Illinois","Buena Park|California","Troy|Michigan","O'Fallon|Missouri","Johns Creek|Georgia","Bellingham|Washington","Westland|Michigan","Bloomington|Indiana","Sioux City|Iowa","Warwick|Rhode Island","Hemet|California","Longview|Texas","Farmington Hills|Michigan","Bend|Oregon","Lakewood|California","Merced|California","Mission|Texas","Chino|California","Redwood City|California","Edinburg|Texas","Cranston|Rhode Island","Parma|Ohio","New Rochelle|New York","Lake Forest|California","Napa|California","Hammond|Indiana","Fayetteville|Arkansas","Bloomington|Illinois","Avondale|Arizona","Somerville|Massachusetts","Palm Coast|Florida","Bryan|Texas","Gary|Indiana","Largo|Florida","Brooklyn Park|Minnesota","Tustin|California","Racine|Wisconsin","Deerfield Beach|Florida","Lynchburg|Virginia","Mountain View|California","Medford|Oregon","Lawrence|Massachusetts","Bellflower|California","Melbourne|Florida","St. Joseph|Missouri","Camden|New Jersey","St. George|Utah","Kennewick|Washington","Baldwin Park|California","Chino Hills|California","Alameda|California","Albany|Georgia","Arlington Heights|Illinois","Scranton|Pennsylvania","Evanston|Illinois","Kalamazoo|Michigan","Baytown|Texas","Upland|California","Springdale|Arkansas","Bethlehem|Pennsylvania","Schaumburg|Illinois","Mount Pleasant|South Carolina","Auburn|Washington","Decatur|Illinois","San Ramon|California","Pleasanton|California","Wyoming|Michigan","Lake Charles|Louisiana","Plymouth|Minnesota","Bolingbrook|Illinois","Pharr|Texas","Appleton|Wisconsin","Gastonia|North Carolina","Folsom|California","Southfield|Michigan","Rochester Hills|Michigan","New Britain|Connecticut","Goodyear|Arizona","Canton|Ohio","Warner Robins|Georgia","Union City|California","Perris|California","Manteca|California","Iowa City|Iowa","Jonesboro|Arkansas","Wilmington|Delaware","Lynwood|California","Loveland|Colorado","Pawtucket|Rhode Island","Boynton Beach|Florida","Waukesha|Wisconsin","Gulfport|Mississippi","Apple Valley|California","Passaic|New Jersey","Rapid City|South Dakota","Layton|Utah","Lafayette|Indiana","Turlock|California","Muncie|Indiana","Temple|Texas","Missouri City|Texas","Redlands|California","Santa Fe|New Mexico","Lauderhill|Florida","Milpitas|California","Palatine|Illinois","Missoula|Montana","Rock Hill|South Carolina","Jacksonville|North Carolina","Franklin|Tennessee","Flagstaff|Arizona","Flower Mound|Texas","Weston|Florida","Waterloo|Iowa","Union City|New Jersey","Mount Vernon|New York","Fort Myers|Florida","Dothan|Alabama","Rancho Cordova|California","Redondo Beach|California","Jackson|Tennessee","Pasco|Washington","St. Charles|Missouri","Eau Claire|Wisconsin","North Richland Hills|Texas","Bismarck|North Dakota","Yorba Linda|California","Kenner|Louisiana","Walnut Creek|California","Frederick|Maryland","Oshkosh|Wisconsin","Pittsburg|California","Palo Alto|California","Bossier City|Louisiana","Portland|Maine","St. Cloud|Minnesota","Davis|California","South San Francisco|California","Camarillo|California","North Little Rock|Arkansas","Schenectady|New York","Gaithersburg|Maryland","Harlingen|Texas","Woodbury|Minnesota","Eagan|Minnesota","Yuba City|California","Maple Grove|Minnesota","Youngstown|Ohio","Skokie|Illinois","Kissimmee|Florida","Johnson City|Tennessee","Victoria|Texas","San Clemente|California","Bayonne|New Jersey","Laguna Niguel|California","East Orange|New Jersey","Shawnee|Kansas","Homestead|Florida","Delray Beach|Florida","Rockville|Maryland","Janesville|Wisconsin","Conway|Arkansas","Pico Rivera|California","Lorain|Ohio","Montebello|California","Lodi|California","New Braunfels|Texas","Marysville|Washington","Tamarac|Florida","Madera|California","Conroe|Texas","Santa Cruz|California","Eden Prairie|Minnesota","Cheyenne|Wyoming","Daytona Beach|Florida","Alpharetta|Georgia","Hamilton|Ohio","Waltham|Massachusetts","Coon Rapids|Minnesota","Haverhill|Massachusetts","Council Bluffs|Iowa","Taylor|Michigan","Utica|New York","Ames|Iowa","La Habra|California","Encinitas|California","Bowling Green|Kentucky","Burnsville|Minnesota","Greenville|South Carolina","West Des Moines|Iowa","Cedar Park|Texas","Tulare|California","Monterey Park|California","Vineland|New Jersey","Terre Haute|Indiana","North Miami|Florida","Mansfield|Texas","West Allis|Wisconsin","Bristol|Connecticut","Taylorsville|Utah","Malden|Massachusetts","Meriden|Connecticut","Blaine|Minnesota","Wellington|Florida","Cupertino|California","Springfield|Oregon","Rogers|Arkansas","St. Clair Shores|Michigan","Gardena|California","Pontiac|Michigan","National City|California","Grand Junction|Colorado","Rocklin|California","Chapel Hill|North Carolina","Casper|Wyoming","Broomfield|Colorado","Petaluma|California","South Jordan|Utah","Springfield|Ohio","Great Falls|Montana","Lancaster|Pennsylvania","North Port|Florida","Lakewood|Washington","Marietta|Georgia","San Rafael|California","Royal Oak|Michigan","Des Plaines|Illinois","Huntington Park|California","La Mesa|California","Orland Park|Illinois","Auburn|Alabama","Lakeville|Minnesota","Owensboro|Kentucky","Moore|Oklahoma","Jupiter|Florida","Idaho Falls|Idaho","Dubuque|Iowa","Bartlett|Tennessee","Rowlett|Texas","Novi|Michigan","White Plains|New York","Arcadia|California","Redmond|Washington","Lake Elsinore|California","Ocala|Florida","Tinley Park|Illinois","Port Orange|Florida","Medford|Massachusetts","Oak Lawn|Illinois","Rocky Mount|North Carolina","Kokomo|Indiana","Coconut Creek|Florida","Bowie|Maryland","Berwyn|Illinois","Midwest City|Oklahoma","Fountain Valley|California","Buckeye|Arizona","Dearborn Heights|Michigan","Woodland|California","Noblesville|Indiana","Valdosta|Georgia","Diamond Bar|California","Manhattan|Kansas","Santee|California","Taunton|Massachusetts","Sanford|Florida","Kettering|Ohio","New Brunswick|New Jersey","Decatur|Alabama","Chicopee|Massachusetts","Anderson|Indiana","Margate|Florida","Weymouth Town|Massachusetts","Hempstead|New York","Corvallis|Oregon","Eastvale|California","Porterville|California","West Haven|Connecticut","Brentwood|California","Paramount|California","Grand Forks|North Dakota","Georgetown|Texas","St. Peters|Missouri","Shoreline|Washington","Mount Prospect|Illinois","Hanford|California","Normal|Illinois","Rosemead|California","Lehi|Utah","Pocatello|Idaho","Highland|California","Novato|California","Port Arthur|Texas","Carson City|Nevada","San Marcos|Texas","Hendersonville|Tennessee","Elyria|Ohio","Revere|Massachusetts","Pflugerville|Texas","Greenwood|Indiana","Bellevue|Nebraska","Wheaton|Illinois","Smyrna|Georgia","Sarasota|Florida","Blue Springs|Missouri","Colton|California","Euless|Texas","Castle Rock|Colorado","Cathedral City|California","Kingsport|Tennessee","Lake Havasu City|Arizona","Pensacola|Florida","Hoboken|New Jersey","Yucaipa|California","Watsonville|California","Richland|Washington","Delano|California","Hoffman Estates|Illinois","Florissant|Missouri","Placentia|California","West New York|New Jersey","Dublin|California","Oak Park|Illinois","Peabody|Massachusetts","Perth Amboy|New Jersey","Battle Creek|Michigan","Bradenton|Florida","Gilroy|California","Milford|Connecticut","Albany|Oregon","Ankeny|Iowa","La Crosse|Wisconsin","Burlington|North Carolina","DeSoto|Texas","Harrisonburg|Virginia","Minnetonka|Minnesota","Elkhart|Indiana","Lakewood|Ohio","Glendora|California","Southaven|Mississippi","Charleston|West Virginia","Joplin|Missouri","Enid|Oklahoma","Palm Beach Gardens|Florida","Brookhaven|Georgia","Plainfield|New Jersey","Grand Island|Nebraska","Palm Desert|California","Huntersville|North Carolina","Tigard|Oregon","Lenexa|Kansas","Saginaw|Michigan","Kentwood|Michigan","Doral|Florida","Apple Valley|Minnesota","Grapevine|Texas","Aliso Viejo|California","Sammamish|Washington","Casa Grande|Arizona","Pinellas Park|Florida","Troy|New York","West Sacramento|California","Burien|Washington","Commerce City|Colorado","Monroe|Louisiana","Cerritos|California","Downers Grove|Illinois","Coral Gables|Florida","Wilson|North Carolina","Niagara Falls|New York","Poway|California","Edina|Minnesota","Cuyahoga Falls|Ohio","Rancho Santa Margarita|California","Harrisburg|Pennsylvania","Huntington|West Virginia","La Mirada|California","Cypress|California","Caldwell|Idaho","Logan|Utah","Galveston|Texas","Sheboygan|Wisconsin","Middletown|Ohio","Murray|Utah","Roswell|New Mexico","Parker|Colorado","Bedford|Texas","East Lansing|Michigan","Methuen|Massachusetts","Covina|California","Alexandria|Louisiana","Olympia|Washington","Euclid|Ohio","Mishawaka|Indiana","Salina|Kansas","Azusa|California","Newark|Ohio","Chesterfield|Missouri","Leesburg|Virginia","Dunwoody|Georgia","Hattiesburg|Mississippi","Roseville|Michigan","Bonita Springs|Florida","Portage|Michigan","St. Louis Park|Minnesota","Collierville|Tennessee","Middletown|Connecticut","Stillwater|Oklahoma","East Providence|Rhode Island","Lawrence|Indiana","Wauwatosa|Wisconsin","Mentor|Ohio","Ceres|California","Cedar Hill|Texas","Mansfield|Ohio","Binghamton|New York","Coeur d'Alene|Idaho","San Luis Obispo|California","Minot|North Dakota","Palm Springs|California","Pine Bluff|Arkansas","Texas City|Texas","Summerville|South Carolina","Twin Falls|Idaho","Jeffersonville|Indiana","San Jacinto|California","Madison|Alabama","Altoona|Pennsylvania","Columbus|Indiana","Beavercreek|Ohio","Apopka|Florida","Elmhurst|Illinois","Maricopa|Arizona","Farmington|New Mexico","Glenview|Illinois","Cleveland Heights|Ohio","Draper|Utah","Lincoln|California","Sierra Vista|Arizona","Lacey|Washington","Biloxi|Mississippi","Strongsville|Ohio","Barnstable Town|Massachusetts","Wylie|Texas","Sayreville|New Jersey","Kannapolis|North Carolina","Charlottesville|Virginia","Littleton|Colorado","Titusville|Florida","Hackensack|New Jersey","Newark|California","Pittsfield|Massachusetts","York|Pennsylvania","Lombard|Illinois","Attleboro|Massachusetts","DeKalb|Illinois","Blacksburg|Virginia","Dublin|Ohio","Haltom City|Texas","Lompoc|California","El Centro|California","Danville|California","Jefferson City|Missouri","Cutler Bay|Florida","Oakland Park|Florida","North Miami Beach|Florida","Freeport|New York","Moline|Illinois","Coachella|California","Fort Pierce|Florida","Smyrna|Tennessee","Bountiful|Utah","Fond du Lac|Wisconsin","Everett|Massachusetts","Danville|Virginia","Keller|Texas","Belleville|Illinois","Bell Gardens|California","Cleveland|Tennessee","North Lauderdale|Florida","Fairfield|Ohio","Salem|Massachusetts","Rancho Palos Verdes|California","San Bruno|California","Concord|New Hampshire","Burlington|Vermont","Apex|North Carolina","Midland|Michigan","Altamonte Springs|Florida","Hutchinson|Kansas","Buffalo Grove|Illinois","Urbandale|Iowa","State College|Pennsylvania","Urbana|Illinois","Plainfield|Illinois","Manassas|Virginia","Bartlett|Illinois","Kearny|New Jersey","Oro Valley|Arizona","Findlay|Ohio","Rohnert Park|California","Westfield|Massachusetts","Linden|New Jersey","Sumter|South Carolina","Wilkes-Barre|Pennsylvania","Woonsocket|Rhode Island","Leominster|Massachusetts","Shelton|Connecticut","Brea|California","Covington|Kentucky","Rockwall|Texas","Riverton|Utah","Meridian|Mississippi","St. Cloud|Florida","Quincy|Illinois","Morgan Hill|California","Warren|Ohio","Edmonds|Washington","Burleson|Texas","Beverly|Massachusetts","Mankato|Minnesota","Hagerstown|Maryland","Prescott|Arizona","Campbell|California","Cedar Falls|Iowa","Beaumont|California","La Puente|California","Crystal Lake|Illinois","Fitchburg|Massachusetts","Carol Stream|Illinois","Hickory|North Carolina","Streamwood|Illinois","Norwich|Connecticut","Coppell|Texas","San Gabriel|California","Holyoke|Massachusetts","Bentonville|Arkansas","Peachtree Corners|Georgia","Florence|Alabama","Brentwood|Tennessee","Bozeman|Montana","New Berlin|Wisconsin","Goose Creek|South Carolina","Huntsville|Texas","Prescott Valley|Arizona","Maplewood|Minnesota","Romeoville|Illinois","Duncanville|Texas","Atlantic City|New Jersey","Clovis|New Mexico","The Colony|Texas","Culver City|California","Marlborough|Massachusetts","Hilton Head Island|South Carolina","Moorhead|Minnesota","Calexico|California","Bullhead City|Arizona","Germantown|Tennessee","La Quinta|California","Lancaster|Ohio","Wausau|Wisconsin","Sherman|Texas","Ocoee|Florida","Shakopee|Minnesota","Woburn|Massachusetts","Bremerton|Washington","Rock Island|Illinois","Muskogee|Oklahoma","Cape Girardeau|Missouri","Annapolis|Maryland","Greenacres|Florida","Ormond Beach|Florida","Hallandale Beach|Florida","Stanton|California","Puyallup|Washington","Pacifica|California","Hanover Park|Illinois","Hurst|Texas","Lima|Ohio","Marana|Arizona","Carpentersville|Illinois","Oakley|California","Huber Heights|Ohio","Lancaster|Texas","Montclair|California","Wheeling|Illinois","Brookfield|Wisconsin","Park Ridge|Illinois","Florence|South Carolina","Roy|Utah","Winter Garden|Florida","Chelsea|Massachusetts","Valley Stream|New York","Spartanburg|South Carolina","Lake Oswego|Oregon","Friendswood|Texas","Westerville|Ohio","Northglenn|Colorado","Phenix City|Alabama","Grove City|Ohio","Texarkana|Texas","Addison|Illinois","Dover|Delaware","Lincoln Park|Michigan","Calumet City|Illinois","Muskegon|Michigan","Aventura|Florida","Martinez|California","Greenfield|Wisconsin","Apache Junction|Arizona","Monrovia|California","Weslaco|Texas","Keizer|Oregon","Spanish Fork|Utah","Beloit|Wisconsin","Panama City|Florida"];
+
 // ── UPDATE ADDRESS (Part A.I, 8 → history in Part A.III, 2) ─────────────────
 // The client moved: enter the new address for item 8, and the address that
 // was there rolls down into the Part A.III, 2 "residences during the past 5
@@ -3323,8 +3329,8 @@ function openAddressUpdate(){
     +'<div style="font-family:var(--font-display);font-size:16px;font-weight:600;color:var(--ink);margin-bottom:2px;">Update address</div>'
     +'<div style="font-size:11.5px;color:var(--ink-muted);line-height:1.5;margin-bottom:12px;">The new address goes into <b>8. Residence in the U.S.</b> — the current one ('+(old.street?old.street.replace(/</g,'&lt;'):'empty')+') rolls down into <b>Part A.III, 2</b> (residences during the past 5 years) and its dates are closed out.</div>'
     +'<div style="margin-bottom:9px;"><label style="'+lab+'">Street Number and Name *</label><input id="au-street" style="'+inp+'"></div>'
-    +'<div style="display:flex;gap:8px;margin-bottom:9px;"><div style="flex:0 0 90px;"><label style="'+lab+'">Apt. Number</label><input id="au-apt" style="'+inp+'"></div><div style="flex:1;"><label style="'+lab+'">City *</label><input id="au-city" style="'+inp+'"></div></div>'
-    +'<div style="display:flex;gap:8px;margin-bottom:9px;"><div style="flex:1;"><label style="'+lab+'">State</label><input id="au-state" style="'+inp+'"></div><div style="flex:0 0 110px;"><label style="'+lab+'">Zip Code</label><input id="au-zip" style="'+inp+'"></div></div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:9px;"><div style="flex:0 0 90px;"><label style="'+lab+'">Apt. Number</label><input id="au-apt" style="'+inp+'"></div><div style="flex:1;"><label style="'+lab+'">City * <span style="text-transform:none;font-weight:400;">(type to see suggestions)</span></label><input id="au-city" list="us-cities-dl" onchange="_auCityPicked()" style="'+inp+'"></div></div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:9px;"><div style="flex:1;"><label style="'+lab+'">State</label><input id="au-state" list="us-states-dl" style="'+inp+'"></div><div style="flex:0 0 90px;"><label style="'+lab+'">Zip Code</label><input id="au-zip" style="'+inp+'"></div><div style="flex:0 0 110px;"><label style="'+lab+'">Country</label><input id="au-country" value="USA" oninput="_auToggleGeoLists()" style="'+inp+'"></div></div>'
     +'<div style="display:flex;gap:8px;margin-bottom:9px;"><div style="flex:0 0 90px;"><label style="'+lab+'">Area code</label><input id="au-area" style="'+inp+'" placeholder="(keep)"></div><div style="flex:1;"><label style="'+lab+'">Telephone</label><input id="au-phone" style="'+inp+'" placeholder="(keep current)"></div><div style="flex:0 0 110px;"><label style="'+lab+'">Lives here since</label><input id="au-since" style="'+inp+'" value="'+nowMY+'" placeholder="mm/yyyy"></div></div>'
     +'<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-soft);margin:4px 0 14px;cursor:pointer;"><input type="checkbox" id="au-mail" '+(mailSame?'checked':'')+' style="width:auto;accent-color:#6A8C6E;">Also update <b>9. Mailing Address</b> to this same address</label>'
     +'<div style="display:flex;gap:8px;justify-content:flex-end;">'
@@ -3339,9 +3345,30 @@ function closeAddressUpdate(){
   const ov=document.getElementById('addr-upd-overlay');
   if(ov) ov.remove();
 }
+// City/state suggestions in the dialog apply only while the country is the
+// U.S. (the default); any other country turns them off.
+function _auCountryIsUS(){
+  const c=((document.getElementById('au-country')||{}).value||'').trim().toUpperCase();
+  return c===''||c==='USA'||c==='US'||c==='U.S.'||c==='U.S.A.'||c==='UNITED STATES'||c==='UNITED STATES OF AMERICA'||c==='EEUU'||c==='EE.UU.'||c==='ESTADOS UNIDOS';
+}
+function _auToggleGeoLists(){
+  const cI=document.getElementById('au-city'), sI=document.getElementById('au-state');
+  if(!cI||!sI) return;
+  if(_auCountryIsUS()){ cI.setAttribute('list','us-cities-dl'); sI.setAttribute('list','us-states-dl'); }
+  else{ cI.removeAttribute('list'); sI.removeAttribute('list'); }
+}
+function _auCityPicked(){
+  if(!_auCountryIsUS()) return;
+  const cI=document.getElementById('au-city'), sI=document.getElementById('au-state');
+  if(!cI) return;
+  const hit=_geoSplitCityState(cI.value);
+  if(!hit) return;
+  cI.value=hit.city;
+  if(sI) sI.value=hit.state;
+}
 function applyAddressUpdate(){
   const g=id=>((document.getElementById(id)||{}).value||'').trim();
-  const nu={street:g('au-street'),apt:g('au-apt'),city:g('au-city'),state:g('au-state'),zip:g('au-zip'),area:g('au-area'),phone:g('au-phone'),since:g('au-since')};
+  const nu={street:g('au-street'),apt:g('au-apt'),city:g('au-city'),state:g('au-state'),zip:g('au-zip'),area:g('au-area'),phone:g('au-phone'),since:g('au-since'),country:g('au-country')||'USA'};
   if(!nu.street||!nu.city){ alert('Street and City are required.'); return; }
   if(nu.since&&!/^\d{2}\/\d{4}$/.test(nu.since)){ alert('"Lives here since" must be mm/yyyy (e.g. 07/2026).'); return; }
   const updMail=(document.getElementById('au-mail')||{}).checked;
@@ -3350,7 +3377,7 @@ function applyAddressUpdate(){
   // current table rows -> objects
   const rows=_ADDR_TABLE.map(r=>({street:(V[r.street]||'').trim(),city:(V[r.city]||'').trim(),state:(V[r.state]||'').trim(),country:(V[r.country]||'').trim(),from:(V[r.from]||'').trim(),to:(V[r.to]||'').trim()}));
   const filled=r=>!!(r.street||r.city||r.from);
-  const newRow={street:nu.street+(nu.apt?' # '+nu.apt:''),city:nu.city,state:nu.state,country:'USA',from:nu.since,to:'Present'};
+  const newRow={street:nu.street+(nu.apt?' # '+nu.apt:''),city:nu.city,state:nu.state,country:nu.country,from:nu.since,to:'Present'};
   let oldRow=null, rest;
   if(filled(rows[0])&&/present/i.test(rows[0].to)){
     // row 1 is the current address — close out its dates and push it down
@@ -3395,8 +3422,68 @@ function _injectAddrBtn(){
 }
 {
   const _abOrigBuild=buildForm;
-  buildForm=function(){ const r=_abOrigBuild.apply(this,arguments); try{ _injectAddrBtn(); }catch(e){} return r; };
+  buildForm=function(){
+    const r=_abOrigBuild.apply(this,arguments);
+    try{ _injectAddrBtn(); }catch(e){}
+    try{ _cbApplyBlocks(); }catch(e){}
+    try{ _attachGeoLists(); }catch(e){}
+    return r;
+  };
 }
+
+// ── U.S. city/state suggestions ──────────────────────────────────────────────
+// Item 8 / item 9 city and state boxes (U.S. addresses by definition) and the
+// Update-address dialog suggest from the top-1,000 U.S. cities: picking
+// "Nashville, Tennessee" writes the city and fills the state automatically.
+function _initGeoDatalists(){
+  if(document.getElementById('us-cities-dl')) return;
+  const dl=document.createElement('datalist');
+  dl.id='us-cities-dl';
+  dl.innerHTML=_US_CITIES.map(cs=>{ const i=cs.indexOf('|'); return '<option value="'+cs.slice(0,i)+', '+cs.slice(i+1)+'"></option>'; }).join('');
+  document.body.appendChild(dl);
+  const ds=document.createElement('datalist');
+  ds.id='us-states-dl';
+  ds.innerHTML=_US_STATES.map(s=>'<option value="'+s+'"></option>').join('');
+  document.body.appendChild(ds);
+}
+function _geoSplitCityState(val){
+  const m=String(val||'').match(/^(.+),\s*(.+)$/);
+  if(!m) return null;
+  const st=_US_STATES.find(s=>s.toLowerCase()===m[2].trim().toLowerCase());
+  return st?{city:m[1].trim(),state:st}:null;
+}
+function _attachGeoLists(){
+  _initGeoDatalists();
+  [[_ADDR8.city,_ADDR8.state],[_ADDR9.city,_ADDR9.state]].forEach(pair=>{
+    const cRow=document.getElementById('fr-'+pair[0]);
+    const sRow=document.getElementById('fr-'+pair[1]);
+    const cInp=cRow?cRow.querySelector('input'):null;
+    const sInp=sRow?sRow.querySelector('input'):null;
+    if(cInp) cInp.setAttribute('list','us-cities-dl');
+    if(sInp) sInp.setAttribute('list','us-states-dl');
+  });
+}
+// When a "City, State" suggestion is picked in an item-8/9 city box, split it:
+// city stays in the city box, the state fills its own box.
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(!t||t.tagName!=='INPUT') return;
+  const row=t.closest?t.closest('.field-row'):null;
+  if(!row||!row.id) return;
+  const cid=row.id.slice(3);
+  const pair=[[_ADDR8.city,_ADDR8.state],[_ADDR9.city,_ADDR9.state]].find(p=>p[0]===cid);
+  if(!pair) return;
+  const hit=_geoSplitCityState(t.value);
+  if(!hit) return;
+  const city=ucMode?hit.city.toUpperCase():hit.city;
+  const state=ucMode?hit.state.toUpperCase():hit.state;
+  V[pair[0]]=city; t.value=city;
+  V[pair[1]]=state;
+  const sRow=document.getElementById('fr-'+pair[1]);
+  const sInp=sRow?sRow.querySelector('input'):null;
+  if(sInp) sInp.value=state;
+  drawOver(); applyRules(); updateProg();
+});
 
 // ── SINGLE-ANSWER CHECKBOX GROUPS ────────────────────────────────────────────
 // Checkbox fields that share a PDF name stem (Marital[0..3], PartALine9Sex[0/1],
@@ -3404,27 +3491,41 @@ function _injectAddrBtn(){
 // clears the rest of its group. Genuinely multi-answer boxes (the Part B.1
 // bases, the deceased boxes in A.III.5) have unique stems and never group.
 function _cbStem(p){ return String(p||'').toLowerCase().replace(/\[\d+\]$/,'').replace(/_(yes|no)$/,''); }
-function _cbExclusive(fid){
-  if(V[fid]!=='X') return false;
-  const f=FD.find(x=>x.id===fid);
-  if(!f||f.type!=='checkbox'||!f.pdf) return false;
-  const s=_cbStem(f.pdf);
-  let changed=false;
-  FD.forEach(x=>{
-    if(x.id===fid||x.type!=='checkbox'||!x.pdf) return;
-    if(_cbStem(x.pdf)!==s) return;
-    if(V[x.id]){ V[x.id]=''; _syncPanelField(x); changed=true; }
+// Once one box of a group is checked, its siblings are BLOCKED (faded and
+// unclickable) until the answer is unchecked again — no accidental switches.
+window._cbBlockedSet=new Set();
+function _cbApplyBlocks(){
+  const by={};
+  FD.forEach(f=>{ if(f.type!=='checkbox'||!f.pdf) return; const s=_cbStem(f.pdf); (by[s]=by[s]||[]).push(f.id); });
+  const blocked=new Set();
+  Object.values(by).forEach(g=>{
+    if(g.length<2) return;
+    if(g.some(id=>V[id]==='X')) g.forEach(id=>{ if(V[id]!=='X') blocked.add(id); });
   });
-  return changed;
+  window._cbBlockedSet=blocked;
+  FD.forEach(f=>{
+    if(f.type!=='checkbox') return;
+    const row=document.getElementById('fr-'+f.id);
+    if(!row) return;
+    const isB=blocked.has(f.id);
+    row.classList.toggle('cb-blocked',isB);
+    const inp=row.querySelector('input[type=checkbox]');
+    if(inp) inp.disabled=isB;
+  });
 }
-// Panel checkboxes: the row's own onchange sets V first (at-target), then this
-// bubbling listener enforces the single answer.
+{
+  const st=document.createElement('style');
+  st.textContent='.field-row.cb-blocked{opacity:.45}.field-row.cb-blocked input[type=checkbox]{cursor:not-allowed}';
+  document.head.appendChild(st);
+}
+// Any checkbox change re-evaluates the blocks (the row's own onchange sets V
+// first at-target, then this bubbling listener runs).
 document.addEventListener('change',e=>{
   const t=e.target;
   if(!t||t.type!=='checkbox') return;
   const row=t.closest?t.closest('.field-row'):null;
   if(!row||!row.id||row.id.indexOf('fr-')!==0) return;
-  if(_cbExclusive(row.id.slice(3))){ drawOver(); applyRules(); updateProg(); }
+  _cbApplyBlocks(); drawOver(); updateProg();
 });
 
 // ── FILL MODE: type directly on the PDF ──────────────────────────────────────
@@ -3517,16 +3618,18 @@ function _initFillOnPdf(){
   }
   area.addEventListener('mousemove',e=>{
     if(appMode!=='fill'||_fillEd) return;
-    area.style.cursor=fieldAt(e)?'pointer':'';
+    const hit=fieldAt(e);
+    area.style.cursor=hit?((hit.type==='checkbox'&&V[hit.id]!=='X'&&window._cbBlockedSet&&window._cbBlockedSet.has(hit.id))?'not-allowed':'pointer'):'';
   });
   area.addEventListener('click',e=>{
     if(appMode!=='fill') return;
     if(_fillEd&&_fillEd.el.contains(e.target)) return;
     const f=fieldAt(e); if(!f) return;
     if(f.type==='checkbox'){
+      if(V[f.id]!=='X'&&window._cbBlockedSet&&window._cbBlockedSet.has(f.id)) return; // group answered — uncheck it first
       V[f.id]=(V[f.id]==='X')?'':'X';
-      _cbExclusive(f.id);
       _syncPanelField(f);
+      _cbApplyBlocks();
       drawOver(); applyRules(); updateProg();
       return;
     }
