@@ -1278,13 +1278,15 @@ function drawOver(){
       // Filled: amber background + text
       const fo=gf(f);
       if(f.type==='checkbox'){
-        // draw X in box
-        ctx.fillStyle=fo.color||'#2C2620';
-        ctx.font=`bold ${Math.round(fh*0.85)}px Arial`;
-        ctx.textBaseline='middle';
-        ctx.textAlign='center';
-        ctx.fillText('✓',fx+fw/2,fy+fh/2);
-        ctx.textAlign='left';
+        // draw X in box — but an N/A checkbox stays blank on the page
+        if(v!=='N/A'){
+          ctx.fillStyle=fo.color||'#2C2620';
+          ctx.font=`bold ${Math.round(fh*0.85)}px Arial`;
+          ctx.textBaseline='middle';
+          ctx.textAlign='center';
+          ctx.fillText('✓',fx+fw/2,fy+fh/2);
+          ctx.textAlign='left';
+        }
       } else if(f.type==='textarea'){
         // multi-line boxes (narrative answers, the Supplement B page): wrap
         // and stack lines from the top instead of squeezing one line
@@ -3539,6 +3541,61 @@ function _feInit(){
 }
 _feInit();
 
+// ── "I AM NOT MARRIED" → N/A THE SPOUSE BLOCK ────────────────────────────────
+// Checking "I am not married" (page 2) marks every question in the Your
+// Spouse block (items 1–24) N/A; unchecking clears exactly those N/A marks.
+// If some spouse questions already have real answers, it asks whether to
+// replace them or keep them and only N/A the empty ones.
+const _NOTMARRIED_ID='form1_0_subform_1_checkbox5_0';
+function _spouseFields(){
+  return FD.filter(f=>f.pdf&&f.pdf.indexOf('#subform[1].NotMarried[0].')!==-1);
+}
+function _spouseNaApply(on){
+  const fields=_spouseFields();
+  if(on){
+    const filled=fields.filter(f=>V[f.id]&&V[f.id]!=='N/A');
+    let overwrite=false;
+    if(filled.length){
+      overwrite=confirm(filled.length+' spouse questions already have answers.\n\nOK — replace them all with N/A\nCancel — keep them and mark only the empty ones N/A');
+    }
+    fields.forEach(f=>{ if(overwrite||!V[f.id]) V[f.id]='N/A'; });
+  } else {
+    fields.forEach(f=>{ if(V[f.id]==='N/A') V[f.id]=''; });
+  }
+  buildForm(); drawOver(); applyRules(); updateProg();
+}
+
+// ── MORE THAN 4 CHILDREN → SUPPLEMENT A ──────────────────────────────────────
+// The form fits 4 children; entering a Total Number of Children above 4
+// offers to open Supplement A (page 11), as the form's NOTE instructs, with
+// the A-Number and applicant name at the top filled from Part A.I.
+const _TOTALCHILD_ID='form1_0_subform_1_totalchild_0';
+function _childrenSupplementCheck(){
+  const n=parseInt(V[_TOTALCHILD_ID],10);
+  if(!(n>4)) return;
+  const go=confirm('The form only fits 4 children (pages 2–3). With '+n+' children, list children 5 and up on Supplement A (page 11), as the form instructs.\n\nOpen Supplement A now? The A-Number and applicant name at the top will be filled in.');
+  if(!go) return;
+  const set=(id,val)=>{ if(val&&!V[id]) V[id]=val; };
+  set('form1_0_subform_12_ptailine1_anumber_1', V['form1_0_subform_0_ptailine1_anumber_0']);
+  const nm=[V['form1_0_subform_0_ptailine5_firstname_0'],V['form1_0_subform_0_ptailine6_middlename_0'],V['form1_0_subform_0_ptailine4_lastname_0']].filter(Boolean).join(' ');
+  set('form1_0_subform_12_applicantname_0', nm);
+  buildForm(); drawOver(); updateProg();
+  try{
+    curPart='C';
+    document.querySelectorAll('.ptab').forEach((t,i)=>t.classList.toggle('on',PARTS[i]==='C'));
+    document.querySelectorAll('.part-sec').forEach(sc=>sc.classList.toggle('on',sc.id==='ps-C'));
+  }catch(e){}
+  renderPg(11);
+  const row=document.getElementById('fr-form1_0_subform_12_textfield12_6');
+  if(row) row.scrollIntoView({block:'center'});
+}
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(!t||t.tagName!=='INPUT') return;
+  const row=t.closest?t.closest('.field-row'):null;
+  if(row&&row.id==='fr-'+_TOTALCHILD_ID) _childrenSupplementCheck();
+});
+
 // ── SINGLE-ANSWER CHECKBOX GROUPS ────────────────────────────────────────────
 // Checkbox fields that share a PDF name stem (Marital[0..3], PartALine9Sex[0/1],
 // PtAIILine22_Yes/_No, …) are one question with one answer: checking a box
@@ -3579,6 +3636,7 @@ document.addEventListener('change',e=>{
   if(!t||t.type!=='checkbox') return;
   const row=t.closest?t.closest('.field-row'):null;
   if(!row||!row.id||row.id.indexOf('fr-')!==0) return;
+  if(row.id.slice(3)===_NOTMARRIED_ID){ _spouseNaApply(t.checked); }
   _cbApplyBlocks(); drawOver(); updateProg();
 });
 
@@ -3682,6 +3740,7 @@ function _initFillOnPdf(){
     if(f.type==='checkbox'){
       if(V[f.id]!=='X'&&window._cbBlockedSet&&window._cbBlockedSet.has(f.id)) return; // group answered — uncheck it first
       V[f.id]=(V[f.id]==='X')?'':'X';
+      if(f.id===_NOTMARRIED_ID){ _spouseNaApply(V[f.id]==='X'); }
       _syncPanelField(f);
       _cbApplyBlocks();
       drawOver(); applyRules(); updateProg();
