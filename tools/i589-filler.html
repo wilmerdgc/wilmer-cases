@@ -74,7 +74,10 @@ body{font-family:var(--font-body);background:var(--cream);color:var(--ink);heigh
 #main{display:flex;flex:1;overflow:hidden;min-height:0}
 
 /* LEFT - PDF */
-#left{width:46%;min-width:200px;max-width:80%;display:flex;flex-direction:column;background:var(--parchment);flex-shrink:0}
+#left{width:46%;min-width:200px;max-width:80%;display:flex;flex-direction:column;background:var(--parchment);flex-shrink:0;order:3}
+/* Panel on the left, PDF on the right (flex order — markup unchanged) */
+#splitter{order:2}
+#right{order:1}
 #pdf-nav{display:flex;align-items:center;justify-content:center;gap:10px;padding:6px;background:var(--cream-dark);border-bottom:1px solid var(--border);flex-shrink:0}
 .pnb{width:26px;height:26px;background:#fff;border:1px solid var(--border);color:var(--ink-soft);border-radius:var(--radius-sm);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;transition:all .15s}
 .pnb:hover{background:var(--cream);border-color:var(--ink-faint)}
@@ -311,6 +314,9 @@ body{font-family:var(--font-body);background:var(--cream);color:var(--ink);heigh
 .sfi-del{padding:1px 6px;border:1px solid transparent;border-radius:3px;background:transparent;color:var(--ink-faint);font-size:11px;cursor:pointer;line-height:1;opacity:0;transition:opacity .15s}
 .sfi:hover .sfi-del{opacity:1}
 .sfi-del:hover{border-color:var(--rose);color:var(--rose)}
+.sfi-move{padding:1px 5px;border:1px solid transparent;border-radius:3px;background:transparent;color:var(--ink-faint);font-size:11px;cursor:pointer;line-height:1;opacity:0;transition:opacity .15s;flex-shrink:0}
+.sfi:hover .sfi-move{opacity:1}
+.sfi-move:hover{border-color:var(--slate,#6B7FA3);color:var(--slate,#6B7FA3)}
 
 /* SPLITTER */
 #splitter{width:5px;background:var(--border);cursor:col-resize;flex-shrink:0;transition:background .15s;position:relative;z-index:10}
@@ -2078,7 +2084,7 @@ function buildFieldList(){
       row.draggable=true;
       row.dataset.fid=f.id;
       const typeLabel={text:'TXT',date:'DATE',checkbox:'CB',textarea:'AREA',tel:'TEL',select:'SEL'}[f.type]||f.type.toUpperCase();
-      row.innerHTML=`<span class="sfi-drag" title="Drag to reorder">⠿</span><span class="sfi-lbl">${f.lbl}</span><span class="sfi-type">${typeLabel}</span><span class="sfi-pg">p.${f.pg}</span><button class="sfi-del" onclick="deleteField('${f.id}',event)" title="Delete field">✕</button>`;
+      row.innerHTML=`<span class="sfi-drag" title="Drag to reorder">⠿</span><span class="sfi-lbl">${f.lbl}</span><span class="sfi-type">${typeLabel}</span><span class="sfi-pg">p.${f.pg}</span><button class="sfi-move" onclick="moveField('${f.id}',-1,event)" title="Move up">↑</button><button class="sfi-move" onclick="moveField('${f.id}',1,event)" title="Move down">↓</button><button class="sfi-del" onclick="deleteField('${f.id}',event)" title="Delete field">✕</button>`;
       row.onclick=()=>selectField(f.id);
       row.addEventListener('dragstart',e=>{
         e.dataTransfer.setData('text/plain',f.id);
@@ -2860,7 +2866,9 @@ function initSplitter(){
     if(!dragging) return;
     const mainW = main.getBoundingClientRect().width;
     const dx = e.clientX - startX;
-    let newW = startW + dx;
+    // Panel sits left of the splitter, PDF (#left) right of it: dragging the
+    // splitter right shrinks the PDF.
+    let newW = startW - dx;
     // clamp between 200px and 80% of main
     newW = Math.max(200, Math.min(mainW * 0.8, newW));
     left.style.width = newW + 'px';
@@ -3077,6 +3085,25 @@ function _tplChanged(){ if(window._onI589TemplateChanged){ try{ window._onI589Te
 document.addEventListener('mouseup',()=>{ if(appMode==='settings') _tplChanged(); });
 document.addEventListener('keyup',e=>{ if(appMode==='settings'&&/^Arrow/.test(e.key)) _tplChanged(); });
 document.addEventListener('drop',()=>{ if(appMode==='settings') setTimeout(_tplChanged,50); },true);
+
+// Move a field one step up/down within its part group (the ↑/↓ buttons on
+// each Settings row). Swaps with its neighbor in FD, so both the Settings
+// list and the Fill panel reorder; the change rides the shared template.
+function moveField(id,dir,e){
+  if(e) e.stopPropagation();
+  const f=FD.find(x=>x.id===id); if(!f) return;
+  const sibs=FD.filter(x=>x.part===f.part);
+  const pos=sibs.indexOf(f);
+  const tgt=sibs[pos+dir];
+  if(!tgt) return;
+  const i=FD.indexOf(f), j=FD.indexOf(tgt);
+  FD[i]=tgt; FD[j]=f;
+  buildFieldList();
+  buildForm();
+  const el=document.getElementById('sfi-'+id);
+  if(el){ el.classList.add('sel'); el.scrollIntoView({block:'nearest'}); }
+  _tplChanged();
+}
 
 // Rename a field from the editor's new Label box.
 function saveLabelEdit(){
