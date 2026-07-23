@@ -500,6 +500,7 @@ body{font-family:var(--font-body);background:var(--cream);color:var(--ink);heigh
           <span style="font-size:9px;color:var(--ink-faint)" title="Arrow keys move. Alt+Arrow keys resize. Shift = 10×.">⌨ arrows / Alt+arrows</span>
         </div>
         <div class="ed-grid">
+          <div class="ed-cell" style="grid-column:1/-1"><label>Field name (label)</label><input type="text" id="ed-lbl" onchange="saveLabelEdit()" placeholder="Rename this field…"></div>
           <div class="ed-cell"><label>Page</label>
             <div style="display:flex;gap:4px">
               <select id="ed-pg" onchange="changeFieldPage()" style="flex:1;padding:5px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;background:#fff;color:var(--ink);font-family:var(--font-body);cursor:pointer">
@@ -2160,6 +2161,7 @@ function selectField(id){
   const fo=gf(f);
   document.getElementById('field-editor').style.display='block';
   document.getElementById('ed-field-name').textContent=f.lbl;
+  {const _le=document.getElementById('ed-lbl');if(_le)_le.value=f.lbl;}
   document.getElementById('ed-pg').value=f.pg;
   document.getElementById('ed-x').value=f.x;
   document.getElementById('ed-y').value=f.y;
@@ -2191,6 +2193,7 @@ function saveField(){
   const bold=document.getElementById('ed-bold').checked;
   fontOvr[selFid]={family:fam,size:fs,color:col,bold};
   f.fs=fs;
+  {const _le=document.getElementById('ed-lbl');const _nl=_le?_le.value.trim():'';if(_nl)f.lbl=_nl;}
   buildFieldList();
   selectField(selFid);
   renderPg(f.pg);
@@ -2995,6 +2998,222 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 
 <!-- ═══════════════════════════════════════════════════════════════════════
+     FIELD TEMPLATE + FILL-ON-PDF — added when this tool was folded into the
+     Romero case-tracker.
+     · Template: renamed labels, deleted/added/moved fields and rule edits are
+       diffed against the baked-in defaults (FD0/RULES0). computeI589Template()
+       returns that diff; applyI589Template() re-applies it, so the parent app
+       can persist one shared template for ALL cases. _tplChanged() fires after
+       every template-mutating action; the bridge (next script) forwards it.
+     · Fill-on-PDF: in Fill mode, clicking a field box on the page opens an
+       inline editor right on the PDF (checkboxes toggle in place). Works
+       standalone too — no parent app required.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+// ── Pristine copies of the baked-in field defs & rules (taken at load, before
+//    any user edit or template application can touch them) ──
+const FD0=JSON.parse(JSON.stringify(FD));
+const RULES0=JSON.parse(JSON.stringify(RULES));
+
+// Diff current FD/RULES against the baked-in defaults.
+function computeI589Template(){
+  const map0={}; FD0.forEach(f=>map0[f.id]=f);
+  const cur={};  FD.forEach(f=>cur[f.id]=f);
+  const t={labels:{},geom:{},deleted:[],added:[]};
+  FD0.forEach(f0=>{ if(!cur[f0.id]) t.deleted.push(f0.id); });
+  FD.forEach(f=>{
+    const f0=map0[f.id];
+    if(!f0){ t.added.push(JSON.parse(JSON.stringify(f))); return; }
+    if(f.lbl!==f0.lbl) t.labels[f.id]=f.lbl;
+    const g={};
+    ['part','type','pg','x','y','w','h','fs'].forEach(k=>{ if(f[k]!==f0[k]) g[k]=f[k]; });
+    if(JSON.stringify(f.opts||null)!==JSON.stringify(f0.opts||null)) g.opts=f.opts;
+    if(Object.keys(g).length) t.geom[f.id]=g;
+  });
+  // Field order: only stored when the user actually reordered (an added field
+  // at its default spot doesn't count) — keeps the template small.
+  const addedIds=new Set(t.added.map(f=>f.id));
+  const seqCur=FD.filter(f=>!addedIds.has(f.id)).map(f=>f.id);
+  const seqDef=FD0.filter(f=>cur[f.id]).map(f=>f.id);
+  if(JSON.stringify(seqCur)!==JSON.stringify(seqDef)) t.order=FD.map(f=>f.id);
+  if(JSON.stringify(RULES)!==JSON.stringify(RULES0)) t.rules=JSON.parse(JSON.stringify(RULES));
+  return t;
+}
+
+// Re-apply a stored template on top of the baked-in defaults. Unknown ids are
+// ignored, so a template survives future updates of this tool.
+function applyI589Template(t){
+  if(!t||typeof t!=='object') return;
+  (t.deleted||[]).forEach(id=>{ const i=FD.findIndex(f=>f.id===id); if(i!==-1) FD.splice(i,1); });
+  (t.added||[]).forEach(nf=>{
+    if(!nf||!nf.id||FD.find(f=>f.id===nf.id)) return;
+    const cp=JSON.parse(JSON.stringify(nf));
+    const lastIdx=FD.reduce((acc,f,i)=>f.part===cp.part?i:acc,-1);
+    FD.splice(lastIdx===-1?FD.length:lastIdx+1,0,cp);
+  });
+  Object.keys(t.labels||{}).forEach(id=>{ const f=FD.find(f=>f.id===id); if(f) f.lbl=t.labels[id]; });
+  Object.keys(t.geom||{}).forEach(id=>{ const f=FD.find(f=>f.id===id); if(f) Object.assign(f,JSON.parse(JSON.stringify(t.geom[id]))); });
+  if(Array.isArray(t.order)&&t.order.length){
+    const pos={}; t.order.forEach((id,i)=>pos[id]=i);
+    FD.sort((a,b)=>(pos[a.id]!==undefined?pos[a.id]:1e6)-(pos[b.id]!==undefined?pos[b.id]:1e6));
+  }
+  if(Array.isArray(t.rules)){ RULES.length=0; t.rules.forEach(r=>RULES.push(JSON.parse(JSON.stringify(r)))); }
+}
+
+// Notify whoever is listening (the app bridge) that the template may have
+// changed. No-op standalone.
+function _tplChanged(){ if(window._onI589TemplateChanged){ try{ window._onI589TemplateChanged(); }catch(e){} } }
+
+// Every named action that can mutate FD/RULES gets a post-call notification.
+['saveField','resetField','deleteField','saveNewField','nudgeField','liveApplyField',
+ 'changeFieldPage','doConvertWidgets','snapSelectedToNearest','autoMatchAllWidgets',
+ 'saveRule','deleteRule','edSaveInlineRule','edDelInlineRule'].forEach(fn=>{
+  if(typeof window[fn]==='function'){
+    const orig=window[fn];
+    window[fn]=function(){ const r=orig.apply(this,arguments); _tplChanged(); return r; };
+  }
+});
+// Drag-move/resize + calibrate end, keyboard nudges, and list reorder drops.
+document.addEventListener('mouseup',()=>{ if(appMode==='settings') _tplChanged(); });
+document.addEventListener('keyup',e=>{ if(appMode==='settings'&&/^Arrow/.test(e.key)) _tplChanged(); });
+document.addEventListener('drop',()=>{ if(appMode==='settings') setTimeout(_tplChanged,50); },true);
+
+// Rename a field from the editor's new Label box.
+function saveLabelEdit(){
+  if(!selFid) return;
+  const f=FD.find(x=>x.id===selFid); if(!f) return;
+  const le=document.getElementById('ed-lbl'); if(!le) return;
+  const nl=le.value.trim(); if(!nl||nl===f.lbl) return;
+  f.lbl=nl;
+  document.getElementById('ed-field-name').textContent=f.lbl;
+  const hint=document.getElementById('sel-hint');
+  if(hint) hint.textContent=`"${f.lbl}" selected — editing position & style`;
+  buildFieldList();
+  const el=document.getElementById('sfi-'+selFid);
+  if(el){ el.classList.add('sel'); el.scrollIntoView({block:'nearest'}); }
+  buildForm();
+  _tplChanged();
+}
+
+// ── FILL MODE: type directly on the PDF ──────────────────────────────────────
+let _fillEd=null; // {el, fid}
+
+function _syncPanelField(f){
+  const row=document.getElementById('fr-'+f.id);
+  if(row){ try{ row.replaceWith(makeField(f)); }catch(e){} }
+}
+function _closeFillEditor(commit){
+  if(!_fillEd) return;
+  const ed=_fillEd; _fillEd=null;
+  const f=FD.find(x=>x.id===ed.fid);
+  if(commit&&f){
+    let val=ed.el.value;
+    if(ucMode&&typeof val==='string'){ val=val.toUpperCase(); }
+    V[f.id]=val;
+    _syncPanelField(f);
+    applyRules(); updateProg();
+  }
+  try{ ed.el.remove(); }catch(e){}
+  drawOver();
+}
+function _openFillEditor(f){
+  _closeFillEditor(true);
+  const pc=pageCanvases[f.pg]; if(!pc) return;
+  const r=pc.cv.getBoundingClientRect();
+  const sx=r.width/pc.cv.width, sy=r.height/pc.cv.height;
+  const left=f.x*pc.cv.width*sx, top=f.y*pc.cv.height*sy;
+  const wpx=Math.max(40,f.w*pc.cv.width*sx), hpx=Math.max(14,f.h*pc.cv.height*sy);
+  const fo=gf(f);
+  let el;
+  if(f.type==='radio'||f.type==='select'){
+    el=document.createElement('select');
+    if(!(f.opts||[]).includes('')){ const op=document.createElement('option'); op.value=''; op.textContent='—'; el.appendChild(op); }
+    (f.opts||[]).forEach(o=>{ const op=document.createElement('option'); op.value=o; op.textContent=o; el.appendChild(op); });
+    el.value=V[f.id]||'';
+    el.onchange=()=>_closeFillEditor(true);
+  } else if(f.type==='textarea'||hpx>40){
+    el=document.createElement('textarea');
+    el.value=V[f.id]||'';
+  } else {
+    el=document.createElement('input');
+    el.type='text';
+    el.value=V[f.id]||'';
+  }
+  el.style.cssText='position:absolute;z-index:30;box-sizing:border-box;'
+    +'left:'+left+'px;top:'+top+'px;width:'+wpx+'px;height:'+hpx+'px;'
+    +'font-family:"'+fo.family+'";font-size:'+Math.max(8,Math.round(fo.size*sx))+'px;'+(fo.bold?'font-weight:bold;':'')
+    +'color:'+fo.color+';background:#FFFCE6;border:1.5px solid var(--amber,#C9823A);border-radius:2px;padding:0 2px;outline:none;resize:none;overflow:hidden;';
+  el.addEventListener('keydown',ev=>{
+    if(ev.key==='Enter'&&el.tagName!=='TEXTAREA'){ ev.preventDefault(); _closeFillEditor(true); }
+    else if(ev.key==='Escape'){ _closeFillEditor(false); }
+    ev.stopPropagation();
+  });
+  el.addEventListener('blur',()=>{ if(_fillEd&&_fillEd.el===el) _closeFillEditor(true); });
+  pc.wrap.appendChild(el);
+  _fillEd={el,fid:f.id};
+  el.focus();
+  try{ if(el.select) el.select(); }catch(e){}
+}
+function _initFillOnPdf(){
+  // Normalize the shipped DOM (the source file was saved mid-session with the
+  // Settings panel showing while appMode is 'fill') so the tool always opens
+  // coherently in Fill mode.
+  try{ setMode('fill'); }catch(e){}
+  const area=document.getElementById('pdf-area'); if(!area) return;
+  function fieldAt(e){
+    for(const [pgStr,pc] of Object.entries(pageCanvases)){
+      const r=pc.cv.getBoundingClientRect();
+      if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom) continue;
+      const pg=Number(pgStr);
+      const [mx,my]=canvasXY(e,pc.cv);
+      const w=pc.cv.width,h=pc.cv.height;
+      // smallest hit wins so tiny checkboxes near big boxes stay clickable
+      let best=null,bestA=Infinity;
+      FD.forEach(f=>{
+        if(f.pg!==pg) return;
+        const row=document.getElementById('fr-'+f.id);
+        if(row&&row.classList.contains('hidden')) return;
+        const fx=f.x*w,fy=f.y*h,fw=f.w*w,fh=f.h*h;
+        if(mx>=fx-3&&mx<=fx+fw+3&&my>=fy-3&&my<=fy+fh+3){
+          const a=fw*fh;
+          if(a<bestA){ best=f; bestA=a; }
+        }
+      });
+      return best;
+    }
+    return null;
+  }
+  area.addEventListener('mousemove',e=>{
+    if(appMode!=='fill'||_fillEd) return;
+    area.style.cursor=fieldAt(e)?'pointer':'';
+  });
+  area.addEventListener('click',e=>{
+    if(appMode!=='fill') return;
+    if(_fillEd&&_fillEd.el.contains(e.target)) return;
+    const f=fieldAt(e); if(!f) return;
+    if(f.type==='checkbox'){
+      V[f.id]=(V[f.id]==='X')?'':'X';
+      _syncPanelField(f);
+      drawOver(); applyRules(); updateProg();
+      return;
+    }
+    _openFillEditor(f);
+    // also reveal the field in the side panel for context — switch the part
+    // tab WITHOUT setPart() (that would scroll the PDF away from the click)
+    try{
+      curPart=f.part;
+      document.querySelectorAll('.ptab').forEach((t,i)=>t.classList.toggle('on',PARTS[i]===f.part));
+      document.querySelectorAll('.part-sec').forEach(s=>s.classList.toggle('on',s.id==='ps-'+f.part));
+      const row=document.getElementById('fr-'+f.id);
+      if(row) row.scrollIntoView({block:'center'});
+    }catch(err){}
+  });
+}
+if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded',_initFillOnPdf); }
+else{ _initFillOnPdf(); }
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
      APP BRIDGE — added when this tool was folded into the Romero
      case-tracker. The parent app (index.html) embeds this file in an iframe
      scoped to one case: after the tool announces it's ready, the parent
@@ -3067,13 +3286,37 @@ document.addEventListener('DOMContentLoaded',()=>{
   var _origBuild=buildForm;
   buildForm=function(){ _origBuild.apply(this,arguments); _queueSave(); };
 
+  // ── Shared field template (renames / deletions / moves — applies to every
+  //    case). The parent stores one global copy; post changes back debounced. ──
+  var _tplTimer=null, _lastTplJson=null;
+  window._onI589TemplateChanged=function(){
+    if(_loading) return;
+    clearTimeout(_tplTimer);
+    _tplTimer=setTimeout(function(){
+      var t; try{ t=computeI589Template(); }catch(e){ return; }
+      var j; try{ j=JSON.stringify(t); }catch(e){ return; }
+      if(j===_lastTplJson) return;
+      _lastTplJson=j;
+      try{ window.parent.postMessage({type:'i589-template', template:t},'*'); }catch(e){}
+    },800);
+  };
+
   window.addEventListener('message',function(e){
     var d=e.data||{};
     if(d.type==='i589-load'){
       _clid=d.clid||null;
       if(d.clientName){ try{ document.title='I-589 — '+d.clientName; }catch(err){} }
+      if(d.template){ _loading=true; try{ applyI589Template(d.template); }catch(err){} _loading=false; }
       if(d.state&&d.state.vals&&Object.keys(d.state.vals).length){ i589SetState(d.state); }
       else if(d.prefill){ i589ApplyPrefill(d.prefill); }
+      else if(d.template){
+        // template only — rebuild so renames/deletions show right away
+        _loading=true;
+        try{ buildForm(); drawOver(); applyRules(); updateProg(); }catch(err){}
+        _loading=false;
+      }
+      // Baseline: what we just applied is the saved template — don't echo it.
+      try{ _lastTplJson=JSON.stringify(computeI589Template()); }catch(err){}
     }
   });
   function _announce(){ try{ window.parent.postMessage({type:'i589-ready'},'*'); }catch(e){} }
