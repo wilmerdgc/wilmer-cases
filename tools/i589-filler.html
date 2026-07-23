@@ -3240,6 +3240,157 @@ function saveLabelEdit(){
   _tplChanged();
 }
 
+// ── UPDATE ADDRESS (Part A.I, 8 → history in Part A.III, 2) ─────────────────
+// The client moved: enter the new address for item 8, and the address that
+// was there rolls down into the Part A.III, 2 "residences during the past 5
+// years" table (its To date closes at the move date; every other row shifts
+// down one). Optionally the mailing address (item 9) is updated to match.
+const _ADDR8={
+  street:'form1_0_subform_0_ptailine8_streetnumand',
+  apt:'form1_0_subform_0_ptailine8_aptnumber_0',
+  city:'form1_0_subform_0_textfield1_2',
+  state:'form1_0_subform_0_ptailine8_state_0',
+  zip:'form1_0_subform_0_ptailine8_zipcode_0',
+  area:'form1_0_subform_0_ptailine8_areacode_0',
+  phone:'form1_0_subform_0_ptailine8_telephonenum'
+};
+const _ADDR9={
+  street:'form1_0_subform_0_ptailine9_streetnumand',
+  apt:'form1_0_subform_0_ptailine9_aptnumber_0',
+  city:'form1_0_subform_0_ptailine9_city_0',
+  state:'form1_0_subform_0_ptailine9_state_0',
+  zip:'form1_0_subform_0_ptailine9_zipcode_0',
+  area:'form1_0_subform_0_ptailine9_areacode_0',
+  phone:'form1_0_subform_0_ptailine9_telephonenumbe_0'
+};
+const _ADDR_TABLE=[
+  {street:'form1_0_subform_4_textfield13_8', city:'form1_0_subform_4_textfield13_10',state:'form1_0_subform_4_textfield13_12',country:'form1_0_subform_4_textfield13_14',from:'form1_0_subform_4_datetimefield24_0',to:'form1_0_subform_4_datetimefield26_0'},
+  {street:'form1_0_subform_4_textfield13_9', city:'form1_0_subform_4_textfield13_11',state:'form1_0_subform_4_textfield13_13',country:'form1_0_subform_4_textfield13_15',from:'form1_0_subform_4_datetimefield25_0',to:'form1_0_subform_4_datetimefield27_0'},
+  {street:'form1_0_subform_4_textfield13_16',city:'form1_0_subform_4_textfield13_17',state:'form1_0_subform_4_textfield13_18',country:'form1_0_subform_4_textfield13_19',from:'form1_0_subform_4_datetimefield28_0',to:'form1_0_subform_4_datetimefield29_0'},
+  {street:'form1_0_subform_4_textfield13_20',city:'form1_0_subform_4_textfield13_21',state:'form1_0_subform_4_textfield13_22',country:'form1_0_subform_4_textfield13_23',from:'form1_0_subform_4_datetimefield30_0',to:'form1_0_subform_4_datetimefield31_0'},
+  {street:'form1_0_subform_4_textfield13_24',city:'form1_0_subform_4_textfield13_25',state:'form1_0_subform_4_textfield13_26',country:'form1_0_subform_4_textfield13_27',from:'form1_0_subform_4_datetimefield32_0',to:'form1_0_subform_4_datetimefield33_0'}
+];
+
+function openAddressUpdate(){
+  const old={};
+  Object.keys(_ADDR8).forEach(k=>{ old[k]=(V[_ADDR8[k]]||'').trim(); });
+  const now=new Date();
+  const nowMY=('0'+(now.getMonth()+1)).slice(-2)+'/'+now.getFullYear();
+  const mailSame=(V[_ADDR9.street]||'').trim()!==''&&(V[_ADDR9.street]||'').trim().toLowerCase()===old.street.toLowerCase();
+  const ov=document.createElement('div');
+  ov.id='addr-upd-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(44,38,32,.4);z-index:900;display:flex;align-items:center;justify-content:center;';
+  const inp='width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:var(--font-body);background:#fff;color:var(--ink);outline:none;';
+  const lab='font-size:9px;font-weight:700;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin:0 0 3px;';
+  ov.innerHTML=
+    '<div style="background:var(--cream,#F7F4EF);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,.3);width:480px;max-width:94vw;max-height:92vh;overflow:auto;padding:20px 22px;font-family:var(--font-body);" onclick="event.stopPropagation()">'
+    +'<div style="font-family:var(--font-display);font-size:16px;font-weight:600;color:var(--ink);margin-bottom:2px;">Update address</div>'
+    +'<div style="font-size:11.5px;color:var(--ink-muted);line-height:1.5;margin-bottom:12px;">The new address goes into <b>8. Residence in the U.S.</b> — the current one ('+(old.street?old.street.replace(/</g,'&lt;'):'empty')+') rolls down into <b>Part A.III, 2</b> (residences during the past 5 years) and its dates are closed out.</div>'
+    +'<div style="margin-bottom:9px;"><label style="'+lab+'">Street Number and Name *</label><input id="au-street" style="'+inp+'"></div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:9px;"><div style="flex:0 0 90px;"><label style="'+lab+'">Apt. Number</label><input id="au-apt" style="'+inp+'"></div><div style="flex:1;"><label style="'+lab+'">City *</label><input id="au-city" style="'+inp+'"></div></div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:9px;"><div style="flex:1;"><label style="'+lab+'">State</label><input id="au-state" style="'+inp+'"></div><div style="flex:0 0 110px;"><label style="'+lab+'">Zip Code</label><input id="au-zip" style="'+inp+'"></div></div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:9px;"><div style="flex:0 0 90px;"><label style="'+lab+'">Area code</label><input id="au-area" style="'+inp+'" placeholder="(keep)"></div><div style="flex:1;"><label style="'+lab+'">Telephone</label><input id="au-phone" style="'+inp+'" placeholder="(keep current)"></div><div style="flex:0 0 110px;"><label style="'+lab+'">Lives here since</label><input id="au-since" style="'+inp+'" value="'+nowMY+'" placeholder="mm/yyyy"></div></div>'
+    +'<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-soft);margin:4px 0 14px;cursor:pointer;"><input type="checkbox" id="au-mail" '+(mailSame?'checked':'')+' style="width:auto;accent-color:#6A8C6E;">Also update <b>9. Mailing Address</b> to this same address</label>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;">'
+    +'<button onclick="closeAddressUpdate()" style="padding:8px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);font-size:12px;cursor:pointer;font-family:var(--font-body);">Cancel</button>'
+    +'<button onclick="applyAddressUpdate()" style="padding:8px 18px;border:none;border-radius:var(--radius-sm);background:#6B7FA3;color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font-body);">✓ Update address</button>'
+    +'</div></div>';
+  ov.addEventListener('click',e=>{ if(e.target===ov) closeAddressUpdate(); });
+  document.body.appendChild(ov);
+  document.getElementById('au-street').focus();
+}
+function closeAddressUpdate(){
+  const ov=document.getElementById('addr-upd-overlay');
+  if(ov) ov.remove();
+}
+function applyAddressUpdate(){
+  const g=id=>((document.getElementById(id)||{}).value||'').trim();
+  const nu={street:g('au-street'),apt:g('au-apt'),city:g('au-city'),state:g('au-state'),zip:g('au-zip'),area:g('au-area'),phone:g('au-phone'),since:g('au-since')};
+  if(!nu.street||!nu.city){ alert('Street and City are required.'); return; }
+  if(nu.since&&!/^\d{2}\/\d{4}$/.test(nu.since)){ alert('"Lives here since" must be mm/yyyy (e.g. 07/2026).'); return; }
+  const updMail=(document.getElementById('au-mail')||{}).checked;
+  const old={};
+  Object.keys(_ADDR8).forEach(k=>{ old[k]=(V[_ADDR8[k]]||'').trim(); });
+  // current table rows -> objects
+  const rows=_ADDR_TABLE.map(r=>({street:(V[r.street]||'').trim(),city:(V[r.city]||'').trim(),state:(V[r.state]||'').trim(),country:(V[r.country]||'').trim(),from:(V[r.from]||'').trim(),to:(V[r.to]||'').trim()}));
+  const filled=r=>!!(r.street||r.city||r.from);
+  const newRow={street:nu.street+(nu.apt?' # '+nu.apt:''),city:nu.city,state:nu.state,country:'USA',from:nu.since,to:'Present'};
+  let oldRow=null, rest;
+  if(filled(rows[0])&&/present/i.test(rows[0].to)){
+    // row 1 is the current address — close out its dates and push it down
+    oldRow=Object.assign({},rows[0],{to:nu.since});
+    rest=rows.slice(1).filter(filled);
+  } else {
+    if(old.street){ oldRow={street:old.street+(old.apt?' # '+old.apt:''),city:old.city,state:old.state,country:'USA',from:'',to:nu.since}; }
+    rest=rows.filter(filled);
+  }
+  const finalRows=[newRow].concat(oldRow?[oldRow]:[]).concat(rest);
+  const dropped=finalRows.length-_ADDR_TABLE.length;
+  _ADDR_TABLE.forEach((r,i)=>{
+    const src=finalRows[i]||{street:'',city:'',state:'',country:'',from:'',to:''};
+    V[r.street]=src.street; V[r.city]=src.city; V[r.state]=src.state;
+    V[r.country]=src.country; V[r.from]=src.from; V[r.to]=src.to;
+  });
+  // item 8 gets the new address (phone only when provided)
+  V[_ADDR8.street]=nu.street; V[_ADDR8.apt]=nu.apt; V[_ADDR8.city]=nu.city;
+  V[_ADDR8.state]=nu.state; V[_ADDR8.zip]=nu.zip;
+  if(nu.area) V[_ADDR8.area]=nu.area;
+  if(nu.phone) V[_ADDR8.phone]=nu.phone;
+  if(updMail){
+    V[_ADDR9.street]=nu.street; V[_ADDR9.apt]=nu.apt; V[_ADDR9.city]=nu.city;
+    V[_ADDR9.state]=nu.state; V[_ADDR9.zip]=nu.zip;
+    if(nu.area) V[_ADDR9.area]=nu.area;
+    if(nu.phone) V[_ADDR9.phone]=nu.phone;
+  }
+  closeAddressUpdate();
+  buildForm(); drawOver(); applyRules(); updateProg();
+  alert('✓ Address updated. The previous address is now row 2 of Part A.III, 2 (page 4).'
+    +(dropped>0?'\n⚠ The oldest '+dropped+' residence row'+(dropped>1?'s':'')+' no longer fit in the table — use Supplement B for '+(dropped>1?'them':'it')+'.':''));
+}
+// Put an "Update address" button just above the item-8 street field in the panel.
+function _injectAddrBtn(){
+  const row=document.getElementById('fr-'+_ADDR8.street);
+  if(!row||document.getElementById('addr-upd-bar')) return;
+  const bar=document.createElement('div');
+  bar.id='addr-upd-bar';
+  bar.style.cssText='margin:4px 0 6px;';
+  bar.innerHTML='<button onclick="openAddressUpdate()" title="Enter the new address — the current one moves into Part A.III, 2 (residences during the past 5 years)" style="width:100%;padding:7px 10px;border:1px dashed #6B7FA3;border-radius:var(--radius-sm);background:rgba(107,127,163,.07);color:#6B7FA3;font-size:11.5px;font-weight:600;cursor:pointer;font-family:var(--font-body);">⟳ Update address — moves the current one to Part A.III, 2</button>';
+  row.parentNode.insertBefore(bar,row);
+}
+{
+  const _abOrigBuild=buildForm;
+  buildForm=function(){ const r=_abOrigBuild.apply(this,arguments); try{ _injectAddrBtn(); }catch(e){} return r; };
+}
+
+// ── SINGLE-ANSWER CHECKBOX GROUPS ────────────────────────────────────────────
+// Checkbox fields that share a PDF name stem (Marital[0..3], PartALine9Sex[0/1],
+// PtAIILine22_Yes/_No, …) are one question with one answer: checking a box
+// clears the rest of its group. Genuinely multi-answer boxes (the Part B.1
+// bases, the deceased boxes in A.III.5) have unique stems and never group.
+function _cbStem(p){ return String(p||'').toLowerCase().replace(/\[\d+\]$/,'').replace(/_(yes|no)$/,''); }
+function _cbExclusive(fid){
+  if(V[fid]!=='X') return false;
+  const f=FD.find(x=>x.id===fid);
+  if(!f||f.type!=='checkbox'||!f.pdf) return false;
+  const s=_cbStem(f.pdf);
+  let changed=false;
+  FD.forEach(x=>{
+    if(x.id===fid||x.type!=='checkbox'||!x.pdf) return;
+    if(_cbStem(x.pdf)!==s) return;
+    if(V[x.id]){ V[x.id]=''; _syncPanelField(x); changed=true; }
+  });
+  return changed;
+}
+// Panel checkboxes: the row's own onchange sets V first (at-target), then this
+// bubbling listener enforces the single answer.
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(!t||t.type!=='checkbox') return;
+  const row=t.closest?t.closest('.field-row'):null;
+  if(!row||!row.id||row.id.indexOf('fr-')!==0) return;
+  if(_cbExclusive(row.id.slice(3))){ drawOver(); applyRules(); updateProg(); }
+});
+
 // ── FILL MODE: type directly on the PDF ──────────────────────────────────────
 let _fillEd=null; // {el, fid}
 
@@ -3338,6 +3489,7 @@ function _initFillOnPdf(){
     const f=fieldAt(e); if(!f) return;
     if(f.type==='checkbox'){
       V[f.id]=(V[f.id]==='X')?'':'X';
+      _cbExclusive(f.id);
       _syncPanelField(f);
       drawOver(); applyRules(); updateProg();
       return;
