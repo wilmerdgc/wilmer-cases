@@ -2315,11 +2315,13 @@ window.addEventListener('load',()=>autoGrowAllNotes());
       <button class="cd-tab-btn" id="cdtab-checklists" onclick="switchCaseTab('checklists')">Workflow</button>
       <button class="cd-tab-btn" id="cdtab-documents" onclick="switchCaseTab('documents')">Documents</button>
       <button class="cd-tab-btn" id="cdtab-masterprep" onclick="switchCaseTab('masterprep')">Master Prep</button>
+      <button class="cd-tab-btn" id="cdtab-i589" onclick="switchCaseTab('i589')">I-589</button>
     </div>
     <div id="cd-pane-overview"><div id="case-detail-body"></div></div>
     <div id="cd-pane-checklists" style="display:none"><div id="case-checklists-body"></div></div>
     <div id="cd-pane-documents" style="display:none"><div id="case-documents-body"></div></div>
     <div id="cd-pane-masterprep" style="display:none"><div id="case-masterprep-body"></div></div>
+    <div id="cd-pane-i589" style="display:none"><div id="case-i589-body"></div></div>
   </div>
   <div id="cases-add-view" style="display:none;">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
@@ -14952,6 +14954,11 @@ function renderToolsPage(){
         <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Master Hearing Prep</div>
         <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Pick a case and the master-calendar prep form is filled with the client(s), A-numbers, hearing, and judge — then saved back to that case.</div>
       </div>
+      <div onclick="renderI589Tool()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
+        <div style="font-size:24px;margin-bottom:8px;">🛂</div>
+        <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">I-589 Application</div>
+        <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Fill the asylum application on top of the official PDF. Answers are saved to the case as you type, and one click downloads the completed I-589.</div>
+      </div>
       <div onclick="document.getElementById('restore-backup-input').click()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
         <div style="font-size:24px;margin-bottom:8px;">♻️</div>
         <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Restore from backup</div>
@@ -15162,6 +15169,155 @@ function _mhpPickCase(clid){
   const frameHost=document.createElement('div');
   host.appendChild(frameHost);
   _openMasterPrep(clid,frameHost,{height:'calc(100vh - 240px)'});
+}
+
+// ══════════════════════════════════════════════════
+// I-589 FILLER — embeds tools/i589-filler.html in an iframe, scoped to one
+// case. Same bridge pattern as Master Hearing Prep: the parent prefills
+// Part A.I from case data on first open, and every change the user types is
+// posted back and stored on caseMeta[clid].i589 so it syncs with the rest
+// of the case. The tool's own "⬇ Filled PDF" button generates the completed
+// I-589 PDF (pdf-lib runs inside the iframe — nothing to do on this side).
+// ══════════════════════════════════════════════════
+const I589_TOOL_URL='tools/i589-filler.html';
+let _i589Active=null;        // { frame, handler, clid }
+let _i589SaveTimers={};      // per-clid debounce timers
+
+function _i589Teardown(){
+  if(_i589Active&&_i589Active.handler){
+    try{ window.removeEventListener('message',_i589Active.handler); }catch(e){}
+  }
+  _i589Active=null;
+}
+
+// The paper form wants mm/dd/yyyy; case data stores ISO yyyy-mm-dd.
+function _i589FmtDate(iso){
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso||'').trim());
+  return m?(m[2]+'/'+m[3]+'/'+m[1]):String(iso||'');
+}
+
+// Semantic prefill for the tool's Part A.I boxes (the field-id mapping lives
+// in the tool's bridge, not here).
+function _i589BuildPrefill(clid){
+  const recs=records.filter(r=>(r.clid||r.client)===clid);
+  const base=recs.length?recs.reduce((best,r)=>{
+    const s=(r.client?1:0)+(r.anum?1:0)+(r.atty?1:0)+(r.type?1:0);
+    const bs=(best.client?1:0)+(best.anum?1:0)+(best.atty?1:0)+(best.type?1:0);
+    return s>bs?r:best;
+  },recs[0]):{clid:clid,client:'',anum:''};
+  const meta=caseMeta[clid]||{};
+  let lf=meta.clientFirstName||'', lm=meta.clientMiddleName||'', ll=meta.clientLastName||'';
+  if(!lf&&!ll&&base.client){
+    const parts=String(base.client).trim().split(/\s+/);
+    if(parts.length===1){ lf=parts[0]; }
+    else{ lf=parts[0]; ll=parts[parts.length-1]; if(parts.length>2) lm=parts.slice(1,-1).join(' '); }
+  }
+  return {
+    anum:base.anum||'', fname:lf, mname:lm, lname:ll,
+    dob:_i589FmtDate(meta.clientDob||''),
+    cobirth:meta.clientCountryOfBirth||''
+  };
+}
+
+// Persist a state posted by the iframe onto the case, debounced. The state is
+// text-only (field values + font prefs), so it rides the caseMeta shard sync
+// without any stripping.
+function _i589SaveState(clid,state){
+  if(!clid||!state) return;
+  clearTimeout(_i589SaveTimers[clid]);
+  _i589SaveTimers[clid]=setTimeout(()=>{
+    let s; try{ s=JSON.parse(JSON.stringify(state)); }catch(e){ return; }
+    if(!caseMeta[clid]) caseMeta[clid]={};
+    caseMeta[clid].i589=s;
+    try{ if(typeof markUnsaved==='function') markUnsaved(); }catch(e){}
+    try{ if(typeof saveAllData==='function') saveAllData(); }catch(e){}
+  },400);
+}
+
+// Build the iframe for a case and run the ready/load/state handshake.
+function _openI589(clid,hostEl,opts){
+  opts=opts||{};
+  _i589Teardown();
+  const saved=(caseMeta[clid]||{}).i589||null;
+  const prefill=(saved&&saved.vals&&Object.keys(saved.vals).length)?null:_i589BuildPrefill(clid);
+  const _cn=records.find(r=>(r.clid||r.client)===clid&&r.client);
+  const clientName=(_cn&&_cn.client)||clid;
+  hostEl.innerHTML='';
+  const frame=document.createElement('iframe');
+  frame.src=I589_TOOL_URL;
+  frame.title='I-589 Filler';
+  frame.style.cssText='width:100%;height:'+(opts.height||'calc(100vh - 190px)')+';min-height:520px;border:1px solid var(--border);border-radius:10px;background:#f7f4ef;display:block;';
+  function handler(e){
+    if(e.source!==frame.contentWindow) return;
+    const d=e.data||{};
+    if(d.type==='i589-ready'){
+      try{ frame.contentWindow.postMessage({type:'i589-load',clid:clid,state:saved,prefill:prefill,clientName:clientName},'*'); }catch(err){}
+    } else if(d.type==='i589-state'){
+      _i589SaveState(clid,d.state);
+    }
+  }
+  window.addEventListener('message',handler);
+  _i589Active={frame,handler,clid};
+  hostEl.appendChild(frame);
+  return frame;
+}
+
+// Case-detail sub-tab renderer.
+function renderCaseI589(clid){
+  const host=document.getElementById('case-i589-body');
+  if(!host)return;
+  _openI589(clid,host,{height:'calc(100vh - 200px)'});
+}
+
+// Tools-tab launcher: pick a case, then open the filler full-width.
+function renderI589Tool(){
+  const el=document.getElementById('tools-content');
+  if(!el)return;
+  el.style.cssText='';
+  const cases=(typeof getCases==='function'?getCases():[]).slice().sort((a,b)=>(a.client||'').localeCompare(b.client||''));
+  el.innerHTML=`
+    <button onclick="_i589Teardown();renderToolsPage();" style="font-size:11px;padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;margin-bottom:14px;">← Back to Tools</button>
+    <div style="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);margin-bottom:4px;">I-589 Application</div>
+    <div style="font-size:13px;color:var(--ink-muted);margin-bottom:16px;">Pick a case — the form opens prefilled with the client's name, A-number, and date of birth. Everything you type is saved to the case, and ⬇ Filled PDF downloads the completed I-589.</div>
+    <div style="position:relative;max-width:420px;margin-bottom:8px;">
+      <input id="i589-case-search" type="text" placeholder="Search client, A-number or Client ID…" autocomplete="off" oninput="_i589FilterCases(this.value)" style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;background:#fff;"/>
+    </div>
+    <div id="i589-case-list" style="display:flex;flex-direction:column;gap:4px;max-width:640px;"></div>
+    <div id="i589-open-host" style="margin-top:16px;"></div>`;
+  _i589AllCasesCache=cases;
+  _i589FilterCases('');
+}
+let _i589AllCasesCache=[];
+function _i589FilterCases(q){
+  const list=document.getElementById('i589-case-list');
+  if(!list)return;
+  q=(q||'').toLowerCase().trim();
+  let cases=_i589AllCasesCache;
+  if(q){
+    cases=cases.filter(c=>((c.client||'').toLowerCase().includes(q)||(c.anum||'').toLowerCase().includes(q)||(c.clid||'').toLowerCase().includes(q)));
+  }
+  cases=cases.slice(0,40);
+  if(!cases.length){ list.innerHTML='<div style="font-size:12px;color:var(--ink-faint);font-style:italic;padding:8px 2px;">No cases match.</div>'; return; }
+  list.innerHTML=cases.map(c=>{
+    const cid=(c.clid||c.client||'').replace(/'/g,"\\'");
+    const sub=[c.anum?('A# '+escHtml(c.anum)):'',c.type?escHtml(c.type):'',c.clid?('ID '+escHtml(c.clid)):''].filter(Boolean).join(' · ');
+    return `<button onclick="_i589PickCase('${cid}')" style="text-align:left;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;padding:9px 12px;cursor:pointer;font-family:inherit;transition:all .12s;" onmouseenter="this.style.borderColor='var(--sage)'" onmouseleave="this.style.borderColor='var(--border)'">
+      <div style="font-size:13px;font-weight:600;color:var(--ink);">👤 ${escHtml(c.client||'—')}</div>
+      <div style="font-size:11px;color:var(--ink-muted);margin-top:2px;">${sub}</div>
+    </button>`;
+  }).join('');
+}
+function _i589PickCase(clid){
+  const host=document.getElementById('i589-open-host');
+  const list=document.getElementById('i589-case-list');
+  const search=document.getElementById('i589-case-search');
+  if(list)list.style.display='none';
+  if(search)search.style.display='none';
+  if(!host)return;
+  host.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><div style="font-size:12px;color:var(--ink-muted);">I-589 for <strong>'+escHtml(clid)+'</strong></div><button onclick="_i589Teardown();renderI589Tool();" style="font-size:11px;padding:4px 11px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Pick another case</button></div>';
+  const frameHost=document.createElement('div');
+  host.appendChild(frameHost);
+  _openI589(clid,frameHost,{height:'calc(100vh - 240px)'});
 }
 
 // ══════════════════════════════════════════════════
@@ -18325,11 +18481,12 @@ window._sijSetFcStage = function(sel){
 };
 
 function switchCaseTab(tab){
-  const panes={overview:'cd-pane-overview',checklists:'cd-pane-checklists',documents:'cd-pane-documents',masterprep:'cd-pane-masterprep'};
-  const tabs={overview:'cdtab-overview',checklists:'cdtab-checklists',documents:'cdtab-documents',masterprep:'cdtab-masterprep'};
+  const panes={overview:'cd-pane-overview',checklists:'cd-pane-checklists',documents:'cd-pane-documents',masterprep:'cd-pane-masterprep',i589:'cd-pane-i589'};
+  const tabs={overview:'cdtab-overview',checklists:'cdtab-checklists',documents:'cdtab-documents',masterprep:'cdtab-masterprep',i589:'cdtab-i589'};
   if(!panes[tab])tab='overview';
-  // Leaving the Master Prep tab? tear down the iframe bridge listener.
+  // Leaving the Master Prep / I-589 tab? tear down the iframe bridge listener.
   if(tab!=='masterprep')_mhpTeardown();
+  if(tab!=='i589')_i589Teardown();
   Object.keys(panes).forEach(k=>{
     const p=document.getElementById(panes[k]);if(p)p.style.display=(k===tab)?'':'none';
     const b=document.getElementById(tabs[k]);if(b)b.classList.toggle('active',k===tab);
@@ -18337,6 +18494,7 @@ function switchCaseTab(tab){
   if(tab==='checklists'&&activeCaseClid)renderCaseChecklists(activeCaseClid);
   if(tab==='documents'&&activeCaseClid)renderCaseDocuments(activeCaseClid);
   if(tab==='masterprep'&&activeCaseClid)renderCaseMasterPrep(activeCaseClid);
+  if(tab==='i589'&&activeCaseClid)renderCaseI589(activeCaseClid);
 }
 
 // Record a document created for a case (from the Motion/Brief Creator or
@@ -18728,14 +18886,17 @@ function openCaseDetail(clid){
   document.getElementById('cases-sub-nav').style.display='none';
   document.getElementById('cases-detail-view').style.display='';
   _mhpTeardown();
+  _i589Teardown();
   document.getElementById('cd-pane-overview').style.display='';
   document.getElementById('cd-pane-checklists').style.display='none';
   document.getElementById('cd-pane-documents').style.display='none';
   {const _mpp=document.getElementById('cd-pane-masterprep');if(_mpp)_mpp.style.display='none';}
+  {const _i5p=document.getElementById('cd-pane-i589');if(_i5p)_i5p.style.display='none';}
   document.getElementById('cdtab-overview').classList.add('active');
   document.getElementById('cdtab-checklists').classList.remove('active');
   document.getElementById('cdtab-documents').classList.remove('active');
   {const _mpt=document.getElementById('cdtab-masterprep');if(_mpt)_mpt.classList.remove('active');}
+  {const _i5t=document.getElementById('cdtab-i589');if(_i5t)_i5t.classList.remove('active');}
   if(typeof _refreshDocTabLabel==='function')_refreshDocTabLabel(clid);
   const allRecs=records.filter(r=>(r.clid||r.client)===clid);
   if(!allRecs.length)return;
