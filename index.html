@@ -15221,17 +15221,45 @@ function _i589BuildPrefill(clid){
 
 // Persist a state posted by the iframe onto the case, debounced. The state is
 // text-only (field values + font prefs), so it rides the caseMeta shard sync
-// without any stripping.
+// without any stripping. Edits land on whichever version is open in the tool:
+// the main working copy (caseMeta.i589) or a saved version (i589Versions[]).
 function _i589SaveState(clid,state){
   if(!clid||!state) return;
+  // Route by the version open at EDIT time, not when the debounce fires —
+  // otherwise switching versions could land pending edits in the wrong one.
+  const av=(_i589Active&&_i589Active.clid===clid)?_i589Active.activeVer:null;
   clearTimeout(_i589SaveTimers[clid]);
   _i589SaveTimers[clid]=setTimeout(()=>{
     let s; try{ s=JSON.parse(JSON.stringify(state)); }catch(e){ return; }
     if(!caseMeta[clid]) caseMeta[clid]={};
-    caseMeta[clid].i589=s;
+    if(av){
+      const v=_i589VersionsOf(clid).find(x=>x.id===av);
+      if(v){ v.state=s; v.savedAt=Date.now(); }
+      else caseMeta[clid].i589=s;
+    } else {
+      caseMeta[clid].i589=s;
+    }
     try{ if(typeof markUnsaved==='function') markUnsaved(); }catch(e){}
     try{ if(typeof saveAllData==='function') saveAllData(); }catch(e){}
   },400);
+}
+
+// ── I-589 saved versions (per case) ──
+function _i589VersionsOf(clid){
+  if(!caseMeta[clid]) caseMeta[clid]={};
+  if(!Array.isArray(caseMeta[clid].i589Versions)) caseMeta[clid].i589Versions=[];
+  return caseMeta[clid].i589Versions;
+}
+function _i589PostVersions(clid){
+  if(!_i589Active||_i589Active.clid!==clid||!_i589Active.frame) return;
+  const list=_i589VersionsOf(clid).map(v=>({id:v.id,name:v.name,savedAt:v.savedAt}));
+  try{
+    _i589Active.frame.contentWindow.postMessage({type:'i589-versions',versions:list,activeId:_i589Active.activeVer||null},'*');
+  }catch(e){}
+}
+function _i589PersistVersions(){
+  try{ if(typeof markUnsaved==='function') markUnsaved(); }catch(e){}
+  try{ if(typeof saveAllData==='function') saveAllData(); }catch(e){}
 }
 
 // Persist the tool's shared field template (renames, deletions, moved and
@@ -15267,14 +15295,57 @@ function _openI589(clid,hostEl,opts){
     const d=e.data||{};
     if(d.type==='i589-ready'){
       try{ frame.contentWindow.postMessage({type:'i589-load',clid:clid,state:saved,prefill:prefill,clientName:clientName,template:(i589Template&&i589Template.data)||null},'*'); }catch(err){}
+      _i589PostVersions(clid);
     } else if(d.type==='i589-state'){
       _i589SaveState(clid,d.state);
     } else if(d.type==='i589-template'){
       _i589SaveTemplate(d.template);
+    } else if(d.type==='i589-save-version'){
+      let s; try{ s=JSON.parse(JSON.stringify(d.state||{})); }catch(err){ s=null; }
+      if(s){
+        const list=_i589VersionsOf(clid);
+        if(list.length>=10){ try{ frame.contentWindow.postMessage({type:'i589-version-error',msg:'This case already has 10 saved versions — delete one first.'},'*'); }catch(err){} return; }
+        const v={id:'v'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:String(d.name||'Version '+(list.length+1)).slice(0,60),savedAt:Date.now(),state:s};
+        list.push(v);
+        _i589Active.activeVer=v.id; // keep editing what was just saved
+        _i589PersistVersions();
+        _i589PostVersions(clid);
+      }
+    } else if(d.type==='i589-open-version'){
+      const vid=d.id||null;
+      let st=null;
+      if(vid){
+        const v=_i589VersionsOf(clid).find(x=>x.id===vid);
+        if(!v) return;
+        st=v.state||null;
+        _i589Active.activeVer=vid;
+      } else {
+        st=(caseMeta[clid]||{}).i589||null;
+        _i589Active.activeVer=null;
+      }
+      try{ frame.contentWindow.postMessage({type:'i589-load-version',id:vid,state:st},'*'); }catch(err){}
+      _i589PostVersions(clid);
+    } else if(d.type==='i589-rename-version'){
+      const v=_i589VersionsOf(clid).find(x=>x.id===d.id);
+      if(v&&d.name){ v.name=String(d.name).slice(0,60); _i589PersistVersions(); _i589PostVersions(clid); }
+    } else if(d.type==='i589-delete-version'){
+      const list=_i589VersionsOf(clid);
+      const i=list.findIndex(x=>x.id===d.id);
+      if(i!==-1){
+        const wasOpen=(_i589Active.activeVer===d.id);
+        list.splice(i,1);
+        if(wasOpen){
+          _i589Active.activeVer=null;
+          // the deleted version was on screen — switch the form back to the main draft
+          try{ frame.contentWindow.postMessage({type:'i589-load-version',id:null,state:(caseMeta[clid]||{}).i589||null},'*'); }catch(err){}
+        }
+        _i589PersistVersions();
+        _i589PostVersions(clid);
+      }
     }
   }
   window.addEventListener('message',handler);
-  _i589Active={frame,handler,clid};
+  _i589Active={frame,handler,clid,activeVer:null};
   hostEl.appendChild(frame);
   return frame;
 }

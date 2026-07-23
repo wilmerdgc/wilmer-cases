@@ -3850,6 +3850,106 @@ else{ _initFillOnPdf(); }
     },800);
   };
 
+  // ── Saved versions (per case): 🗂 header button + dropdown. The parent app
+  //    stores the versions on the case; edits save into whichever is open. ──
+  var _versions=[], _activeVerId=null;
+  function _verFlushState(){
+    clearTimeout(_saveTimer); _saveTimer=null;
+    if(!_clid) return;
+    try{ window.parent.postMessage({type:'i589-state', clid:_clid, state:i589GetState()},'*'); }catch(e){}
+  }
+  function _verBtn(){ return document.getElementById('i589-ver-btn'); }
+  function _verLabel(){
+    var v=null;
+    for(var i=0;i<_versions.length;i++){ if(_versions[i].id===_activeVerId){ v=_versions[i]; break; } }
+    return '🗂 '+(v?v.name:'Current draft');
+  }
+  function _verInit(){
+    if(_verBtn()) return;
+    var anchor=document.getElementById('imp-pdf-file');
+    if(!anchor||!anchor.parentNode) return;
+    var b=document.createElement('button');
+    b.id='i589-ver-btn'; b.className='btn btn-outline';
+    b.textContent=_verLabel();
+    b.title='Saved versions of this I-589 — save, open, rename, delete';
+    b.onclick=_verToggleMenu;
+    anchor.parentNode.insertBefore(b,anchor.nextSibling);
+  }
+  function _verEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+  function _verRow(id,name,savedAt){
+    var on=(id===_activeVerId)||(!id&&!_activeVerId);
+    var when='';
+    if(savedAt){ var dt=new Date(savedAt); when=dt.toLocaleDateString()+' '+dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
+    return '<div data-open="'+(id||'')+'" style="display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:6px;cursor:pointer;'+(on?'background:rgba(107,127,163,.12);':'')+'">'
+      +'<span style="font-size:11px;color:#6B7FA3;">'+(on?'●':'○')+'</span>'
+      +'<span style="flex:1;min-width:0;"><span style="display:block;font-size:12px;color:#2C2620;font-weight:'+(on?'700':'500')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_verEsc(name)+'</span>'
+      +(when?'<span style="display:block;font-size:10px;color:#8a8378;">'+when+'</span>':'')
+      +'</span>'
+      +(id?'<button data-ren="'+id+'" title="Rename" style="border:none;background:none;cursor:pointer;font-size:12px;color:#8a8378;font-family:inherit;">✎</button><button data-del="'+id+'" title="Delete" style="border:none;background:none;cursor:pointer;font-size:12px;color:#B85C5C;font-family:inherit;">✕</button>':'')
+      +'</div>';
+  }
+  function _verCloseMenu(){
+    var m=document.getElementById('i589-ver-menu');
+    if(m) m.remove();
+    document.removeEventListener('mousedown',_verOutside,true);
+  }
+  function _verOutside(e){
+    var m=document.getElementById('i589-ver-menu');
+    if(m&&!m.contains(e.target)&&e.target!==_verBtn()) _verCloseMenu();
+  }
+  function _verToggleMenu(){
+    if(document.getElementById('i589-ver-menu')){ _verCloseMenu(); return; }
+    var b=_verBtn(); if(!b) return;
+    var r=b.getBoundingClientRect();
+    var m=document.createElement('div');
+    m.id='i589-ver-menu';
+    m.style.cssText='position:fixed;z-index:950;top:'+(r.bottom+6)+'px;left:'+Math.max(8,Math.min(window.innerWidth-320,r.left))+'px;width:300px;background:#fff;border:1px solid var(--border,#ddd);border-radius:10px;box-shadow:0 14px 40px rgba(0,0,0,.22);padding:8px;font-family:var(--font-body,sans-serif);';
+    var rows='<button data-act="save" style="display:block;width:100%;text-align:left;padding:8px 10px;border:1px dashed #6A8C6E;border-radius:6px;background:rgba(106,140,110,.07);color:#4c6b50;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:6px;">💾 Save current form as a new version</button>';
+    rows+=_verRow(null,'Current draft',null);
+    for(var i=0;i<_versions.length;i++){ rows+=_verRow(_versions[i].id,_versions[i].name,_versions[i].savedAt); }
+    m.innerHTML=rows;
+    m.addEventListener('click',_verMenuClick);
+    document.body.appendChild(m);
+    setTimeout(function(){ document.addEventListener('mousedown',_verOutside,true); },0);
+  }
+  function _verMenuClick(e){
+    var t=e.target.closest('[data-act],[data-ren],[data-del],[data-open]');
+    if(!t) return;
+    if(t.getAttribute('data-act')==='save'){
+      var nm=prompt('Name for this version:','Version '+(_versions.length+1));
+      if(nm===null) return;
+      _verCloseMenu();
+      _verFlushState(); // whatever is on screen lands on the open copy first
+      try{ window.parent.postMessage({type:'i589-save-version', clid:_clid, name:nm||('Version '+(_versions.length+1)), state:i589GetState()},'*'); }catch(err){}
+      return;
+    }
+    var ren=t.getAttribute('data-ren');
+    if(ren){
+      e.stopPropagation();
+      var rv=null; for(var i=0;i<_versions.length;i++){ if(_versions[i].id===ren) rv=_versions[i]; }
+      var nn=prompt('New name:',rv?rv.name:'');
+      if(nn){ try{ window.parent.postMessage({type:'i589-rename-version', clid:_clid, id:ren, name:nn},'*'); }catch(err){} }
+      return;
+    }
+    var del=t.getAttribute('data-del');
+    if(del){
+      e.stopPropagation();
+      var dv=null; for(var j=0;j<_versions.length;j++){ if(_versions[j].id===del) dv=_versions[j]; }
+      if(confirm('Delete version "'+(dv?dv.name:'')+'"? This cannot be undone.')){
+        try{ window.parent.postMessage({type:'i589-delete-version', clid:_clid, id:del},'*'); }catch(err){}
+      }
+      return;
+    }
+    var oid=t.getAttribute('data-open');
+    if(oid!==null){
+      oid=oid||null;
+      _verCloseMenu();
+      if(oid===_activeVerId) return;
+      _verFlushState(); // pending edits land on the version they were made in
+      try{ window.parent.postMessage({type:'i589-open-version', clid:_clid, id:oid},'*'); }catch(err){}
+    }
+  }
+
   window.addEventListener('message',function(e){
     var d=e.data||{};
     if(d.type==='i589-load'){
@@ -3866,6 +3966,18 @@ else{ _initFillOnPdf(); }
       }
       // Baseline: what we just applied is the saved template — don't echo it.
       try{ _lastTplJson=JSON.stringify(computeI589Template()); }catch(err){}
+    } else if(d.type==='i589-versions'){
+      _versions=d.versions||[];
+      _activeVerId=d.activeId||null;
+      _verInit();
+      var vb=_verBtn(); if(vb) vb.textContent=_verLabel();
+      if(document.getElementById('i589-ver-menu')){ _verCloseMenu(); _verToggleMenu(); }
+    } else if(d.type==='i589-load-version'){
+      i589SetState((d.state&&d.state.vals)?d.state:{v:1,vals:{},fontOvr:{},fontGlobal:null});
+      _activeVerId=d.id||null;
+      var vb2=_verBtn(); if(vb2) vb2.textContent=_verLabel();
+    } else if(d.type==='i589-version-error'){
+      alert(d.msg||'Version error');
     }
   });
   function _announce(){ try{ window.parent.postMessage({type:'i589-ready'},'*'); }catch(e){} }
