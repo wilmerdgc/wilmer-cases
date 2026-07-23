@@ -3485,6 +3485,60 @@ document.addEventListener('change',e=>{
   drawOver(); applyRules(); updateProg();
 });
 
+// ── FIELD EDITOR: minimize / close / drag anywhere ───────────────────────────
+// The editor (the block under the amber line in Settings) gets a header bar:
+// ─ collapses it to just the bar, ✕ hides it (selecting a field reopens it),
+// and dragging the bar floats it wherever you drop it. Double-click the bar
+// to dock it back to the bottom of the panel.
+function _feInit(){
+  const fe=document.getElementById('field-editor');
+  if(!fe||document.getElementById('fe-header')) return;
+  const hdr=document.createElement('div');
+  hdr.id='fe-header';
+  hdr.style.cssText='display:flex;align-items:center;gap:8px;margin:-8px -10px 8px -10px;padding:5px 10px;cursor:move;user-select:none;background:rgba(201,130,58,.10);border-radius:6px;';
+  hdr.title='Drag to move · double-click to dock back';
+  hdr.innerHTML='<span style="color:var(--amber);font-size:12px;">⠿</span>'
+    +'<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--amber);text-transform:uppercase;flex:1;">Field editor</span>'
+    +'<button id="fe-min-btn" title="Minimize / restore" style="border:1px solid var(--border);background:#fff;border-radius:4px;font-size:11px;line-height:1;padding:3px 8px;cursor:pointer;color:var(--ink-soft);font-family:inherit;">─</button>'
+    +'<button id="fe-close-btn" title="Close (click any field to reopen)" style="border:1px solid var(--border);background:#fff;border-radius:4px;font-size:11px;line-height:1;padding:3px 8px;cursor:pointer;color:var(--ink-soft);font-family:inherit;">✕</button>';
+  fe.insertBefore(hdr,fe.firstChild);
+  const st=document.createElement('style');
+  st.textContent='#field-editor.fe-min > :not(#fe-header){display:none!important}'
+    +'#field-editor.fe-float{position:fixed;z-index:850;width:380px;max-width:92vw;box-shadow:0 16px 44px rgba(0,0,0,.28);border:1px solid var(--amber);border-radius:10px;max-height:72vh}';
+  document.head.appendChild(st);
+  document.getElementById('fe-min-btn').onclick=e=>{
+    e.stopPropagation();
+    fe.classList.toggle('fe-min');
+    document.getElementById('fe-min-btn').textContent=fe.classList.contains('fe-min')?'▢':'─';
+  };
+  document.getElementById('fe-close-btn').onclick=e=>{ e.stopPropagation(); fe.style.display='none'; };
+  let drag=null;
+  hdr.addEventListener('mousedown',e=>{
+    if(e.target.tagName==='BUTTON') return;
+    const r=fe.getBoundingClientRect();
+    if(!fe.classList.contains('fe-float')){
+      fe.classList.add('fe-float');
+      fe.style.left=r.left+'px'; fe.style.top=r.top+'px';
+    }
+    drag={dx:e.clientX-r.left, dy:e.clientY-r.top};
+    e.preventDefault();
+  });
+  hdr.addEventListener('dblclick',e=>{
+    if(e.target.tagName==='BUTTON') return;
+    fe.classList.remove('fe-float');
+    fe.style.left=''; fe.style.top='';
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!drag) return;
+    let L=e.clientX-drag.dx, T=e.clientY-drag.dy;
+    L=Math.max(4,Math.min(window.innerWidth-140,L));
+    T=Math.max(4,Math.min(window.innerHeight-50,T));
+    fe.style.left=L+'px'; fe.style.top=T+'px';
+  });
+  document.addEventListener('mouseup',()=>{ drag=null; });
+}
+_feInit();
+
 // ── SINGLE-ANSWER CHECKBOX GROUPS ────────────────────────────────────────────
 // Checkbox fields that share a PDF name stem (Marital[0..3], PartALine9Sex[0/1],
 // PtAIILine22_Yes/_No, …) are one question with one answer: checking a box
