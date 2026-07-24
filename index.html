@@ -23166,7 +23166,14 @@ function applyPayload(p){
   if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}
   if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}
   if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}
-  if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}
+  if(p.customChecklists&&Array.isArray(p.customChecklists)){
+    // union by id — an incoming stale/empty list must never wipe local checklists
+    const _ccm=new Map();
+    (Array.isArray(customChecklists)?customChecklists:[]).forEach(c=>{ if(c&&c.id) _ccm.set(c.id,c); });
+    p.customChecklists.forEach(c=>{ if(c&&c.id) _ccm.set(c.id,c); });
+    customChecklists=Array.from(_ccm.values());
+    saveCustomChecklists();
+  }
   if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);
   if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;
   if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);
@@ -23796,8 +23803,23 @@ function _mergePayloads(cloudData, localData){
   // before merge, but the cloud side can win if it has data the local
   // doc never loaded (e.g. fresh install).
   const fields = ['caseTypes','caseTypeDocLists','caseTypeStages',
-                  'customColumns','colVis','callUpTypes','caseIssueTypes','customChecklists',
+                  'customColumns','colVis','callUpTypes','caseIssueTypes',
                   'venues','firmInfo','bondPrepQuestions'];
+  // customChecklists merges by UNION on id, not whole-array newer-wins — a
+  // device that saved while holding a stale/empty list must never wipe the
+  // checklists (same protection as paralegal/attorney names). Same id on
+  // both sides → the side with the newer overall _savedAt wins. Trade-off:
+  // deleting a checklist can resurrect from a device still holding it until
+  // deleted there too — far less harmful than silent loss.
+  {
+    const _ccMap=new Map();
+    (Array.isArray(cloudData.customChecklists)?cloudData.customChecklists:[]).forEach(c=>{ if(c&&c.id) _ccMap.set(c.id,c); });
+    (Array.isArray(localData.customChecklists)?localData.customChecklists:[]).forEach(c=>{
+      if(!c||!c.id) return;
+      if(!_ccMap.has(c.id)||_localNewer) _ccMap.set(c.id,c);
+    });
+    merged.customChecklists=Array.from(_ccMap.values());
+  }
   fields.forEach(f => {
     const lv = localData[f];
     const cv = cloudData[f];
@@ -24112,8 +24134,11 @@ try{ ensureFCEventTypes(); }catch(e){}
 // resurrects if deleted later.
 (function _seedAilaChecklist(){
   try{
-    if(localStorage.getItem('aila_checklist_seeded_v1')==='done') return;
+    // v2: reseeds after the 2026-07 wipe (whole-list merge let a stale device
+    // erase the checklists; merges are union-by-id now)
+    if(localStorage.getItem('aila_checklist_seeded_v2')==='done') return;
     if(!Array.isArray(customChecklists)) return;
+    let _added=false;
     if(!customChecklists.some(c=>c&&c.id==='cl_aila_supdocs_2021')){
       const T=(v,subs)=>({type:'task',value:v,assignedTo:'',subitems:(subs||[]).map(s=>({type:'task',value:s,assignedTo:''}))});
       customChecklists.push({
@@ -24184,11 +24209,19 @@ try{ ensureFCEventTypes(); }catch(e){}
           T('Brief or legal memorandum on eligibility for asylum, withholding, and/or CAT')
         ]
       });
+      _added=true;
+    }
+    // Recreate the office's "One Year Issue" checklist lost in the same wipe.
+    if(!customChecklists.some(c=>c&&c.id==='cl_one_year_issue')){
+      customChecklists.push({id:'cl_one_year_issue',name:'One Year Issue',caseTypes:[],items:[]});
+      _added=true;
+    }
+    if(_added){
       saveCustomChecklists();
       markUnsaved();
       try{ if(typeof saveAllData==='function') saveAllData(); }catch(e){}
     }
-    localStorage.setItem('aila_checklist_seeded_v1','done');
+    localStorage.setItem('aila_checklist_seeded_v2','done');
   }catch(e){}
 })();
 (function _backfillDeadlineNotes(){
