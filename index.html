@@ -24104,6 +24104,91 @@ try{ ensureFCEventTypes(); }catch(e){}
 // for. Idempotent (only touches blank notes on active events), so it's
 // safe to run every boot; the per-record sync propagates the filled
 // notes to the other devices.
+// One-time seed: the AILA "Checklist for Supporting Documentation" (Asylum
+// Primer, App. 6I, Oct 2021) as a checklist with tasks and sub-tasks. Seeds
+// once per device (flag) with a fixed id so it never duplicates and never
+// resurrects if deleted later.
+(function _seedAilaChecklist(){
+  try{
+    if(localStorage.getItem('aila_checklist_seeded_v1')==='done') return;
+    if(!Array.isArray(customChecklists)) return;
+    if(!customChecklists.some(c=>c&&c.id==='cl_aila_supdocs_2021')){
+      const T=(v,subs)=>({type:'task',value:v,assignedTo:'',subitems:(subs||[]).map(s=>({type:'task',value:s,assignedTo:''}))});
+      customChecklists.push({
+        id:'cl_aila_supdocs_2021',
+        name:'AILA — Supporting Documentation (Asylum)',
+        caseTypes:[],
+        items:[
+          T('Identity documents and other official government documents'),
+          T('Documentation of family relationships',[
+            'All derivative applicants',
+            'Any witnesses',
+            'Any people referenced in the sworn declaration']),
+          T('Membership cards, letters from organizations, or other affiliation documents'),
+          T('Published descriptions of the race, religion, nationality, political opinion, or social group'),
+          T('Witness affidavits',[
+            'People who can confirm the protected characteristic(s)',
+            'People present during the act(s) of harm or mistreatment',
+            'People the applicant confided in about the incident(s)',
+            'People who observed symptoms of physical or psychological harm',
+            'People with personal knowledge of events in the sworn declaration',
+            'People with personal knowledge of current country conditions',
+            'People with personal knowledge of ongoing threats to the applicant or family',
+            'Similarly situated people who suffered similar persecution or torture',
+            'People with personal knowledge of the flight and journey to the U.S.']),
+          T('Identity documents for any witnesses'),
+          T('Photographs',[
+            'Applicant participating in various events',
+            'Applicant\'s injuries or physical harm suffered',
+            'People and/or events referenced in the sworn declaration']),
+          T('Police reports documenting the harm suffered or threatened'),
+          T('Arrest warrants or records (if arrested due to the protected characteristic)'),
+          T('Medical records',[
+            'Appointment records',
+            'Diagnoses and treatment reports',
+            'X-rays and photographs',
+            'Hospital admission and discharge records',
+            'Prescribed medications and treatments',
+            'Letters from treating doctors (abroad and in the U.S.)',
+            'Current prescribed medications',
+            'Evaluations of physical injuries and their likely cause']),
+          T('Mental health records',[
+            'Appointment records',
+            'Diagnoses and treatment reports',
+            'Hospital admission and discharge records',
+            'Prescribed medications and treatments',
+            'Letters from treating mental health professionals (abroad and in the U.S.)',
+            'Current prescribed medications',
+            'Evaluations of mental health disorders and their likely trigger']),
+          T('Medical, mental health, and death certificates of similarly situated people'),
+          T('Newspaper, media, or human-rights coverage of events involving the applicant'),
+          T('Demonstrative evidence (maps, models, drawings, charts, graphs)'),
+          T('Expert affidavits',[
+            'Country conditions related to the protection claim',
+            'Laws of other countries (citizenship, immigration, family, criminal)']),
+          T('Country conditions reports and articles (at the time of persecution and now)'),
+          T('Copies of other countries\' laws showing the social group is distinct/particular'),
+          T('Statistics, sociological studies, and scholarly research'),
+          T('Evidence of failed attempts to obtain corroborating documentation'),
+          T('Evidence of why obtaining certain documentation would be dangerous'),
+          T('Evidence of travel to the U.S. (itineraries, tickets, hotel receipts)'),
+          T('Entry documentation (I-94, visa, stamped passport — even if false)'),
+          T('Evidence of presence outside the U.S. in the past year (if 1-year deadline at issue)'),
+          T('Certified final dispositions for any arrests, charges, or convictions'),
+          T('Evidence of good moral character and rehabilitation, if needed'),
+          T('Certified English translations for all non-English documents'),
+          T('One passport-style photograph of the applicant and each derivative'),
+          T('Unpublished circuit court, BIA, and IJ decisions'),
+          T('Brief or legal memorandum on eligibility for asylum, withholding, and/or CAT')
+        ]
+      });
+      saveCustomChecklists();
+      markUnsaved();
+      try{ if(typeof saveAllData==='function') saveAllData(); }catch(e){}
+    }
+    localStorage.setItem('aila_checklist_seeded_v1','done');
+  }catch(e){}
+})();
 (function _backfillDeadlineNotes(){
   let n=0;
   (records||[]).forEach(r=>{
