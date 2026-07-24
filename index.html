@@ -576,9 +576,10 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .ro-grid { display: grid; grid-template-columns: 96px 1fr; gap: 2px 10px; margin-bottom: 14px; }
 .ro-row { display: contents; }
 .ro-row .ro-label { font-size: 10px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; padding: 7px 0 7px 0; align-self: center; }
-.ro-row .ro-value { font-size: 13px; color: var(--ink); padding: 6px 8px; border-radius: 6px; cursor: pointer; position: relative; transition: background 0.12s; min-height: 22px; display: flex; align-items: center; gap: 6px; }
-.ro-row .ro-value:hover { background: #fff; box-shadow: inset 0 0 0 1px var(--border); }
-.ro-row .ro-value:hover::after { content: '✎'; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--ink-faint); }
+.ro-row .ro-value { font-size: 13px; color: var(--ink); padding: 6px 8px; border-radius: 6px; cursor: default; position: relative; min-height: 22px; display: flex; align-items: center; gap: 6px; }
+.ro-edit-btn { flex-shrink: 0; margin-left: auto; border: 1px solid transparent; background: transparent; color: var(--ink-faint); font-size: 12px; line-height: 1; padding: 3px 7px; border-radius: 5px; cursor: pointer; font-family: inherit; opacity: .4; transition: all .12s; }
+.ro-row:hover .ro-edit-btn { opacity: 1; }
+.ro-edit-btn:hover { border-color: var(--sage); color: var(--sage); background: #fff; }
 .ro-row .ro-value.empty { color: var(--ink-faint); font-style: italic; }
 .ro-row .ro-value.multiline { white-space: pre-wrap; line-height: 1.5; align-items: flex-start; padding: 8px; }
 .ro-event-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
@@ -12172,7 +12173,9 @@ function _renderReadOnlyView(r){
   const row = (label, value, focusId, extraCls) => {
     if(!value) return ''; // hide empty fields entirely
     const cls = 'ro-value' + (extraCls?' '+extraCls:'');
-    return `<div class="ro-row"><div class="ro-label">${_escHtml(label)}</div><div class="${cls}" data-focus="${focusId}" role="button" tabindex="0">${_escHtml(value)}</div></div>`;
+    // Display only — editing happens ONLY through the ✎ button, never by
+    // clicking the value itself.
+    return `<div class="ro-row"><div class="ro-label">${_escHtml(label)}</div><div class="${cls}">${_escHtml(value)}<button type="button" class="ro-edit-btn" data-focus="${focusId}" title="Edit ${_escHtml(label.toLowerCase())}">✎</button></div></div>`;
   };
   const remindersVal = reminders.length ? reminders.map(d=>d+'d before').join(', ') : '';
   const statusVal = r.finishedStatus ? (r.finishedStatus==='completed'?'Completed':r.finishedStatus==='cancelled'?'Cancelled':r.finishedStatus==='deleted'?'Deleted':r.finishedStatus) : (r.attendedStatus?'Attended':'');
@@ -12245,10 +12248,8 @@ function _renderReadOnlyView(r){
     <button type="button" onclick="emailEventFollowUp('${String(r.id).replace(/'/g,"\\'")}')" ${_paraEmailRo?'':'disabled'} title="${_paraEmailRo?'Ask the paralegal for a status update on this event':'No email on file for this paralegal — add one in Settings'}" style="font-size:11px;font-weight:600;padding:6px 14px;border:1px solid var(--slate);border-radius:16px;background:var(--slate-light);color:var(--slate);cursor:${_paraEmailRo?'pointer':'not-allowed'};font-family:inherit;opacity:${_paraEmailRo?'1':'.45'};">✉ Follow up (paralegal)</button>
   </div>`;
   host.innerHTML = hero + grid + actions;
-  host.querySelectorAll('.ro-value').forEach(el=>{
-    const fid = el.getAttribute('data-focus');
-    el.addEventListener('click', ()=>enterEditMode(fid));
-    el.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); enterEditMode(fid); } });
+  host.querySelectorAll('.ro-edit-btn').forEach(el=>{
+    el.addEventListener('click', e=>{ e.stopPropagation(); enterEditMode(el.getAttribute('data-focus')); });
   });
 }
 
