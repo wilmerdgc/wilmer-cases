@@ -20628,14 +20628,16 @@ function renderChecklistsList(){
       let nameEl;
       if(isEv){
         nameEl=document.createElement('select');
-        nameEl.style.cssText='font-size:11px;color:'+_dotColor+';font-family:inherit;border:none;background:transparent;outline:none;cursor:pointer;padding:1px 2px;border-radius:4px;flex:1 1 auto;min-width:0;';
+        // width:auto beats the global `input,select{width:100%}` rule, which
+        // otherwise makes the flex row crush this control to a few pixels
+        nameEl.style.cssText='font-size:11px;color:'+_dotColor+';font-family:inherit;border:none;background:transparent;outline:none;cursor:pointer;padding:1px 2px;border-radius:4px;flex:1 1 0%;min-width:0;width:auto;';
         const ph=document.createElement('option');ph.value='';ph.textContent='— event type —';nameEl.appendChild(ph);
         eventTypes.forEach(ev=>{const o=document.createElement('option');o.value=ev;o.textContent=ev;if(ev===it.value)o.selected=true;nameEl.appendChild(o);});
         if(it.value && !eventTypes.includes(it.value)){const o=document.createElement('option');o.value=it.value;o.textContent=it.value;o.selected=true;nameEl.appendChild(o);}
         nameEl.onchange=()=>{it.value=nameEl.value;persist();renderRows();};
       } else {
         nameEl=document.createElement('input');nameEl.type='text';nameEl.placeholder='Item name…';nameEl.value=it.value||'';
-        nameEl.style.cssText='font-size:11px;color:#5C5148;font-family:inherit;border:none;background:transparent;outline:none;padding:1px 2px;border-radius:4px;flex:1 1 auto;min-width:0;';
+        nameEl.style.cssText='font-size:11px;color:#5C5148;font-family:inherit;border:none;background:transparent;outline:none;padding:1px 2px;border-radius:4px;flex:1 1 0%;min-width:0;width:auto;';
         nameEl.onfocus=()=>{nameEl.style.background='var(--cream-dark)';};
         nameEl.onblur=()=>{nameEl.style.background='transparent';persist();};
         nameEl.oninput=()=>{it.value=nameEl.value;};
@@ -20647,7 +20649,7 @@ function renderChecklistsList(){
       typeBtn.title='Click to switch to '+(isEv?'task':'event');
       typeBtn.onclick=()=>{ it.type=isEv?'task':'event'; if(isEv)it.value=''; persist(); renderRows(); refreshCount(); };
       const asg=document.createElement('select');
-      asg.style.cssText='font-size:10px;border:none;background:transparent;outline:none;color:'+(it.assignedTo?'var(--ink-muted)':'var(--ink-faint)')+';cursor:pointer;flex-shrink:0;padding:2px 4px;font-family:inherit;opacity:'+(it.assignedTo?'1':'0.5')+';transition:opacity .12s;';
+      asg.style.cssText='font-size:10px;border:none;background:transparent;outline:none;color:'+(it.assignedTo?'var(--ink-muted)':'var(--ink-faint)')+';cursor:pointer;flex-shrink:0;padding:2px 4px;font-family:inherit;opacity:'+(it.assignedTo?'1':'0.5')+';transition:opacity .12s;width:auto;';
       asg.title='Assigned to';
       [['','— assign —'],['Attorney','Attorney'],['Paralegal','Paralegal']].forEach(([v,lbl2])=>{const o=document.createElement('option');o.value=v;o.textContent=lbl2;if(v===(it.assignedTo||''))o.selected=true;asg.appendChild(o);});
       asg.onchange=()=>{ it.assignedTo=asg.value; asg.style.color=asg.value?'var(--ink-muted)':'var(--ink-faint)'; asg.style.opacity=asg.value?'1':'0.5'; persist(); };
