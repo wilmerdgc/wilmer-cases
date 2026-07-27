@@ -629,7 +629,7 @@
     <span class="sched-lbl">Scheduled</span>
     <div class="sched-list" id="sched-list"></div>
   </div>
-  <div class="row">
+  <div class="row" id="hearing-fields-row">
     <div class="field"><label class="lbl">Court</label><input type="text" id="court" data-label="Court"></div>
     <div class="field"><label class="lbl">Judge</label><input type="text" id="judge" data-label="Judge"></div>
     <div class="field"><label class="lbl">Date</label><input type="date" id="h_date" data-label="Hearing Date"></div>
@@ -1508,6 +1508,13 @@ function clearHistory() {
 // show as chips under the Hearing heading. Clicking one fills the fields.
 let scheduledHearings = [];
 let _schedListenerOn = false;
+// When the tracker supplies scheduled hearings, the chip IS the hearing info —
+// the manual Court/Judge/Date/Time/Format row below it is redundant and stays
+// hidden. The row still exists (hidden) because everything downstream reads
+// from it: chip clicks and the silent autofill below write into it, and the
+// PDF export / snapshots / parent sync read from it. "✎ Edit" reveals it for
+// corrections; with no scheduled hearings the row shows normally.
+let _hearingFieldsManual = false;
 
 function setScheduledHearings(list) {
   scheduledHearings = Array.isArray(list) ? list : [];
@@ -1523,9 +1530,28 @@ function setScheduledHearings(list) {
 function renderScheduledHearings() {
   const wrap = document.getElementById('sched-hearings');
   const listEl = document.getElementById('sched-list');
+  const fieldsRow = document.getElementById('hearing-fields-row');
   if (!wrap || !listEl) return;
-  if (!scheduledHearings.length) { wrap.style.display = 'none'; return; }
+  if (!scheduledHearings.length) {
+    wrap.style.display = 'none';
+    if (fieldsRow) fieldsRow.style.display = '';
+    return;
+  }
   wrap.style.display = '';
+  if (fieldsRow) fieldsRow.style.display = _hearingFieldsManual ? '' : 'none';
+  // With the fields hidden, quietly fill them from the first scheduled
+  // hearing when still empty — the PDF, snapshots, and parent sync all read
+  // these inputs, and a chip the user never clicked must not export blank.
+  if (!_hearingFieldsManual && !(document.getElementById('h_date')?.value)) {
+    const h0 = scheduledHearings[0];
+    const set = (id, v) => { const e = document.getElementById(id); if (e && v != null && v !== '') e.value = v; };
+    set('court', h0.court);
+    set('judge', h0.judge);
+    set('h_date', h0.date);
+    set('h_time', (h0.time || '').slice(0, 5));
+    if (h0.format) { const fs = document.getElementById('format'); if (fs) fs.value = h0.format; }
+    try { syncInPersonFields(); } catch(e) {}
+  }
   const curDate = document.getElementById('h_date')?.value || '';
   const curTime = document.getElementById('h_time')?.value || '';
   listEl.innerHTML = '';
@@ -1550,6 +1576,14 @@ function renderScheduledHearings() {
     b.onclick = () => applyScheduledHearing(idx);
     listEl.appendChild(b);
   });
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'sched-chip';
+  editBtn.style.opacity = '.75';
+  editBtn.textContent = _hearingFieldsManual ? '✓ Done' : '✎ Edit';
+  editBtn.title = _hearingFieldsManual ? 'Hide the hearing detail fields' : 'Show the hearing detail fields to correct them';
+  editBtn.onclick = () => { _hearingFieldsManual = !_hearingFieldsManual; renderScheduledHearings(); };
+  listEl.appendChild(editBtn);
 }
 
 function applyScheduledHearing(idx) {
