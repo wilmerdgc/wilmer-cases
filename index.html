@@ -11318,6 +11318,22 @@ function isHearingEventType(val){
 function isMasterPrepType(val){
   return /\bMASTER\b/i.test(val||'') && /\bPREP\b/i.test(val||'');
 }
+// The hearing-format picker was historically authored inside the edit-only
+// "Mark as…" status section, which Add mode hides — so a stale cached page
+// (or any load-order hiccup that skips the one-time lift below) leaves the
+// picker trapped inside a hidden parent while saveEvent() still demands a
+// format: a dead-end alert with nothing to click. This helper is the single
+// way to show the picker: it re-lifts the node out of the status section if
+// it's still nested there, then displays it — so demanding a format always
+// also displays the choices.
+function ensureHearingModeSectionVisible(){
+  const hms=document.getElementById('modal-hearing-mode-section');
+  if(!hms) return null;
+  const status=document.getElementById('modal-status-section');
+  if(status&&status.contains(hms)&&status.parentNode) status.parentNode.insertBefore(hms,status);
+  hms.style.display='block';
+  return hms;
+}
 function setHearingMode(mode){
   const r1=document.getElementById('hm-virtual');
   const r2=document.getElementById('hm-inperson');
@@ -11662,8 +11678,12 @@ function onEventTypeChange(val){
   if(!panel)return;
   panel.style.display=(val==='SCHEDULING ORDER')?'':'none';
   if(val==='SCHEDULING ORDER') renderSoExistingAttachments();
-  const hms=document.getElementById('modal-hearing-mode-section');
-  if(hms)hms.style.display=isHearingEventType(val)?'block':'none';
+  if(isHearingEventType(val)){
+    ensureHearingModeSectionVisible();
+  }else{
+    const hms=document.getElementById('modal-hearing-mode-section');
+    if(hms)hms.style.display='none';
+  }
   // MASTER PREP scheduler — only for MASTER events
   const mps=document.getElementById('modal-master-prep-section');
   if(mps){
@@ -12640,8 +12660,25 @@ window.saveEvent=function(){
   const _evt=(document.getElementById('fc-eventtype')||{}).value||'';
   const _isStandalone=(_evt==='PERSONAL TASK'||_evt==='OFFICE TASK'||_evt==='TASK');
   if(!_isStandalone){
-    if(!client){alert('Client name is required.');return;}
-    if(!type){alert('Case type is required.');return;}
+    // In the case-prefilled modal these rows are hidden by .case-compact —
+    // drop the compact mode before alerting so the user can actually see and
+    // fill the field being demanded (same dead-end-proofing as the hearing
+    // format check below).
+    const _mCompact=document.getElementById('modal');
+    if(!client){
+      if(_mCompact)_mCompact.classList.remove('case-compact');
+      alert('Client name is required.');
+      const _cf=document.getElementById('fc-client');
+      if(_cf){ try{ _cf.scrollIntoView({block:'center',behavior:'smooth'}); _cf.focus(); }catch(e){} }
+      return;
+    }
+    if(!type){
+      if(_mCompact)_mCompact.classList.remove('case-compact');
+      alert('Case type is required.');
+      const _ctf=document.getElementById('fc-casetype');
+      if(_ctf){ try{ _ctf.scrollIntoView({block:'center',behavior:'smooth'}); _ctf.focus(); }catch(e){} }
+      return;
+    }
   }
   // Skip the hearing field requirements when the user is just closing the
   // event out (a status change or the compact finish dialog) — those fields
@@ -12655,14 +12692,21 @@ window.saveEvent=function(){
   if(isHearingEventType(_evt) && !_finishing){
     const _hm=getHearingMode();
     if(!_isMasterPrep && _hm!=='virtual' && _hm!=='in-person' && _hm!=='office'){
+      // Show the picker BEFORE alerting — if it was hidden (stale page /
+      // nested in the hidden status section) the user was stuck in a
+      // dead-end: asked to choose a format with no options on screen.
+      const _hmsEl=ensureHearingModeSectionVisible();
       alert('Hearings always need a format.\n\nChoose Virtual, In Person, or At the Office for this hearing.');
-      const _hmsEl=document.getElementById('modal-hearing-mode-section');
       if(_hmsEl){ try{ _hmsEl.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
       return;
     }
     if(_hm==='virtual' || _hm==='in-person'){
       const _jsel=document.getElementById('vh-judge');
       if(!_jsel || !_jsel.value){
+        // Same self-healing as the format check: make sure the judge panel
+        // is actually on screen before demanding a selection from it.
+        ensureHearingModeSectionVisible();
+        if(typeof onHearingModeChange==='function') onHearingModeChange();
         alert('Hearings always need a judge.\n\nSelect the judge for this hearing.');
         const _vd=document.getElementById('modal-virtual-details');
         if(_vd){ try{ _vd.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
