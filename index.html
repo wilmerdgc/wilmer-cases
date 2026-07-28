@@ -14230,9 +14230,9 @@ function getCases(){
   if(_casesCache)return _casesCache;
   const map={};
   records.forEach(r=>{const key=r.clid||r.client;if(!map[key]){map[key]={clid:r.clid||'',client:r.client||'',anum:r.anum||'',type:r.type||'',atty:r.atty||'',records:[]};}if(r.anum&&!map[key].anum)map[key].anum=r.anum;if(r.atty&&!map[key].atty)map[key].atty=r.atty;if(r.type&&!map[key].type)map[key].type=r.type;if(r.client&&!map[key].client)map[key].client=r.client;map[key].records.push(r);});
-  // Hide cases that have been explicitly closed (Delete case). Their records
-  // remain in the All Events view under a 'Case Closed' badge.
-  _casesCache=Object.values(map).filter(c=>!_isCaseClosed(c.clid||c.client)).sort((a,b)=>(a.client||'').localeCompare(b.client||''));
+  // Closed cases stay in the list, tagged c.closed — the Cases tab shows
+  // them with a CLOSED mark; pickers and boards filter on !c.closed.
+  _casesCache=Object.values(map).map(c=>{ c.closed=_isCaseClosed(c.clid||c.client); return c; }).sort((a,b)=>(a.client||'').localeCompare(b.client||''));
   return _casesCache;
 }
 let _caseFilterOptsDirty=true;
@@ -14269,6 +14269,8 @@ function renderCases(){
   });}
   if(ft)cases=cases.filter(c=>c.type===ft);
   if(fa)cases=cases.filter(c=>c.atty===fa);
+  // closed cases sink to the bottom of the results (stable — alphabetical within each group)
+  cases=cases.slice().sort((a,b)=>(a.closed?1:0)-(b.closed?1:0));
   const list=document.getElementById('cases-list');
   const empty=document.getElementById('cases-empty');
   const frag=document.createDocumentFragment();
@@ -14292,7 +14294,9 @@ function renderCases(){
     const membersHtml=respondents.length
       ? `<div style="font-size:11px;color:#9E9186;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">+ ${respondents.map(r=>`<span style="color:#6B7FA3;font-weight:500;">${r.name}</span>`+(r.relationship?` <span style="color:#C4BAB0">(${r.relationship})</span>`:'')).join(' &middot; ')}</div>`
       : '';
-    card.innerHTML=`<div class="case-card-left" style="min-width:0;flex:1;overflow:hidden;"><div class="case-card-name">${c.client||'—'}</div>${membersHtml}<div class="case-card-meta">${c.type||'—'}${c.atty?' · '+c.atty:''}${c.anum?' · A# '+c.anum:''}</div></div><div class="case-card-right">${sb}${cuChip}<span style="font-size:11px;color:#C4BAB0">${activeRecs.length} active · ${c.records.length} total</span>${c.clid?'<span style="font-size:11px;color:#C4BAB0">ID '+c.clid+'</span>':''}</div>`;
+    const closedChip=c.closed?`<span style="display:inline-block;font-size:10px;font-weight:700;letter-spacing:.05em;color:#9A7B3F;background:#FBF4E9;border:1px solid #C9B79A;border-radius:10px;padding:1px 8px;margin-left:8px;vertical-align:middle;">📦 CLOSED${(caseMeta[c.clid||c.client]&&caseMeta[c.clid||c.client].caseClosed&&caseMeta[c.clid||c.client].caseClosed.date)?' · '+fmtShort(caseMeta[c.clid||c.client].caseClosed.date):''}</span>`:'';
+    if(c.closed) card.style.opacity='0.62';
+    card.innerHTML=`<div class="case-card-left" style="min-width:0;flex:1;overflow:hidden;"><div class="case-card-name">${c.client||'—'}${closedChip}</div>${membersHtml}<div class="case-card-meta">${c.type||'—'}${c.atty?' · '+c.atty:''}${c.anum?' · A# '+c.anum:''}</div></div><div class="case-card-right">${c.closed?'':sb+cuChip}<span style="font-size:11px;color:#C4BAB0">${activeRecs.length} active · ${c.records.length} total</span>${c.clid?'<span style="font-size:11px;color:#C4BAB0">ID '+c.clid+'</span>':''}</div>`;
     frag.appendChild(card);
   });
   list.appendChild(frag);
@@ -14358,11 +14362,12 @@ function renderCasesTypeStats(){
   };
   const currentFilter=document.getElementById('cases-filter-type').value;
   el.innerHTML='';
-  // Total card
+  // Total card — counts every case; the closed portion is broken out below it
+  const closedN=all.filter(c=>c.closed).length;
   const totalCard=document.createElement('div');
   totalCard.className='ct-stat'+(currentFilter===''?' ct-active':'');
-  totalCard.title='Show all case types';
-  totalCard.innerHTML=`<div class="ct-stat-num">${total}</div><div class="ct-stat-label">All Cases</div><div class="ct-stat-bar" style="width:100%;background:var(--parchment)"></div>`;
+  totalCard.title='Show all case types'+(closedN?' ('+(total-closedN)+' active, '+closedN+' closed)':'');
+  totalCard.innerHTML=`<div class="ct-stat-num">${total}</div><div class="ct-stat-label">All Cases</div>${closedN?`<div style="font-size:9.5px;color:#9A7B3F;margin-top:1px;">${total-closedN} active · ${closedN} closed</div>`:''}<div class="ct-stat-bar" style="width:100%;background:var(--parchment)"></div>`;
   totalCard.onclick=()=>{ document.getElementById('cases-filter-type').value=''; renderCasesTypeStats(); renderCases(); };
   el.appendChild(totalCard);
   sorted.forEach(([t,n])=>{
@@ -14385,7 +14390,7 @@ function renderSIJTable(){
   // live DOM + listeners so both subtabs behave identically.
   const boards=document.querySelectorAll('.sij-board');
   if(!boards.length)return;
-  const all=getCases().filter(c=>(c.type||'').includes('Special Juvenile'));
+  const all=getCases().filter(c=>!c.closed&&(c.type||'').includes('Special Juvenile'));
   if(!all.length){
     boards.forEach(b=>{b.innerHTML='<div style="text-align:center;padding:4rem;color:#9E9186;font-size:13px;">No SIJ cases found.</div>';});
     return;
@@ -15126,7 +15131,7 @@ function renderMasterPrep(){
   const el=document.getElementById('tools-content');
   if(!el)return;
   el.style.cssText='';
-  const cases=(typeof getCases==='function'?getCases():[]).slice().sort((a,b)=>(a.client||'').localeCompare(b.client||''));
+  const cases=(typeof getCases==='function'?getCases():[]).filter(c=>!c.closed).sort((a,b)=>(a.client||'').localeCompare(b.client||''));
   el.innerHTML=`
     <button onclick="_mhpTeardown();renderToolsPage();" style="font-size:11px;padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;margin-bottom:14px;">← Back to Tools</button>
     <div style="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);margin-bottom:4px;">Master Hearing Prep</div>
@@ -15363,7 +15368,7 @@ function renderI589Tool(){
   const el=document.getElementById('tools-content');
   if(!el)return;
   el.style.cssText='';
-  const cases=(typeof getCases==='function'?getCases():[]).slice().sort((a,b)=>(a.client||'').localeCompare(b.client||''));
+  const cases=(typeof getCases==='function'?getCases():[]).filter(c=>!c.closed).sort((a,b)=>(a.client||'').localeCompare(b.client||''));
   el.innerHTML=`
     <button onclick="_i589Teardown();renderToolsPage();" style="font-size:11px;padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;margin-bottom:14px;">← Back to Tools</button>
     <div style="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);margin-bottom:4px;">I-589 Application</div>
@@ -18346,7 +18351,7 @@ function renderSIJBoard(){
   const board=document.getElementById('sij-board');
   if(!board)return;
 
-  const all=getCases().filter(c=>(c.type||'').includes('Special Juvenile'));
+  const all=getCases().filter(c=>!c.closed&&(c.type||'').includes('Special Juvenile'));
 
   if(!all.length){
     board.innerHTML='<div style="text-align:center;padding:4rem;color:#9E9186;font-size:13px;">No SIJ cases found.</div>';
@@ -25038,7 +25043,7 @@ function openNewTaskModal(presetDate){
     .join('');
 
   // datalist of existing cases for the optional case link
-  const caseOpts=getCases().map(c=>{
+  const caseOpts=getCases().filter(c=>!c.closed).map(c=>{
     const label=(c.client||c.clid||'')+(c.clid&&c.clid!==c.client?' · '+c.clid:'')+(c.anum?' · A#'+c.anum:'');
     return `<option value="${label.replace(/"/g,'&quot;')}" data-clid="${(c.clid||c.client||'').replace(/"/g,'&quot;')}"></option>`;
   }).join('');
@@ -25106,7 +25111,7 @@ function saveNewTask(){
     if(matched){ clid=matched.getAttribute('data-clid')||''; }
     // If the user typed a query that doesn't exactly match, try a loose match
     if(!clid){
-      const cases=getCases();
+      const cases=getCases().filter(c=>!c.closed);
       const q=caseText.toLowerCase();
       const hit=cases.find(c=>(c.client||'').toLowerCase()===q||(c.clid||'').toLowerCase()===q)
               ||cases.find(c=>(c.client||'').toLowerCase().includes(q)||(c.clid||'').toLowerCase().includes(q));
