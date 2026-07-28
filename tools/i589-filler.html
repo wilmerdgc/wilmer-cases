@@ -334,7 +334,7 @@ body{font-family:var(--font-body);background:var(--cream);color:var(--ink);heigh
   <span id="bar-title">I-589</span>
   <button class="btn btn-green" onclick="document.getElementById('imp-file').click()">⬆ Import XLSX</button>
   <input type="file" id="imp-file" accept=".xlsx" style="display:none" onchange="importXLSX(event)">
-  <button class="btn btn-green" onclick="document.getElementById('imp-pdf-file').click()" title="Upload a filled I-589 PDF — its answers are read and copied into this form">⬆ Read PDF</button>
+  <button id="imp-pdf-btn" class="btn btn-green" onclick="document.getElementById('imp-pdf-file').click()" title="Upload any PDF that contains a filled I-589 (alone or inside a bigger filing, fillable, printed, or scanned) — the form pages are found and their answers copied into this form">⬆ Read PDF</button>
   <input type="file" id="imp-pdf-file" accept=".pdf,application/pdf" style="display:none" onchange="importPDF(event)">
   <button class="btn btn-outline" onclick="exportJSON()">⬇ JSON</button>
   <button class="btn btn-outline" onclick="exportXLSX()" style="border-color:#4caf8a;color:#4caf8a">⬇ Export XLSX</button>
@@ -1878,13 +1878,21 @@ function importXLSX(e){
 // Flattened or scanned PDFs carry no field data and import nothing.
 function importPDF(e){
   const file=e.target.files[0]; if(!file) return;
+  const btn=document.getElementById('imp-pdf-btn');
+  const setBtn=t=>{ if(btn) btn.textContent=t; };
   const reader=new FileReader();
   reader.onload=async ev=>{
+    if(btn) btn.disabled=true;
+    setBtn('Reading…');
     try{
-      const n=await importPDFData(ev.target.result);
-      alert(n>0?('✓ Read '+n+' answers from the PDF.')
-               :'No fillable form data found in this PDF.\n(Scanned or flattened PDFs cannot be read — the PDF must still have its form fields.)');
+      const res=await importPDFData(ev.target.result, setBtn);
+      const label={fields:'from the PDF’s form fields', raw:'from the PDF’s form fields', text:'from the printed text (positions matched to the form)', ocr:'by OCR of the scanned pages'}[res.method]||'';
+      alert(res.n>0?('✓ Read '+res.n+' answers '+label+'.'
+                    +(res.method==='text'||res.method==='ocr'?'\n\nThis PDF had no live form fields, so the answers were matched by their position on the page — please review them before relying on the form.':''))
+               :'No I-589 data could be read from this PDF.\n\nTried: form fields, printed text, and OCR of scanned pages. If this is a scan, a clearer copy may work better.');
     }catch(err){ alert('PDF read error: '+err.message); }
+    if(btn) btn.disabled=false;
+    setBtn('⬆ Read PDF');
     e.target.value='';
   };
   reader.readAsArrayBuffer(file);
@@ -1963,28 +1971,198 @@ function _importPDFRawScan(bytes){
   }
   return n;
 }
-async function importPDFData(buf){
+// Which I-589 page is this text from? Primary signal: the USCIS footer
+// "Page X of 12" (present on every form page); fallback: part headers.
+// Returns 1–12 or null (not a form page — cover letters, exhibits, etc.).
+function _i589PageFromText(t){
+  t=String(t||'').replace(/\s+/g,' ');
+  const m=t.match(/Page\s+(\d{1,2})\s+of\s+12\b/i);
+  if(m&&/I\s*-?\s*589/i.test(t)){ const p=parseInt(m[1],10); if(p>=1&&p<=12) return p; }
+  if(/Part\s*A\.?\s*I\b.{0,4}Information About You/i.test(t)&&/START HERE/i.test(t)) return 1;
+  if(/Part\s*A\.?\s*II\b.{0,4}Information About Your Spouse/i.test(t)) return 2;
+  if(/Part\s*A\.?\s*III\b.{0,4}Information About Your Background/i.test(t)) return 4;
+  if(/Part\s*B\b.{0,4}Information About Your Application/i.test(t)) return 5;
+  if(/Part\s*C\b.{0,4}Additional Information/i.test(t)) return 7;
+  if(/Part\s*D\b.{0,4}Your Signature/i.test(t)) return 9;
+  if(/Supplement\s*A/i.test(t)&&/I\s*-?\s*589/i.test(t)) return 11;
+  if(/Supplement\s*B/i.test(t)&&/I\s*-?\s*589/i.test(t)) return 12;
+  return null;
+}
+// Drop text into the fields of one form page by POSITION: an item whose
+// anchor point falls inside a field's box is part of that field's answer.
+// items: [{str, x, yTop, w, h}] normalized 0–1, yTop = bottom edge of the
+// glyphs measured from the page top.
+function _applyItemsToFormPage(fp, items){
+  let n=0;
+  const clean=items.filter(it=>it.str&&it.str.trim());
+  FD.filter(f=>f.pg===fp).forEach(f=>{
+    if(f.id.indexOf('pdf417barcode')!==-1) return;
+    const pad=0.005;
+    const inside=clean.filter(it=>{
+      const cx=it.x+Math.min((it.w||0)/2,0.01);
+      const cy=it.yTop-(it.h||0.01)/2;
+      return cx>=f.x-pad&&cx<=f.x+f.w+pad&&cy>=f.y-pad&&cy<=f.y+f.h+pad;
+    });
+    if(f.type==='checkbox'){
+      if(inside.some(it=>/^[xX×✓✔■◼]$/.test(it.str.trim()))){
+        if(!V[f.id]){ V[f.id]='X'; n++; }
+      }
+      return;
+    }
+    if(!inside.length) return;
+    inside.sort((a,b)=>(a.yTop-b.yTop)||(a.x-b.x));
+    const lines=[]; let cur=[], lastY=null;
+    inside.forEach(it=>{
+      if(lastY!==null&&(it.yTop-lastY)>0.007){ lines.push(cur); cur=[]; }
+      cur.push(it); lastY=it.yTop;
+    });
+    lines.push(cur);
+    const val=lines.map(L=>L.map(w2=>w2.str).join(' ').replace(/\s+/g,' ').trim())
+      .filter(Boolean).join(f.type==='textarea'?'\n':' ').trim();
+    if(val&&!V[f.id]){ V[f.id]=val; n++; }
+  });
+  return n;
+}
+// The blank form's own printed text (labels, instructions), per template
+// page — used to subtract form furniture from uploaded pages so only the
+// APPLICANT'S answers survive the positional match.
+let _blankTextCache={};
+async function _blankPageText(fp){
+  if(_blankTextCache[fp]) return _blankTextCache[fp];
+  if(!pdfDoc) return [];
+  try{
+    const page=await pdfDoc.getPage(fp);
+    const tc=await page.getTextContent();
+    const vp=page.getViewport({scale:1});
+    const arr=tc.items.filter(i=>i.str&&i.str.trim()).map(it=>({
+      str:it.str.replace(/\s+/g,' ').trim(),
+      x:it.transform[4]/vp.width,
+      y:1-(it.transform[5]/vp.height),
+      w:(it.width||0)/vp.width
+    }));
+    _blankTextCache[fp]=arr;
+    return arr;
+  }catch(e){ return []; }
+}
+// Drop items that are the form's own printed text: same string at the same
+// spot, or a word sitting inside a template phrase's span on the same line.
+function _subtractTemplate(items, blank){
+  if(!blank.length) return items;
+  return items.filter(it=>{
+    const s=String(it.str||'').replace(/\s+/g,' ').trim();
+    if(!s) return false;
+    const lower=s.toLowerCase();
+    return !blank.some(b=>{
+      if(Math.abs(b.y-it.yTop)>0.012) return false;
+      if(b.str===s&&Math.abs(b.x-it.x)<0.012) return true;
+      if(it.x>=b.x-0.012&&it.x<=b.x+b.w+0.012&&b.str.toLowerCase().indexOf(lower)!==-1) return true;
+      return false;
+    });
+  });
+}
+// Printed / flattened submissions: no form fields, but a text layer with
+// coordinates. Find the I-589 pages anywhere in the document and read each
+// one positionally. Reads ONLY detected form pages — other documents in the
+// same PDF are ignored.
+async function _importPDFByText(doc,progress){
+  let n=0; const found=new Set();
+  for(let p=1;p<=doc.numPages&&found.size<12;p++){
+    if(progress) progress('Reading text '+p+'/'+doc.numPages+'…');
+    const page=await doc.getPage(p);
+    const tc=await page.getTextContent();
+    if(!tc.items.length) continue;
+    const fp=_i589PageFromText(tc.items.map(i=>i.str).join(' '));
+    if(!fp||found.has(fp)) continue;
+    found.add(fp);
+    const vp=page.getViewport({scale:1});
+    const items=tc.items.map(it=>({
+      str:it.str,
+      x:it.transform[4]/vp.width,
+      yTop:1-(it.transform[5]/vp.height),
+      w:(it.width||0)/vp.width,
+      h:(it.height||8)/vp.height
+    }));
+    n+=_applyItemsToFormPage(fp,_subtractTemplate(items,await _blankPageText(fp)));
+  }
+  return n;
+}
+// Scanned copies ("pictures in PDF format"): lazy-load Tesseract.js, render
+// each page, OCR it, and use the recognized word boxes with the same
+// positional matcher. Only pages recognized as I-589 pages are read.
+function _ensureTesseract(){
+  if(window.Tesseract) return Promise.resolve(true);
+  return new Promise(res=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    s.onload=()=>res(!!window.Tesseract);
+    s.onerror=()=>res(false);
+    document.head.appendChild(s);
+  });
+}
+async function _importPDFByOCR(doc,progress){
+  if(progress) progress('Loading OCR…');
+  if(!(await _ensureTesseract())) return 0;
+  let worker=null, n=0;
+  const found=new Set();
+  try{
+    worker=await Tesseract.createWorker('eng');
+    for(let p=1;p<=doc.numPages&&found.size<12;p++){
+      if(progress) progress('OCR '+p+'/'+doc.numPages+'…');
+      const page=await doc.getPage(p);
+      const vp=page.getViewport({scale:2});
+      const cv=document.createElement('canvas');
+      cv.width=vp.width; cv.height=vp.height;
+      await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+      const out=await worker.recognize(cv);
+      const data=out&&out.data?out.data:{};
+      const fp=_i589PageFromText(data.text||'');
+      if(!fp||found.has(fp)) continue;
+      found.add(fp);
+      const words=(data.words||[]).map(w2=>({
+        str:w2.text,
+        x:w2.bbox.x0/cv.width,
+        yTop:w2.bbox.y1/cv.height,
+        w:(w2.bbox.x1-w2.bbox.x0)/cv.width,
+        h:(w2.bbox.y1-w2.bbox.y0)/cv.height
+      }));
+      n+=_applyItemsToFormPage(fp,_subtractTemplate(words,await _blankPageText(fp)));
+    }
+  }catch(err){}
+  try{ if(worker) await worker.terminate(); }catch(err){}
+  return n;
+}
+async function importPDFData(buf,progress){
   const rawBytes=new Uint8Array(buf.slice(0)); // copy — pdf.js detaches the buffer
   const byPdfName={};
   FD.forEach(f=>{ if(f.pdf) byPdfName[f.pdf]=f; });
-  let n=0;
-  try{
-    const doc=await pdfjsLib.getDocument({data:buf}).promise;
-    for(let p=1;p<=doc.numPages;p++){
-      const page=await doc.getPage(p);
-      const annots=await page.getAnnotations();
-      annots.forEach(a=>{
-        if(a.subtype!=='Widget'||!a.fieldName) return;
-        const f=byPdfName[a.fieldName];
-        if(!f) return;
-        n+=_pdfSetImported(f,a.fieldValue,false);
-      });
-    }
-    try{ if(doc.destroy) doc.destroy(); }catch(err){}
-  }catch(err){ /* fall through to the raw scan */ }
-  if(!n) n=_importPDFRawScan(rawBytes);
+  let n=0, method=null, doc=null;
+  try{ doc=await pdfjsLib.getDocument({data:buf}).promise; }catch(err){ doc=null; }
+  // 1) live form fields (works even with other documents in the same PDF —
+  //    only I-589 field names match)
+  if(doc){
+    try{
+      for(let p=1;p<=doc.numPages;p++){
+        const page=await doc.getPage(p);
+        const annots=await page.getAnnotations();
+        annots.forEach(a=>{
+          if(a.subtype!=='Widget'||!a.fieldName) return;
+          const f=byPdfName[a.fieldName];
+          if(!f) return;
+          n+=_pdfSetImported(f,a.fieldValue,false);
+        });
+      }
+      if(n) method='fields';
+    }catch(err){}
+  }
+  // 2) stripped-but-present widget objects (the office's own filled PDFs)
+  if(!n){ n=_importPDFRawScan(rawBytes); if(n) method='raw'; }
+  // 3) printed/flattened submissions: positional read of the text layer
+  if(!n&&doc){ try{ n=await _importPDFByText(doc,progress); if(n) method='text'; }catch(err){} }
+  // 4) scanned images: OCR + positional read
+  if(!n&&doc){ try{ n=await _importPDFByOCR(doc,progress); if(n) method='ocr'; }catch(err){} }
+  try{ if(doc&&doc.destroy) doc.destroy(); }catch(err){}
   if(n){ buildForm(); drawOver(); applyRules(); updateProg(); }
-  return n;
+  return {n:n, method:method};
 }
 
 // ── EXPORT FILLED DATA AS XLSX ────────────────────────────────────────────────
