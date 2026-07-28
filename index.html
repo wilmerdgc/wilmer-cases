@@ -13158,6 +13158,48 @@ function emailScheduleToClient(clid){
   });
 }
 
+// Same schedule email, addressed to the office instead of the client:
+// Loly (matched by name in the paralegal/attorney email lists) plus the
+// case's assigned paralegal.
+function emailScheduleToStaff(clid){
+  const findEmail=name=>{
+    const n=String(name||'').toLowerCase();
+    let hit='';
+    [typeof paralegalEmails!=='undefined'?paralegalEmails:{}, typeof attorneyEmails!=='undefined'?attorneyEmails:{}].forEach(map=>{
+      Object.keys(map||{}).forEach(k=>{ if(!hit&&k.toLowerCase().includes(n)&&map[k]) hit=map[k]; });
+    });
+    return hit;
+  };
+  const clientEvents=records.filter(r=>{
+    return (r.clid||r.client)===clid && !r.finishedStatus && !r.deletedStatus && r.date
+      && !(r.notes&&r.notes.startsWith('⏰ REMINDER'));
+  }).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  if(!clientEvents.length){ showToast('No planned events to send'); return; }
+  const base=clientEvents[0];
+  const clientName=base.client||clid;
+  const lolyEmail=findEmail('loly');
+  const paraEmail=(base.atty&&typeof paralegalEmails!=='undefined'&&paralegalEmails[base.atty])||'';
+  const to=[lolyEmail,paraEmail].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(', ');
+  if(!to){ showToast('No email on file for Loly or '+(base.atty||'the paralegal')+' — add them in Settings'); return; }
+  if(!lolyEmail) showToast('No email found for Loly — sending to the paralegal only');
+  else if(!paraEmail) showToast('No email for '+(base.atty||'the paralegal')+' — sending to Loly only');
+  let body='Hola:\n\n'
+    +'Este es el calendario de los próximos eventos del caso:\n\n'
+    +clientName+' — ID del cliente: '+(base.clid||clid);
+  if(base.anum) body+=' — A#: '+base.anum;
+  if(base.atty) body+='\nParalegal: '+base.atty;
+  body+='\n\n';
+  clientEvents.forEach(ev=>{ body+=formatEventForEmailES(ev,clid,base.atty||''); });
+  body+='Gracias,';
+  openEmailComposeModal({
+    to: to,
+    subject: 'Calendario del caso — '+clientName+(base.clid?' ('+base.clid+')':''),
+    body: body,
+    _clid: clid,
+    _addSignature: true
+  });
+}
+
 // ── Gmail signature cache ──
 let _gmailSignature=null;
 let _gmailSignatureFetched=false;
@@ -19718,6 +19760,15 @@ function openCaseDetail(clid){
   schedClientBtn.onclick=()=>emailScheduleToClient(clid);
   atRow.appendChild(schedClientBtn);
 
+  // Same schedule, but to the office: Loly + the case's paralegal.
+  const schedStaffBtn=document.createElement('button');
+  schedStaffBtn.className='btn-sm';
+  schedStaffBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#6B7FA3;color:#6B7FA3;margin-left:4px;font-weight:600;';
+  schedStaffBtn.textContent='📅 Schedule → Loly + Paralegal';
+  schedStaffBtn.title='Email every upcoming event on this case to Loly and the assigned paralegal';
+  schedStaffBtn.onclick=()=>emailScheduleToStaff(clid);
+  atRow.appendChild(schedStaffBtn);
+
   // Email Case button (general case email, default to paralegal)
   const emailCaseBtn=document.createElement('button');emailCaseBtn.className='btn-sm';emailCaseBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#B4CCAD;color:#6A8C6E;margin-left:4px;font-weight:600;';emailCaseBtn.textContent='✉ Email Case';
   emailCaseBtn.onclick=()=>{
@@ -23113,7 +23164,7 @@ function openNewCaseModal(){
   paralegals.forEach(p => { const o = document.createElement('option'); o.value=p; o.textContent=p; attyEl.appendChild(o); });
 
   // Clear fields
-  ['nc-lastName','nc-firstName','nc-middleName','nc-clid','nc-anum','nc-email','nc-countryOfBirth','nc-notes'].forEach(id => {const e=document.getElementById(id);if(e)e.value='';});
+  ['nc-lastName','nc-firstName','nc-middleName','nc-clid','nc-anum','nc-email','nc-countryOfBirth','nc-dob','nc-phone','nc-notes'].forEach(id => {const e=document.getElementById(id);if(e)e.value='';});
   typeEl.value = ''; attyEl.value = '';
   const catElM = document.getElementById('nc-category'); if(catElM) catElM.value = 'Office';
 
@@ -23192,6 +23243,16 @@ function saveNewCase(){
   if(middleName) caseMeta[_cid].clientMiddleName=middleName;
   if(email) caseMeta[_cid].clientEmail=email;
   if(countryOfBirth) caseMeta[_cid].clientCountryOfBirth=countryOfBirth;
+  const _ncDob=(document.getElementById('nc-dob')||{value:''}).value;
+  if(_ncDob) caseMeta[_cid].clientDob=_ncDob;
+  const _ncPhone=(document.getElementById('nc-phone')||{value:''}).value.trim();
+  if(_ncPhone) caseMeta[_cid].clientPhone=_ncPhone;
+  // The creation note also goes into the case's Notes list (the anchor
+  // record is hidden, so notes stored only there were invisible).
+  if(notes){
+    if(!caseMeta[_cid].caseNotesList) caseMeta[_cid].caseNotesList=[];
+    caseMeta[_cid].caseNotesList.push({date:todayStr(),text:notes});
+  }
   caseMeta[_cid].caseCategory=(document.getElementById('nc-category')||{value:'Office'}).value||'Office';
 
   // Add new case type / paralegal if not already in lists
@@ -25316,6 +25377,18 @@ function saveNewTask(){
       <div>
         <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Country of Birth</label>
         <input id="nc-countryOfBirth" type="text" placeholder="Country of birth…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
+      </div>
+    </div>
+
+    <!-- Date of Birth + Phone — same fields Client 1 shows in Case Information -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Date of Birth</label>
+        <input id="nc-dob" type="date" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Phone</label>
+        <input id="nc-phone" type="text" placeholder="Phone…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
       </div>
     </div>
 
