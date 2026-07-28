@@ -14384,6 +14384,57 @@ function renderCasesTypeStats(){
 }
 
 let _sijSearchQuery='';
+// ── SIJ visa-bulletin currency ──────────────────────────────────────────────
+// Each SIJ case can carry the I-360 priority date (caseMeta.sijPriorityDate,
+// entered in Case Information); the office-wide EB-4 bulletin date lives in
+// firmInfo.sijBulletinDate (set in the SIJ tab header). A case whose priority
+// date is on or before the bulletin date is CURRENT.
+function _sijIsCurrent(clid){
+  const pd=(caseMeta[clid]||{}).sijPriorityDate||'';
+  const bd=(typeof firmInfo!=='undefined'&&firmInfo&&firmInfo.sijBulletinDate)||'';
+  return !!(pd&&bd&&pd<=bd);
+}
+// Find SIJ cases that just became CURRENT and email the office once per case.
+function _sijCheckCurrent(){
+  try{
+    const bd=(typeof firmInfo!=='undefined'&&firmInfo&&firmInfo.sijBulletinDate)||'';
+    if(!bd) return;
+    const newly=[];
+    getCases().forEach(c=>{
+      if(c.closed||!(c.type||'').includes('Special Juvenile')) return;
+      const clid=c.clid||c.client;
+      const m=caseMeta[clid]||{};
+      if(!m.sijPriorityDate||m.sijPriorityDate>bd) return;
+      if(m.sijCurrentNotified) return;
+      newly.push({clid:clid,name:c.client||clid,pd:m.sijPriorityDate});
+    });
+    if(!newly.length) return;
+    if(typeof _gmailAccessToken==='undefined'||!_gmailAccessToken||!_gmailUserEmail){
+      showToast('🟢 '+newly.length+' SIJ case'+(newly.length>1?'s are':' is')+' CURRENT — sign in to Gmail to get the email alert');
+      return; // not marked — retried once Gmail is available
+    }
+    const lines=newly.map(x=>'• '+x.name+' (ID '+x.clid+') — priority date '+fmtDate(x.pd));
+    const body='Good news:\n\nThe following SIJ case'+(newly.length>1?'s are':' is')+' now CURRENT under the EB-4 visa bulletin date of '+fmtDate(bd)+':\n\n'
+      +lines.join('\n')
+      +'\n\nPriority date on or before the bulletin date — the case can move forward with adjustment of status.\n\n— wilmer-cases';
+    gmailSendMessage(_gmailUserEmail,'🟢 SIJ visa bulletin: '+newly.length+' case'+(newly.length>1?'s':'')+' now CURRENT',body)
+      .then(()=>{
+        const today=todayStr();
+        newly.forEach(x=>{ if(!caseMeta[x.clid])caseMeta[x.clid]={}; caseMeta[x.clid].sijCurrentNotified=today; caseMeta[x.clid]._updatedAt=Date.now(); });
+        markUnsaved();
+        showToast('🟢 Emailed you: '+newly.length+' SIJ case'+(newly.length>1?'s':'')+' now CURRENT');
+      })
+      .catch(()=>{ showToast('Could not send the SIJ CURRENT email — will retry'); });
+  }catch(e){}
+}
+function _sijSetBulletinDate(v){
+  if(typeof firmInfo==='undefined'||!firmInfo) return;
+  firmInfo.sijBulletinDate=v||'';
+  markUnsaved();
+  try{ if(typeof saveAllData==='function') saveAllData(); }catch(e){}
+  _sijCheckCurrent();
+  renderSIJTable();
+}
 function renderSIJTable(){
   // Render the same table into every .sij-board element on the page
   // (Cases → SIJ subtab, Calendar → SIJ view, etc.). Each mount gets its own
@@ -14592,13 +14643,16 @@ function renderSIJTable(){
     header=document.createElement('div');
     header.className='sij-search-header';
     header.style.cssText='padding:8px 12px;border-bottom:1px solid var(--border);background:var(--cream);display:flex;align-items:center;gap:10px;flex-shrink:0;';
-    header.innerHTML='<input type="text" class="sij-search-input" placeholder="Search by name, Cl ID, A-Number…" style="flex:1;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;outline:none;background:#fff;color:var(--ink);"/><button type="button" class="sij-search-clear" title="Clear" style="display:none;border:none;background:transparent;color:var(--ink-muted);cursor:pointer;font-size:14px;padding:0 4px;line-height:1;">×</button><span class="sij-search-count" style="font-size:11px;color:var(--ink-muted);white-space:nowrap;"></span>';
+    header.innerHTML='<input type="text" class="sij-search-input" placeholder="Search by name, Cl ID, A-Number…" style="flex:1;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;outline:none;background:#fff;color:var(--ink);"/><button type="button" class="sij-search-clear" title="Clear" style="display:none;border:none;background:transparent;color:var(--ink-muted);cursor:pointer;font-size:14px;padding:0 4px;line-height:1;">×</button><span class="sij-search-count" style="font-size:11px;color:var(--ink-muted);white-space:nowrap;"></span><span title="Current EB-4 visa bulletin date for SIJ — cases whose I-360 priority date is on or before this date are CURRENT" style="font-size:10px;font-weight:700;letter-spacing:.05em;color:#6A8C6E;text-transform:uppercase;white-space:nowrap;margin-left:6px;">EB-4 Bulletin</span><input type="date" class="sij-bulletin-input" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;outline:none;background:#fff;color:var(--ink);"/>';
     board.appendChild(header);
     const inp=header.querySelector('.sij-search-input');
     const clr=header.querySelector('.sij-search-clear');
     inp.value=_sijSearchQuery;
     inp.addEventListener('input',function(){_sijSearchQuery=inp.value;renderSIJTable();});
     clr.addEventListener('click',function(){_sijSearchQuery='';inp.value='';inp.focus();renderSIJTable();});
+    const bul=header.querySelector('.sij-bulletin-input');
+    bul.value=(typeof firmInfo!=='undefined'&&firmInfo&&firmInfo.sijBulletinDate)||'';
+    bul.addEventListener('change',function(){_sijSetBulletinDate(bul.value);});
     tblWrap=document.createElement('div');
     tblWrap.className='sij-table-wrap';
     tblWrap.style.cssText='overflow-x:auto;flex:1;min-height:0;';
@@ -14610,6 +14664,8 @@ function renderSIJTable(){
   if(_clr)_clr.style.display=_sijSearchQuery?'inline-block':'none';
   const _cnt=header.querySelector('.sij-search-count');
   if(_cnt)_cnt.textContent=_q?_filteredCount+' of '+_totalCount:_totalCount+' case'+(_totalCount===1?'':'s');
+  const _bul=header.querySelector('.sij-bulletin-input');
+  if(_bul&&document.activeElement!==_bul)_bul.value=(typeof firmInfo!=='undefined'&&firmInfo&&firmInfo.sijBulletinDate)||'';
   tblWrap.innerHTML='';
   const tbl=document.createElement('table');
   tbl.style.cssText='border-collapse:collapse;font-size:12px;table-layout:fixed;';
@@ -14791,7 +14847,7 @@ function renderSIJTable(){
       // Per-client cells (always rendered)
       let rowHtml='';
       // Client column — shows this individual client's name
-      rowHtml+=`<td style="${tdS}font-weight:${cl.isLead?'600':'500'};color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;z-index:1;background:${rowBg||'var(--cream)'};box-shadow:2px 0 0 var(--border);"><span ondblclick="event.stopPropagation();openCaseDetail('${c.clid}');" title="${escHtml(cl.name||'')}${cl.isLead?'':' (rider)'} — Double-click to open case" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;" onmouseenter="this.style.textDecorationColor='var(--ink)'" onmouseleave="this.style.textDecorationColor='transparent'">${escHtml(shortName)}</span>${leadBadge}</td>`;
+      rowHtml+=`<td style="${tdS}font-weight:${cl.isLead?'600':'500'};color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;z-index:1;background:${rowBg||'var(--cream)'};box-shadow:2px 0 0 var(--border);"><span ondblclick="event.stopPropagation();openCaseDetail('${c.clid}');" title="${escHtml(cl.name||'')}${cl.isLead?'':' (rider)'} — Double-click to open case" style="cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;" onmouseenter="this.style.textDecorationColor='var(--ink)'" onmouseleave="this.style.textDecorationColor='transparent'">${escHtml(shortName)}</span>${leadBadge}${cl.isLead&&_sijIsCurrent(c.clid)?'<span title="I-360 priority date is on or before the EB-4 bulletin date" style="display:inline-block;margin-left:6px;font-size:9px;font-weight:800;letter-spacing:.06em;color:#fff;background:#6A8C6E;border-radius:8px;padding:1px 7px;vertical-align:middle;">CURRENT</span>':''}</td>`;
       // Cl ID — only on first row
       if(isFirstRow){
         rowHtml+=`<td rowspan="${rowCount}" ondblclick="event.stopPropagation();openCaseDetail('${c.clid}');" title="Double-click to open case" style="${tdS}color:var(--ink-muted);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;vertical-align:top;">${c.clid||'—'}</td>`;
@@ -19165,6 +19221,16 @@ function openCaseDetail(clid){
     // Client Phone
     const clPhoneI=mkText2((caseMeta[clid]||{}).clientPhone||'');clPhoneI.placeholder='Phone…';infoBody._clPhoneInput=clPhoneI;
     mkInfoCell(L1,'Phone',(caseMeta[clid]||{}).clientPhone||'',()=>clPhoneI);
+    // Priority date (I-360) — Special Juvenile cases only. Compared against
+    // the EB-4 bulletin date set in the SIJ tab; on/before it = CURRENT.
+    if((base.type||'').includes('Special Juvenile')){
+      const _pd=(caseMeta[clid]||{}).sijPriorityDate||'';
+      const pdI=document.createElement('input');pdI.type='date';pdI.value=_pd;
+      pdI.style.cssText='width:100%;font-size:13px;font-weight:500;color:#2C2620;border:none;outline:none;background:transparent;padding:0;font-family:inherit;';
+      infoBody._sijPriorityInput=pdI;
+      const _curTxt=_pd?(fmtDate(_pd)+(_sijIsCurrent(clid)?'  🟢 CURRENT':'')):'';
+      mkInfoCell(L1,'Priority Date (I-360)',_curTxt,()=>pdI);
+    }
     // Per-client fields — Family/Given/Middle Name, DOB, Country of Birth —
     // are NOT rendered up top any more. They live inside each client's row
     // below. We still build the inputs here so the existing save logic
@@ -19513,6 +19579,7 @@ function openCaseDetail(clid){
     const _builtName=[caseMeta[clid].clientFirstName,caseMeta[clid].clientMiddleName,caseMeta[clid].clientLastName].filter(Boolean).join(' ');
     if(_builtName){allRecs.forEach(r=>r.client=_builtName);base.client=_builtName;}
     if(infoBody._clPhoneInput)caseMeta[clid].clientPhone=infoBody._clPhoneInput.value.trim();
+    if(infoBody._sijPriorityInput){caseMeta[clid].sijPriorityDate=infoBody._sijPriorityInput.value||'';setTimeout(()=>{try{_sijCheckCurrent();}catch(e){}},400);}
     if(infoBody._clStreetInput)caseMeta[clid].clientStreet=infoBody._clStreetInput.value.trim();
     if(infoBody._clAptInput)caseMeta[clid].clientApt=infoBody._clAptInput.value.trim();
     if(infoBody._clCityInput)caseMeta[clid].clientCity=infoBody._clCityInput.value.trim();
@@ -24283,6 +24350,9 @@ try{ ensureFCEventTypes(); }catch(e){}
     localStorage.setItem('migration_merge_sij_types_v1','done');
   }catch(e){}
 })();
+// After boot settles (cloud sync + Gmail token restore), see whether any SIJ
+// case has become CURRENT under the stored bulletin date and email the alert.
+setTimeout(()=>{ try{ _sijCheckCurrent(); }catch(e){} }, 12000);
 (function _backfillDeadlineNotes(){
   let n=0;
   (records||[]).forEach(r=>{
