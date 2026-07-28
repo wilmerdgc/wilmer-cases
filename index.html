@@ -24229,6 +24229,60 @@ try{ ensureFCEventTypes(); }catch(e){}
     localStorage.setItem('aila_checklist_seeded_v2','done');
   }catch(e){}
 })();
+// One-time merge: "Special Juvenile in Court" was a duplicate of "Special
+// Juvenile in Immigration Court". Records are retyped to the longer name and
+// each case's stage progress is carried over by matching stage NAMES between
+// the two workflows ("FC — Service of Process" maps to "FC — Service &
+// Scheduling"; the two stages that don't exist in the kept workflow —
+// Special Findings Motion and Post-Trial — have no target and are dropped).
+(function _mergeSijCaseTypes(){
+  try{
+    if(localStorage.getItem('migration_merge_sij_types_v1')==='done') return;
+    const OLD='Special Juvenile in Court', NEW='Special Juvenile in Immigration Court';
+    const oldClids=new Set(records.filter(r=>r.type===OLD).map(r=>r.clid||r.client));
+    let touched=false;
+    records.forEach(r=>{ if(r.type===OLD){ r.type=NEW; r._updatedAt=Date.now(); touched=true; } });
+    if(oldClids.size&&typeof caseTypeStages!=='undefined'){
+      const oldList=(caseTypeStages[OLD]||[]).map(s=>s&&s.name);
+      const newList=(caseTypeStages[NEW]||[]).map(s=>s&&s.name);
+      const idxMap={};
+      oldList.forEach((nm,i)=>{ const j=newList.indexOf(nm); if(j!==-1) idxMap[i]=j; });
+      const aF=oldList.indexOf('FC — Service of Process'), aT=newList.indexOf('FC — Service & Scheduling');
+      if(aF!==-1&&aT!==-1) idxMap[aF]=aT;
+      oldClids.forEach(clid=>{
+        const m=caseMeta[clid];
+        if(!m||!m.stageProgress) return;
+        const np={};
+        Object.keys(m.stageProgress).forEach(si=>{ const j=idxMap[si]; if(j!==undefined) np[j]=m.stageProgress[si]; });
+        m.stageProgress=np;
+        m._updatedAt=Date.now();
+        touched=true;
+      });
+    }
+    if(typeof caseTypeStages!=='undefined'&&caseTypeStages[OLD]){ delete caseTypeStages[OLD]; touched=true; }
+    if(typeof caseTypeDocLists!=='undefined'&&caseTypeDocLists[OLD]){
+      if(!caseTypeDocLists[NEW]) caseTypeDocLists[NEW]=caseTypeDocLists[OLD];
+      delete caseTypeDocLists[OLD]; touched=true;
+    }
+    if(Array.isArray(caseTypes)&&caseTypes.includes(OLD)){
+      caseTypes=caseTypes.filter(t=>t!==OLD);
+      if(!caseTypes.includes(NEW)) caseTypes.push(NEW);
+      touched=true;
+    }
+    (typeof customChecklists!=='undefined'?customChecklists:[]).forEach(cl=>{
+      if(cl&&Array.isArray(cl.caseTypes)&&cl.caseTypes.includes(OLD)){
+        cl.caseTypes=cl.caseTypes.map(t=>t===OLD?NEW:t).filter((t,i,a)=>a.indexOf(t)===i);
+        touched=true;
+      }
+    });
+    if(touched){
+      try{ _invalidateCasesCache(); }catch(e){}
+      markUnsaved();
+      try{ if(typeof saveAllData==='function') saveAllData(); }catch(e){}
+    }
+    localStorage.setItem('migration_merge_sij_types_v1','done');
+  }catch(e){}
+})();
 (function _backfillDeadlineNotes(){
   let n=0;
   (records||[]).forEach(r=>{
