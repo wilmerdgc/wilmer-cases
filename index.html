@@ -9264,6 +9264,12 @@ function renderWeek() {
           const _hc=_es.color||_categoryColors.hearing||'#6A8C6E';
           t.style.setProperty('--hearing-color',_hc);
           t.style.background=_hc+'22';
+        }else if(r.event==='SCHEDULING ORDER'){
+          // Scheduling orders read like hearings: tinted card + colored edge,
+          // so they don't disappear next to MASTER/INDIVIDUAL cards.
+          const _sc=_es.color||'#C9823A';
+          t.style.background=_sc+'22';
+          t.style.borderLeft='3px solid '+_sc;
         }else if(_es.category==='callup' && _es.color){
           // Call-up: color only as a frame around the title (--dot-color set above)
           t.classList.add('week-callup');
