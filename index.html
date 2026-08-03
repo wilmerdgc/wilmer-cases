@@ -2337,16 +2337,16 @@ window.addEventListener('load',()=>autoGrowAllNotes());
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px;">
           <div>
             <label class="nc-label">Family Name (Last Name) <span style="color:#B85C5C">*</span></label>
-            <input id="ncp-lastName" type="text" placeholder="Last name (one word)…" class="nc-input" oninput="this.style.borderColor='#DDD5CA'"/>
+            <input id="ncp-lastName" type="text" placeholder="Last name…" class="nc-input" oninput="this.style.borderColor='#DDD5CA'"/>
           </div>
           <div>
             <label class="nc-label">Given Name (First Name) <span style="color:#B85C5C">*</span></label>
-            <input id="ncp-firstName" type="text" placeholder="First name (one word)…" class="nc-input" oninput="this.style.borderColor='#DDD5CA'"/>
+            <input id="ncp-firstName" type="text" placeholder="First name…" class="nc-input" oninput="this.style.borderColor='#DDD5CA'"/>
           </div>
         </div>
         <div style="margin-bottom:13px;">
           <label class="nc-label">Middle Name</label>
-          <input id="ncp-middleName" type="text" placeholder="Middle name (one word, optional)…" class="nc-input"/>
+          <input id="ncp-middleName" type="text" placeholder="Middle name (optional)…" class="nc-input"/>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px;">
           <div>
@@ -14263,10 +14263,10 @@ function importNewCasesFromExcel(input){
 // ── Cases Tab ──
 let activeCaseClid=null;
 function goToCase(clid){switchTab('cases');setTimeout(()=>openCaseDetail(clid),30);}
-// Enforce one-word-only for first/middle/last name fields. Collapses any
-// whitespace-separated extras down to the first token, so each client ends
-// up with exactly one first name, one middle name, and one last name.
-function _singleName(s){ return s?String(s).trim().split(/\s+/)[0]||'':''; }
+// Clean a first/middle/last name field. Multi-word names are allowed
+// (e.g. "De La Cruz", "Maria Jose") — this only trims the ends and
+// collapses runs of whitespace down to single spaces.
+function _singleName(s){ return s?String(s).trim().replace(/\s+/g,' '):''; }
 // A case is "closed" when the user clicked Delete case in Case Information.
 // Closed cases disappear from every list except the All Events view (where
 // their records are shown with a 'Case Closed' badge).
@@ -19622,7 +19622,7 @@ function openCaseDetail(clid){
     if(infoBody._clLastInput){const raw=infoBody._clLastInput.value.trim();let v=_singleName(raw).toUpperCase();if(raw!==v){_nameTrimmed=true;infoBody._clLastInput.value=v;}caseMeta[clid].clientLastName=v;}
     if(infoBody._clFirstInput){const raw=infoBody._clFirstInput.value.trim();const v=_singleName(raw);if(raw!==v){_nameTrimmed=true;infoBody._clFirstInput.value=v;}caseMeta[clid].clientFirstName=v;}
     if(infoBody._clMiddleInput){const raw=infoBody._clMiddleInput.value.trim();const v=_singleName(raw);if(raw!==v){_nameTrimmed=true;infoBody._clMiddleInput.value=v;}caseMeta[clid].clientMiddleName=v;}
-    if(_nameTrimmed) showToast('Name fields accept one word each — extras trimmed');
+    if(_nameTrimmed) showToast('Name fields cleaned up');
     // Rebuild display name from structured fields and sync to all records
     const _builtName=[caseMeta[clid].clientFirstName,caseMeta[clid].clientMiddleName,caseMeta[clid].clientLastName].filter(Boolean).join(' ');
     if(_builtName){allRecs.forEach(r=>r.client=_builtName);base.client=_builtName;}
@@ -23150,7 +23150,7 @@ function saveAddCasePage(){
   dirtyCaseFilterOpts();
   dirtyFilterOpts();
   markUnsaved();
-  if(_nameTrimmed) showToast('Name fields accept one word each — extras trimmed');
+  if(_nameTrimmed) showToast('Name fields cleaned up');
   const _extraBits=[];
   if(_evRecs.length)_extraBits.push(_evRecs.length+' event'+(_evRecs.length>1?'s':''));
   if(_clCount)_extraBits.push(_clCount+' client'+(_clCount>1?'s':''));
@@ -23270,7 +23270,7 @@ function saveNewCase(){
   dirtyFilterOpts();
   markUnsaved();
   closeNewCaseModal();
-  if(_nameTrimmed) showToast('Name fields accept one word each — extras trimmed');
+  if(_nameTrimmed) showToast('Name fields cleaned up');
   const _extraBits=[];
   if(_evRecs.length)_extraBits.push(_evRecs.length+' event'+(_evRecs.length>1?'s':''));
   if(_clCount)_extraBits.push(_clCount+' client'+(_clCount>1?'s':''));
@@ -25350,16 +25350,16 @@ function saveNewTask(){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
       <div>
         <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Family Name (Last) <span style="color:#B85C5C">*</span></label>
-        <input id="nc-lastName" type="text" placeholder="Last name (one word)…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="this.style.borderColor='#DDD5CA'"/>
+        <input id="nc-lastName" type="text" placeholder="Last name…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="this.style.borderColor='#DDD5CA'"/>
       </div>
       <div>
         <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Given Name (First) <span style="color:#B85C5C">*</span></label>
-        <input id="nc-firstName" type="text" placeholder="First name (one word)…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="this.style.borderColor='#DDD5CA'"/>
+        <input id="nc-firstName" type="text" placeholder="First name…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="this.style.borderColor='#DDD5CA'"/>
       </div>
     </div>
     <div style="margin-bottom:14px;">
       <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Middle Name</label>
-      <input id="nc-middleName" type="text" placeholder="Middle name (one word, optional)…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
+      <input id="nc-middleName" type="text" placeholder="Middle name (optional)…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
     </div>
 
     <!-- Two columns: Client ID + A-number -->
