@@ -16654,8 +16654,15 @@ async function generateMotionWebex(){
       const m = /^field(\d+)$/.exec(k);
       if(!m) return;
       const n = m[1];
-      const val = values[k];
+      let val = values[k];
       if(val == null) return;
+      // Fields 5 + 6 carry "; "-separated lists (respondent names /
+      // A-numbers) when the motion covers several clients — stack them
+      // one per line in the document, keeping the semicolons.
+      if((n === '5' || n === '6') && String(val).indexOf(';') !== -1){
+        const parts = String(val).split(';').map(s => s.trim()).filter(Boolean);
+        val = parts.map((s, i) => s + (i < parts.length - 1 ? ';' : '')).join('\n');
+      }
       const lines = String(val).split('\n');
       // Anchor on Field<N>[1]" exactly so Field2 doesn't accidentally match
       // Field20 / Field21. The "[1]" suffix is what disambiguates.
@@ -16680,6 +16687,21 @@ async function generateMotionWebex(){
               firstDone = true;
               return '<w:t xml:space="preserve">' + t + '</w:t>';
             });
+          });
+          return before + newContent + after;
+        }
+        // Fields 5/6: their SDTs keep every text run inside ONE
+        // paragraph (a name split across runs), so spreading the lines
+        // across runs would render them side by side. Pack the whole
+        // stack into the first run with soft <w:br/> breaks instead.
+        if((n === '5' || n === '6') && lines.length > 1){
+          let firstRun = true;
+          const newContent = content.replace(/<w:t[^>]*>[^<]*<\/w:t>/g, () => {
+            if(firstRun){
+              firstRun = false;
+              return '<w:t xml:space="preserve">' + lines.map(l => _escXml(l)).join('</w:t><w:br/><w:t xml:space="preserve">') + '</w:t>';
+            }
+            return '<w:t xml:space="preserve"></w:t>';
           });
           return before + newContent + after;
         }
@@ -16861,11 +16883,13 @@ async function generateWitnessList(){
       if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
       if(addr[1]) c += para(run(addr[1]), { jc:'center', after:120 });
       c += para(run('In the Matter of:'), { after:40 });
-      const leftInner = para(run(respLine || '____________', { bold:true }), { after:0 })
+      const leftInner = para(run(respStack || '____________', { bold:true }), { after:0 })
         + para('', { after:0 })
         + para(run('In Removal Proceedings,'), { after:0 })
         + para(run('       Respondent.'), { after:0 });
-      const rightInner = para(run('File No.: ' + (anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________')), { after:0 });
+      // Hanging indent keeps additional A-numbers aligned under the first
+      // one, to the right of the "File No.:" label.
+      const rightInner = para(run('File No.: ' + (anumStack || '____________')), { after:0, left:1152, hanging:1152 });
       const leftCell = tcell(5040, leftInner, '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>');
       const rightCell = tcell(4320, rightInner, '');
       c += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
@@ -16917,6 +16941,12 @@ async function generateWitnessList(){
     const v = window._briefValues || {};
     const respLine = (v.field5 || '').split('\n')[0].trim();
     const anum = (v.field6 || '').trim();
+    // Multi-client cases: fields 5/6 are "; "-separated lists. Stacked
+    // versions put one name / one A-number per line in the captions.
+    const respList = respLine ? respLine.split(';').map(s => s.trim()).filter(Boolean) : [];
+    const respStack = respList.map((s, i) => s + (i < respList.length - 1 ? ';' : '')).join('\n');
+    const anumList = anum ? anum.split(';').map(s => s.trim()).filter(Boolean).map(s => 'A' + s.replace(/^A[- ]?/i, '')) : [];
+    const anumStack = anumList.map((s, i) => s + (i < anumList.length - 1 ? ';' : '')).join('\n');
     const opts = window._wlOpts || { cover:true, cert:true };
     const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
     const respWord = plural ? 'Respondents' : 'Respondent';
@@ -16962,8 +16992,14 @@ async function generateWitnessList(){
 
     // ── Witness List body ─────────────────────────────────────────
     let caption = '';
-    if(respLine) caption += para(run('In the Matter of: ' + respLine), { after:40 });
-    if(anum)     caption += para(run('A-Number: ' + anum), { after:200 });
+    if(respList.length > 1){
+      caption += para(run('In the Matter of:'), { after:0 });
+      respList.forEach((s, i) => { caption += para(run(s + (i < respList.length - 1 ? ';' : '')), { left:360, after:(i === respList.length - 1 ? 40 : 0) }); });
+    } else if(respLine) caption += para(run('In the Matter of: ' + respLine), { after:40 });
+    if(anumList.length > 1){
+      caption += para(run('A-Numbers:'), { after:0 });
+      anumList.forEach((s, i) => { caption += para(run(s + (i < anumList.length - 1 ? ';' : '')), { left:360, after:(i === anumList.length - 1 ? 200 : 0) }); });
+    } else if(anum) caption += para(run('A-Number: ' + anum), { after:200 });
     const title = para(run('WITNESS LIST', { bold:true, sz:'28' }), { jc:'center', after:240 });
 
     // ── Certificate of service ────────────────────────────────────
@@ -16977,8 +17013,13 @@ async function generateWitnessList(){
       const box = (on) => on ? '☒ ' : '☐ ';
       certificate += pageBreak;
       certificate += para(run('CERTIFICATE OF SERVICE', { bold:true, sz:'28' }), { jc:'center', after:240 });
-      certificate += para(run('Matter of: ', { bold:true }) + run(respLine || '____________')
-        + run('          File No.: ', { bold:true }) + run(anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________'), { after:200 });
+      if(respList.length > 1){
+        certificate += para(run('Matter of: ', { bold:true }) + run(respStack), { after:120, left:1152, hanging:1152 });
+        certificate += para(run('File No.: ', { bold:true }) + run(anumStack || '____________'), { after:200, left:1152, hanging:1152 });
+      } else {
+        certificate += para(run('Matter of: ', { bold:true }) + run(respLine || '____________')
+          + run('          File No.: ', { bold:true }) + run(anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________'), { after:200 });
+      }
       certificate += para(run('I hereby certify that the foregoing WITNESS LIST and any attached pages were served on the Department of Homeland Security, Office of the Chief Counsel, by:'), { jc:'both', after:120 });
       certificate += para(run(box(isMail) + 'United States Postal Service to the person and address below.'), { left:360, after:0 });
       certificate += para(run(box(isICE) + 'Serving notice through the ICE E-Filing System.'), { left:360, after:0 });
@@ -17110,6 +17151,12 @@ async function generateAsylumFee(){
       + (borders ? '<w:tcBorders>' + borders + '</w:tcBorders>' : '') + '</w:tcPr>' + (inner || para('')) + '</w:tc>';
 
     const anum = (v.field6 || '').trim();
+    // Multi-client cases: fields 5/6 are "; "-separated lists. Stacked
+    // versions put one name / one A-number per line in the captions.
+    const respList = respLine ? respLine.split(';').map(s => s.trim()).filter(Boolean) : [];
+    const respStack = respList.map((s, i) => s + (i < respList.length - 1 ? ';' : '')).join('\n');
+    const anumList = anum ? anum.split(';').map(s => s.trim()).filter(Boolean).map(s => 'A' + s.replace(/^A[- ]?/i, '')) : [];
+    const anumStack = anumList.map((s, i) => s + (i < anumList.length - 1 ? ';' : '')).join('\n');
     const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
     const respWord = plural ? 'Respondents' : 'Respondent';
     const addr = (typeof _briefSplitAddr === 'function') ? _briefSplitAddr(v.field4 || '') : [String(v.field4||''), ''];
@@ -17155,11 +17202,13 @@ async function generateAsylumFee(){
         + tcell(1165, para('', { after:0 }), bL)
         + tcell(3145, rightInner || para('', { after:0 }), '')
         + '</w:tr>';
-      const fileNo = 'File No.: ' + (anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________');
+      // Hanging indent keeps additional A-numbers aligned under the first
+      // one, to the right of the "File No.:" label.
+      const fileNo = 'File No.: ' + (anumStack || '____________');
       c += '<w:tbl><w:tblPr><w:tblW w:w="9350" w:type="dxa"/><w:jc w:val="center"/>'
         + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
         + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="1165"/><w:gridCol w:w="3145"/></w:tblGrid>'
-        + boxRow(para(run(respLine || '____________', { bold:true }), { after:0 }), para(run(fileNo), { after:0 }), bT)
+        + boxRow(para(run(respStack || '____________', { bold:true }), { after:0 }), para(run(fileNo), { after:0, left:1152, hanging:1152 }), bT)
         + boxRow(para('', { after:0 }), null)
         + boxRow(para(run('In Removal Proceedings,'), { after:0 }), null)
         + boxRow(para(run('       ' + respWord + '.'), { after:0 }), null, bB)
@@ -17210,8 +17259,13 @@ async function generateAsylumFee(){
       const box = (on) => on ? '☒ ' : '☐ ';
       if(opts.cover) certificate += pageBreak;
       certificate += para(run('CERTIFICATE OF SERVICE', { bold:true, sz:'28' }), { jc:'center', after:240 });
-      certificate += para(run('Matter of: ', { bold:true }) + run(respLine || '____________')
-        + run('          File No.: ', { bold:true }) + run(anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________'), { after:200 });
+      if(respList.length > 1){
+        certificate += para(run('Matter of: ', { bold:true }) + run(respStack), { after:120, left:1152, hanging:1152 });
+        certificate += para(run('File No.: ', { bold:true }) + run(anumStack || '____________'), { after:200, left:1152, hanging:1152 });
+      } else {
+        certificate += para(run('Matter of: ', { bold:true }) + run(respLine || '____________')
+          + run('          File No.: ', { bold:true }) + run(anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________'), { after:200 });
+      }
       certificate += para(run('I hereby certify that the foregoing:'), { jc:'both', after:120 });
       certificate += para(run(feeTitle, { bold:true }), { jc:'center', after:120 });
       certificate += para(run('and any attached pages were served on the Department of Homeland Security, Office of the Chief Counsel, by:'), { jc:'both', after:120 });
