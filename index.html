@@ -13209,10 +13209,32 @@ function formatEventForEmail(ev, clid, defaultParalegal){
 
 // Spanish-language version of formatEventForEmail. Used when the client is
 // added to a calendar email so they can read the schedule in Spanish.
+// Client-facing Spanish names for the event types, each with a one-line
+// plain-language explanation. Firm wording: MASTER = Audiencia
+// Preliminar, INDIVIDUAL = Audiencia de Juicio Final. Ordered longest
+// name first so "INDIVIDUAL PREP" matches before "INDIVIDUAL".
+const ES_EVENT_TERMS=[
+  {en:'INDIVIDUAL PREP', es:'Preparación para la Audiencia de Juicio Final', desc:'cita con nuestra oficina para preparar su testimonio antes de la audiencia'},
+  {en:'PREP MASTER', es:'Preparación para la Audiencia Preliminar', desc:'cita con nuestra oficina para prepararle antes de la audiencia'},
+  {en:'MASTER PREP', es:'Preparación para la Audiencia Preliminar', desc:'cita con nuestra oficina para prepararle antes de la audiencia'},
+  {en:'SCHEDULING ORDER', es:'Orden de Calendario del tribunal', desc:'orden del juez con las fechas límite para entregar documentos del caso'},
+  {en:'FILING DEADLINE', es:'Fecha límite para presentar documentos', desc:'último día para entregar documentos al tribunal'},
+  {en:'BIOMETRICS', es:'Cita de huellas (biométricos)', desc:'cita del gobierno para tomar sus huellas digitales y foto'},
+  {en:'INTERVIEW', es:'Entrevista', desc:'entrevista de su caso con el oficial de inmigración'},
+  {en:'MASTER', es:'Audiencia Preliminar', desc:'audiencia corta ante el juez de inmigración para revisar el caso y fijar las próximas fechas; ese día no se decide el caso'},
+  {en:'INDIVIDUAL', es:'Audiencia de Juicio Final', desc:'la audiencia principal, donde el juez escucha todo su caso y puede tomar una decisión final'}
+];
+function esEventTerm(evName){
+  const up=String(evName||'').toUpperCase();
+  return ES_EVENT_TERMS.find(t=>up.includes(t.en))||null;
+}
+
 function formatEventForEmailES(ev, clid, defaultParalegal){
   let txt='';
   txt+='Paralegal: '+(ev.atty||defaultParalegal)+'\n';
-  txt+='Tipo de evento: '+(ev.event||'—')+'\n';
+  const _term=esEventTerm(ev.event);
+  txt+='Tipo de evento: '+(_term?(_term.es+' ('+(ev.event||'')+')'):(ev.event||'—'))+'\n';
+  if(_term&&_term.desc) txt+='Qué significa: '+_term.desc+'.\n';
   txt+='Fecha límite: '+fmtDate(ev.date);
   if(ev.timeStart){
     txt+=' A LAS '+fmtTime(ev.timeStart);
@@ -13533,6 +13555,23 @@ async function _appendSpanishEmailBody(){
     es = await _translateToSpanish(english);
     if(!es){ showToast('No se pudo traducir — revisa la conexión e inténtalo de nuevo'); return; }
     es += '\n\n(Traducción automática — revísela antes de enviar)';
+  }
+  // Swap raw event names (MASTER, INDIVIDUAL, …) for their client-facing
+  // Spanish terms, and add a plain-language glossary for the ones this
+  // email mentions — unless the Spanish body already explains them
+  // (the hand-templated drafts carry their own "Qué significa" lines).
+  {
+    // Longest names match first, and each match is masked out so e.g.
+    // "INDIVIDUAL PREP" doesn't also count as a plain "INDIVIDUAL".
+    let _scan=(bodyEl.value+' '+es).toUpperCase();
+    const found=[];
+    ES_EVENT_TERMS.forEach(t=>{ if(_scan.includes(t.en)){ found.push(t); _scan=_scan.split(t.en).join(' '); } });
+    found.forEach(t=>{ es=es.replace(new RegExp('\\b'+t.en.replace(/ /g,'\\s+')+'\\b','gi'), t.es); });
+    if(found.length && !es.includes('Qué significa:')){
+      const seen=new Set(); const gloss=[];
+      found.forEach(t=>{ if(!t.desc||seen.has(t.es))return; seen.add(t.es); gloss.push('• '+t.es+': '+t.desc+'.'); });
+      if(gloss.length) es+='\n\nEn términos sencillos:\n'+gloss.join('\n');
+    }
   }
   // Re-read the body — the user may have kept typing while the
   // translation request was in flight.
