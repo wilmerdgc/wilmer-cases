@@ -15660,6 +15660,10 @@ function _briefFormatClientName(cl, meta){
     if(last) return last + ', ' + [first, mid].filter(Boolean).join(' ').trim();
     return cl.name || '';
   }
+  // Rider with structured name parts (edited in Case Information):
+  // format exactly like the lead — "LAST, First Middle".
+  const rLast = (cl.lastName||'').trim().toUpperCase();
+  if(rLast) return rLast + ', ' + [(cl.firstName||'').trim(), (cl.middleName||'').trim()].filter(Boolean).join(' ').trim();
   // Respondent name — assume "First Middle LAST" or "First LAST" and flip
   // to "LAST, First Middle". If we can't tell, just upper-case the whole.
   const raw = (cl.name||'').trim();
@@ -15691,6 +15695,9 @@ function _briefAllClients(clid){
     name: r.name || '',
     anum: r.anum || '',
     dob: r.dob || '',
+    firstName: r.firstName || '',
+    middleName: r.middleName || '',
+    lastName: r.lastName || '',
     relationship: r.relationship || 'Rider'
   })) : [];
   return [lead, ...riders];
@@ -19493,28 +19500,50 @@ function openCaseDetail(clid){
             const wrap = document.createElement('span');
             wrap.style.cssText='display:inline-flex;align-items:baseline;gap:6px;flex-wrap:wrap;';
             const styleField = 'font-size:12px;font-weight:600;color:#2C2620;border:none;border-bottom:1px solid #DDD5CA;outline:none;background:transparent;padding:1px 0;width:110px;font-family:inherit;';
+            clLastI.placeholder = 'LAST';     clLastI.style.cssText = styleField;
             clFirstI.placeholder = 'First';   clFirstI.style.cssText = styleField;
             clMiddleI.placeholder = 'Middle'; clMiddleI.style.cssText = styleField + 'width:90px;color:#5C5148;font-weight:500;';
-            clLastI.placeholder = 'LAST';     clLastI.style.cssText = styleField;
+            wrap.appendChild(clLastI);
             wrap.appendChild(clFirstI);
             wrap.appendChild(clMiddleI);
-            wrap.appendChild(clLastI);
             row.appendChild(wrap);
           } else {
-            // Rider: keep the single combined name input.
-            const nI3=mkText2(cl.name);nI3.style.cssText='font-size:12px;font-weight:600;color:#2C2620;border:none;border-bottom:1px solid #DDD5CA;outline:none;background:transparent;padding:1px 0;min-width:100px;width:140px;';cl._nameInput=nI3;row.appendChild(nI3);
+            // Rider: same structured LAST / First / Middle inputs as the
+            // lead. Prefill from the stored structured fields; older riders
+            // only have the combined name — parse it, treating trailing
+            // ALL-CAPS words as the last name.
+            const rr=((caseMeta[clid]||{}).respondents||[])[cl.idx]||{};
+            let pf=(rr.firstName||'').trim(), pm=(rr.middleName||'').trim(), pl=(rr.lastName||'').trim();
+            if(!pf && !pl && cl.name){
+              const toks=String(cl.name).trim().split(/\s+/);
+              let li=toks.length;
+              while(li>1 && toks[li-1]===toks[li-1].toUpperCase() && /[A-ZÀ-Þ]/.test(toks[li-1])) li--;
+              if(li===toks.length) li=Math.max(1,toks.length-1);
+              pl=toks.slice(li).join(' ');
+              pf=toks[0]||'';
+              pm=toks.slice(1,li).join(' ');
+            }
+            const wrap2=document.createElement('span');
+            wrap2.style.cssText='display:inline-flex;align-items:baseline;gap:6px;flex-wrap:wrap;';
+            const styleField2='font-size:12px;font-weight:600;color:#2C2620;border:none;border-bottom:1px solid #DDD5CA;outline:none;background:transparent;padding:1px 0;width:110px;font-family:inherit;';
+            const lI=mkText2(pl);lI.placeholder='LAST';lI.style.cssText=styleField2;
+            const fI=mkText2(pf);fI.placeholder='First';fI.style.cssText=styleField2;
+            const mI=mkText2(pm);mI.placeholder='Middle';mI.style.cssText=styleField2+'width:90px;color:#5C5148;font-weight:500;';
+            cl._lastInput=lI;cl._firstInput=fI;cl._middleInput=mI;
+            wrap2.appendChild(lI);wrap2.appendChild(fI);wrap2.appendChild(mI);
+            row.appendChild(wrap2);
           }
         }
         else {
-          // View mode: lead gets the structured "First Middle LAST" (last
-          // name uppercased) pulled from caseMeta; riders fall back to
-          // their .name field.
+          // View mode: structured "First Middle LAST" (last name
+          // uppercased) — lead from caseMeta, riders from their
+          // respondents entry. Falls back to the combined .name field.
           let displayName = cl.name || '';
-          if(cl._isBase){
-            const m = caseMeta[clid] || {};
-            const f = (m.clientFirstName||'').trim();
-            const mi = (m.clientMiddleName||'').trim();
-            const l = (m.clientLastName||'').trim().toUpperCase();
+          {
+            const src = cl._isBase ? (caseMeta[clid] || {}) : (((caseMeta[clid]||{}).respondents||[])[cl.idx] || {});
+            const f = ((cl._isBase ? src.clientFirstName : src.firstName)||'').trim();
+            const mi = ((cl._isBase ? src.clientMiddleName : src.middleName)||'').trim();
+            const l = ((cl._isBase ? src.clientLastName : src.lastName)||'').trim().toUpperCase();
             const structured = [f, mi, l].filter(Boolean).join(' ');
             if(structured) displayName = structured;
           }
@@ -19558,16 +19587,25 @@ function openCaseDetail(clid){
           }
         }
 
-        // Country of Birth — lead only (riders don't track country yet).
-        if(cl._isBase){
-          const cobCurrent = (caseMeta[clid]||{}).clientCountryOfBirth||'';
+        // Country of Birth — same field for the lead and every rider
+        // (riders store theirs on their respondents entry).
+        {
+          const cobCurrent = cl._isBase
+            ? ((caseMeta[clid]||{}).clientCountryOfBirth||'')
+            : ((((caseMeta[clid]||{}).respondents||[])[cl.idx]||{}).countryOfBirth||'');
           if(isEditing || cobCurrent){
             const cobLbl=document.createElement('span');cobLbl.style.cssText='font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;';cobLbl.textContent='Born in';row.appendChild(cobLbl);
             if(isEditing){
-              // Reuse the input bound to infoBody._clCobInput so the existing
-              // save logic (caseMeta[clid].clientCountryOfBirth = …) works.
-              clCobI.style.cssText='font-size:11px;color:#5C5148;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;width:140px;font-family:inherit;';
-              row.appendChild(clCobI);
+              if(cl._isBase){
+                // Reuse the input bound to infoBody._clCobInput so the existing
+                // save logic (caseMeta[clid].clientCountryOfBirth = …) works.
+                clCobI.style.cssText='font-size:11px;color:#5C5148;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;width:140px;font-family:inherit;';
+                row.appendChild(clCobI);
+              } else {
+                const cobI=mkText2(cobCurrent);cobI.placeholder='Country of birth…';
+                cobI.style.cssText='font-size:11px;color:#5C5148;border:none;border-bottom:1px solid #EDE8E0;outline:none;background:transparent;padding:1px 0;width:140px;font-family:inherit;';
+                cl._cobInput=cobI;row.appendChild(cobI);
+              }
             } else {
               const cobSpan=document.createElement('span');cobSpan.style.cssText='font-size:11px;color:#5C5148;white-space:nowrap;';cobSpan.textContent=cobCurrent;row.appendChild(cobSpan);
             }
@@ -19695,6 +19733,18 @@ function openCaseDetail(clid){
       if(cl._anumInput){const nv=cl._anumInput.value.trim();if(cl._isBase){allRecs.forEach(r=>r.anum=nv);base.anum=nv;}else if(cl.idx>=0)caseMeta[clid].respondents[cl.idx].anum=nv;}
       if(cl._typeInput){const nv=cl._typeInput.value;if(cl._isBase){allRecs.forEach(r=>r.type=nv);base.type=nv;}else if(cl.idx>=0)caseMeta[clid].respondents[cl.idx].type=nv;}
       if(cl._dobInput){const nv=cl._dobInput.value;if(cl._isBase){if(!caseMeta[clid])caseMeta[clid]={};caseMeta[clid].clientDob=nv;}else if(cl.idx>=0)caseMeta[clid].respondents[cl.idx].dob=nv;}
+      // Rider structured name: save the three parts (last name uppercased,
+      // same rule as the lead) and rebuild the combined .name from them.
+      if(cl._lastInput && cl.idx>=0 && caseMeta[clid].respondents[cl.idx]){
+        const rr=caseMeta[clid].respondents[cl.idx];
+        rr.lastName=_singleName(cl._lastInput.value).toUpperCase();
+        rr.firstName=_singleName(cl._firstInput?cl._firstInput.value:'');
+        rr.middleName=_singleName(cl._middleInput?cl._middleInput.value:'');
+        rr.name=[rr.firstName,rr.middleName,rr.lastName].filter(Boolean).join(' ');
+      }
+      if(cl._cobInput && cl.idx>=0 && caseMeta[clid].respondents[cl.idx]){
+        caseMeta[clid].respondents[cl.idx].countryOfBirth=cl._cobInput.value.trim();
+      }
     });
     markUnsaved();
     {const _m=caseMeta[clid]||{};const _c=[_m.clientFirstName,_m.clientMiddleName,_m.clientLastName].filter(Boolean).join(' ');document.getElementById('case-detail-title').textContent=_c||base.client||clid;}
