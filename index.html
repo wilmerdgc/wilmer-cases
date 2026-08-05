@@ -13373,7 +13373,7 @@ function buildCalendarEmailDraft(clid, clientName){
   const paralegalEmail=paralegalEmails[paralegal]||'';
   const lolyEmail='mvintimilla@theromerofirm.com';
   let bodyText='Dear Loly, Please calendar the events below for '+clientName+' (Client ID: '+(base.clid||clid)+(base.anum?', A#: '+base.anum:'')+').\n';
-  bodyText+='The rows match the calendar sheet columns — copy them and paste straight into the sheet:\n\n';
+  bodyText+='The rows match the calendar sheet columns — copy them and paste straight into the sheet. The same rows are in the attached CSV file: open it in Excel and click the top-left select-all corner to copy everything in one click.\n\n';
   clientEvents.forEach(ev=>{
     bodyText+=formatEventRowForLoly(ev)+'\n';
     lolyReminderRowsFor(ev).forEach(row=>{ bodyText+=row+'\n'; });
@@ -13460,7 +13460,7 @@ function emailScheduleToStaff(clid){
   if(!lolyEmail) showToast('No email found for Loly — sending to the paralegal only');
   else if(!paraEmail) showToast('No email for '+(base.atty||'the paralegal')+' — sending to Loly only');
   let body='Hola:\n\n'
-    +'Este es el calendario de los próximos eventos del caso. Las filas siguen las columnas de la hoja del calendario — cópielas y péguelas directamente en la hoja:\n\n'
+    +'Este es el calendario de los próximos eventos del caso. Las filas siguen las columnas de la hoja del calendario — cópielas y péguelas directamente en la hoja. Las mismas filas van en el archivo CSV adjunto: ábralo en Excel y haga clic en la esquina superior izquierda para seleccionarlo todo de una vez.\n\n'
     +clientName+' — ID del cliente: '+(base.clid||clid);
   if(base.anum) body+=' — A#: '+base.anum;
   body+='\n\n';
@@ -13785,6 +13785,28 @@ function _composeBodyToHtml(text){
   return html;
 }
 
+// If the compose body carries calendar-sheet rows (tab-separated lines),
+// duplicate them as a CSV attachment. Gmail strips scripts from email HTML,
+// so the emailed table can't offer one-click select-all — but the attached
+// CSV opened in Excel can: the top-left select-all corner + copy grabs every
+// row at once. The BOM keeps accented names intact in Excel.
+function _composeRowsCsvAttachment(bodyText){
+  const rowLines=String(bodyText||'').split('\n').filter(l=>l.indexOf('\t')!==-1);
+  if(!rowLines.length) return null;
+  const csv='\uFEFF'+rowLines.map(l=>l.split('\t').map(c=>'"'+c.replace(/"/g,'""')+'"').join(',')).join('\r\n');
+  const base64=btoa(unescape(encodeURIComponent(csv)));
+  const d=new Date();
+  const name='calendar-rows-'+d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'.csv';
+  return {name:name, mimeType:'text/csv', base64:base64, size:Math.floor(base64.length*3/4)};
+}
+// Merge the auto-built CSV with any manually attached files.
+function _composeAttachmentsWithCsv(bodyRaw){
+  const atts=(typeof _gmailComposeAttachments!=='undefined' && _gmailComposeAttachments.length)?_gmailComposeAttachments.slice():[];
+  const csvAtt=_composeRowsCsvAttachment(bodyRaw);
+  if(csvAtt && !atts.some(a=>a.name===csvAtt.name)) atts.push(csvAtt);
+  return atts.length?atts:null;
+}
+
 async function doSendComposeEmail(){
   const to=(document.getElementById('emc-to')||{}).value||'';
   const cc=(document.getElementById('emc-cc')||{}).value||'';
@@ -13801,7 +13823,7 @@ async function doSendComposeEmail(){
   if(window._emcSignatureHtml){
     htmlBody+='<br><br>--<br>'+window._emcSignatureHtml;
   }
-  const atts=(typeof _gmailComposeAttachments!=='undefined' && _gmailComposeAttachments.length)?_gmailComposeAttachments.slice():null;
+  const atts=_composeAttachmentsWithCsv(bodyRaw);
   const ok=await gmailSendMessage(to.trim(),subject,htmlBody,null,null,cc.trim(),atts);
   if(ok){
     if(typeof gmailResetCompose==='function') gmailResetCompose();
@@ -13882,7 +13904,7 @@ async function doScheduleComposeEmail(sendAt){
   if(window._emcSignatureHtml){
     htmlBody+='<br><br>--<br>'+window._emcSignatureHtml;
   }
-  const atts=(typeof _gmailComposeAttachments!=='undefined' && _gmailComposeAttachments.length)?_gmailComposeAttachments.slice():null;
+  const atts=_composeAttachmentsWithCsv(bodyRaw);
   gmailScheduleEmail({
     to: to.trim(),
     cc: cc.trim(),
@@ -26590,7 +26612,7 @@ function renderScheduleText(){
     return;
   }
 
-  lines.push('Each event below is one row in the calendar-sheet format (columns A\u2013O) \u2014 copy the rows and paste them straight into the sheet:');
+  lines.push('Each event below is one row in the calendar-sheet format (columns A\u2013O) \u2014 copy the rows and paste them straight into the sheet. The same rows are in the attached CSV file: open it in Excel and click the top-left select-all corner to copy everything in one click.');
   lines.push('');
 
   if(added.length){
