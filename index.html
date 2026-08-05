@@ -13207,13 +13207,13 @@ function buildParalegalIntroEmail(clid, newName){
 
 // ── Loly calendar-sheet rows ──────────────────────────────────────────────
 // Loly keeps the office calendar in a spreadsheet (QUEENS – FINAL CALENDAR)
-// with fixed columns A–O. Calendar emails to her render each event as one
-// row in that exact column order so she can copy the rows out of the email
-// and paste them straight into the sheet.
-const LOLY_SHEET_COLUMNS=['Date','Time','Last Name','First Name','Office','Attorney','Paralegal','Client or Case ID','Court','Type of Court','Judge','Case Notes','Client Cell Phone','Atty Assigned (Newark Only)','A#'];
+// with fixed columns A–O: Date, Time, Last Name, First Name, Office,
+// Attorney, Paralegal, Client or Case ID, Court, Type of Court, Judge,
+// Case Notes, Client Cell Phone, Atty Assigned (Newark Only), A#.
+// Calendar emails to her render each event as one row in that exact column
+// order (no header row — she pastes under the sheet's existing headers).
 const LOLY_SHEET_OFFICE='Queens';
 const LOLY_SHEET_ATTORNEY='Wilmer';
-function lolySheetHeaderRow(){ return LOLY_SHEET_COLUMNS.join('\t'); }
 // One event → one tab-separated line in the sheet's column order. Reminder
 // records follow the sheet's convention for reminder rows: the reminder text
 // goes in the Court column and Type of Court reads "REMINDER <parent event
@@ -13374,7 +13374,6 @@ function buildCalendarEmailDraft(clid, clientName){
   const lolyEmail='mvintimilla@theromerofirm.com';
   let bodyText='Dear Loly, Please calendar the events below for '+clientName+' (Client ID: '+(base.clid||clid)+(base.anum?', A#: '+base.anum:'')+').\n';
   bodyText+='The rows match the calendar sheet columns — copy them and paste straight into the sheet:\n\n';
-  bodyText+=lolySheetHeaderRow()+'\n';
   clientEvents.forEach(ev=>{
     bodyText+=formatEventRowForLoly(ev)+'\n';
     lolyReminderRowsFor(ev).forEach(row=>{ bodyText+=row+'\n'; });
@@ -13465,7 +13464,6 @@ function emailScheduleToStaff(clid){
     +clientName+' — ID del cliente: '+(base.clid||clid);
   if(base.anum) body+=' — A#: '+base.anum;
   body+='\n\n';
-  body+=lolySheetHeaderRow()+'\n';
   clientEvents.forEach(ev=>{
     body+=formatEventRowForLoly(ev)+'\n';
     lolyReminderRowsFor(ev).forEach(row=>{ body+=row+'\n'; });
@@ -13765,19 +13763,17 @@ function showGmailConnectPrompt(){
 // text; any run of tab-separated lines (the Loly calendar-sheet rows) is
 // rendered as a real table — copying a table out of Gmail pastes cell-by-cell
 // into Excel/Google Sheets, which tab characters inside HTML cannot do.
+// Cells wrap and the table caps at the window width so the whole thing can
+// be selected without horizontal scrolling; visual width doesn't affect
+// what lands in the sheet on paste.
 function _composeBodyToHtml(text){
   const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   let html='';
   let rows=[];
   const flush=()=>{
     if(!rows.length) return;
-    html+='<table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;font-size:12px;">'
-      +rows.map(cells=>{
-        const isHeader=(typeof LOLY_SHEET_COLUMNS!=='undefined')&&cells.length===LOLY_SHEET_COLUMNS.length&&cells.every((c,i)=>c===LOLY_SHEET_COLUMNS[i]);
-        const tag=isHeader?'th':'td';
-        const style=isHeader?'white-space:nowrap;background:#000;color:#fff;font-weight:700;':'white-space:nowrap;';
-        return '<tr>'+cells.map(c=>'<'+tag+' style="'+style+'">'+(esc(c)||'&nbsp;')+'</'+tag+'>').join('')+'</tr>';
-      }).join('')
+    html+='<table border="1" cellpadding="3" cellspacing="0" style="border-collapse:collapse;font-size:11px;width:100%;max-width:100%;">'
+      +rows.map(cells=>'<tr>'+cells.map(c=>'<td style="vertical-align:top;word-wrap:break-word;overflow-wrap:break-word;">'+(esc(c)||'&nbsp;')+'</td>').join('')+'</tr>').join('')
       +'</table>';
     rows=[];
   };
@@ -26595,8 +26591,6 @@ function renderScheduleText(){
   }
 
   lines.push('Each event below is one row in the calendar-sheet format (columns A\u2013O) \u2014 copy the rows and paste them straight into the sheet:');
-  lines.push('');
-  lines.push(lolySheetHeaderRow());
   lines.push('');
 
   if(added.length){
