@@ -1064,6 +1064,9 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .reminder-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 3px 10px; border: 1px solid var(--slate-light); border-radius: 20px; background: var(--slate-light); color: var(--slate); margin: 2px; }
 .reminder-chip button { border: none; background: none; color: var(--ink-faint); cursor: pointer; font-size: 13px; }
 .reminder-chip button:hover { color: var(--rose); }
+.reminder-chip.weekend { background: #FBEFDD; border-color: #E8C9A0; color: #8A5A22; }
+.reminder-chip .wkd-shift { border: 1px solid #DEC69E; background: #FFFDF8; color: #7A5A2B; border-radius: 12px; font-size: 10px; font-weight: 600; padding: 1px 8px; cursor: pointer; }
+.reminder-chip .wkd-shift:hover { background: #F2E3C9; color: #5E4520; }
 .reminder-quick { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 9px; }
 .reminder-quick button { font-size: 11px; padding: 4px 12px; border: 1px solid var(--border); border-radius: 20px; background: var(--cream); color: var(--ink-soft); }
 .reminder-quick button:hover { background: var(--sage-light); border-color: var(--sage-mid); color: var(--sage); }
@@ -12046,7 +12049,7 @@ function onCaseTypeChangeModal(){
   ev.value=curE;
 }
 function toggleStatusBtn(s){if(pendingStatus===s){pendingStatus=null;}else{pendingStatus=s;}['attended','completed','cancelled','rescheduled','deleted'].forEach(k=>{const el=document.getElementById('sbtn-'+k);if(el)el.classList.toggle('sel',pendingStatus===k);});const _pmRow=document.getElementById('proc-milestone-row');if(_pmRow){const _hasCase=!!((document.getElementById('fc-clid')||{value:''}).value.trim()||(document.getElementById('fc-client')||{value:''}).value.trim());_pmRow.style.display=(_hasCase&&['attended','completed','cancelled','rescheduled'].includes(pendingStatus))?'flex':'none';const _pmdR=document.getElementById('proc-milestone-date-row');if(_pmdR){const _pmC=document.getElementById('fc-proc-milestone');_pmdR.style.display=(_pmRow.style.display!=='none'&&_pmC&&_pmC.checked)?'flex':'none';}}const rp=document.getElementById('reschedule-panel');rp.classList.toggle('open',pendingStatus==='rescheduled');if(pendingStatus!=='rescheduled'){document.getElementById('fc-reschedule-date').value='';document.getElementById('reschedule-extras').style.display='none';rsReminders=[];renderRsReminderChips();}const nl=document.getElementById('history-note-label'),na=document.getElementById('fc-history-note');const req=['completed','cancelled','deleted'].includes(pendingStatus);if(req){nl.innerHTML='Reason <span style="color:#B85C5C">*</span>';nl.style.color='#B85C5C';na.placeholder={completed:'Why completed?',cancelled:'Why cancelled?',deleted:'Why deleted?'}[pendingStatus]||'Required…';na.style.borderColor='#E8C4C4';}else{nl.textContent='Add note to history';nl.style.color='';na.placeholder='Optional note…';na.style.borderColor='';}}
-function onRescheduleDateChange(){const val=document.getElementById('fc-reschedule-date').value;document.getElementById('reschedule-extras').style.display=val?'block':'none';}
+function onRescheduleDateChange(){const val=document.getElementById('fc-reschedule-date').value;document.getElementById('reschedule-extras').style.display=val?'block':'none';renderRsReminderChips();}
 function toggleRsTimePanel(){const on=document.getElementById('rs-time-toggle').checked;document.getElementById('rs-time-range-panel').classList.toggle('open',on);if(!on){document.getElementById('rs-time-start').value='';document.getElementById('rs-time-end').value='';document.getElementById('rs-time-display').textContent='';}else updateRsTimeDisplay();}
 function updateRsTimeDisplay(){const s=document.getElementById('rs-time-start').value,e=document.getElementById('rs-time-end').value,d=document.getElementById('rs-time-display');if(s&&e)d.textContent=fmtTime(s)+' – '+fmtTime(e);else if(s)d.textContent=fmtTime(s);else d.textContent='';}
 // Show/hide the milestone date input under the "Add to Procedural
@@ -12062,10 +12065,11 @@ function toggleProcMilestoneDate(){
     if(di&&!di.value) di.value=(document.getElementById('fc-date')||{value:''}).value||todayStr();
   }
 }
-function renderRsReminderChips(){const el=document.getElementById('rs-reminder-chips');el.innerHTML='';rsReminders.sort((a,b)=>b-a).forEach(d=>{const chip=document.createElement('span');chip.className='reminder-chip';chip.innerHTML=d+' days before<button type="button" onclick="removeRsReminder('+d+')" title="Remove">&#215;</button>';el.appendChild(chip);});if(!rsReminders.length)el.innerHTML='<span style="font-size:12px;color:#C4BAB0">No reminders set</span>';}
+function renderRsReminderChips(){const el=document.getElementById('rs-reminder-chips');el.innerHTML='';const dateVal=(document.getElementById('fc-reschedule-date')||{}).value||'';rsReminders.sort((a,b)=>b-a).forEach(d=>{el.appendChild(_buildReminderChip(d,dateVal,'removeRsReminder','shiftRsReminder'));});if(!rsReminders.length)el.innerHTML='<span style="font-size:12px;color:#C4BAB0">No reminders set</span>';}
 function addRsReminder(days){days=parseInt(days);if(isNaN(days)||days<1)return;if(!rsReminders.includes(days))rsReminders.push(days);renderRsReminderChips();}
 function addRsReminderCustom(){addRsReminder(parseInt(document.getElementById('rs-reminder-custom').value));document.getElementById('rs-reminder-custom').value='';}
 function removeRsReminder(days){rsReminders=rsReminders.filter(d=>d!==days);renderRsReminderChips();}
+function shiftRsReminder(oldDays,newDays){if(newDays<1)return;rsReminders=rsReminders.filter(d=>d!==oldDays);if(!rsReminders.includes(newDays))rsReminders.push(newDays);renderRsReminderChips();showToast('Reminder moved to '+newDays+' days before (weekday)');}
 // ── Audit history helpers ──────────────────────────────────────────
 // "A record is any change made": every edit is captured field-by-field
 // (old → new) along with the timestamp and the device that made it, and
@@ -12097,31 +12101,50 @@ function _histMeta(h){
   return _escHtml(s);
 }
 function renderHistoryLog(history){const wrap=document.getElementById('modal-history-wrap'),log=document.getElementById('modal-history-log');if(!history||!history.length){wrap.style.display='none';return;}wrap.style.display='block';log.innerHTML='';[...history].reverse().forEach(h=>{const entry=document.createElement('div');entry.className='history-entry';const dotClass=(h.type==='note'||h.type==='edit')?'note':h.type;let actionText='';if(h.type==='completed')actionText='Marked as Completed';else if(h.type==='attended')actionText='Marked as Attended';else if(h.type==='cancelled')actionText='Marked as Cancelled';else if(h.type==='deleted')actionText='Marked as Deleted';else if(h.type==='rescheduled')actionText=`Rescheduled → ${h.newDate?fmtDate(h.newDate):'(no date)'}${h.prevDate?' (was '+fmtDate(h.prevDate)+')':''}`;else if(h.type==='note')actionText='Note added';else if(h.type==='edit')actionText='Edited';let changesHtml='';if(h.type==='edit'&&h.changes&&h.changes.length){changesHtml='<ul class="history-changes">'+h.changes.map(c=>`<li><span class="hc-field">${_escHtml(c.label)}:</span> <span class="hc-from">${_escHtml(c.from||'(empty)')}</span> → <span class="hc-to">${_escHtml(c.to||'(empty)')}</span></li>`).join('')+'</ul>';}entry.innerHTML=`<div class="history-dot ${dotClass}"></div><div class="history-body"><div class="history-action">${actionText}</div><div class="history-meta">${_histMeta(h)}</div>${changesHtml}${h.note?`<div class="history-note-text">${_escHtml(h.note)}</div>`:''}</div>`;log.appendChild(entry);});}
+// Builds one reminder chip. When the computed date (deadline − days) lands on a
+// Sat/Sun the chip turns amber and offers one-click shifts to the nearest
+// Friday (before) or Monday (after) so the reminder fires on a weekday.
+function _buildReminderChip(d, dateVal, removeFn, shiftFn){
+  const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let dateHint='', shiftBtns='', weekend=false;
+  if(dateVal){
+    const[y,mo,dy]=dateVal.split('-').map(Number);
+    const dt=new Date(y,mo-1,dy);
+    dt.setDate(dt.getDate()-d);
+    const day=dt.getDay();
+    weekend=(day===0||day===6);
+    const mm=String(dt.getMonth()+1).padStart(2,'0');
+    const dd=String(dt.getDate()).padStart(2,'0');
+    dateHint=` <span style="font-size:10px;color:${weekend?'#8A5A22':'#9E9186'};font-weight:${weekend?'600':'400'};">${weekend?'⚠ ':''}${DAYS[day]} ${mm}/${dd}/${dt.getFullYear()}</span>`;
+    if(weekend){
+      const toFri=(day===6)?1:2, toMon=(day===6)?2:1;
+      const _short=t=>String(t.getMonth()+1).padStart(2,'0')+'/'+String(t.getDate()).padStart(2,'0');
+      const fri=new Date(dt); fri.setDate(fri.getDate()-toFri);
+      shiftBtns+=`<button type="button" class="wkd-shift" onclick="${shiftFn}(${d},${d+toFri})" title="Move this reminder to Friday">Fri ${_short(fri)}</button>`;
+      if(d-toMon>=1){
+        const mon=new Date(dt); mon.setDate(mon.getDate()+toMon);
+        shiftBtns+=`<button type="button" class="wkd-shift" onclick="${shiftFn}(${d},${d-toMon})" title="Move this reminder to Monday">Mon ${_short(mon)}</button>`;
+      }
+    }
+  }
+  const chip=document.createElement('span');
+  chip.className='reminder-chip'+(weekend?' weekend':'');
+  chip.innerHTML=`${d} days before${dateHint}${shiftBtns}<button type="button" onclick="${removeFn}(${d})" title="Remove">&#215;</button>`;
+  return chip;
+}
 function renderReminderChips(){
   const el=document.getElementById('reminder-chips');
   el.innerHTML='';
   const dateVal=document.getElementById('fc-date').value;
-  const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   pendingReminders.sort((a,b)=>b-a).forEach(d=>{
-    let dateHint='';
-    if(dateVal){
-      const[y,mo,dy]=dateVal.split('-').map(Number);
-      const dt=new Date(y,mo-1,dy);
-      dt.setDate(dt.getDate()-d);
-      const mm=String(dt.getMonth()+1).padStart(2,'0');
-      const dd=String(dt.getDate()).padStart(2,'0');
-      dateHint=` <span style="font-size:10px;color:#9E9186;font-weight:400;">${DAYS[dt.getDay()]} ${mm}/${dd}/${dt.getFullYear()}</span>`;
-    }
-    const chip=document.createElement('span');
-    chip.className='reminder-chip';
-    chip.innerHTML=`${d} days before${dateHint}<button type="button" onclick="removeReminder(${d})" title="Remove">&#215;</button>`;
-    el.appendChild(chip);
+    el.appendChild(_buildReminderChip(d,dateVal,'removeReminder','shiftReminder'));
   });
   if(!pendingReminders.length)el.innerHTML='<span style="font-size:12px;color:#C4BAB0;padding:2px 0">No reminders set</span>';
 }
 function addReminder(days){days=parseInt(days);if(isNaN(days)||days<1)return;if(!pendingReminders.includes(days))pendingReminders.push(days);renderReminderChips();}
 function addReminderCustom(){addReminder(parseInt(document.getElementById('fc-reminder-custom').value));document.getElementById('fc-reminder-custom').value='';}
 function removeReminder(days){pendingReminders=pendingReminders.filter(d=>d!==days);renderReminderChips();}
+function shiftReminder(oldDays,newDays){if(newDays<1)return;pendingReminders=pendingReminders.filter(d=>d!==oldDays);if(!pendingReminders.includes(newDays))pendingReminders.push(newDays);renderReminderChips();showToast('Reminder moved to '+newDays+' days before (weekday)');}
 function toggleTimePanel(){const on=document.getElementById('fc-time-toggle').checked;document.getElementById('time-range-panel').classList.toggle('open',on);if(!on){document.getElementById('fc-time-start').value='';document.getElementById('fc-time-end').value='';document.getElementById('fc-time-display').textContent='';}else updateTimeDisplay();}
 function updateTimeDisplay(){const s=document.getElementById('fc-time-start').value,e=document.getElementById('fc-time-end').value,d=document.getElementById('fc-time-display');if(s&&e)d.textContent=`${fmtTime(s)} – ${fmtTime(e)}`;else if(s)d.textContent=fmtTime(s);else d.textContent='';}
 function resetDateCalc(startVal){
