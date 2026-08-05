@@ -13205,6 +13205,58 @@ function buildParalegalIntroEmail(clid, newName){
   });
 }
 
+// ── Loly calendar-sheet rows ──────────────────────────────────────────────
+// Loly keeps the office calendar in a spreadsheet (QUEENS – FINAL CALENDAR)
+// with fixed columns A–O. Calendar emails to her render each event as one
+// row in that exact column order so she can copy the rows out of the email
+// and paste them straight into the sheet.
+const LOLY_SHEET_COLUMNS=['Date','Time','Last Name','First Name','Office','Attorney','Paralegal','Client or Case ID','Court','Type of Court','Judge','Case Notes','Client Cell Phone','Atty Assigned (Newark Only)','A#'];
+const LOLY_SHEET_OFFICE='Queens';
+const LOLY_SHEET_ATTORNEY='Wilmer';
+function lolySheetHeaderRow(){ return LOLY_SHEET_COLUMNS.join('\t'); }
+// One event → one tab-separated line in the sheet's column order. Reminder
+// records follow the sheet's convention for reminder rows: the reminder text
+// goes in the Court column and Type of Court reads "REMINDER <parent event
+// type>". extraNote (e.g. "RESCHEDULED from ...") is prepended to Case Notes.
+function formatEventRowForLoly(r, extraNote){
+  const cell=v=>String(v==null?'':v).replace(/[\t\r\n]+/g,' ').trim();
+  const meta=(typeof caseMeta!=='undefined'&&caseMeta[r.clid])||{};
+  const d=r.date?parseDate(r.date):null;
+  const dateStr=d?d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}):'';
+  const timeStr=r.timeStart?(fmtTime(r.timeStart)+(r.timeEnd?' - '+fmtTime(r.timeEnd):'')):'--';
+  let last=(meta.clientLastName||'').trim();
+  let first=[meta.clientFirstName,meta.clientMiddleName].filter(Boolean).join(' ').trim();
+  if(!last&&!first){
+    const parts=String(r.client||'').trim().split(/\s+/).filter(Boolean);
+    last=parts.length>1?parts[parts.length-1]:(parts[0]||'');
+    first=parts.slice(0,-1).join(' ');
+  }
+  const isReminder=!!(r.notes&&r.notes.startsWith('⏰ REMINDER'));
+  let typeOfCourt, court, caseNotes;
+  if(isReminder){
+    const parent=records.find(x=>x.id===r._parentId);
+    typeOfCourt=('REMINDER '+((parent&&(parent.event||parent.type))||'')).trim();
+    court=String(r.notes).replace(/^⏰ REMINDER:?\s*/,'');
+    caseNotes='';
+  } else {
+    typeOfCourt=r.event||r.type||'';
+    court=r.hearingMode==='virtual'?'Webex'
+         :r.hearingMode==='in-person'?(eventInPersonVenue(r)||'In person')
+         :r.hearingMode==='office'?'Office':'';
+    caseNotes=r.notes||'';
+  }
+  if(extraNote) caseNotes=caseNotes?(extraNote+' — '+caseNotes):extraNote;
+  return [dateStr,timeStr,last,first,LOLY_SHEET_OFFICE,LOLY_SHEET_ATTORNEY,r.atty||'',r.clid||'',court,typeOfCourt,eventJudgeName(r),caseNotes,meta.clientPhone||'','',r.anum||''].map(cell).join('\t');
+}
+// Rows for the still-pending reminders linked to an event — each reminder is
+// its own row on Loly's sheet.
+function lolyReminderRowsFor(ev){
+  return records
+    .filter(x=>x._parentId===ev.id&&x.notes&&x.notes.startsWith('⏰ REMINDER')&&x.date&&!x.finishedStatus&&!x.deletedStatus)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''))
+    .map(x=>formatEventRowForLoly(x));
+}
+
 function formatEventForEmail(ev, clid, defaultParalegal){
   let txt='';
   const isHearing=['MASTER','INDIVIDUAL','MERITS','BOND'].some(h=>(ev.event||'').toUpperCase().includes(h));
@@ -13320,12 +13372,14 @@ function buildCalendarEmailDraft(clid, clientName){
   const paralegal=base.atty||'';
   const paralegalEmail=paralegalEmails[paralegal]||'';
   const lolyEmail='mvintimilla@theromerofirm.com';
-  let bodyText='Dear Loly, Please calendar:\n\n';
-  bodyText+=clientName+' Client ID: '+(base.clid||clid);
-  if(base.anum) bodyText+=' A#: '+base.anum;
-  bodyText+='\n\n';
-  clientEvents.forEach(ev=>{ bodyText+=formatEventForEmail(ev,clid,paralegal); });
-  bodyText+='Thank you.';
+  let bodyText='Dear Loly, Please calendar the events below for '+clientName+' (Client ID: '+(base.clid||clid)+(base.anum?', A#: '+base.anum:'')+').\n';
+  bodyText+='The rows match the calendar sheet columns — copy them and paste straight into the sheet:\n\n';
+  bodyText+=lolySheetHeaderRow()+'\n';
+  clientEvents.forEach(ev=>{
+    bodyText+=formatEventRowForLoly(ev)+'\n';
+    lolyReminderRowsFor(ev).forEach(row=>{ bodyText+=row+'\n'; });
+  });
+  bodyText+='\nThank you.';
   // Spanish client-facing version (appended when the client is added to the email)
   const clientFirst=((caseMeta[clid]||{}).clientFirstName)||(clientName||'').split(/\s+/)[0]||'';
   let bodyTextES='Estimado/a '+(clientFirst||clientName)+',\n\nLe escribimos para informarle las próximas fechas relacionadas con su caso:\n\n';
@@ -13407,13 +13461,16 @@ function emailScheduleToStaff(clid){
   if(!lolyEmail) showToast('No email found for Loly — sending to the paralegal only');
   else if(!paraEmail) showToast('No email for '+(base.atty||'the paralegal')+' — sending to Loly only');
   let body='Hola:\n\n'
-    +'Este es el calendario de los próximos eventos del caso:\n\n'
+    +'Este es el calendario de los próximos eventos del caso. Las filas siguen las columnas de la hoja del calendario — cópielas y péguelas directamente en la hoja:\n\n'
     +clientName+' — ID del cliente: '+(base.clid||clid);
   if(base.anum) body+=' — A#: '+base.anum;
-  if(base.atty) body+='\nParalegal: '+base.atty;
   body+='\n\n';
-  clientEvents.forEach(ev=>{ body+=formatEventForEmailES(ev,clid,base.atty||''); });
-  body+='Gracias,';
+  body+=lolySheetHeaderRow()+'\n';
+  clientEvents.forEach(ev=>{
+    body+=formatEventRowForLoly(ev)+'\n';
+    lolyReminderRowsFor(ev).forEach(row=>{ body+=row+'\n'; });
+  });
+  body+='\nGracias,';
   openEmailComposeModal({
     to: to,
     subject: 'Calendario del caso — '+clientName+(base.clid?' ('+base.clid+')':''),
@@ -13704,6 +13761,29 @@ function showGmailConnectPrompt(){
   document.body.appendChild(banner);
 }
 
+// Build the HTML body from the compose textarea. Plain lines become <br>
+// text; any run of tab-separated lines (the Loly calendar-sheet rows) is
+// rendered as a real table — copying a table out of Gmail pastes cell-by-cell
+// into Excel/Google Sheets, which tab characters inside HTML cannot do.
+function _composeBodyToHtml(text){
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let html='';
+  let rows=[];
+  const flush=()=>{
+    if(!rows.length) return;
+    html+='<table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;font-size:12px;">'
+      +rows.map(cells=>'<tr>'+cells.map(c=>'<td style="white-space:nowrap;">'+(esc(c)||'&nbsp;')+'</td>').join('')+'</tr>').join('')
+      +'</table>';
+    rows=[];
+  };
+  String(text||'').split('\n').forEach(line=>{
+    if(line.indexOf('\t')!==-1) rows.push(line.split('\t'));
+    else { flush(); html+=esc(line)+'<br>'; }
+  });
+  flush();
+  return html;
+}
+
 async function doSendComposeEmail(){
   const to=(document.getElementById('emc-to')||{}).value||'';
   const cc=(document.getElementById('emc-cc')||{}).value||'';
@@ -13716,7 +13796,7 @@ async function doSendComposeEmail(){
   }
   // Split body from signature area and build HTML
   // The plain text body gets <br> for newlines; if there's an HTML signature, append it
-  let htmlBody=bodyRaw.replace(/\n--\n[\s\S]*$/,'').trim().replace(/\n/g,'<br>');
+  let htmlBody=_composeBodyToHtml(bodyRaw.replace(/\n--\n[\s\S]*$/,'').trim());
   if(window._emcSignatureHtml){
     htmlBody+='<br><br>--<br>'+window._emcSignatureHtml;
   }
@@ -13797,7 +13877,7 @@ async function doScheduleComposeEmail(sendAt){
   if(!to.trim()){ showToast('Enter a recipient'); return; }
   if(!sendAt||sendAt<=Date.now()){ showToast('Pick a future send time'); return; }
   if(!_gmailAccessToken){ showGmailConnectPrompt(); return; }
-  let htmlBody=bodyRaw.replace(/\n--\n[\s\S]*$/,'').trim().replace(/\n/g,'<br>');
+  let htmlBody=_composeBodyToHtml(bodyRaw.replace(/\n--\n[\s\S]*$/,'').trim());
   if(window._emcSignatureHtml){
     htmlBody+='<br><br>--<br>'+window._emcSignatureHtml;
   }
@@ -26438,8 +26518,6 @@ function renderScheduleText(){
   const filter=(document.getElementById('sched-filter-sel')||{}).value||'all';
   const _todayStr=todayStr();
   const _WDAYS_SHORT=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const _WDAYS_LONG=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const _MONTHS_SHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
   function passesFilter(r){
     if(filter==='hearings') return HEARING_TYPES.has(r.event)||r.event?.includes('HEARING')||r.event?.includes('MASTER')||r.event?.includes('INDIVIDUAL');
@@ -26458,39 +26536,6 @@ function renderScheduleText(){
     return wd+', '+mo+'/'+dy+'/'+yr+((d.getDay()===0||d.getDay()===6)?' \u26A0 WEEKEND':'');
   }
 
-  function fmtReminderDate(dateStr){
-    if(!dateStr) return '';
-    const d=parseDate(dateStr);
-    if(!d) return '';
-    return _WDAYS_LONG[d.getDay()]+', '+_MONTHS_SHORT[d.getMonth()]+' '+d.getDate();
-  }
-
-  function reminderLines(r){
-    const days=_schedGetReminderDays(r);
-    if(!days.length) return [];
-    const out=['Reminders:'];
-    days.forEach(d=>{
-      const rDateStr=addDateDays(r.date,-d);
-      const rFmt=fmtReminderDate(rDateStr);
-      const rd=parseDate(rDateStr);
-      const isWknd=rd&&(rd.getDay()===0||rd.getDay()===6);
-      out.push('  \u2022 '+d+' day'+(d===1?'':'s')+' before \u2192 '+rFmt+(isWknd?' \u26A0 Weekend':''));
-    });
-    return out;
-  }
-
-  function baseBlock(r){
-    const lines=[];
-    lines.push('Client: '+(r.client||'\u2014'));
-    if(r.clid)  lines.push('Client ID: '+r.clid);
-    if(r.anum)  lines.push('A#: '+r.anum);
-    if(r.atty)  lines.push('Paralegal: '+r.atty);
-    lines.push('Event Type: '+(r.event||r.type||'\u2014'));
-    lines.push('Due Date: '+fmtDueDate(r.date));
-    if(r.notes) lines.push('Notes: '+r.notes);
-    reminderLines(r).forEach(l=>lines.push(l));
-    return lines;
-  }
 
   // ── Gather today's changes ──
   const added=[], rescheduled=[], statusChanged=[], edited=[];
@@ -26544,33 +26589,28 @@ function renderScheduleText(){
     return;
   }
 
+  lines.push('Each event below is one row in the calendar-sheet format (columns A\u2013O) \u2014 copy the rows and paste them straight into the sheet:');
+  lines.push('');
+  lines.push(lolySheetHeaderRow());
+  lines.push('');
+
   if(added.length){
     lines.push('ADDED:');
-    lines.push('');
-    added.forEach((r,i)=>{
-      lines.push((i+1)+'.');
-      baseBlock(r).forEach(l=>lines.push(l));
-      lines.push('');
+    added.forEach(r=>{
+      lines.push(formatEventRowForLoly(r));
+      lolyReminderRowsFor(r).forEach(row=>lines.push(row));
     });
+    lines.push('');
   }
 
   if(rescheduled.length){
-    lines.push('RESCHEDULED:');
-    lines.push('');
-    rescheduled.forEach(({r,h},i)=>{
-      lines.push((i+1)+'.');
-      lines.push('Client: '+(r.client||'\u2014'));
-      if(r.clid)  lines.push('Client ID: '+r.clid);
-      if(r.anum)  lines.push('A#: '+r.anum);
-      if(r.atty)  lines.push('Paralegal: '+r.atty);
-      lines.push('Event Type: '+(r.event||r.type||'\u2014'));
-      lines.push('Old Date: '+fmtDueDate(h.prevDate||''));
-      lines.push('New Date: '+fmtDueDate(h.newDate||r.date||''));
-      if(h.note)  lines.push('Reason: '+h.note);
-      if(r.notes) lines.push('Notes: '+r.notes);
-      reminderLines(r).forEach(l=>lines.push(l));
-      lines.push('');
+    lines.push('RESCHEDULED (update these rows to the new date):');
+    rescheduled.forEach(({r,h})=>{
+      const note='RESCHEDULED from '+fmtDueDate(h.prevDate||'')+(h.note?' \u2014 '+h.note:'');
+      lines.push(formatEventRowForLoly(r,note));
+      lolyReminderRowsFor(r).forEach(row=>lines.push(row));
     });
+    lines.push('');
   }
 
   if(statusChanged.length){
@@ -26581,32 +26621,22 @@ function renderScheduleText(){
       byType[k].push(x);
     });
     Object.entries(byType).forEach(([label,items])=>{
-      lines.push(label+':');
-      lines.push('');
-      items.forEach(({r,h},i)=>{
-        lines.push((i+1)+'.');
-        lines.push('Client: '+(r.client||'\u2014'));
-        if(r.clid)  lines.push('Client ID: '+r.clid);
-        if(r.anum)  lines.push('A#: '+r.anum);
-        if(r.atty)  lines.push('Paralegal: '+r.atty);
-        lines.push('Event Type: '+(r.event||r.type||'\u2014'));
-        lines.push('Date: '+fmtDueDate(r.date));
-        if(h.note)  lines.push('Reason: '+h.note);
-        lines.push('');
+      lines.push(label+' (remove from calendar):');
+      items.forEach(({r,h})=>{
+        lines.push(formatEventRowForLoly(r,label+(h.note?' \u2014 '+h.note:'')));
       });
+      lines.push('');
     });
   }
 
   if(edited.length){
     lines.push('UPDATED:');
-    lines.push('');
-    edited.forEach(({r,entries},i)=>{
-      lines.push((i+1)+'.');
-      baseBlock(r).forEach(l=>lines.push(l));
+    edited.forEach(({r,entries})=>{
       const note=entries.find(e=>e.note)?.note;
-      if(note) lines.push('Update note: '+note);
-      lines.push('');
+      lines.push(formatEventRowForLoly(r,note?('UPDATED \u2014 '+note):'UPDATED'));
+      lolyReminderRowsFor(r).forEach(row=>lines.push(row));
     });
+    lines.push('');
   }
 
   lines.push('Thanks,');
