@@ -1025,6 +1025,17 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .cd-tab-btn { border: none; border-radius: 0; border-bottom: 2px solid transparent; padding: 9px 18px; background: transparent; font-size: 13px; color: var(--ink-muted); cursor: pointer; font-family: var(--font-body); transition: color 0.15s; }
 .cd-tab-btn:hover { color: var(--ink); background: transparent; }
 .cd-tab-btn.active { color: var(--ink); border-bottom: 2px solid var(--ink); font-weight: 600; }
+/* ── Billing tab (PERSONAL cases) ─────────────── */
+.billing-card { background: #FDFAF7; border: 1px solid #EDE8E0; border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; }
+.billing-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #9E9186; display: block; margin-bottom: 4px; }
+.billing-in { width: 100%; font-size: 13px; padding: 7px 10px; border: 1px solid #DDD5CA; border-radius: 7px; font-family: inherit; box-sizing: border-box; outline: none; background: #fff; color: #2C2620; }
+.billing-in:focus { border-color: #B4A78F; }
+.billing-total-box { font-size: 13px; font-weight: 600; padding: 6px 12px; border: 1px solid #DDD5CA; border-radius: 7px; background: #F5F1EA; color: #2C2620; min-width: 96px; text-align: right; display: inline-block; box-sizing: border-box; }
+.billing-yn { display: inline-flex; border: 1px solid #DDD5CA; border-radius: 20px; overflow: hidden; }
+.billing-yn button { border: none; background: #fff; font-size: 11px; padding: 4px 14px; cursor: pointer; color: #8A7E71; font-family: inherit; }
+.billing-yn button.on { background: #6A8C6E; color: #fff; font-weight: 600; }
+.billing-yn button.no.on { background: #B85C5C; }
+.billing-pay-grid { display: grid; grid-template-columns: 1.1fr .8fr 1.05fr .85fr 1.7fr .8fr .8fr 26px; gap: 6px; align-items: center; }
 
 /* ── Case notes panels ─────────────────────────── */
 .case-notes-panel { background: #fff; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; margin-bottom: 8px; box-shadow: var(--shadow-sm); }
@@ -2320,12 +2331,14 @@ window.addEventListener('load',()=>autoGrowAllNotes());
       <button class="cd-tab-btn" id="cdtab-documents" onclick="switchCaseTab('documents')">Documents</button>
       <button class="cd-tab-btn" id="cdtab-masterprep" onclick="switchCaseTab('masterprep')">Master Prep</button>
       <button class="cd-tab-btn" id="cdtab-i589" onclick="switchCaseTab('i589')">I-589</button>
+      <button class="cd-tab-btn" id="cdtab-billing" onclick="switchCaseTab('billing')" style="display:none">Billing</button>
     </div>
     <div id="cd-pane-overview"><div id="case-detail-body"></div></div>
     <div id="cd-pane-checklists" style="display:none"><div id="case-checklists-body"></div></div>
     <div id="cd-pane-documents" style="display:none"><div id="case-documents-body"></div></div>
     <div id="cd-pane-masterprep" style="display:none"><div id="case-masterprep-body"></div></div>
     <div id="cd-pane-i589" style="display:none"><div id="case-i589-body"></div></div>
+    <div id="cd-pane-billing" style="display:none"><div id="case-billing-body"></div></div>
   </div>
   <div id="cases-add-view" style="display:none;">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
@@ -18961,8 +18974,8 @@ window._sijSetFcStage = function(sel){
 };
 
 function switchCaseTab(tab){
-  const panes={overview:'cd-pane-overview',checklists:'cd-pane-checklists',documents:'cd-pane-documents',masterprep:'cd-pane-masterprep',i589:'cd-pane-i589'};
-  const tabs={overview:'cdtab-overview',checklists:'cdtab-checklists',documents:'cdtab-documents',masterprep:'cdtab-masterprep',i589:'cdtab-i589'};
+  const panes={overview:'cd-pane-overview',checklists:'cd-pane-checklists',documents:'cd-pane-documents',masterprep:'cd-pane-masterprep',i589:'cd-pane-i589',billing:'cd-pane-billing'};
+  const tabs={overview:'cdtab-overview',checklists:'cdtab-checklists',documents:'cdtab-documents',masterprep:'cdtab-masterprep',i589:'cdtab-i589',billing:'cdtab-billing'};
   if(!panes[tab])tab='overview';
   // Leaving the Master Prep / I-589 tab? tear down the iframe bridge listener.
   if(tab!=='masterprep')_mhpTeardown();
@@ -18975,6 +18988,7 @@ function switchCaseTab(tab){
   if(tab==='documents'&&activeCaseClid)renderCaseDocuments(activeCaseClid);
   if(tab==='masterprep'&&activeCaseClid)renderCaseMasterPrep(activeCaseClid);
   if(tab==='i589'&&activeCaseClid)renderCaseI589(activeCaseClid);
+  if(tab==='billing'&&activeCaseClid)renderCaseBilling(activeCaseClid);
 }
 
 // Record a document created for a case (from the Motion/Brief Creator or
@@ -19264,6 +19278,201 @@ function openJudgePicker(wrapEl, metaKey, clid, onSelect){
   }, 0);
 }
 
+// ══════════ BILLING TAB (PERSONAL cases only) ══════════
+// Payment tracking modeled on the legacy desktop app: total cost / retainer /
+// monthly plan on top, a payment ledger below, and computed totals — balance,
+// what-would-be-paid-if-consistent, and past-due. Stored in
+// caseMeta[clid].billing so it syncs with the rest of the case data.
+const BILLING_PAY_TYPES=['Credit','Cash','Check','Zelle','Money Order','Other'];
+function _billingOf(clid){
+  if(!caseMeta[clid])caseMeta[clid]={};
+  if(!caseMeta[clid].billing)caseMeta[clid].billing={totalCost:'',retainer:'',monthly:'',lastRequest:'',autoPay:'',lostContact:'',monthsOpened:'',payments:[]};
+  if(!Array.isArray(caseMeta[clid].billing.payments))caseMeta[clid].billing.payments=[];
+  return caseMeta[clid].billing;
+}
+function _money(n){const v=Number(n)||0;return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+// paid = every payment + additional. expected ("if payments consistent") =
+// retainer + monthly × months case opened, capped at the total cost; only
+// computable once Months Case Opened is filled in.
+function _billingTotals(b){
+  const paid=b.payments.reduce((s,p)=>s+(Number(p.amount)||0)+(Number(p.additional)||0),0);
+  const cost=Number(b.totalCost)||0;
+  const out={paid,cost,balance:cost-paid,expected:null,pastDue:null};
+  if(b.monthsOpened!==''&&b.monthsOpened!=null){
+    const exp=Math.min(cost||Infinity,(Number(b.retainer)||0)+(Number(b.monthly)||0)*(Number(b.monthsOpened)||0));
+    out.expected=exp;out.pastDue=Math.max(0,exp-paid);
+  }
+  return out;
+}
+function renderCaseBilling(clid){
+  const body=document.getElementById('case-billing-body');if(!body)return;
+  const b=_billingOf(clid);
+  body.innerHTML='';
+  const save=()=>{if(typeof markUnsaved==='function')markUnsaved();};
+
+  // Staff name suggestions come from the paralegal / attorney lists
+  let dl=document.getElementById('billing-staff-dl');
+  if(!dl){dl=document.createElement('datalist');dl.id='billing-staff-dl';document.body.appendChild(dl);}
+  dl.innerHTML=[...new Set([...(typeof paralegals!=='undefined'?paralegals:[]),...(typeof attorneys!=='undefined'?attorneys.map(a=>(a&&a.name)||a):[])])]
+    .filter(n=>n&&typeof n==='string').sort().map(n=>`<option value="${escHtml(n)}">`).join('');
+
+  // ── Payment plan card ──
+  const plan=document.createElement('div');plan.className='billing-card';
+  plan.innerHTML='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;margin-bottom:14px;">Payment Plan</div>';
+  const planGrid=document.createElement('div');
+  planGrid.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;';
+  const mkNum=(label,key,step,ph)=>{const w=document.createElement('div');
+    w.innerHTML=`<label class="billing-label">${label}</label>`;
+    const i=document.createElement('input');i.className='billing-in';i.type='number';i.min='0';i.step=step;i.placeholder=ph;
+    i.value=(b[key]===''||b[key]==null)?'':b[key];
+    i.oninput=()=>{b[key]=i.value===''?'':Number(i.value);save();_refreshBillingTotals(clid);};
+    w.appendChild(i);planGrid.appendChild(w);};
+  mkNum('Total Cost','totalCost','0.01','0.00');
+  mkNum('Retainer','retainer','0.01','0.00');
+  mkNum('Monthly','monthly','0.01','0.00');
+  mkNum('Months Case Opened','monthsOpened','1','e.g. 6');
+  {const w=document.createElement('div');w.innerHTML='<label class="billing-label">Last Request for Payment</label>';
+   const i=document.createElement('input');i.className='billing-in';i.type='date';i.value=b.lastRequest||'';
+   i.oninput=()=>{b.lastRequest=i.value;save();};
+   w.appendChild(i);planGrid.appendChild(w);}
+  plan.appendChild(planGrid);
+  const ynRow=document.createElement('div');ynRow.style.cssText='display:flex;gap:26px;flex-wrap:wrap;margin-top:14px;';
+  const mkYN=(label,key)=>{const w=document.createElement('div');
+    w.innerHTML=`<label class="billing-label">${label}</label>`;
+    const seg=document.createElement('div');seg.className='billing-yn';
+    ['Yes','No'].forEach(v=>{const btn=document.createElement('button');btn.type='button';btn.textContent=v;
+      if(v==='No')btn.classList.add('no');
+      btn.classList.toggle('on',b[key]===v);
+      btn.onclick=()=>{b[key]=(b[key]===v)?'':v;save();renderCaseBilling(clid);};
+      seg.appendChild(btn);});
+    w.appendChild(seg);ynRow.appendChild(w);};
+  mkYN('Auto Payment','autoPay');
+  mkYN('Lost Contact','lostContact');
+  plan.appendChild(ynRow);
+  body.appendChild(plan);
+
+  // ── Payments ledger card ──
+  const pc=document.createElement('div');pc.className='billing-card';
+  const pcHead=document.createElement('div');pcHead.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;';
+  pcHead.innerHTML='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;">Payments</div>';
+  const btnRow=document.createElement('div');btnRow.style.cssText='display:flex;gap:8px;';
+  const addBtn=document.createElement('button');addBtn.type='button';addBtn.textContent='+ Add Payment';
+  addBtn.style.cssText='font-size:12px;padding:5px 14px;border:1px solid #B4CCAD;border-radius:20px;background:#EBF1EB;color:#4C6B50;cursor:pointer;font-family:inherit;font-weight:600;';
+  addBtn.onclick=()=>{
+    const _t=new Date();
+    const _iso=_t.getFullYear()+'-'+String(_t.getMonth()+1).padStart(2,'0')+'-'+String(_t.getDate()).padStart(2,'0');
+    b.payments.push({id:uid(),staff:'',office:'',date:_iso,type:'Credit',desc:'',amount:'',additional:''});
+    save();renderCaseBilling(clid);
+  };
+  const invBtn=document.createElement('button');invBtn.type='button';invBtn.textContent='🖨 Statement';
+  invBtn.title='Open a printable statement of account';
+  invBtn.style.cssText='font-size:12px;padding:5px 14px;border:1px solid #DDD5CA;border-radius:20px;background:#fff;color:#5C5148;cursor:pointer;font-family:inherit;';
+  invBtn.onclick=()=>printBillingStatement(clid);
+  btnRow.appendChild(addBtn);btnRow.appendChild(invBtn);pcHead.appendChild(btnRow);
+  pc.appendChild(pcHead);
+  const wrap=document.createElement('div');wrap.style.cssText='overflow-x:auto;';
+  const tbl=document.createElement('div');tbl.style.cssText='min-width:780px;';
+  const head=document.createElement('div');head.className='billing-pay-grid';head.style.marginBottom='6px';
+  ['Staff','Office','Date','Type','Description','Payment','Additional',''].forEach(h=>{
+    const c=document.createElement('div');c.className='billing-label';c.style.marginBottom='0';c.textContent=h;head.appendChild(c);});
+  tbl.appendChild(head);
+  // Newest payments on top, like the legacy app. Rows hold references into
+  // b.payments, so edits land on the stored objects directly.
+  [...b.payments].sort((a,c)=>String(c.date||'').localeCompare(String(a.date||''))).forEach(pay=>{
+    const row=document.createElement('div');row.className='billing-pay-grid';row.style.marginBottom='6px';
+    const mk=(key,type,ph)=>{const i=document.createElement('input');i.className='billing-in';i.type=type;if(ph)i.placeholder=ph;
+      if(type==='number'){i.step='0.01';i.min='0';}
+      i.value=(pay[key]==null)?'':pay[key];
+      if(key==='staff')i.setAttribute('list','billing-staff-dl');
+      i.oninput=()=>{pay[key]=(type==='number')?(i.value===''?'':Number(i.value)):i.value;save();if(type==='number')_refreshBillingTotals(clid);};
+      row.appendChild(i);};
+    mk('staff','text','Staff…');
+    mk('office','text','Office…');
+    mk('date','date');
+    {const s=document.createElement('select');s.className='billing-in';
+     const opts=BILLING_PAY_TYPES.includes(pay.type)||!pay.type?BILLING_PAY_TYPES:[pay.type,...BILLING_PAY_TYPES];
+     opts.forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=t;if(t===(pay.type||'Credit'))o.selected=true;s.appendChild(o);});
+     s.onchange=()=>{pay.type=s.value;save();};row.appendChild(s);}
+    mk('desc','text','Description…');
+    mk('amount','number','0.00');
+    mk('additional','number','0.00');
+    {const del=document.createElement('button');del.type='button';del.innerHTML='&#215;';del.title='Remove payment';
+     del.style.cssText='border:none;background:none;color:#B85C5C;font-size:16px;cursor:pointer;padding:0 4px;line-height:1;';
+     del.onclick=()=>{if(!confirm('Remove this payment?'))return;b.payments=b.payments.filter(p=>p.id!==pay.id);save();renderCaseBilling(clid);};
+     row.appendChild(del);}
+    tbl.appendChild(row);
+  });
+  if(!b.payments.length){
+    const empty=document.createElement('div');
+    empty.style.cssText='font-size:12px;color:#C4BAB0;padding:10px 0;';
+    empty.textContent='No payments recorded yet — use “+ Add Payment”.';
+    tbl.appendChild(empty);
+  }
+  wrap.appendChild(tbl);pc.appendChild(wrap);body.appendChild(pc);
+
+  // ── Totals card ──
+  const tot=document.createElement('div');tot.className='billing-card';tot.id='billing-totals-card';
+  body.appendChild(tot);
+  _refreshBillingTotals(clid);
+}
+// Rebuilds only the totals card so typing in amount fields doesn't lose focus.
+function _refreshBillingTotals(clid){
+  const el=document.getElementById('billing-totals-card');if(!el)return;
+  const b=_billingOf(clid),t=_billingTotals(b);
+  const row=(label,val,color)=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:14px;padding:5px 0;"><div style="font-size:12px;color:#8A7E71;">${label}</div><div class="billing-total-box"${color?` style="color:${color};"`:''}>${val}</div></div>`;
+  const balColor=t.balance>0.004?'#B85C5C':'#4C6B50';
+  let pastDue;
+  if(t.expected==null)pastDue=row('Past Due','?','#9E9186');
+  else if(t.pastDue>0.004)pastDue=row('Past Due',_money(t.pastDue),'#B85C5C');
+  else pastDue=row('Past Due',_money(0),'#4C6B50');
+  el.innerHTML='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;margin-bottom:10px;">Totals</div>'
+    +'<div style="max-width:440px;">'
+    +row('Total Paid',_money(t.paid))
+    +row('Balance',_money(t.balance),balColor)
+    +pastDue
+    +'<div style="border-top:0.5px solid #DDD5CA;margin:8px 0;"></div>'
+    +row('Total Paid if Payments Consistent',t.expected==null?'—':_money(t.expected))
+    +row('Balance if Payments Consistent',t.expected==null?'—':_money(Math.max(0,t.cost-t.expected)))
+    +(t.expected==null?'<div style="font-size:11px;color:#9E9186;margin-top:6px;">Enter “Months Case Opened” above to compute the consistency and past-due figures.</div>':'')
+    +'</div>';
+}
+// Opens a printable Statement of Account in a new window.
+function printBillingStatement(clid){
+  const b=_billingOf(clid),t=_billingTotals(b);
+  const m=caseMeta[clid]||{};
+  const name=[m.clientFirstName,m.clientMiddleName,m.clientLastName].filter(Boolean).join(' ')
+    ||((records.find(r=>(r.clid||r.client)===clid)||{}).client)||clid;
+  const today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const rows=[...b.payments].sort((a,c)=>String(a.date||'').localeCompare(String(c.date||''))).map(p=>{
+    const extra=Number(p.additional)||0;
+    return `<tr><td>${escHtml(p.date?fmtDate(p.date):'')}</td><td>${escHtml(p.staff||'')}</td><td>${escHtml(p.office||'')}</td><td>${escHtml(p.type||'')}</td><td>${escHtml(p.desc||'')}</td><td style="text-align:right">${_money(p.amount)}</td><td style="text-align:right">${extra?_money(extra):''}</td></tr>`;
+  }).join('');
+  const w=window.open('','_blank');
+  if(!w){showToast('Pop-up blocked — allow pop-ups to print the statement');return;}
+  w.document.write('<!DOCTYPE html><html><head><title>Statement of Account — '+escHtml(String(name))+'</title><style>'
+    +'body{font-family:Georgia,serif;color:#2C2620;margin:40px;}h1{font-size:20px;margin:0 0 2px;}'
+    +'.sub{color:#777;font-size:12px;margin-bottom:18px;}'
+    +'table{width:100%;border-collapse:collapse;font-size:12px;margin:14px 0;}'
+    +'th,td{border:1px solid #D8D0C4;padding:6px 8px;text-align:left;}'
+    +'th{background:#F5F1EA;font-size:10px;text-transform:uppercase;letter-spacing:.05em;}'
+    +'.tot{margin-top:16px;font-size:13px;}.tot div{display:flex;justify-content:space-between;max-width:320px;padding:3px 0;}'
+    +'.due{color:#A03030;font-weight:bold;}'
+    +'</style></head><body>'
+    +'<h1>Statement of Account</h1>'
+    +'<div class="sub">'+escHtml(String(name))+' — Case #'+escHtml(String(clid))+' · '+today+'</div>'
+    +'<div>Total Cost: <strong>'+_money(b.totalCost)+'</strong> &nbsp;·&nbsp; Retainer: <strong>'+_money(b.retainer)+'</strong> &nbsp;·&nbsp; Monthly: <strong>'+_money(b.monthly)+'</strong></div>'
+    +'<table><thead><tr><th>Date</th><th>Staff</th><th>Office</th><th>Type</th><th>Description</th><th>Payment</th><th>Additional</th></tr></thead>'
+    +'<tbody>'+(rows||'<tr><td colspan="7" style="text-align:center;color:#999">No payments recorded</td></tr>')+'</tbody></table>'
+    +'<div class="tot">'
+    +'<div><span>Total Paid</span><strong>'+_money(t.paid)+'</strong></div>'
+    +'<div><span>Balance</span><strong'+(t.balance>0.004?' class="due"':'')+'>'+_money(t.balance)+'</strong></div>'
+    +(t.expected!=null&&t.pastDue>0.004?'<div><span>Past Due</span><strong class="due">'+_money(t.pastDue)+'</strong></div>':'')
+    +'</div></body></html>');
+  w.document.close();
+  w.focus();
+  setTimeout(()=>{try{w.print();}catch(e){}},350);
+}
+
 // Render a small client photo slot at the top of the case detail.
 // Stored as caseMeta[clid].clientPhoto (base64 data URL).
 // canEdit=true (set by the Case Info edit toggle) shows the upload "+"
@@ -19372,11 +19581,14 @@ function openCaseDetail(clid){
   document.getElementById('cd-pane-documents').style.display='none';
   {const _mpp=document.getElementById('cd-pane-masterprep');if(_mpp)_mpp.style.display='none';}
   {const _i5p=document.getElementById('cd-pane-i589');if(_i5p)_i5p.style.display='none';}
+  {const _blp=document.getElementById('cd-pane-billing');if(_blp)_blp.style.display='none';}
   document.getElementById('cdtab-overview').classList.add('active');
   document.getElementById('cdtab-checklists').classList.remove('active');
   document.getElementById('cdtab-documents').classList.remove('active');
   {const _mpt=document.getElementById('cdtab-masterprep');if(_mpt)_mpt.classList.remove('active');}
   {const _i5t=document.getElementById('cdtab-i589');if(_i5t)_i5t.classList.remove('active');}
+  // Billing tab is only for cases marked PERSONAL in case information
+  {const _blt=document.getElementById('cdtab-billing');if(_blt){_blt.classList.remove('active');_blt.style.display=((caseMeta[clid]||{}).caseCategory==='Personal')?'':'none';}}
   if(typeof _refreshDocTabLabel==='function')_refreshDocTabLabel(clid);
   const allRecs=records.filter(r=>(r.clid||r.client)===clid);
   if(!allRecs.length)return;
@@ -19630,7 +19842,11 @@ function openCaseDetail(clid){
       [['Office','Office'],['Personal','Personal']].forEach(([v,lbl])=>{
         const o=document.createElement('option');o.value=v;o.textContent=lbl;if(v===_catNow)o.selected=true;catSel.appendChild(o);
       });
-      catSel.onchange=()=>{ if(!caseMeta[clid])caseMeta[clid]={}; caseMeta[clid].caseCategory=catSel.value; markUnsaved(); };
+      catSel.onchange=()=>{ if(!caseMeta[clid])caseMeta[clid]={}; caseMeta[clid].caseCategory=catSel.value; markUnsaved();
+        // Billing tab follows the category live: PERSONAL cases get it, Office cases don't.
+        const _blt=document.getElementById('cdtab-billing');
+        if(_blt){ _blt.style.display=(catSel.value==='Personal')?'':'none';
+          if(catSel.value!=='Personal'&&_blt.classList.contains('active'))switchCaseTab('overview'); } };
       catItem.appendChild(catSel);
       L1.appendChild(catItem);
     } else {
