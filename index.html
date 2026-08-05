@@ -13772,7 +13772,12 @@ function _composeBodyToHtml(text){
   const flush=()=>{
     if(!rows.length) return;
     html+='<table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;font-size:12px;">'
-      +rows.map(cells=>'<tr>'+cells.map(c=>'<td style="white-space:nowrap;">'+(esc(c)||'&nbsp;')+'</td>').join('')+'</tr>').join('')
+      +rows.map(cells=>{
+        const isHeader=(typeof LOLY_SHEET_COLUMNS!=='undefined')&&cells.length===LOLY_SHEET_COLUMNS.length&&cells.every((c,i)=>c===LOLY_SHEET_COLUMNS[i]);
+        const tag=isHeader?'th':'td';
+        const style=isHeader?'white-space:nowrap;background:#000;color:#fff;font-weight:700;':'white-space:nowrap;';
+        return '<tr>'+cells.map(c=>'<'+tag+' style="'+style+'">'+(esc(c)||'&nbsp;')+'</'+tag+'>').join('')+'</tr>';
+      }).join('')
       +'</table>';
     rows=[];
   };
