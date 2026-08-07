@@ -19788,18 +19788,25 @@ function openCaseDetail(clid){
                   j.webex==='no'?'<span style="font-size:9px;background:#F9EDED;color:#B85C5C;border-radius:6px;padding:1px 5px;font-weight:600;margin-left:4px;">In Person</span>':
                   j.webex==='depends'?'<span style="font-size:9px;background:#FAF0E6;color:#C9823A;border-radius:6px;padding:1px 5px;font-weight:600;margin-left:4px;">Depends</span>':'';
         it.innerHTML='<span class="judge-picker-item-name">'+j.name+wb+'</span><span class="judge-picker-item-meta">'+j.role+(j.venue?' · '+j.venue:'')+'</span>';
-        it.onmousedown=e=>{e.preventDefault();if(respondentIdx===-1){caseMeta[clid][judgeKey]=j.id;}else if(caseMeta[clid].respondents[respondentIdx]){caseMeta[clid].respondents[respondentIdx][judgeKey]=j.id;}markUnsaved();picker.remove();onDone();showToast(j.name+' assigned ✓');};
+        it.onmousedown=e=>{e.preventDefault();if(respondentIdx===-1){caseMeta[clid][judgeKey]=j.id;}else if(caseMeta[clid].respondents[respondentIdx]){caseMeta[clid].respondents[respondentIdx][judgeKey]=j.id;}markUnsaved();closePicker();onDone();showToast(j.name+' assigned ✓');};
         lw.appendChild(it);
       });
       const ni2=document.createElement('div');ni2.className='judge-picker-none';ni2.textContent='— None / Remove';
-      ni2.onmousedown=e=>{e.preventDefault();if(respondentIdx===-1){delete caseMeta[clid][judgeKey];}else if(caseMeta[clid].respondents[respondentIdx]){delete caseMeta[clid].respondents[respondentIdx][judgeKey];}markUnsaved();picker.remove();onDone();};
+      ni2.onmousedown=e=>{e.preventDefault();if(respondentIdx===-1){delete caseMeta[clid][judgeKey];}else if(caseMeta[clid].respondents[respondentIdx]){delete caseMeta[clid].respondents[respondentIdx][judgeKey];}markUnsaved();closePicker();onDone();};
       lw.appendChild(ni2);
     }
     bl('');
     si.addEventListener('input',()=>bl(si.value));
-    si.addEventListener('keydown',e=>{if(e.key==='Escape')picker.remove();});
-    anchorEl.style.position='relative';anchorEl.appendChild(picker);
-    setTimeout(()=>{si.focus();const close=e=>{if(!picker.contains(e.target)&&!anchorEl.contains(e.target)){picker.remove();document.removeEventListener('mousedown',close);}};document.addEventListener('mousedown',close);},0);
+    si.addEventListener('keydown',e=>{if(e.key==='Escape')closePicker();});
+    // .case-info-item clips its content (overflow:hidden keeps long values
+    // inside the grid cell), which also clips this absolutely-positioned
+    // dropdown to the ~50px cell — the judge list becomes invisible and
+    // unclickable (seen on the consolidated shared card). Lift the clip
+    // while the picker is open and restore it on close.
+    const _prevOverflow=anchorEl.style.overflow;
+    function closePicker(){picker.remove();anchorEl.style.overflow=_prevOverflow;}
+    anchorEl.style.position='relative';anchorEl.style.overflow='visible';anchorEl.appendChild(picker);
+    setTimeout(()=>{si.focus();const close=e=>{if(!picker.contains(e.target)&&!anchorEl.contains(e.target)){closePicker();document.removeEventListener('mousedown',close);}};document.addEventListener('mousedown',close);},0);
   }
 
   // Quick-add client modal
