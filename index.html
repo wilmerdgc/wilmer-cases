@@ -15437,18 +15437,6 @@ function renderToolsPage(){
         <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Form G-28</div>
         <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Notice of Entry of Appearance as Attorney or Accredited Representative</div>
       </div>
-      <div onclick="renderMergeDuplicates()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
-        <div style="font-size:24px;margin-bottom:8px;">🔀</div>
-        <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Merge duplicate clients</div>
-        <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Combine two client entries into one without losing any of their events, tasks, or notes.</div>
-      </div>
-      <div onclick="document.getElementById('import-new-cases-input').click()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
-        <div style="font-size:24px;margin-bottom:8px;">📥</div>
-        <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Import new cases from Excel</div>
-        <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;margin-bottom:10px;">Add cases from an Excel sheet. Existing cases (matched by Client ID or A-Number) are skipped — current data is never overwritten.</div>
-        <a href="#" onclick="event.stopPropagation();event.preventDefault();downloadCasesTemplate();" style="font-size:11px;color:var(--sage);text-decoration:underline;font-weight:500;">↓ Download blank template</a>
-        <input type="file" id="import-new-cases-input" accept=".xlsx,.xls" style="display:none;" onchange="importNewCasesFromExcel(this);event.stopPropagation();"/>
-      </div>
       <div onclick="renderBondPrep()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
         <div style="font-size:24px;margin-bottom:8px;">⚖️</div>
         <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Bond Hearing Prep</div>
@@ -15463,12 +15451,6 @@ function renderToolsPage(){
         <div style="font-size:24px;margin-bottom:8px;">🛂</div>
         <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">I-589 Application</div>
         <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Fill the asylum application on top of the official PDF. Answers are saved to the case as you type, and one click downloads the completed I-589.</div>
-      </div>
-      <div onclick="document.getElementById('restore-backup-input').click()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
-        <div style="font-size:24px;margin-bottom:8px;">♻️</div>
-        <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Restore from backup</div>
-        <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Pick a daily-backup JSON (or recovery delta). Records and cases that exist locally are kept as-is — only ones that are missing get added back in. Nothing you've edited recently will be touched.</div>
-        <input type="file" id="restore-backup-input" accept=".json,application/json" style="display:none;" onchange="restoreFromBackup(this);event.stopPropagation();"/>
       </div>
       <div onclick="openExhibitPacketApp(event)" title="Click to open · Shift-click to change the URL" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
         <div style="font-size:24px;margin-bottom:8px;">📑</div>
