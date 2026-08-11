@@ -2474,6 +2474,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
   </div>
   <div class="settings-section"><div class="settings-section-title">Paralegals</div><div id="paralegal-tags"></div><div class="tag-add-row"><input id="new-paralegal" type="text" placeholder="Add paralegal..."/><button onclick="addTag('paralegal')">Add</button></div></div>
   <div class="settings-section"><div class="settings-section-title">Attorneys</div><div id="attorney-tags"></div><div class="tag-add-row"><input id="new-attorney" type="text" placeholder="Add attorney..."/><button onclick="addTag('attorney')">Add</button></div></div>
+  <div class="settings-section"><div class="settings-section-title">Calendar Staff</div><div style="font-size:11px;color:#8A7E72;margin-bottom:8px;">Everyone here receives the calendar emails (case schedules and daily calendar changes).</div><div id="calendar-staff-tags"></div><div class="tag-add-row"><input id="new-calendarstaff" type="text" placeholder="Add calendar staff..."/><button onclick="addTag('calendarstaff')">Add</button></div></div>
   <div class="settings-section">
     <div class="settings-section-title">Event types</div>
     <div style="font-size:11px;color:var(--ink-muted);line-height:1.55;margin-bottom:14px;background:#EEF1F7;border:1px solid #CBD5E8;border-radius:8px;padding:10px 12px;">
@@ -3405,6 +3406,25 @@ function saveAttorneyEmails(){ try{ localStorage.setItem('casetracker_attorney_e
 function loadAttorneyEmails(){ try{ const d=localStorage.getItem('casetracker_attorney_emails'); if(d) attorneyEmails=JSON.parse(d); }catch(e){} }
 function saveAttorneySignatures(){ try{ localStorage.setItem('casetracker_attorney_signatures', JSON.stringify(attorneySignatures)); }catch(e){} }
 function loadAttorneySignatures(){ try{ const d=localStorage.getItem('casetracker_attorney_signatures'); if(d) attorneySignatures=JSON.parse(d); }catch(e){} }
+// Calendar staff — the office staff who keep the master calendar sheet
+// (QUEENS – FINAL CALENDAR). Every calendar/schedule email goes to everyone
+// on this list. Same shape as paralegals/attorneys: names + {name: email}.
+// Editable in Settings → Calendar Staff.
+let calendarStaff=['Loly','Paul Bernal'];
+let calendarStaffEmails={'Loly':'mvintimilla@theromerofirm.com','Paul Bernal':'pbernal@theromerofirm.com'};
+// Emails of everyone on the calendar-staff list, in list order, deduped.
+// Falls back to Loly's address so calendar emails still have a recipient
+// even if the list is emptied out in Settings.
+function calendarStaffRecipients(){
+  const out=calendarStaff.map(n=>calendarStaffEmails[n]).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i);
+  return out.length?out:['mvintimilla@theromerofirm.com'];
+}
+// "Loly" / "Loly and Paul Bernal" / "A, B and C" — for email greetings.
+function calendarStaffGreetingNames(){
+  const list=calendarStaff.filter(Boolean);
+  if(!list.length) return 'Loly';
+  return list.length>1?list.slice(0,-1).join(', ')+' and '+list[list.length-1]:list[0];
+}
 // Bumped whenever the eventTypes list itself changes (add/remove/rename/
 // reorder) so the cloud merge can tell which device's ORDER is newer
 // without falling back to whole-doc last-write-wins.
@@ -7228,7 +7248,7 @@ function migrateDocLists(){Object.keys(caseTypeDocLists).forEach(ct=>{const arr=
 function addCaseType(){const inp=document.getElementById('new-casetype');const val=inp.value.trim();if(!val){alert('Case type name required.');return;}if(caseTypes.includes(val)){alert('Case type already exists.');return;}caseTypes.push(val);inp.value='';renderCaseTypesSection();updateSettingsSaveBar();dirtyFilterOpts();}
 
 // ── Settings rendering ──
-function renderSettings(){renderColVis();renderParalegalTags();renderAttorneyTags();renderEventTypeTags();renderTags('casetype',caseTypes);renderVenueTags();renderSettingsTable();renderFirmInfoFields();}
+function renderSettings(){renderColVis();renderParalegalTags();renderAttorneyTags();renderCalendarStaffTags();renderEventTypeTags();renderTags('casetype',caseTypes);renderVenueTags();renderSettingsTable();renderFirmInfoFields();}
 function renderFirmInfoFields(){
   const fields=['lastName','firstName','middleName','firmName','barNumber','licensingAuthority','street','apt','city','state','zip','phone','mobile','email','fax'];
   fields.forEach(k=>{const el=document.getElementById('fi-'+k);if(el)el.value=firmInfo[k]||'';});
@@ -7321,6 +7341,50 @@ function renderAttorneyTags(){
     emailIn.onblur=()=>{emailIn.style.borderColor='#EDE8E0';const em=emailIn.value.trim();if(em)attorneyEmails[v]=em;else delete attorneyEmails[v];updateSettingsSaveBar();markUnsaved();lockEmail();};
     const removeBtn=document.createElement('button');removeBtn.innerHTML='×';removeBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0;';
     removeBtn.onclick=()=>{delete attorneyEmails[v];attorneys.splice(i,1);updateSettingsSaveBar();markUnsaved();renderAttorneyTags();};
+    row.appendChild(nameEl);row.appendChild(emailIn);row.appendChild(removeBtn);el.appendChild(row);
+  });
+}
+
+// Renders the Calendar Staff section in Settings — the people who keep the
+// office calendar sheet and receive every calendar email. Same row layout
+// as renderAttorneyTags (name + triple-click-to-edit email + remove).
+function renderCalendarStaffTags(){
+  const el=document.getElementById('calendar-staff-tags');if(!el)return;el.innerHTML='';
+  el.style.cssText='display:flex;flex-direction:column;gap:6px;margin-bottom:10px;';
+  calendarStaff.forEach((v,i)=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 10px;background:#FDFAF7;border:1px solid #EDE8E0;border-radius:8px;';
+    const nameEl=document.createElement('span');nameEl.style.cssText='font-size:12px;font-weight:600;color:#2C2620;min-width:120px;cursor:pointer;';nameEl.textContent=v;nameEl.title='Click to edit name';
+    nameEl.onclick=()=>{
+      const newName=prompt('Edit calendar staff name:',v);
+      if(newName&&newName.trim()&&newName.trim()!==v){
+        const old=v;
+        calendarStaff[i]=newName.trim();
+        if(calendarStaffEmails[old]){calendarStaffEmails[newName.trim()]=calendarStaffEmails[old];delete calendarStaffEmails[old];}
+        updateSettingsSaveBar();markUnsaved();renderCalendarStaffTags();
+      }
+    };
+    const emailIn=document.createElement('input');emailIn.type='email';emailIn.placeholder='email@example.com';emailIn.value=calendarStaffEmails[v]||'';
+    emailIn.style.cssText='flex:1;font-size:11px;padding:4px 8px;border:1px solid #EDE8E0;border-radius:5px;color:#5C5148;background:#fff;outline:none;font-family:inherit;min-width:160px;cursor:pointer;';
+    emailIn.readOnly=true;emailIn.title='Click 3 times to edit';
+    let clickCount=0,clickTimer=null;
+    const lockEmail=()=>{emailIn.readOnly=true;emailIn.style.cursor='pointer';emailIn.style.background='#fff';emailIn.title='Click 3 times to edit';clickCount=0;if(clickTimer){clearTimeout(clickTimer);clickTimer=null;}};
+    emailIn.onclick=()=>{
+      if(!emailIn.readOnly)return;
+      clickCount++;
+      if(clickTimer)clearTimeout(clickTimer);
+      if(clickCount>=3){
+        emailIn.readOnly=false;emailIn.style.cursor='text';emailIn.style.background='#FFFEF5';emailIn.title='';clickCount=0;
+        emailIn.focus();
+      }else{
+        clickTimer=setTimeout(()=>{clickCount=0;},800);
+      }
+    };
+    emailIn.onfocus=()=>{if(!emailIn.readOnly)emailIn.style.borderColor='#6A8C6E';};
+    emailIn.oninput=()=>{const em=emailIn.value.trim();if(em)calendarStaffEmails[v]=em;else delete calendarStaffEmails[v];updateSettingsSaveBar();markUnsaved();};
+    emailIn.onblur=()=>{emailIn.style.borderColor='#EDE8E0';const em=emailIn.value.trim();if(em)calendarStaffEmails[v]=em;else delete calendarStaffEmails[v];updateSettingsSaveBar();markUnsaved();lockEmail();};
+    const removeBtn=document.createElement('button');removeBtn.innerHTML='×';removeBtn.style.cssText='border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0;';
+    removeBtn.onclick=()=>{delete calendarStaffEmails[v];calendarStaff.splice(i,1);updateSettingsSaveBar();markUnsaved();renderCalendarStaffTags();};
     row.appendChild(nameEl);row.appendChild(emailIn);row.appendChild(removeBtn);el.appendChild(row);
   });
 }
@@ -7615,7 +7679,7 @@ function toggleAddColForm(){const f=document.getElementById('add-col-form');f.cl
 function addCustomColumn(){const name=document.getElementById('new-col-name').value.trim(),type=document.getElementById('new-col-type').value;if(!name){alert('Column name required.');return;}const key='custom_'+name.toLowerCase().replace(/\s+/g,'_')+'_'+Date.now();customColumns.push({key,label:name,type,options:type==='select'?[...paralegals,'Me']:[]});colVis[key]=true;records.forEach(r=>r[key]='');document.getElementById('new-col-name').value='';document.getElementById('add-col-form').classList.remove('open');showToast(`Column "${name}" added`);renderSettings();updateSettingsSaveBar();}
 function removeCustomColumn(key){customColumns=customColumns.filter(c=>c.key!==key);delete colVis[key];records.forEach(r=>delete r[key]);renderSettings();renderAll();updateSettingsSaveBar();}
 function startEditTag(tag,label,kind,i,arr){if(tag.classList.contains('editing'))return;tag.classList.add('editing');const oldVal=arr[i];const input=document.createElement('input');input.className='tag-edit-input';input.value=oldVal;input.style.width=(Math.max(oldVal.length,4)*8)+'px';input.oninput=()=>{input.style.width=(Math.max(input.value.length,4)*8)+'px';};label.replaceWith(input);input.focus();input.select();function commit(){const newVal=input.value.trim();if(newVal&&newVal!==oldVal){if(kind==='paralegal'){paralegals[i]=newVal;records.forEach(r=>{if(r.atty===oldVal)r.atty=newVal;if(r.assigned===oldVal)r.assigned=newVal;});_sortParalegalsAZ();}else if(kind==='eventtype'){eventTypes[i]=newVal;records.forEach(r=>{if(r.event===oldVal)r.event=newVal;});}else if(kind==='casetype'){caseTypes[i]=newVal;records.forEach(r=>{if(r.type===oldVal)r.type=newVal;});}updateSettingsSaveBar();}renderSettings();}input.onblur=commit;input.onkeydown=(e)=>{if(e.key==='Enter'){e.preventDefault();input.blur();}if(e.key==='Escape'){input.value=oldVal;input.blur();}};}
-function addTag(kind){const inp=document.getElementById('new-'+kind),val=inp.value.trim();if(!val)return;if(kind==='paralegal'&&!paralegals.includes(val)){paralegals.push(val);_sortParalegalsAZ();}else if(kind==='attorney'&&!attorneys.includes(val))attorneys.push(val);else if(kind==='eventtype'&&!eventTypes.includes(val)){eventTypes.push(val);if(eventTypeMeta[val]&&eventTypeMeta[val]._deleted){delete eventTypeMeta[val]._deleted;eventTypeMeta[val]._updatedAt=Date.now();}}else if(kind==='casetype'&&!caseTypes.includes(val))caseTypes.push(val);inp.value='';renderSettings();updateSettingsSaveBar();dirtyFilterOpts();if(kind==='paralegal'||kind==='attorney')markUnsaved();}
+function addTag(kind){const inp=document.getElementById('new-'+kind),val=inp.value.trim();if(!val)return;if(kind==='paralegal'&&!paralegals.includes(val)){paralegals.push(val);_sortParalegalsAZ();}else if(kind==='attorney'&&!attorneys.includes(val))attorneys.push(val);else if(kind==='calendarstaff'&&!calendarStaff.includes(val))calendarStaff.push(val);else if(kind==='eventtype'&&!eventTypes.includes(val)){eventTypes.push(val);if(eventTypeMeta[val]&&eventTypeMeta[val]._deleted){delete eventTypeMeta[val]._deleted;eventTypeMeta[val]._updatedAt=Date.now();}}else if(kind==='casetype'&&!caseTypes.includes(val))caseTypes.push(val);inp.value='';renderSettings();updateSettingsSaveBar();dirtyFilterOpts();if(kind==='paralegal'||kind==='attorney'||kind==='calendarstaff')markUnsaved();}
 function removeTag(kind,i){if(kind==='paralegal')paralegals.splice(i,1);else if(kind==='eventtype'){const _n=eventTypes[i];eventTypes.splice(i,1);if(_n)eventTypeMeta[_n]=Object.assign({},eventTypeMeta[_n],{_deleted:true,_updatedAt:Date.now()});}else if(kind==='casetype')caseTypes.splice(i,1);renderSettings();updateSettingsSaveBar();dirtyFilterOpts();}
 function renderSettingsTable(){const cols=allColumns().filter(c=>c.key!=='notes');const thead=document.getElementById('settings-thead');thead.innerHTML='';[...cols,{key:'notes',label:'Notes'},{key:'_a',label:''}].forEach(c=>{const th=document.createElement('th');th.textContent=c.label;thead.appendChild(th);});const tbody=document.getElementById('settings-tbody');tbody.innerHTML='';const stFrag=document.createDocumentFragment();const sorted=[...records].filter(r=>!r.deletedStatus).map(r=>({r,d:parseDate(r.date)})).sort((a,b)=>{if(!a.d&&!b.d)return 0;if(!a.d)return 1;if(!b.d)return-1;return a.d-b.d;}).map(x=>x.r);sorted.forEach(r=>{const isE=editingRowId===r.id;const tr=document.createElement('tr');tr.className=isE?'editing-row':'';if(isE){let c=`<td><input id="se-clid-${r.id}" value="${r.clid||''}" style="min-width:55px"/></td><td><input id="se-client-${r.id}" value="${r.client}" style="min-width:90px"/></td><td><input id="se-anum-${r.id}" value="${r.anum||''}" style="min-width:80px"/></td><td><select id="se-type-${r.id}" style="min-width:110px">${caseTypes.map(c=>`<option${c===r.type?' selected':''}>${c}</option>`).join('')}</select></td><td><select id="se-atty-${r.id}" style="min-width:100px"><option value="">—</option>${paralegals.map(p=>`<option${p===r.atty?' selected':''}>${p}</option>`).join('')}</select></td><td><select id="se-event-${r.id}" style="min-width:100px"><option value="">—</option>${eventTypes.map(e=>`<option${e===r.event?' selected':''}>${e}</option>`).join('')}</select></td><td><input type="date" id="se-date-${r.id}" value="${r.date||''}" style="min-width:110px"/></td><td><select id="se-assigned-${r.id}" style="min-width:90px"><option value="">—</option><option value="Me"${r.assigned==='Me'?' selected':''}>Me</option>${paralegals.map(p=>`<option${p===r.assigned?' selected':''}>${p}</option>`).join('')}</select></td>`;customColumns.forEach(cc=>{c+=cc.type==='select'?`<td><select id="se-${cc.key}-${r.id}" style="min-width:90px"><option value="">—</option>${cc.options.map(o=>`<option${o===(r[cc.key]||'')?(' selected="selected"'):''}">${o}</option>`).join('')}</select></td>`:`<td><input id="se-${cc.key}-${r.id}" value="${r[cc.key]||''}" style="min-width:90px"/></td>`;});c+=`<td><input id="se-notes-${r.id}" value="${r.notes||''}" style="min-width:130px"/></td><td style="white-space:nowrap"><button class="btn-success btn-sm" onclick="saveRow('${r.id}')" style="margin-right:4px">Save</button><button class="btn-sm" onclick="cancelRow()">Cancel</button></td>`;tr.innerHTML=c;}else{let c=`<td class="muted">${r.clid||'—'}</td><td style="font-weight:500">${r.client}</td><td class="muted">${r.anum||'—'}</td><td class="muted">${r.type}</td><td class="muted">${r.atty||'—'}</td><td>${r.event||'—'}</td><td><span class="badge ${badgeClass(status(parseDate(r.date)))}">${fmtDate(r.date)}</span></td><td>${r.assigned?`<span class="badge ${r.assigned==='Me'?'badge-me':'no-date'}">${r.assigned}</span>`:'—'}</td>`;customColumns.forEach(cc=>{c+=`<td class="muted">${r[cc.key]||'—'}</td>`;});c+=`<td class="muted" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.notes}">${r.notes||'—'}</td><td style="white-space:nowrap"><button class="edit-btn" onclick="startEditRow('${r.id}')" style="margin-right:4px">Edit</button><button class="btn-danger btn-sm" onclick="deleteById('${r.id}')">Del</button></td>`;tr.innerHTML=c;}tbody.appendChild(tr);});}
 function startEditRow(id){editingRowId=id;renderSettingsTable();}
@@ -12885,7 +12949,7 @@ function offerCalendarEmailDraft(savedData){
   draftBtn.innerHTML=`
     <div style="flex:1;">
       <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:2px;">Draft calendar email?</div>
-      <div style="font-size:11px;color:var(--ink-muted);">Send all planned events for ${savedData.client} to Loly</div>
+      <div style="font-size:11px;color:var(--ink-muted);">Send all planned events for ${savedData.client} to the calendar staff</div>
     </div>
     <button onclick="buildCalendarEmailDraft('${clid.replace(/'/g,"\\'")}','${(savedData.client||'').replace(/'/g,"\\'")}');this.parentElement.remove();" style="font-size:11px;font-weight:600;padding:7px 14px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;">Draft Email</button>
     <button onclick="this.parentElement.remove();" style="font-size:11px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Skip</button>`;
@@ -13371,8 +13435,8 @@ function buildCalendarEmailDraft(clid, clientName){
   const base=clientEvents[0];
   const paralegal=base.atty||'';
   const paralegalEmail=paralegalEmails[paralegal]||'';
-  const lolyEmail='mvintimilla@theromerofirm.com';
-  let bodyText='Dear Loly, Please calendar the events below for '+clientName+' (Client ID: '+(base.clid||clid)+(base.anum?', A#: '+base.anum:'')+').\n';
+  const staffEmails=calendarStaffRecipients();
+  let bodyText='Dear '+calendarStaffGreetingNames()+', Please calendar the events below for '+clientName+' (Client ID: '+(base.clid||clid)+(base.anum?', A#: '+base.anum:'')+').\n';
   bodyText+='The rows match the calendar sheet columns — copy them and paste straight into the sheet. The same rows are in the attached CSV file: open it in Excel and click the top-left select-all corner to copy everything in one click.\n\n';
   clientEvents.forEach(ev=>{
     bodyText+=formatEventRowForLoly(ev)+'\n';
@@ -13388,8 +13452,8 @@ function buildCalendarEmailDraft(clid, clientName){
   clientEvents.forEach(ev=>{ bodyTextES+=formatEventForEmailES(ev,clid,paralegal); });
   bodyTextES+='Gracias.';
   const subject='Calendar - '+clientName+(base.clid?' ('+base.clid+')':'');
-  // To: Loly + paralegal
-  const toList=[lolyEmail];
+  // To: calendar staff + paralegal
+  const toList=staffEmails.slice();
   if(paralegalEmail && !toList.includes(paralegalEmail)) toList.push(paralegalEmail);
   openEmailComposeModal({
     to: toList.join(', '),
@@ -13435,17 +13499,9 @@ function emailScheduleToClient(clid){
 }
 
 // Same schedule email, addressed to the office instead of the client:
-// Loly (matched by name in the paralegal/attorney email lists) plus the
-// case's assigned paralegal.
+// the calendar staff (Settings → Calendar Staff) plus the case's
+// assigned paralegal.
 function emailScheduleToStaff(clid){
-  const findEmail=name=>{
-    const n=String(name||'').toLowerCase();
-    let hit='';
-    [typeof paralegalEmails!=='undefined'?paralegalEmails:{}, typeof attorneyEmails!=='undefined'?attorneyEmails:{}].forEach(map=>{
-      Object.keys(map||{}).forEach(k=>{ if(!hit&&k.toLowerCase().includes(n)&&map[k]) hit=map[k]; });
-    });
-    return hit;
-  };
   const clientEvents=records.filter(r=>{
     return (r.clid||r.client)===clid && !r.finishedStatus && !r.deletedStatus && r.date
       && !(r.notes&&r.notes.startsWith('⏰ REMINDER'));
@@ -13453,12 +13509,12 @@ function emailScheduleToStaff(clid){
   if(!clientEvents.length){ showToast('No planned events to send'); return; }
   const base=clientEvents[0];
   const clientName=base.client||clid;
-  const lolyEmail=findEmail('loly');
+  const staffEmails=calendarStaff.map(n=>calendarStaffEmails[n]).filter(Boolean);
   const paraEmail=(base.atty&&typeof paralegalEmails!=='undefined'&&paralegalEmails[base.atty])||'';
-  const to=[lolyEmail,paraEmail].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(', ');
-  if(!to){ showToast('No email on file for Loly or '+(base.atty||'the paralegal')+' — add them in Settings'); return; }
-  if(!lolyEmail) showToast('No email found for Loly — sending to the paralegal only');
-  else if(!paraEmail) showToast('No email for '+(base.atty||'the paralegal')+' — sending to Loly only');
+  const to=[...staffEmails,paraEmail].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(', ');
+  if(!to){ showToast('No email on file for the calendar staff or '+(base.atty||'the paralegal')+' — add them in Settings'); return; }
+  if(!staffEmails.length) showToast('No emails found for the calendar staff — sending to the paralegal only');
+  else if(!paraEmail) showToast('No email for '+(base.atty||'the paralegal')+' — sending to the calendar staff only');
   let body='Hola:\n\n'
     +'Este es el calendario de los próximos eventos del caso. Las filas siguen las columnas de la hoja del calendario — cópielas y péguelas directamente en la hoja. Las mismas filas van en el archivo CSV adjunto: ábralo en Excel y haga clic en la esquina superior izquierda para seleccionarlo todo de una vez.\n\n'
     +clientName+' — ID del cliente: '+(base.clid||clid);
@@ -13686,10 +13742,12 @@ function renderQuickAddRecipients(clid){
   const el=document.getElementById('emc-quick-add');
   if(!el) return;
   el.innerHTML='';
-  const lolyEmail='mvintimilla@theromerofirm.com';
   const recipients=[];
-  // Loly
-  recipients.push({label:'+ Loly',email:lolyEmail,color:'var(--amber)'});
+  // Calendar staff (Loly + anyone else in Settings → Calendar Staff)
+  calendarStaff.forEach(name=>{
+    const em=calendarStaffEmails[name];
+    if(em&&!recipients.find(r=>r.email===em)) recipients.push({label:'+ '+name,email:em,color:'var(--amber)'});
+  });
   // Paralegal (from case or all)
   if(clid){
     const base=records.find(r=>(r.clid||r.client)===clid);
@@ -14182,12 +14240,12 @@ function saveAllData(){
   // GUARD: a session frozen by "Close app on other devices" must never
   // write again — its in-memory state is presumed stale.
   if(typeof _remoteClosed!=='undefined' && _remoteClosed){ return; }
-  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
+  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();// Auto-push events to Google Calendar when signed in as the target email
 try{ _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync(); }catch(e){}
 }catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypesUpdatedAt)eventTypesUpdatedAt=p.eventTypesUpdatedAt;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);caseTypes=_withRecordCaseTypes(p.caseTypes);if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}if(p.recordTombstones&&typeof p.recordTombstones==='object'){recordTombstones=_pruneTombstones(p.recordTombstones);}if(p.i589Template&&typeof p.i589Template==='object')i589Template=p.i589Template;return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypesUpdatedAt)eventTypesUpdatedAt=p.eventTypesUpdatedAt;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);caseTypes=_withRecordCaseTypes(p.caseTypes);if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.calendarStaff&&Array.isArray(p.calendarStaff)&&p.calendarStaff.length)calendarStaff=p.calendarStaff;if(p.calendarStaffEmails)Object.assign(calendarStaffEmails,p.calendarStaffEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}if(p.recordTombstones&&typeof p.recordTombstones==='object'){recordTombstones=_pruneTombstones(p.recordTombstones);}if(p.i589Template&&typeof p.i589Template==='object')i589Template=p.i589Template;return true;}catch(e){return false;}}
 // One pending-render flag, used by both the debounced timer and the global
 // focusout listener: if the user is mid-edit when the timer fires, we set
 // the flag and re-try after they blur, so we never yank focus mid-type.
@@ -17898,6 +17956,8 @@ function restoreFromBackup(input){
     venues = _union(venues, backup.venues);
     if(backup.paralegalEmails) Object.keys(backup.paralegalEmails).forEach(k => { if(!paralegalEmails[k]) paralegalEmails[k]=backup.paralegalEmails[k]; });
     if(backup.attorneyEmails)  Object.keys(backup.attorneyEmails ).forEach(k => { if(!attorneyEmails[k])  attorneyEmails[k] =backup.attorneyEmails[k]; });
+    if(Array.isArray(backup.calendarStaff)) calendarStaff = _union(calendarStaff, backup.calendarStaff);
+    if(backup.calendarStaffEmails) Object.keys(backup.calendarStaffEmails).forEach(k => { if(!calendarStaffEmails[k]) calendarStaffEmails[k]=backup.calendarStaffEmails[k]; });
     if(typeof markUnsaved==='function') markUnsaved();
     if(typeof renderAll==='function') try{ renderAll(); }catch(e){}
     showToast('Restored ' + newRecs.length + ' record(s) and ' + newMetaClids.length + ' case(s) ✓');
@@ -20413,12 +20473,12 @@ function openCaseDetail(clid){
   schedClientBtn.onclick=()=>emailScheduleToClient(clid);
   atRow.appendChild(schedClientBtn);
 
-  // Same schedule, but to the office: Loly + the case's paralegal.
+  // Same schedule, but to the office: the calendar staff + the case's paralegal.
   const schedStaffBtn=document.createElement('button');
   schedStaffBtn.className='btn-sm';
   schedStaffBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#6B7FA3;color:#6B7FA3;margin-left:4px;font-weight:600;';
-  schedStaffBtn.textContent='📅 Schedule → Loly + Paralegal';
-  schedStaffBtn.title='Email every upcoming event on this case to Loly and the assigned paralegal';
+  schedStaffBtn.textContent='📅 Schedule → Calendar Staff + Paralegal';
+  schedStaffBtn.title='Email every upcoming event on this case to the calendar staff and the assigned paralegal';
   schedStaffBtn.onclick=()=>emailScheduleToStaff(clid);
   atRow.appendChild(schedStaffBtn);
 
@@ -23963,6 +24023,8 @@ function applyPayload(p){
   if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);
   if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;
   if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);
+  if(p.calendarStaff&&Array.isArray(p.calendarStaff)&&p.calendarStaff.length)calendarStaff=p.calendarStaff;
+  if(p.calendarStaffEmails)Object.assign(calendarStaffEmails,p.calendarStaffEmails);
   if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);
   if(p.venues&&Array.isArray(p.venues))venues=p.venues;
   if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);
@@ -24206,7 +24268,7 @@ async function _recSyncPush(changedIds, deletedIds){
 function _persistLocalSnapshotQuiet(){
   try{
     const prevEpoch = parseInt(localStorage.getItem('wilmer_save_epoch')||'0') || 0;
-    const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:prevEpoch||Date.now()};
+    const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:prevEpoch||Date.now()};
     localStorage.setItem((typeof STORAGE_KEY !== 'undefined' ? STORAGE_KEY : 'casetracker_v1'), JSON.stringify(payload));
   }catch(e){}
 }
@@ -24571,6 +24633,8 @@ function _mergePayloads(cloudData, localData){
   merged.judges = _mergeById(cloudData.judges, localData.judges, _localNewer);
   merged.paralegalEmails    = _mergeMap(cloudData.paralegalEmails,    localData.paralegalEmails,    _localNewer);
   merged.attorneyEmails     = _mergeMap(cloudData.attorneyEmails,     localData.attorneyEmails,     _localNewer);
+  merged.calendarStaff      = _unionNames(cloudData.calendarStaff, localData.calendarStaff);
+  merged.calendarStaffEmails= _mergeMap(cloudData.calendarStaffEmails, localData.calendarStaffEmails, _localNewer);
   merged.attorneySignatures = _mergeMap(cloudData.attorneySignatures, localData.attorneySignatures, _localNewer);
   // ── Event-type config: merged per entry (like records) instead of
   // whole-object newest-doc-wins. Before this, a stale device saving
@@ -24675,7 +24739,7 @@ function _syncToFirestore(savedAt){
       records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,
       caseTypes,caseTypeDocLists,caseTypeStages,
       customColumns,colVis,caseMeta:caseMetaClean,callUpTypes,judges,caseIssueTypes,
-      customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,
+      customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,
       _savedAt:savedAt||Date.now(),_deviceId:_deviceId
     }));
     // Step 2b: write caseMeta out to its own sharded docs (wilmer/cm_*).
@@ -24696,7 +24760,7 @@ function _syncToFirestore(savedAt){
       'records','paralegals','eventTypes','eventTypesUpdatedAt','eventTypeMeta',
       'caseTypes','caseTypeDocLists','caseTypeStages',
       'customColumns','colVis','callUpTypes','judges','caseIssueTypes',
-      'customChecklists','paralegalEmails','attorneys','attorneyEmails','attorneySignatures','venues','firmInfo','bondPrepQuestions','recordTombstones','i589Template',
+      'customChecklists','paralegalEmails','attorneys','attorneyEmails','calendarStaff','calendarStaffEmails','attorneySignatures','venues','firmInfo','bondPrepQuestions','recordTombstones','i589Template',
       '_savedAt','_deviceId'
     ];
     function _buildWritable(merged){
@@ -24871,7 +24935,7 @@ function forcePullFromCloud(){
       _dataInitialized=true; // explicit pull permits saves again
       try{
         const _now=Date.now();
-        const lp={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
+        const lp={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
         localStorage.setItem('casetracker_v1',JSON.stringify(lp));
         localStorage.setItem('wilmer_save_epoch',String((cloudData&&cloudData._savedAt)||_now));
       }catch(e){}
@@ -25520,7 +25584,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         _dataInitialized=true; // cloud was applied — safe to autosave
         try{
           const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
+          const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
           localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
@@ -25545,7 +25609,7 @@ db.collection('wilmer').doc('data').onSnapshot(
           customColumns, colVis,
           caseMeta: JSON.parse(JSON.stringify(caseMeta||{})),
           callUpTypes, judges, caseIssueTypes, customChecklists,
-          paralegalEmails, attorneys, attorneyEmails, attorneySignatures, venues, firmInfo, bondPrepQuestions,
+          paralegalEmails, attorneys, attorneyEmails, calendarStaff, calendarStaffEmails, attorneySignatures, venues, firmInfo, bondPrepQuestions,
           _savedAt: _lastLocalSave || localEpoch || 0,
           _deviceId
         };
@@ -25565,7 +25629,7 @@ db.collection('wilmer').doc('data').onSnapshot(
           // re-push to Firestore and cause an infinite ping-pong loop.
           try{
             const _now=Date.now();
-            const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
+            const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
             localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
             localStorage.setItem('wilmer_save_epoch',String(Math.max(cloudEpoch, _now)));
             _lastLocalSave=_now;
@@ -25608,7 +25672,7 @@ db.collection('wilmer').onSnapshot(
     if(touched){
       try{
         const _now=Date.now();
-        const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
+        const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
         localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
         _lastLocalSave=_now;
         _refreshSavedHashes();
@@ -26109,7 +26173,7 @@ function saveNewTask(){
     <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px 16px;border-bottom:1px solid #EDE8E0;flex-shrink:0;">
       <div>
-        <div style="font-family:'Lora',Georgia,serif;font-size:17px;font-weight:600;color:#2C2620;" id="sched-modal-title">Send to Loly</div>
+        <div style="font-family:'Lora',Georgia,serif;font-size:17px;font-weight:600;color:#2C2620;" id="sched-modal-title">Send to Calendar Staff</div>
         <div id="sched-modal-subtitle" style="font-size:11px;color:#9E9186;margin-top:2px;"></div>
       </div>
       <button onclick="closeScheduleTodayModal()" style="border:none;background:transparent;font-size:20px;color:#C4BAB0;cursor:pointer;line-height:1;padding:2px 6px;">×</button>
@@ -26597,7 +26661,7 @@ function renderScheduleText(){
   if(sub) sub.textContent=totalChanges+' change'+(totalChanges!==1?'s':'')+' \u00b7 '+TODAY.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
 
   const lines=[];
-  lines.push('Dear Loly,');
+  lines.push('Dear '+calendarStaffGreetingNames()+',');
   lines.push('Please make the following changes in your calendar:');
   lines.push('');
   lines.push(TODAY.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}));
@@ -26721,8 +26785,9 @@ function openScheduleInMail(){
     window.location.href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(ta.value);
     return;
   }
-  // Build recipients: Loly always; cc the unique paralegals from those events
-  const lolyEmail = 'mvintimilla@theromerofirm.com';
+  // Build recipients: calendar staff always; cc the unique paralegals from those events
+  const staffEmails = calendarStaffRecipients();
+  const staffLower = staffEmails.map(e => e.toLowerCase());
   const eventIds = (window._schedLastEventIds || []);
   const paraSet = new Set();
   eventIds.forEach(id => {
@@ -26731,11 +26796,11 @@ function openScheduleInMail(){
       paraSet.add(paralegalEmails[r.atty]);
     }
   });
-  const cc = Array.from(paraSet).filter(e => e.toLowerCase() !== lolyEmail.toLowerCase()).join(', ');
+  const cc = Array.from(paraSet).filter(e => !staffLower.includes(e.toLowerCase())).join(', ');
   // Open the Gmail compose modal first (it resets _gmailComposeAttachments),
   // then push the auto-collected attachments + render the chip strip.
   openEmailComposeModal({
-    to: lolyEmail,
+    to: staffEmails.join(', '),
     cc: cc,
     subject: subject,
     body: ta.value,
