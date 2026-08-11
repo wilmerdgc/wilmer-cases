@@ -255,6 +255,13 @@ button.btn-sm { font-size: 11px; padding: 4px 11px; }
 body.inbox-only .top-bar,
 body.inbox-only #app > .divider,
 body.inbox-only #multitab-banner { display: none !important; }
+/* Tools-only mode (#tools / tools.html): the paralegal-facing entry that
+   shows ONLY the Tools & Forms page — no tabs, calendar, cases, settings,
+   or inbox. Also used by "View as Katya" to preview that experience from
+   the full app. */
+body.tools-only .top-bar,
+body.tools-only #app > .divider,
+body.tools-only #multitab-banner { display: none !important; }
 
 /* ── Divider ───────────────────────────────────── */
 .divider { height: 1px; background: var(--border); margin: 10px 0 24px; }
@@ -1977,6 +1984,16 @@ window.addEventListener('load',()=>autoGrowAllNotes());
   </div>
 </div>
 
+<!-- Tools-only banner: visible whenever the tools-only view is active.
+     In "View as Katya" preview it also shows whose session this really is
+     and an exit button back to the full app. -->
+<div id="tools-only-banner" style="display:none;align-items:center;justify-content:space-between;gap:12px;max-width:1200px;margin:0 auto 14px;padding:9px 16px;background:#6B7FA3;color:#fff;border-radius:10px;font-family:'DM Sans',system-ui,sans-serif;font-size:12px;font-weight:600;">
+  <span>📋 Tools &amp; Forms only <span style="font-weight:400;opacity:.85;">— Katya's view</span></span>
+  <span style="display:flex;align-items:center;gap:10px;">
+    <span id="tools-only-who" style="font-weight:400;opacity:.9;"></span>
+    <button id="tools-only-exit" onclick="exitToolsOnlyView()" style="display:none;border:1px solid rgba(255,255,255,.6);background:rgba(255,255,255,.12);color:#fff;border-radius:14px;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">← Back to my full view</button>
+  </span>
+</div>
 <div id="app" style="max-width:1200px;margin:0 auto">
 <div class="top-bar" style="flex-direction:column;gap:0;margin-bottom:0;padding-bottom:0;">
   <!-- Row 1: Logo + tabs + clock/backup -->
@@ -3607,11 +3624,41 @@ window.addEventListener('beforeunload', () => {
     try{ clearTimeout(window._autoSaveTimer); window._autoSaveTimer = null; saveAllData(); }catch(err){}
   }
 });
+// ── Tools-only view (Katya's main page) ──────────────────────────
+// Active when the page is opened via tools.html / #tools, or when the
+// owner clicks "View as Katya" from the Tools page. Hides all app chrome
+// and locks navigation to the Tools & Forms pane.
+function enterToolsOnlyView(fromPreview){
+  window._toolsOnlyPreview = !!fromPreview;
+  document.body.classList.add('tools-only');
+  const b=document.getElementById('tools-only-banner');
+  if(b){
+    b.style.display='flex';
+    const who=document.getElementById('tools-only-who');
+    const exit=document.getElementById('tools-only-exit');
+    if(who) who.textContent = fromPreview ? 'You are in YOUR session — just previewing' : '';
+    if(exit) exit.style.display = fromPreview ? '' : 'none';
+  }
+  switchTab('tools');
+}
+function exitToolsOnlyView(){
+  window._toolsOnlyPreview=false;
+  document.body.classList.remove('tools-only');
+  const b=document.getElementById('tools-only-banner');
+  if(b) b.style.display='none';
+  switchTab('dashboard');
+  showToast('Back to your full view');
+}
 function switchTab(t){
   // Inbox popout shows only the Inbox — anything else (e.g. "Open case"
   // from an email) belongs to the full app, in its own window.
   if(t!=='inbox' && document.body.classList.contains('inbox-only')){
     window.open(location.origin+location.pathname,'_blank');
+    return;
+  }
+  // Tools-only view is locked to the Tools pane.
+  if(t!=='tools' && document.body.classList.contains('tools-only')){
+    showToast('This view only has Tools & Forms');
     return;
   }
   currentTab=t;
@@ -15428,8 +15475,12 @@ function setDfComment(clid,val){
 function renderToolsPage(){
   const el=document.getElementById('tools-content');
   if(!el)return;
+  const _toolsOnly=document.body.classList.contains('tools-only');
   el.innerHTML=`
-    <div style="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);margin-bottom:6px;">Tools &amp; Forms</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;">
+      <div style="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);">Tools &amp; Forms</div>
+      ${_toolsOnly?'':`<button onclick="enterToolsOnlyView(true)" title="Preview the tools-only view Katya gets (tools.html) — you stay in your own session" style="font-size:11px;font-weight:600;padding:5px 12px;border:1px solid #6B7FA3;border-radius:16px;background:transparent;color:#6B7FA3;cursor:pointer;font-family:inherit;">👁 View as Katya</button>`}
+    </div>
     <div style="font-size:13px;color:var(--ink-muted);margin-bottom:24px;">Forms and data utilities.</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;">
       <div onclick="renderG28Form()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
@@ -25772,6 +25823,9 @@ if(_fbAuthReady) window._attachCloudListeners();
 // into the Inbox tab, with every other pane and the app chrome hidden
 // (body.inbox-only — see the CSS next to .tab-nav).
 if(location.hash==='#inbox'){ try{ document.body.classList.add('inbox-only'); switchTab('inbox'); }catch(e){} }
+// Deep link: tools.html (or #tools) boots straight into the tools-only
+// view — Katya's main page. Only the Tools & Forms pane is reachable.
+if(location.hash==='#tools'){ try{ enterToolsOnlyView(false); }catch(e){} }
 // ── Perf: debounce filter inputs ──
 ['f-search','f-atty','f-type','f-category'].forEach(id=>{
   const el=document.getElementById(id);
