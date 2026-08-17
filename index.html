@@ -262,6 +262,55 @@ body.inbox-only #multitab-banner { display: none !important; }
 body.tools-only .top-bar,
 body.tools-only #app > .divider,
 body.tools-only #multitab-banner { display: none !important; }
+/* Client-only mode: a CLIENT of a personal case signed in with their own
+   email (see APP_ACCESS / clientPortalCasesFor in the gate script). The
+   whole tracker is hidden and only the read-only client portal shows. */
+body.client-only #app,
+body.client-only #multitab-banner,
+body.client-only #tools-only-banner { display: none !important; }
+
+/* ── Client portal ──────────────────────────────
+   Shared by the client's own signed-in page (#client-portal) and the
+   owner's "Client's View" case tab, so the preview is the real thing. */
+.cp-card {
+  background: #fff;
+  border: 1px solid #EDE8E0;
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 14px;
+  box-shadow: 0 1px 3px rgba(60,45,30,.05);
+}
+.cp-card-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #C4BAB0;
+  margin-bottom: 12px;
+}
+.cp-line { font-size: 13px; color: #5C5148; line-height: 1.6; }
+.cp-muted { font-size: 12px; color: #9E9186; line-height: 1.55; }
+.cp-strong { font-family: 'Lora', Georgia, serif; font-size: 15px; font-weight: 600; color: #2C2620; }
+.cp-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 12px; }
+.cp-field-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #C4BAB0; margin-bottom: 3px; }
+.cp-field-value { font-size: 13px; font-weight: 500; color: #2C2620; word-break: break-word; }
+.cp-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 7px 0;
+  border-bottom: 1px solid #F7F3ED;
+}
+.cp-item:last-child { border-bottom: none; }
+.cp-pill {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.cp-empty { font-size: 12px; color: #C4BAB0; font-style: italic; padding: 4px 0; }
 
 /* ── Divider ───────────────────────────────────── */
 .divider { height: 1px; background: var(--border); margin: 10px 0 24px; }
@@ -2019,6 +2068,29 @@ window.addEventListener('load',()=>autoGrowAllNotes());
     <button id="tools-only-signout" onclick="gateSignOut()" style="display:none;border:1px solid rgba(255,255,255,.6);background:rgba(255,255,255,.12);color:#fff;border-radius:14px;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Sign out</button>
   </span>
 </div>
+<!-- ══════════════════════════════════════════════════════════════════
+     CLIENT PORTAL — what a client of a PERSONAL case sees after signing
+     in with the email on file for their case (caseMeta[clid].clientEmail).
+     Read-only: schedule, case progress, documents still needed, payments.
+     The same body is rendered into the owner's "Client's View" case tab,
+     so that preview is literally the client's page.
+     ══════════════════════════════════════════════════════════════════ -->
+<div id="client-portal" style="display:none;font-family:'DM Sans',system-ui,sans-serif;">
+  <div style="background:#2C2620;color:#F7F3ED;padding:14px 0;margin-bottom:20px;">
+    <div style="max-width:780px;margin:0 auto;padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <div>
+        <div id="client-portal-firm" style="font-family:'Lora',Georgia,serif;font-size:16px;font-weight:600;">Your case</div>
+        <div style="font-size:11px;opacity:.7;margin-top:2px;">Client portal</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span id="client-portal-who" style="font-size:11px;opacity:.75;"></span>
+        <button onclick="gateSignOut()" style="border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.1);color:#fff;border-radius:16px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Sign out</button>
+      </div>
+    </div>
+  </div>
+  <div id="client-portal-cases" style="max-width:780px;margin:0 auto 12px;padding:0 16px;display:none;gap:6px;flex-wrap:wrap;"></div>
+  <div id="client-portal-body" style="max-width:780px;margin:0 auto;padding:0 16px 60px;"></div>
+</div>
 <div id="app" style="max-width:1200px;margin:0 auto">
 <div class="top-bar" style="flex-direction:column;gap:0;margin-bottom:0;padding-bottom:0;">
   <!-- Row 1: Logo + tabs + clock/backup -->
@@ -2374,6 +2446,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
       <button class="cd-tab-btn" id="cdtab-masterprep" onclick="switchCaseTab('masterprep')">Master Prep</button>
       <button class="cd-tab-btn" id="cdtab-i589" onclick="switchCaseTab('i589')">I-589</button>
       <button class="cd-tab-btn" id="cdtab-billing" onclick="switchCaseTab('billing')" style="display:none">Billing</button>
+      <button class="cd-tab-btn" id="cdtab-clientview" onclick="switchCaseTab('clientview')" style="display:none">Client's View</button>
     </div>
     <div id="cd-pane-overview"><div id="case-detail-body"></div></div>
     <div id="cd-pane-checklists" style="display:none"><div id="case-checklists-body"></div></div>
@@ -2381,6 +2454,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
     <div id="cd-pane-masterprep" style="display:none"><div id="case-masterprep-body"></div></div>
     <div id="cd-pane-i589" style="display:none"><div id="case-i589-body"></div></div>
     <div id="cd-pane-billing" style="display:none"><div id="case-billing-body"></div></div>
+    <div id="cd-pane-clientview" style="display:none"><div id="case-clientview-body"></div></div>
   </div>
   <div id="cases-add-view" style="display:none;">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
@@ -3532,7 +3606,7 @@ function calculateAgeText(dobStr){
   return years+'y '+months+'m left';
 }
 function fmtShort(s){if(!s)return'—';const d=parseDate(s);return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});}
-function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.remove('warn');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+function showToast(msg){if(window._clientReadOnly)return;const t=document.getElementById('toast');t.textContent=msg;t.classList.remove('warn');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
 function checkWeekendDate(val){if(!val)return false;const[y,m,d]=val.split('-').map(Number);const day=new Date(y,m-1,d).getDay();if(day===0||day===6){const name=day===0?'Sunday':'Saturday';const t=document.getElementById('toast');t.textContent='⚠ '+name+' — is this date intentional?';t.classList.add('warn','show');setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.classList.remove('warn'),200);},3500);return true;}return false;}
 // ── Perf: shared dashed-line factory (hoisted from 4 render fns) ──
 function _makeDashedLine(){
@@ -11380,7 +11454,7 @@ function copyDeadlinesText(){
     if(btn){const o=btn.textContent;btn.textContent='✓ Copied!';btn.style.color='#6A8C6E';btn.style.borderColor='#6A8C6E';setTimeout(()=>{btn.textContent=o;btn.style.color='';btn.style.borderColor='';},1800);}
   }).catch(()=>alert(txt));
 }
-function renderAll(){_sortParalegalsAZ();rebuildFilterOptions();if(currentView==='today')renderDayView();else if(currentView==='week')renderWeek();else if(currentView==='month')renderMonth();else if(currentView==='paralegals')renderParalegals();else if(currentView==='me')renderMe();else if(currentView==='all')renderAllEvents();else if(currentView==='queue'){renderQueue();return;}else if(currentView==='so')renderSchedulingOrders();else if(currentView==='deadlines')renderDeadlines();else if(currentView==='individual')renderIndividualView();// Only update queue badge when not rendering queue (renderQueue handles its own badge)
+function renderAll(){if(window._clientReadOnly){try{showClientCase(window._clientActiveClid);}catch(e){}return;}_sortParalegalsAZ();rebuildFilterOptions();if(currentView==='today')renderDayView();else if(currentView==='week')renderWeek();else if(currentView==='month')renderMonth();else if(currentView==='paralegals')renderParalegals();else if(currentView==='me')renderMe();else if(currentView==='all')renderAllEvents();else if(currentView==='queue'){renderQueue();return;}else if(currentView==='so')renderSchedulingOrders();else if(currentView==='deadlines')renderDeadlines();else if(currentView==='individual')renderIndividualView();// Only update queue badge when not rendering queue (renderQueue handles its own badge)
 updateQueueBadge();updateDeadlinesBadge();}
 </script>
 <script>
@@ -14316,6 +14390,8 @@ function saveAllData(){
   // GUARD: a session frozen by "Close app on other devices" must never
   // write again — its in-memory state is presumed stale.
   if(typeof _remoteClosed!=='undefined' && _remoteClosed){ return; }
+  // GUARD: a client signed into the client portal only ever reads.
+  if(window._clientReadOnly){ return; }
   const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();// Auto-push events to Google Calendar when signed in as the target email
@@ -19199,8 +19275,8 @@ window._sijSetFcStage = function(sel){
 };
 
 function switchCaseTab(tab){
-  const panes={overview:'cd-pane-overview',checklists:'cd-pane-checklists',documents:'cd-pane-documents',masterprep:'cd-pane-masterprep',i589:'cd-pane-i589',billing:'cd-pane-billing'};
-  const tabs={overview:'cdtab-overview',checklists:'cdtab-checklists',documents:'cdtab-documents',masterprep:'cdtab-masterprep',i589:'cdtab-i589',billing:'cdtab-billing'};
+  const panes={overview:'cd-pane-overview',checklists:'cd-pane-checklists',documents:'cd-pane-documents',masterprep:'cd-pane-masterprep',i589:'cd-pane-i589',billing:'cd-pane-billing',clientview:'cd-pane-clientview'};
+  const tabs={overview:'cdtab-overview',checklists:'cdtab-checklists',documents:'cdtab-documents',masterprep:'cdtab-masterprep',i589:'cdtab-i589',billing:'cdtab-billing',clientview:'cdtab-clientview'};
   if(!panes[tab])tab='overview';
   // Leaving the Master Prep / I-589 tab? tear down the iframe bridge listener.
   if(tab!=='masterprep')_mhpTeardown();
@@ -19214,6 +19290,7 @@ function switchCaseTab(tab){
   if(tab==='masterprep'&&activeCaseClid)renderCaseMasterPrep(activeCaseClid);
   if(tab==='i589'&&activeCaseClid)renderCaseI589(activeCaseClid);
   if(tab==='billing'&&activeCaseClid)renderCaseBilling(activeCaseClid);
+  if(tab==='clientview'&&activeCaseClid)renderCaseClientView(activeCaseClid);
 }
 
 // Record a document created for a case (from the Motion/Brief Creator or
@@ -19698,6 +19775,540 @@ function printBillingStatement(clid){
   setTimeout(()=>{try{w.print();}catch(e){}},350);
 }
 
+// ══════════ CLIENT PORTAL (PERSONAL cases only) ══════════
+// A client of a personal case signs in with the email on file for their
+// case (Case Information → Client Email) and lands on a read-only page
+// showing their own case: what's coming up, how far along it is, what
+// documents are still missing, and where their payments stand. Nothing
+// else in the tracker is reachable from there.
+//
+// The exact same body is rendered into the owner's "Client's View" case
+// tab, so that tab is a live preview rather than a mock-up. What the
+// client sees is controlled per case by caseMeta[clid].clientPortal:
+//   enabled       — off switch for portal access (no sign-in at all)
+//   showProgress  — case progress (workflow stages)
+//   showDocs      — documents still needed / received
+//   showBilling   — payment plan + payment history
+//   message       — a note from the attorney, shown at the top
+//   events        — per-record override of the default schedule rules
+//                   ({recordId: true|false}); see _clientEventDefault
+// Access is enforced in the browser (same as the sign-in gate itself) —
+// see the note above APP_ACCESS.
+function _clientPortalOf(clid){
+  if(!caseMeta[clid])caseMeta[clid]={};
+  const cp=caseMeta[clid].clientPortal||(caseMeta[clid].clientPortal={});
+  if(cp.enabled===undefined)cp.enabled=true;
+  if(cp.showProgress===undefined)cp.showProgress=true;
+  if(cp.showDocs===undefined)cp.showDocs=true;
+  if(cp.showBilling===undefined)cp.showBilling=true;
+  if(typeof cp.message!=='string')cp.message='';
+  if(!cp.events||typeof cp.events!=='object')cp.events={};
+  return cp;
+}
+function _clientEmailOf(clid){ return String(((caseMeta[clid]||{}).clientEmail)||'').trim().toLowerCase(); }
+function _isPersonalCase(clid){ return ((caseMeta[clid]||{}).caseCategory)==='Personal'; }
+
+// The case's most complete record — same pick as openCaseDetail.
+function _caseBaseRecord(clid){
+  const all=records.filter(r=>(r.clid||r.client)===clid);
+  if(!all.length)return null;
+  return all.reduce((best,r)=>{
+    const s=(r.client?1:0)+(r.anum?1:0)+(r.atty?1:0)+(r.type?1:0);
+    const bs=(best.client?1:0)+(best.anum?1:0)+(best.atty?1:0)+(best.type?1:0);
+    return s>bs?r:best;
+  },all[0]);
+}
+
+// Every PERSONAL case whose Client Email matches this address and whose
+// portal is switched on. One address can cover more than one case (the
+// portal then shows a case switcher).
+function clientPortalCasesFor(email){
+  const e=String(email||'').trim().toLowerCase();
+  if(!e)return [];
+  return Object.keys(caseMeta||{})
+    .filter(clid=>_isPersonalCase(clid)
+                && _clientEmailOf(clid)===e
+                && ((caseMeta[clid].clientPortal||{}).enabled!==false)
+                && !!_caseBaseRecord(clid))
+    .sort();
+}
+
+// Which events a client sees by default: appearances they are part of —
+// hearings, court dates, interviews, appointments, prep meetings. Internal
+// work (tasks, filing deadlines, call-ups, service, reminders) stays
+// private. Wilmer can flip any single event either way in the Client's
+// View tab; those choices live in clientPortal.events.
+const _CP_EVENT_PRIVATE=/^\s*(⏰|TASK|OFFICE TASK|PERSONAL TASK)|TASK|DEADLINE|CALL[- ]?UP|SCHEDULING ORDER|SERVICE|PETITION|MOTION|REMINDER/i;
+const _CP_EVENT_SHARED=/HEARING|MASTER|INDIVIDUAL|TRIAL|BOND|INTERVIEW|APPOINTMENT|BIOMETRIC|FINGERPRINT|COURT|CONSULT|MEETING/i;
+function _clientEventDefault(r){
+  const t=String((r&&(r.event||r.type))||'');
+  if(!t)return false;
+  if(_CP_EVENT_PRIVATE.test(t))return false;
+  return _CP_EVENT_SHARED.test(t);
+}
+function clientSeesEvent(clid,r){
+  const ov=_clientPortalOf(clid).events[r.id];
+  if(ov===true||ov===false)return ov;
+  return _clientEventDefault(r);
+}
+// Dated, live events of a case, oldest first.
+function _clientCaseEvents(clid){
+  return records
+    .filter(r=>(r.clid||r.client)===clid && r.date && !r.deletedStatus && !_isBlankAnchor(r))
+    .sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.timeStart||'').localeCompare(String(b.timeStart||'')));
+}
+// Where an event happens, in plain language: court/venue, virtual or in
+// person, and the address column when one is filled in.
+function _clientEventPlace(r){
+  const bits=[];
+  const j=(r.hearingJudgeId&&typeof judges!=='undefined')?judges.find(x=>x.id===r.hearingJudgeId):null;
+  if(j&&j.venue)bits.push(j.venue);
+  const mode=String(r.hearingMode||'').toLowerCase();
+  if(mode==='virtual')bits.push('Virtual (Webex)');
+  else if(mode==='in-person')bits.push('In person');
+  else if(mode==='office')bits.push('At our office');
+  try{
+    const col=(customColumns||[]).find(c=>/address/i.test(c.label||''));
+    const addr=col?String(r[col.key]||'').trim():'';
+    if(addr)bits.push(addr);
+  }catch(e){}
+  return bits.join(' · ');
+}
+function _cpCard(titleText){
+  const c=document.createElement('div');c.className='cp-card';
+  if(titleText){const t=document.createElement('div');t.className='cp-card-title';t.textContent=titleText;c.appendChild(t);}
+  return c;
+}
+function _cpField(grid,label,value){
+  if(!value)return;
+  const w=document.createElement('div');
+  const l=document.createElement('div');l.className='cp-field-label';l.textContent=label;
+  const v=document.createElement('div');v.className='cp-field-value';v.textContent=value;
+  w.appendChild(l);w.appendChild(v);grid.appendChild(w);
+}
+
+// The client's page for one case. `host` is emptied and rebuilt.
+function renderClientPortalInto(host,clid){
+  if(!host)return;
+  host.innerHTML='';
+  const meta=caseMeta[clid]||{};
+  const cp=_clientPortalOf(clid);
+  const base=_caseBaseRecord(clid)||{};
+  const fullName=[meta.clientFirstName,meta.clientMiddleName,meta.clientLastName].filter(Boolean).join(' ')||base.client||'';
+  const firstName=meta.clientFirstName||String(fullName).split(/\s+/)[0]||'';
+  const events=_clientCaseEvents(clid).filter(r=>clientSeesEvent(clid,r));
+  const upcoming=events.filter(r=>{const d=parseDate(r.date);return d&&d>=TODAY;});
+  const past=events.filter(r=>{const d=parseDate(r.date);return d&&d<TODAY;}).reverse().slice(0,4);
+
+  // ── Hello + case facts ──
+  const hero=document.createElement('div');
+  hero.className='cp-card';
+  hero.style.cssText+='background:#FDFAF7;';
+  const hi=document.createElement('div');
+  hi.className='cp-strong';hi.style.fontSize='19px';
+  hi.textContent=firstName?('Hello, '+firstName):'Your case';
+  hero.appendChild(hi);
+  const sub=document.createElement('div');
+  sub.className='cp-muted';sub.style.marginTop='4px';
+  sub.textContent='Here is where your case stands today.';
+  hero.appendChild(sub);
+  const hg=document.createElement('div');hg.className='cp-grid';hg.style.marginTop='16px';
+  _cpField(hg,'Case',base.type||'—');
+  _cpField(hg,'File number',base.clid||clid);
+  _cpField(hg,'A-Number',base.anum||'');
+  if(upcoming.length){
+    const n=upcoming[0];
+    const days=Math.round((parseDate(n.date)-TODAY)/86400000);
+    _cpField(hg,'Next date',fmtDate(n.date)+(days===0?' — today':days===1?' — tomorrow':days>0?(' — in '+days+' days'):''));
+  }
+  hero.appendChild(hg);
+  host.appendChild(hero);
+
+  // ── A note from the attorney ──
+  if(String(cp.message||'').trim()){
+    const m=_cpCard('A note from your attorney');
+    const p=document.createElement('div');p.className='cp-line';p.style.whiteSpace='pre-wrap';
+    p.textContent=cp.message.trim();
+    m.appendChild(p);host.appendChild(m);
+  }
+
+  // ── Schedule ──
+  const sc=_cpCard('Your upcoming dates');
+  if(!upcoming.length){
+    const e=document.createElement('div');e.className='cp-empty';
+    e.textContent='Nothing is scheduled right now. We will let you know as soon as a date is set.';
+    sc.appendChild(e);
+  } else {
+    upcoming.forEach((r,i)=>{
+      const row=document.createElement('div');row.className='cp-item';
+      const left=document.createElement('div');
+      left.style.cssText='min-width:104px;flex-shrink:0;';
+      const d=document.createElement('div');
+      d.style.cssText="font-family:'Lora',Georgia,serif;font-size:13px;font-weight:600;color:#2C2620;";
+      d.textContent=fmtDate(r.date);
+      left.appendChild(d);
+      const tm=[fmtTime(r.timeStart),fmtTime(r.timeEnd)].filter(Boolean).join(' – ');
+      if(tm){const t=document.createElement('div');t.className='cp-muted';t.style.fontSize='11px';t.textContent=tm;left.appendChild(t);}
+      const right=document.createElement('div');right.style.flex='1';
+      const ttl=document.createElement('div');ttl.className='cp-line';ttl.style.fontWeight='600';
+      ttl.textContent=r.event||r.type||'Appointment';
+      right.appendChild(ttl);
+      const place=_clientEventPlace(r);
+      if(place){const pl=document.createElement('div');pl.className='cp-muted';pl.textContent=place;right.appendChild(pl);}
+      if(r.virtualLink){
+        const a=document.createElement('a');
+        a.href=r.virtualLink;a.target='_blank';a.rel='noopener';
+        a.style.cssText='font-size:12px;color:#6B7FA3;text-decoration:underline;text-underline-offset:2px;';
+        a.textContent='Join link';
+        right.appendChild(a);
+      }
+      row.appendChild(left);row.appendChild(right);
+      if(i===0){
+        const pill=document.createElement('span');pill.className='cp-pill';
+        pill.style.cssText+='background:#FAF0E6;color:#C9823A;align-self:center;';
+        pill.textContent='Next';
+        row.appendChild(pill);
+      }
+      sc.appendChild(row);
+    });
+  }
+  if(past.length){
+    const ph=document.createElement('div');
+    ph.className='cp-card-title';ph.style.margin='16px 0 6px';ph.textContent='Already done';
+    sc.appendChild(ph);
+    past.forEach(r=>{
+      const row=document.createElement('div');row.className='cp-item';
+      const d=document.createElement('div');d.className='cp-muted';d.style.cssText+='min-width:104px;flex-shrink:0;';
+      d.textContent=fmtDate(r.date);
+      const t=document.createElement('div');t.className='cp-muted';t.style.flex='1';
+      t.textContent=r.event||r.type||'';
+      row.appendChild(d);row.appendChild(t);sc.appendChild(row);
+    });
+  }
+  host.appendChild(sc);
+
+  // ── Documents still needed ──
+  if(cp.showDocs){
+    const secs=Array.isArray(meta.docSections)?meta.docSections:[];
+    const missing=[];let have=0;
+    secs.forEach(sec=>{(sec.docs||[]).forEach(d=>{
+      if(d.checked||d.fileData)have++;
+      else missing.push({section:sec.sectionName||'',name:d.name||''});
+    });});
+    if(secs.length){
+      const dc=_cpCard('Documents');
+      const summary=document.createElement('div');summary.className='cp-muted';summary.style.marginBottom='10px';
+      summary.textContent=missing.length
+        ? ('We have '+have+' of '+(have+missing.length)+' documents. These are the ones we still need from you:')
+        : ('We have all '+have+' documents on file for your case. Nothing is pending.');
+      dc.appendChild(summary);
+      let lastSec=null;
+      missing.forEach(m=>{
+        if(m.section&&m.section!==lastSec){
+          lastSec=m.section;
+          const s=document.createElement('div');
+          s.className='cp-card-title';s.style.margin='12px 0 2px';s.textContent=m.section;
+          dc.appendChild(s);
+        }
+        const row=document.createElement('div');row.className='cp-item';
+        const dot=document.createElement('span');dot.textContent='○';dot.style.cssText='color:#C4BAB0;font-size:11px;line-height:1.6;';
+        const nm=document.createElement('div');nm.className='cp-line';nm.style.flex='1';nm.textContent=m.name;
+        row.appendChild(dot);row.appendChild(nm);dc.appendChild(row);
+      });
+      host.appendChild(dc);
+    }
+  }
+
+  // ── Case progress ──
+  if(cp.showProgress){
+    const stages=(typeof caseTypeStages!=='undefined'&&caseTypeStages[base.type||''])||[];
+    if(stages.length){
+      const prog=meta.stageProgress||{};
+      const pc=_cpCard('Where your case is');
+      const LBL={pending:'Not started yet',in_progress:'In progress',completed:'Done',skipped:'Not needed'};
+      const FG={pending:'#9E9186',in_progress:'#6B7FA3',completed:'#6A8C6E',skipped:'#C4BAB0'};
+      const BG={pending:'transparent',in_progress:'#EEF1F7',completed:'#EBF1EB',skipped:'transparent'};
+      const done=stages.filter((s,i)=>((prog[i]||{}).status)==='completed').length;
+      const bar=document.createElement('div');
+      bar.style.cssText='height:6px;border-radius:4px;background:#F0EBE3;overflow:hidden;margin-bottom:14px;';
+      const fill=document.createElement('div');
+      fill.style.cssText='height:100%;background:#6A8C6E;width:'+Math.round(done/stages.length*100)+'%;';
+      bar.appendChild(fill);pc.appendChild(bar);
+      stages.forEach((stage,i)=>{
+        const st=((prog[i]||{}).status)||'pending';
+        const row=document.createElement('div');row.className='cp-item';
+        let nm=stage.name||('Step '+(i+1));
+        ['IC — ','IC—','FC — ','FC—','USCIS — ','USCIS—'].forEach(p=>{ if(nm.startsWith(p)) nm=nm.slice(p.length).trim(); });
+        const n=document.createElement('div');n.className='cp-line';n.style.flex='1';n.textContent=nm;
+        const b=document.createElement('span');b.className='cp-pill';
+        b.style.cssText+='color:'+FG[st]+';background:'+BG[st]+';';
+        b.textContent=LBL[st]||LBL.pending;
+        row.appendChild(n);row.appendChild(b);pc.appendChild(row);
+      });
+      host.appendChild(pc);
+    }
+  }
+
+  // ── Payments ──
+  if(cp.showBilling){
+    const b=_billingOf(clid);
+    const t=_billingTotals(b);
+    const hasAny=t.cost>0||t.paid>0||b.payments.length;
+    if(hasAny){
+      const bc=_cpCard('Your payments');
+      const g=document.createElement('div');g.className='cp-grid';
+      _cpField(g,'Total cost',t.cost?_money(t.cost):'');
+      _cpField(g,'Paid so far',_money(t.paid));
+      _cpField(g,'Balance',_money(Math.max(0,t.balance)));
+      if(b.monthly)_cpField(g,'Monthly payment',_money(b.monthly));
+      bc.appendChild(g);
+      if(t.pastDue>0.004){
+        const pd=document.createElement('div');
+        pd.style.cssText='margin-top:12px;padding:9px 12px;border-radius:9px;background:#F9EDED;color:#B85C5C;font-size:12px;font-weight:600;';
+        pd.textContent='Behind on the payment plan by '+_money(t.pastDue)+'. Please contact the office.';
+        bc.appendChild(pd);
+      }
+      if(b.payments.length){
+        const ph=document.createElement('div');
+        ph.className='cp-card-title';ph.style.margin='16px 0 4px';ph.textContent='Payment history';
+        bc.appendChild(ph);
+        [...b.payments].sort((x,y)=>String(y.date||'').localeCompare(String(x.date||''))).forEach(p=>{
+          const row=document.createElement('div');row.className='cp-item';
+          const d=document.createElement('div');d.className='cp-muted';d.style.cssText+='min-width:104px;flex-shrink:0;';
+          d.textContent=p.date?fmtDate(p.date):'—';
+          const w=document.createElement('div');w.style.flex='1';
+          const l1=document.createElement('div');l1.className='cp-line';
+          l1.textContent=p.desc||p.type||'Payment';
+          w.appendChild(l1);
+          if(p.type&&p.desc){const l2=document.createElement('div');l2.className='cp-muted';l2.textContent=p.type;w.appendChild(l2);}
+          const amt=document.createElement('div');
+          amt.className='cp-line';amt.style.fontWeight='600';
+          amt.textContent=_money((Number(p.amount)||0)+(Number(p.additional)||0));
+          row.appendChild(d);row.appendChild(w);row.appendChild(amt);
+          bc.appendChild(row);
+        });
+      }
+      host.appendChild(bc);
+    }
+  }
+
+  // ── Who to contact ──
+  const cc=_cpCard('Your legal team');
+  const cg=document.createElement('div');cg.className='cp-grid';
+  const fi=(typeof firmInfo!=='undefined'&&firmInfo)||{};
+  const attyName=[fi.firstName,fi.lastName].filter(Boolean).join(' ');
+  _cpField(cg,'Attorney',attyName||fi.firmName||'');
+  if(fi.firmName&&attyName)_cpField(cg,'Firm',fi.firmName);
+  _cpField(cg,'Phone',fi.phone||fi.mobile||'');
+  _cpField(cg,'Email',fi.email||'');
+  if(base.atty){
+    _cpField(cg,'Paralegal',base.atty);
+    const pe=(typeof paralegalEmails!=='undefined'&&paralegalEmails[base.atty])||'';
+    if(pe)_cpField(cg,'Paralegal email',pe);
+  }
+  cc.appendChild(cg);
+  host.appendChild(cc);
+
+  const foot=document.createElement('div');
+  foot.className='cp-muted';foot.style.cssText+='text-align:center;padding:6px 0 0;';
+  foot.textContent='This page updates on its own as your case moves. It is read-only — to change anything, contact the office.';
+  host.appendChild(foot);
+}
+
+// ── Client's View tab (owner) ────────────────────────────────────
+// The controls for this case's portal on top, and underneath, the client's
+// page exactly as they see it.
+function renderCaseClientView(clid){
+  const body=document.getElementById('case-clientview-body');
+  if(!body)return;
+  body.innerHTML='';
+  const cp=_clientPortalOf(clid);
+  const email=_clientEmailOf(clid);
+  const save=()=>{ if(typeof markUnsaved==='function')markUnsaved(); };
+  const redraw=()=>renderCaseClientView(clid);
+
+  // ── Access panel ──
+  const acc=document.createElement('div');
+  acc.className='billing-card';
+  const accTop=document.createElement('div');
+  accTop.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;';
+  const who=document.createElement('div');
+  if(email){
+    who.innerHTML='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;margin-bottom:4px;">Client sign-in</div>'
+      +'<div style="font-size:13px;color:#2C2620;font-weight:600;">'+escHtml(email)+'</div>'
+      +'<div style="font-size:11px;color:#9E9186;margin-top:3px;">Signs in with Google at this address and lands on the page below.</div>';
+  } else {
+    who.innerHTML='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;margin-bottom:4px;">Client sign-in</div>'
+      +'<div style="font-size:13px;color:#B85C5C;font-weight:600;">No client email on file</div>'
+      +'<div style="font-size:11px;color:#9E9186;margin-top:3px;">Add one in Overview → Case Information → Client Email. It has to be a Google account.</div>';
+  }
+  accTop.appendChild(who);
+  const tog=document.createElement('button');
+  tog.type='button';
+  const on=cp.enabled!==false;
+  tog.textContent=on?'Access on':'Access off';
+  tog.style.cssText='font-size:12px;font-weight:600;padding:6px 16px;border-radius:20px;cursor:pointer;font-family:inherit;border:1px solid '
+    +(on?'#B4CCAD':'#DDD5CA')+';background:'+(on?'#EBF1EB':'#F7F3ED')+';color:'+(on?'#4C6B50':'#9E9186')+';';
+  tog.title=on?'Turn off — the client can no longer sign in':'Turn on — the client can sign in with the email on file';
+  tog.onclick=()=>{ cp.enabled=!on; save(); redraw(); };
+  accTop.appendChild(tog);
+  acc.appendChild(accTop);
+
+  // What the client's page includes
+  const opts=document.createElement('div');
+  opts.style.cssText='display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid #EDE8E0;';
+  [['showProgress','Case progress'],['showDocs','Documents'],['showBilling','Payments']].forEach(([key,label])=>{
+    const w=document.createElement('label');
+    w.style.cssText='display:flex;align-items:center;gap:6px;font-size:12px;color:#5C5148;cursor:pointer;';
+    const cb=document.createElement('input');cb.type='checkbox';cb.checked=cp[key]!==false;
+    cb.style.cssText='width:13px;height:13px;accent-color:#6A8C6E;cursor:pointer;margin:0;';
+    cb.onchange=()=>{ cp[key]=cb.checked; save(); redraw(); };
+    w.appendChild(cb);w.appendChild(document.createTextNode(label));
+    opts.appendChild(w);
+  });
+  acc.appendChild(opts);
+
+  // Note from the attorney
+  const msgWrap=document.createElement('div');
+  msgWrap.style.cssText='margin-top:14px;';
+  msgWrap.innerHTML='<label class="billing-label">Note shown at the top of their page</label>';
+  const msg=document.createElement('textarea');
+  msg.value=cp.message||'';
+  msg.placeholder='e.g. Bring your passport and the last two pay stubs to the hearing.';
+  msg.rows=2;
+  msg.style.cssText='width:100%;box-sizing:border-box;font-size:12px;padding:8px 10px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;resize:vertical;outline:none;';
+  let _msgT=null;
+  msg.oninput=()=>{ cp.message=msg.value; save(); clearTimeout(_msgT); _msgT=setTimeout(()=>_refreshClientPreview(clid),500); };
+  msgWrap.appendChild(msg);
+  acc.appendChild(msgWrap);
+  body.appendChild(acc);
+
+  // ── Which dates the client sees ──
+  const evs=_clientCaseEvents(clid);
+  const future=evs.filter(r=>{const d=parseDate(r.date);return d&&d>=TODAY;});
+  if(future.length){
+    const ec=document.createElement('div');
+    ec.className='billing-card';
+    ec.innerHTML='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;margin-bottom:4px;">Dates shared with the client</div>'
+      +'<div style="font-size:11px;color:#9E9186;margin-bottom:10px;">Hearings, court dates and appointments are shared by default; internal tasks and deadlines are not. Tick or untick to override a single date.</div>';
+    future.forEach(r=>{
+      const row=document.createElement('label');
+      row.style.cssText='display:flex;align-items:center;gap:9px;padding:5px 0;border-bottom:1px solid #F7F3ED;cursor:pointer;';
+      const cb=document.createElement('input');cb.type='checkbox';cb.checked=clientSeesEvent(clid,r);
+      cb.style.cssText='width:13px;height:13px;accent-color:#6A8C6E;cursor:pointer;margin:0;flex-shrink:0;';
+      cb.onchange=()=>{
+        if(cb.checked===_clientEventDefault(r)) delete cp.events[r.id];
+        else cp.events[r.id]=cb.checked;
+        save();_refreshClientPreview(clid);
+      };
+      const d=document.createElement('span');
+      d.style.cssText='font-size:12px;color:#5C5148;min-width:150px;';
+      d.textContent=fmtDate(r.date)+(r.timeStart?(' · '+fmtTime(r.timeStart)):'');
+      const t=document.createElement('span');
+      t.style.cssText='font-size:12px;color:#2C2620;font-weight:500;flex:1;';
+      t.textContent=r.event||r.type||'(no event type)';
+      row.appendChild(cb);row.appendChild(d);row.appendChild(t);
+      ec.appendChild(row);
+    });
+    body.appendChild(ec);
+  }
+
+  // ── Live preview ──
+  const head=document.createElement('div');
+  head.style.cssText='display:flex;align-items:center;gap:8px;margin:22px 0 10px;';
+  head.innerHTML='<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;">What '+(email?escHtml(email):'the client')+' sees</span>'
+    +'<span style="flex:1;height:1px;background:#EDE8E0;"></span>';
+  body.appendChild(head);
+
+  const frame=document.createElement('div');
+  frame.style.cssText='background:#F7F3ED;border:1px solid #EDE8E0;border-radius:14px;padding:18px;';
+  const inner=document.createElement('div');
+  inner.id='client-preview-body';
+  frame.appendChild(inner);
+  body.appendChild(frame);
+  if(cp.enabled===false){
+    const off=document.createElement('div');
+    off.style.cssText='font-size:12px;color:#B85C5C;background:#F9EDED;border-radius:9px;padding:9px 12px;margin-bottom:12px;font-weight:600;';
+    off.textContent='Access is off — the client cannot sign in right now. This is what they would see.';
+    inner.appendChild(off);
+    const pv=document.createElement('div');inner.appendChild(pv);
+    renderClientPortalInto(pv,clid);
+  } else {
+    renderClientPortalInto(inner,clid);
+  }
+}
+function _refreshClientPreview(clid){
+  const inner=document.getElementById('client-preview-body');
+  if(!inner)return;
+  renderCaseClientView(clid);
+}
+
+// ── Client-only mode ─────────────────────────────────────────────
+// Entered from the sign-in gate when the account belongs to a client.
+// Everything except the portal is hidden, and every write path is shut
+// off so a client session can never push data back to the cloud.
+window._clientReadOnly=false;
+window._clientCases=[];
+window._clientActiveClid=null;
+function enterClientOnlyView(clids,email){
+  window._clientReadOnly=true;
+  window._clientCases=clids||[];
+  try{ clearTimeout(window._autoSaveTimer); window._autoSaveTimer=null; }catch(e){}
+  // The "no saved data on this device" prompt may have fired behind the
+  // sign-in gate while the cloud snapshot was still in flight — it isn't
+  // a client's decision to make.
+  try{ const wg=document.getElementById('welcome-gate-ov'); if(wg)wg.remove(); }catch(e){}
+  // Same for a sync toast still fading out from the boot sequence —
+  // showToast is muted from here on (see its guard).
+  try{ const t=document.getElementById('toast'); if(t)t.classList.remove('show'); }catch(e){}
+  // The cloud snapshot lands before the gate knows who signed in, so the
+  // office's data may already have been cached on this machine. Wipe it —
+  // from here on the guards in saveAllData / the listeners keep it out.
+  try{
+    Object.keys(localStorage)
+      .filter(k=>/^casetracker|^wilmer_save_epoch|^daynotes|^view_filters/.test(k))
+      .forEach(k=>localStorage.removeItem(k));
+  }catch(e){}
+  document.body.classList.add('client-only');
+  const portal=document.getElementById('client-portal');
+  if(portal)portal.style.display='';
+  const who=document.getElementById('client-portal-who');
+  if(who)who.textContent=email||'';
+  const firm=document.getElementById('client-portal-firm');
+  if(firm){
+    const fi=(typeof firmInfo!=='undefined'&&firmInfo)||{};
+    firm.textContent=fi.firmName||[fi.firstName,fi.lastName].filter(Boolean).join(' ')||'Your case';
+  }
+  showClientCase((clids&&clids[0])||null);
+}
+function showClientCase(clid){
+  if(!clid)return;
+  window._clientActiveClid=clid;
+  // Case switcher — only when this client has more than one case with us.
+  const sw=document.getElementById('client-portal-cases');
+  if(sw){
+    const list=window._clientCases||[];
+    if(list.length>1){
+      sw.style.display='flex';
+      sw.innerHTML='';
+      list.forEach(id=>{
+        const b=document.createElement('button');
+        const meta=caseMeta[id]||{};
+        const base=_caseBaseRecord(id)||{};
+        const on=(id===clid);
+        b.textContent=base.type||meta.clientLastName||id;
+        b.style.cssText='font-size:12px;font-weight:600;padding:5px 14px;border-radius:20px;cursor:pointer;font-family:inherit;border:1px solid '
+          +(on?'#2C2620':'#DDD5CA')+';background:'+(on?'#2C2620':'#fff')+';color:'+(on?'#F7F3ED':'#5C5148')+';';
+        b.onclick=()=>showClientCase(id);
+        sw.appendChild(b);
+      });
+    } else {
+      sw.style.display='none';
+    }
+  }
+  renderClientPortalInto(document.getElementById('client-portal-body'),clid);
+}
+
 // Render a small client photo slot at the top of the case detail.
 // Stored as caseMeta[clid].clientPhoto (base64 data URL).
 // canEdit=true (set by the Case Info edit toggle) shows the upload "+"
@@ -19807,13 +20418,15 @@ function openCaseDetail(clid){
   {const _mpp=document.getElementById('cd-pane-masterprep');if(_mpp)_mpp.style.display='none';}
   {const _i5p=document.getElementById('cd-pane-i589');if(_i5p)_i5p.style.display='none';}
   {const _blp=document.getElementById('cd-pane-billing');if(_blp)_blp.style.display='none';}
+  {const _cvp=document.getElementById('cd-pane-clientview');if(_cvp)_cvp.style.display='none';}
   document.getElementById('cdtab-overview').classList.add('active');
   document.getElementById('cdtab-checklists').classList.remove('active');
   document.getElementById('cdtab-documents').classList.remove('active');
   {const _mpt=document.getElementById('cdtab-masterprep');if(_mpt)_mpt.classList.remove('active');}
   {const _i5t=document.getElementById('cdtab-i589');if(_i5t)_i5t.classList.remove('active');}
-  // Billing tab is only for cases marked PERSONAL in case information
+  // Billing + Client's View tabs are only for cases marked PERSONAL in case information
   {const _blt=document.getElementById('cdtab-billing');if(_blt){_blt.classList.remove('active');_blt.style.display=((caseMeta[clid]||{}).caseCategory==='Personal')?'':'none';}}
+  {const _cvt=document.getElementById('cdtab-clientview');if(_cvt){_cvt.classList.remove('active');_cvt.style.display=((caseMeta[clid]||{}).caseCategory==='Personal')?'':'none';}}
   if(typeof _refreshDocTabLabel==='function')_refreshDocTabLabel(clid);
   const allRecs=records.filter(r=>(r.clid||r.client)===clid);
   if(!allRecs.length)return;
@@ -20068,10 +20681,15 @@ function openCaseDetail(clid){
         const o=document.createElement('option');o.value=v;o.textContent=lbl;if(v===_catNow)o.selected=true;catSel.appendChild(o);
       });
       catSel.onchange=()=>{ if(!caseMeta[clid])caseMeta[clid]={}; caseMeta[clid].caseCategory=catSel.value; markUnsaved();
-        // Billing tab follows the category live: PERSONAL cases get it, Office cases don't.
-        const _blt=document.getElementById('cdtab-billing');
-        if(_blt){ _blt.style.display=(catSel.value==='Personal')?'':'none';
-          if(catSel.value!=='Personal'&&_blt.classList.contains('active'))switchCaseTab('overview'); } };
+        // Billing + Client's View tabs follow the category live: PERSONAL
+        // cases get them, Office cases don't.
+        const _isP=(catSel.value==='Personal');
+        ['cdtab-billing','cdtab-clientview'].forEach(id=>{
+          const t=document.getElementById(id);
+          if(!t)return;
+          t.style.display=_isP?'':'none';
+          if(!_isP&&t.classList.contains('active'))switchCaseTab('overview');
+        }); };
       catItem.appendChild(catSel);
       L1.appendChild(catItem);
     } else {
@@ -22186,6 +22804,7 @@ function toDateStr(d){
 function dayNotesKey(d){const dt=d||dayViewDate;return'daynotes_'+dt.getFullYear()+'_'+(dt.getMonth()+1)+'_'+dt.getDate();}
 let _pendingDayNotes=false;
 function saveDayNotes(){
+  if(window._clientReadOnly) return;   // client-portal session: read-only
   const key=dayNotesKey();
   const data={p1:document.getElementById('dv-priority-1').value,p2:document.getElementById('dv-priority-2').value,p3:document.getElementById('dv-priority-3').value,notes:document.getElementById('dv-day-notes').value};
   try{localStorage.setItem(key,JSON.stringify(data));}catch{}
@@ -24284,6 +24903,7 @@ function _cleanRecordForCloud(r){
 // Fire-and-forget — failures degrade silently to the whole-doc channel.
 async function _recSyncPush(changedIds, deletedIds){
   if(_recSyncUnavailable || !_fbAuthReady) return;
+  if(window._clientReadOnly) return;   // client-portal session: read-only
   if((!changedIds || !changedIds.length) && (!deletedIds || !deletedIds.length)) return;
   // Safety valve: if nearly every record looks "changed", the dirty-check
   // baseline was almost certainly unseeded rather than a genuine mass
@@ -24754,6 +25374,8 @@ let _syncFailStreak=0;
 function _syncToFirestore(savedAt){
   // Frozen by "Close app on other devices" — never push again.
   if(typeof _remoteClosed!=='undefined' && _remoteClosed){ return; }
+  // A client-portal session is read-only — it never pushes anything.
+  if(window._clientReadOnly){ return; }
   // If anon auth hasn't resolved yet, park the save. It will flush
   // automatically when signInAnonymously() succeeds (see boot block).
   // Without this guard, the first edit in a fresh session fires a write
@@ -24873,7 +25495,7 @@ function _syncToFirestore(savedAt){
             const mergedRecCount = (merged.records||[]).length;
             if(mergedRecCount !== localRecCount){
               applyPayload(merged);
-              try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(merged)); }catch(e){}
+              try{ if(!window._clientReadOnly) localStorage.setItem(STORAGE_KEY, JSON.stringify(merged)); }catch(e){}
               try{ localStorage.setItem('wilmer_save_epoch', String(merged._savedAt||Date.now())); }catch(e){}
               if(typeof renderAll==='function') try{ renderAll(); }catch(e){}
               if(typeof showToast==='function') showToast('☁ Merged with another device ✓');
@@ -24998,7 +25620,7 @@ function forcePullFromCloud(){
       try{
         const _now=Date.now();
         const lp={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
-        localStorage.setItem('casetracker_v1',JSON.stringify(lp));
+        if(!window._clientReadOnly) localStorage.setItem('casetracker_v1',JSON.stringify(lp));
         localStorage.setItem('wilmer_save_epoch',String((cloudData&&cloudData._savedAt)||_now));
       }catch(e){}
       renderAll();
@@ -25490,6 +26112,9 @@ try{ _refreshSavedHashes(); }catch(e){}
 // ══════════════════════════════════════════════════
 function showWelcomeGate(){
   if(document.getElementById('welcome-gate-ov')) return; // already shown
+  // Client-portal sessions never own the data — this prompt (and its
+  // "start empty / overwrite the cloud" choices) is not for them.
+  if(window._clientReadOnly) return;
   const ov=document.createElement('div');
   ov.id='welcome-gate-ov';
   ov.style.cssText='position:fixed;inset:0;background:rgba(44,38,32,0.72);z-index:10000;display:flex;align-items:center;justify-content:center;';
@@ -25631,6 +26256,7 @@ function _attachDataListener(){
 db.collection('wilmer').doc('data').onSnapshot(
   {includeMetadataChanges:false},
   (doc)=>{
+    window._dataSnapshotSeen=true;   // records are in — see _cmSnapshotSeen
     _fbOnline=true;
     updateCloudIndicator();
     if(!doc.exists)return;
@@ -25647,7 +26273,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         try{
           const _now=Date.now();
           const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
-          localStorage.setItem('casetracker_v1',JSON.stringify(payload));
+          if(!window._clientReadOnly) localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
         }catch(e){}
@@ -25692,7 +26318,7 @@ db.collection('wilmer').doc('data').onSnapshot(
           try{
             const _now=Date.now();
             const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
-            localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
+            if(!window._clientReadOnly) localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
             localStorage.setItem('wilmer_save_epoch',String(Math.max(cloudEpoch, _now)));
             _lastLocalSave=_now;
             _refreshSavedHashes();
@@ -25722,6 +26348,10 @@ function _attachCmShardListener(){
 db.collection('wilmer').onSnapshot(
   {includeMetadataChanges:false},
   (snap)=>{
+    // First snapshot means caseMeta has arrived from the cloud — the
+    // sign-in gate waits on this before deciding a client's access
+    // (a client's browser has nothing in localStorage to match against).
+    window._cmSnapshotSeen=true;
     let touched=false;
     snap.docChanges().forEach(ch=>{
       const id=ch.doc.id;
@@ -25735,7 +26365,7 @@ db.collection('wilmer').onSnapshot(
       try{
         const _now=Date.now();
         const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
-        localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
+        if(!window._clientReadOnly) localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
         _lastLocalSave=_now;
         _refreshSavedHashes();
       }catch(e){}
@@ -25858,12 +26488,22 @@ if(location.hash==='#tools'){ try{ enterToolsOnlyView(false); }catch(e){} }
 
 // ══════════════════════════════════════════════════
 // SIGN-IN GATE — who can open the app, and which view they get.
-//   'full'  → the whole tracker
-//   'tools' → locked to the Tools & Forms page (Katya's view)
-// Add or remove people by editing APP_ACCESS below (emails lowercase).
+//   'full'   → the whole tracker
+//   'tools'  → locked to the Tools & Forms page (Katya's view)
+//   'client' → locked to the read-only client portal for their own
+//              PERSONAL case(s). Not listed in APP_ACCESS: the address
+//              comes from the case itself (Case Information → Client
+//              Email on a case marked Personal), so adding a client is
+//              just filling in that field. Turn a client's access off
+//              again in the case's Client's View tab.
+// Add or remove staff by editing APP_ACCESS below (emails lowercase).
 // Runs on a second Firebase Auth instance ('gate') so the anonymous
 // sign-in that powers cloud sync is untouched. Enforced client-side,
-// same approach as the Exhibit Packet paywall.
+// same approach as the Exhibit Packet paywall — with the same caveat:
+// this decides what the PAGE shows, not what Firestore hands out. The
+// rules still allow any authenticated session to read the database, so
+// treat client sign-in as a convenience for people you already trust,
+// not as a wall around the rest of the data.
 // REQUIREMENTS (one-time, Firebase console → wilmer-cases project):
 //   1. Authentication → Sign-in method → enable Google.
 //   2. Authentication → Settings → Authorized domains → add the domain
@@ -25877,30 +26517,86 @@ window._gateRole=null;
 const _gateAuth=firebase.initializeApp(firebaseConfig,'gate').auth();
 function _gateShow(){const g=document.getElementById('access-gate');if(g)g.style.display='flex';}
 function _gateHide(){const g=document.getElementById('access-gate');if(g)g.style.display='none';}
+// A client's browser starts with an empty localStorage, so their case
+// data only exists once the cloud snapshots land. Until then we can't
+// tell "not a client" from "not loaded yet" — so an unrecognised address
+// waits (up to ~25s) for the data before it's turned away.
+const _GATE_CLIENT_WAIT_MS=25000;
+let _gateWaitTimer=null;
+function _gateCaseDataReady(){
+  return !!(window._dataSnapshotSeen && window._cmSnapshotSeen);
+}
+function _gateResolve(u){
+  const blocked=document.getElementById('gate-blocked');
+  const signin=document.getElementById('gate-signin-btn');
+  const msg=document.getElementById('gate-msg');
+  const email=String(u.email||'').toLowerCase();
+  const role=APP_ACCESS[email];
+  if(role){
+    clearInterval(_gateWaitTimer);_gateWaitTimer=null;
+    window._gateRole=role;
+    _gateHide();
+    if(role==='tools'){ try{ enterToolsOnlyView(false); }catch(e){} }
+    return true;
+  }
+  // Client of a personal case?
+  let cases=[];
+  try{ cases=clientPortalCasesFor(email); }catch(e){ cases=[]; }
+  if(cases.length){
+    clearInterval(_gateWaitTimer);_gateWaitTimer=null;
+    window._gateRole='client';
+    _gateHide();
+    try{ enterClientOnlyView(cases,u.email||''); }
+    catch(e){ console.warn('[client-portal] failed to open', e); }
+    return true;
+  }
+  // Still loading? Hold the gate open with a "checking" message.
+  if(!_gateCaseDataReady()){
+    if(msg)msg.textContent='Checking your access…';
+    if(signin)signin.style.display='none';
+    if(blocked)blocked.style.display='none';
+    _gateShow();
+    return false;
+  }
+  if(msg)msg.textContent='This account is signed in but not on the access list.';
+  const be=document.getElementById('gate-blocked-email'); if(be)be.textContent=u.email||'';
+  if(blocked)blocked.style.display='block';
+  if(signin)signin.style.display='none';
+  _gateShow();
+  return false;
+}
 _gateAuth.onAuthStateChanged(u=>{
+  clearInterval(_gateWaitTimer);_gateWaitTimer=null;
   const blocked=document.getElementById('gate-blocked');
   const signin=document.getElementById('gate-signin-btn');
   const msg=document.getElementById('gate-msg');
   if(!u){
     window._gateRole=null;
+    // A client session runs with every write path switched off. Rather
+    // than try to unwind that in place (and risk a later staff sign-in
+    // silently not saving), reload into a clean page.
+    if(window._clientReadOnly){ location.reload(); return; }
     if(blocked)blocked.style.display='none';
     if(signin)signin.style.display='inline-flex';
     if(msg)msg.textContent='Sign in with your Google account to continue.';
     _gateShow();
     return;
   }
-  const role=APP_ACCESS[String(u.email||'').toLowerCase()];
-  if(!role){
-    if(msg)msg.textContent='This account is signed in but not on the access list.';
-    const be=document.getElementById('gate-blocked-email'); if(be)be.textContent=u.email||'';
-    if(blocked)blocked.style.display='block';
-    if(signin)signin.style.display='none';
-    _gateShow();
-    return;
-  }
-  window._gateRole=role;
-  _gateHide();
-  if(role==='tools'){ try{ enterToolsOnlyView(false); }catch(e){} }
+  if(_gateResolve(u))return;
+  // Unrecognised so far — keep re-checking while the case data streams in.
+  const started=Date.now();
+  _gateWaitTimer=setInterval(()=>{
+    if(_gateResolve(u))return;
+    if(_gateCaseDataReady()||Date.now()-started>_GATE_CLIENT_WAIT_MS){
+      clearInterval(_gateWaitTimer);_gateWaitTimer=null;
+      // Final answer: show the "no access" panel.
+      if(msg)msg.textContent='This account is signed in but not on the access list.';
+      const be2=document.getElementById('gate-blocked-email'); if(be2)be2.textContent=u.email||'';
+      if(blocked)blocked.style.display='block';
+      if(signin)signin.style.display='none';
+      _gateShow();
+    }
+  },700);
 });
 function gateSignIn(){
   const err=document.getElementById('gate-error'); if(err)err.style.display='none';
