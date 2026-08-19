@@ -598,6 +598,7 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .modal-backdrop.readonly-mode #modal-master-prep-section,
 .modal-backdrop.readonly-mode #modal-time-row,
 .modal-backdrop.readonly-mode #modal-date-calc,
+.modal-backdrop.readonly-mode #modal-missing-panel,
 .modal-backdrop.readonly-mode #modal-copy-btn { display: none !important; }
 .modal-backdrop.readonly-mode .modal-save-btn { display: none !important; }
 .modal-backdrop.readonly-mode #modal-readonly-view { display: block; }
@@ -3189,6 +3190,9 @@ window.addEventListener('load',()=>autoGrowAllNotes());
     <!-- Shown only when this modal was opened from a preview (split-screen mode);
          lets the user attach the previewed document into the case. -->
     <div id="modal-preview-attach" style="display:none;"></div>
+    <!-- Anything still missing when Save is pressed is listed here, right
+         above the buttons, with the control to fill it in on the spot. -->
+    <div id="modal-missing-panel" style="display:none;"></div>
     <div class="form-actions">
       <button onclick="closeModal()">Close</button>
       <button id="modal-finish-btn" title="Mark this event completed / attended / cancelled…" onclick="_openTaskFinish(editingId)">&check; Finish event</button>
@@ -12389,8 +12393,8 @@ function openCaseFromModal(){
   closeModal();
   goToCase(clid);
 }
-function openAdd(){editingId=null;pendingStatus=null;document.getElementById('modal-title').textContent='Add event';const ocb=document.getElementById('modal-open-case-btn');if(ocb)ocb.style.display='none';document.getElementById('modal-status-section').style.display='none';document.getElementById('modal-reminder-section').style.display='block';['fc-clid','fc-client','fc-anum','fc-date','fc-notes'].forEach(id=>document.getElementById(id).value='');const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=false;document.getElementById('time-range-panel').classList.remove('open');document.getElementById('fc-time-start').value='';document.getElementById('fc-time-end').value='';document.getElementById('fc-time-display').textContent='';pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetVirtualHearingDetails();const _icp0=document.getElementById('individual-callup-panel');if(_icp0)_icp0.style.display='none';resetFcSubevents();const _fcs0=document.getElementById('fc-subevents-panel');if(_fcs0){setupLinkedSubeventsPanel(DEFAULT_LINKED_SUBEVENTS);renderFcSubevents();_fcs0.style.display='';}populateModalDropdowns();resetDateCalc();setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _m0=document.getElementById('modal');_m0.classList.remove('readonly-mode');_m0.classList.remove('case-compact');const _csum0=document.getElementById('modal-case-summary');if(_csum0)_csum0.innerHTML='';_m0.style.display='flex';}
-function openEdit(id){const r=records.find(x=>x.id===id);if(!r)return;editingId=id;pendingStatus=null;document.getElementById('modal-title').textContent='Edit event';const _ocb=document.getElementById('modal-open-case-btn');if(_ocb){_ocb.style.display=(r.clid||r.client)?'inline':'none';}document.getElementById('modal-status-section').style.display='block';document.getElementById('modal-reminder-section').style.display='block';pendingReminders=[];if(r){records.forEach(rx=>{if(rx.id===id)return;const isLinked=rx._parentId===id||(!rx._parentId&&(rx.clid||rx.client)===(r.clid||r.client));if(isLinked&&rx.notes&&rx.notes.startsWith('⏰ REMINDER')&&rx.date&&r.date){const diff=Math.round((new Date(r.date.replace(/-/g,'/'))-new Date(rx.date.replace(/-/g,'/')))/(1000*60*60*24));if(diff>0&&!pendingReminders.includes(diff))pendingReminders.push(diff);}});}renderReminderChips();document.getElementById('fc-clid').value=r.clid||'';document.getElementById('fc-client').value=r.client||'';document.getElementById('fc-anum').value=r.anum||'';document.getElementById('fc-date').value=r.date||'';document.getElementById('fc-notes').value=r.notes||'';const hasTime=!!(r.timeStart||r.timeEnd);const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=hasTime;document.getElementById('fc-time-start').value=r.timeStart||'';document.getElementById('fc-time-end').value=r.timeEnd||'';if(hasTime)document.getElementById('time-range-panel').classList.add('open');else document.getElementById('time-range-panel').classList.remove('open');updateTimeDisplay();document.getElementById('fc-history-note').value='';document.getElementById('fc-reschedule-date').value='';document.getElementById('reschedule-panel').classList.remove('open');document.getElementById('reschedule-extras').style.display='none';if(document.getElementById('rs-time-toggle'))document.getElementById('rs-time-toggle').checked=false;document.getElementById('rs-time-range-panel').classList.remove('open');if(document.getElementById('rs-time-start'))document.getElementById('rs-time-start').value='';if(document.getElementById('rs-time-end'))document.getElementById('rs-time-end').value='';document.getElementById('rs-time-display').textContent='';rsReminders=[];renderRsReminderChips();const _pmChk0=document.getElementById('fc-proc-milestone');if(_pmChk0)_pmChk0.checked=false;const _pmRow0=document.getElementById('proc-milestone-row');if(_pmRow0)_pmRow0.style.display='none';const _pmdR0=document.getElementById('proc-milestone-date-row');if(_pmdR0)_pmdR0.style.display='none';const _pmdI0=document.getElementById('fc-proc-milestone-date');if(_pmdI0)_pmdI0.value='';['attended','completed','cancelled','rescheduled','deleted'].forEach(k=>{const el=document.getElementById('sbtn-'+k);if(el)el.classList.remove('sel');});if(r.attendedStatus){const ab=document.getElementById('sbtn-attended');if(ab)ab.classList.add('sel');}resetSoAttachmentPanel();resetFcSubevents();populateModalDropdowns();document.getElementById('fc-casetype').value=r.type||'';document.getElementById('fc-paralegal').value=r.atty||'';document.getElementById('fc-eventtype').value=r.event||'';onEventTypeChange(r.event||'');setHearingMode(r.hearingMode||'');setVirtualHearingDetails(r.hearingJudgeId||'',r.virtualLink||'');const sid=document.getElementById('so-issue-date');if(sid)sid.value=r.soIssueDate||'';document.getElementById('fc-assigned').value=r.assigned||'';customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);if(el)el.value=r[c.key]||'';});renderHistoryLog(r.history||[]);loadModalChecklistDocs(r);resetDateCalc(r.date||'');const _meModal=document.getElementById('modal');_meModal.classList.remove('case-compact');const _csumE=document.getElementById('modal-case-summary');if(_csumE)_csumE.innerHTML='';_meModal.style.display='flex';enterReadOnlyMode(r);requestAnimationFrame(()=>autoGrowAllNotes(document.getElementById('modal')));}
+function openAdd(){editingId=null;pendingStatus=null;try{_hideMissingPanel();}catch(e){}document.getElementById('modal-title').textContent='Add event';const ocb=document.getElementById('modal-open-case-btn');if(ocb)ocb.style.display='none';document.getElementById('modal-status-section').style.display='none';document.getElementById('modal-reminder-section').style.display='block';['fc-clid','fc-client','fc-anum','fc-date','fc-notes'].forEach(id=>document.getElementById(id).value='');const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=false;document.getElementById('time-range-panel').classList.remove('open');document.getElementById('fc-time-start').value='';document.getElementById('fc-time-end').value='';document.getElementById('fc-time-display').textContent='';pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetVirtualHearingDetails();const _icp0=document.getElementById('individual-callup-panel');if(_icp0)_icp0.style.display='none';resetFcSubevents();const _fcs0=document.getElementById('fc-subevents-panel');if(_fcs0){setupLinkedSubeventsPanel(DEFAULT_LINKED_SUBEVENTS);renderFcSubevents();_fcs0.style.display='';}populateModalDropdowns();resetDateCalc();setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _m0=document.getElementById('modal');_m0.classList.remove('readonly-mode');_m0.classList.remove('case-compact');const _csum0=document.getElementById('modal-case-summary');if(_csum0)_csum0.innerHTML='';_m0.style.display='flex';}
+function openEdit(id){const r=records.find(x=>x.id===id);if(!r)return;editingId=id;pendingStatus=null;try{_hideMissingPanel();}catch(e){}document.getElementById('modal-title').textContent='Edit event';const _ocb=document.getElementById('modal-open-case-btn');if(_ocb){_ocb.style.display=(r.clid||r.client)?'inline':'none';}document.getElementById('modal-status-section').style.display='block';document.getElementById('modal-reminder-section').style.display='block';pendingReminders=[];if(r){records.forEach(rx=>{if(rx.id===id)return;const isLinked=rx._parentId===id||(!rx._parentId&&(rx.clid||rx.client)===(r.clid||r.client));if(isLinked&&rx.notes&&rx.notes.startsWith('⏰ REMINDER')&&rx.date&&r.date){const diff=Math.round((new Date(r.date.replace(/-/g,'/'))-new Date(rx.date.replace(/-/g,'/')))/(1000*60*60*24));if(diff>0&&!pendingReminders.includes(diff))pendingReminders.push(diff);}});}renderReminderChips();document.getElementById('fc-clid').value=r.clid||'';document.getElementById('fc-client').value=r.client||'';document.getElementById('fc-anum').value=r.anum||'';document.getElementById('fc-date').value=r.date||'';document.getElementById('fc-notes').value=r.notes||'';const hasTime=!!(r.timeStart||r.timeEnd);const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=hasTime;document.getElementById('fc-time-start').value=r.timeStart||'';document.getElementById('fc-time-end').value=r.timeEnd||'';if(hasTime)document.getElementById('time-range-panel').classList.add('open');else document.getElementById('time-range-panel').classList.remove('open');updateTimeDisplay();document.getElementById('fc-history-note').value='';document.getElementById('fc-reschedule-date').value='';document.getElementById('reschedule-panel').classList.remove('open');document.getElementById('reschedule-extras').style.display='none';if(document.getElementById('rs-time-toggle'))document.getElementById('rs-time-toggle').checked=false;document.getElementById('rs-time-range-panel').classList.remove('open');if(document.getElementById('rs-time-start'))document.getElementById('rs-time-start').value='';if(document.getElementById('rs-time-end'))document.getElementById('rs-time-end').value='';document.getElementById('rs-time-display').textContent='';rsReminders=[];renderRsReminderChips();const _pmChk0=document.getElementById('fc-proc-milestone');if(_pmChk0)_pmChk0.checked=false;const _pmRow0=document.getElementById('proc-milestone-row');if(_pmRow0)_pmRow0.style.display='none';const _pmdR0=document.getElementById('proc-milestone-date-row');if(_pmdR0)_pmdR0.style.display='none';const _pmdI0=document.getElementById('fc-proc-milestone-date');if(_pmdI0)_pmdI0.value='';['attended','completed','cancelled','rescheduled','deleted'].forEach(k=>{const el=document.getElementById('sbtn-'+k);if(el)el.classList.remove('sel');});if(r.attendedStatus){const ab=document.getElementById('sbtn-attended');if(ab)ab.classList.add('sel');}resetSoAttachmentPanel();resetFcSubevents();populateModalDropdowns();document.getElementById('fc-casetype').value=r.type||'';document.getElementById('fc-paralegal').value=r.atty||'';document.getElementById('fc-eventtype').value=r.event||'';onEventTypeChange(r.event||'');setHearingMode(r.hearingMode||'');setVirtualHearingDetails(r.hearingJudgeId||'',r.virtualLink||'');const sid=document.getElementById('so-issue-date');if(sid)sid.value=r.soIssueDate||'';document.getElementById('fc-assigned').value=r.assigned||'';customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);if(el)el.value=r[c.key]||'';});renderHistoryLog(r.history||[]);loadModalChecklistDocs(r);resetDateCalc(r.date||'');const _meModal=document.getElementById('modal');_meModal.classList.remove('case-compact');const _csumE=document.getElementById('modal-case-summary');if(_csumE)_csumE.innerHTML='';_meModal.style.display='flex';enterReadOnlyMode(r);requestAnimationFrame(()=>autoGrowAllNotes(document.getElementById('modal')));}
 // ── Read-only view / inline edit mode for event modal ──
 function enterEditMode(focusId){
   const m=document.getElementById('modal'); if(!m) return;
@@ -12908,65 +12912,279 @@ function applyDateCalc(){
     setTimeout(()=>res.style.color='#6A8C6E',800);
   }
 }
-function closeModal(){if(typeof _exitPreviewSplitMode==='function')_exitPreviewSplitMode();const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');_mm.classList.remove('case-compact');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetVirtualHearingDetails();resetFcSubevents();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _fcs1=document.getElementById('fc-subevents-panel');if(_fcs1)_fcs1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';_mm.classList.remove('finish-only');if(typeof _heldLockId!=='undefined'&&_heldLockId){_releaseLock(_heldLockId);}if(typeof _stopLockHeartbeat==='function')_stopLockHeartbeat();}
+function closeModal(){if(typeof _exitPreviewSplitMode==='function')_exitPreviewSplitMode();try{_hideMissingPanel();}catch(e){}const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');_mm.classList.remove('case-compact');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetVirtualHearingDetails();resetFcSubevents();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _fcs1=document.getElementById('fc-subevents-panel');if(_fcs1)_fcs1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';_mm.classList.remove('finish-only');if(typeof _heldLockId!=='undefined'&&_heldLockId){_releaseLock(_heldLockId);}if(typeof _stopLockHeartbeat==='function')_stopLockHeartbeat();}
 function handleBackdropClick(e){if(e.target===document.getElementById('modal'))closeModal();}
+
+// ── Missing information panel ────────────────────────────────────────────
+// Saving used to fire one browser alert per missing field and leave the user
+// to hunt the form for it — worse when the field lives in a section that is
+// scrolled off or collapsed. Instead every still-missing item is collected
+// and listed inline right above the Save button, each with the control to
+// fill it in on the spot (plus a link that jumps to the real field).
+function _missingEventFields(){
+  const missing=[];
+  const _g=id=>document.getElementById(id);
+  const _evt=(_g('fc-eventtype')||{}).value||'';
+  // PERSONAL TASK / OFFICE TASK / TASK don't belong to a case file.
+  const _isStandalone=(_evt==='PERSONAL TASK'||_evt==='OFFICE TASK'||_evt==='TASK');
+  if(!_isStandalone){
+    if(!((_g('fc-client')||{}).value||'').trim())
+      missing.push({key:'client',label:'Client name',hint:'Who this event is for.'});
+    if(!((_g('fc-casetype')||{}).value||''))
+      missing.push({key:'casetype',label:'Case type',hint:'The legal case type for this client.'});
+  }
+  // Closing an event out (status change / compact finish dialog) hides the
+  // hearing fields, so they aren't required there.
+  const _finishing=!!pendingStatus||!!(_g('modal')&&_g('modal').classList.contains('finish-only'));
+  const _isMasterPrep=isMasterPrepType(_evt);
+  if(isHearingEventType(_evt)&&!_finishing){
+    const _hm=getHearingMode();
+    if(!_isMasterPrep&&_hm!=='virtual'&&_hm!=='in-person'&&_hm!=='office')
+      missing.push({key:'hearingmode',label:'Hearing format',hint:'Every hearing is Virtual, In Person, or At the Office.'});
+    if(_hm==='virtual'||_hm==='in-person'){
+      const _j=_g('vh-judge');
+      if(!_j||!_j.value) missing.push({key:'judge',label:'Judge',hint:'Court hearings always need the judge on record.'});
+    }
+    if(!_isMasterPrep){
+      const _tt=_g('fc-time-toggle');
+      const _ts=((_g('fc-time-start')||{}).value||'').trim();
+      if(!_tt||!_tt.checked||!_ts)
+        missing.push({key:'time',label:'Hearing time',hint:'Start time — add the end time too if you have it.'});
+    }
+  }
+  if(['completed','cancelled','deleted'].includes(pendingStatus)&&!((_g('fc-history-note')||{}).value||'').trim()){
+    const labels={completed:'completed',cancelled:'cancelled',deleted:'deleted'};
+    missing.push({key:'reason',label:'Reason',hint:'Why this event is being marked '+labels[pendingStatus]+' — it goes into the history.'});
+  }
+  if(pendingStatus==='rescheduled'&&!((_g('fc-reschedule-date')||{}).value||''))
+    missing.push({key:'newdate',label:'New date',hint:'The date this event moved to.'});
+  return missing;
+}
+// Where each missing item lives in the form, for the "show me" jump link.
+const _MF_TARGET={client:'fc-client',casetype:'fc-casetype',hearingmode:'modal-hearing-mode-section',
+  judge:'vh-judge',time:'fc-time-start',reason:'fc-history-note',newdate:'fc-reschedule-date'};
+function _mfFlash(el){
+  if(!el)return;
+  try{el.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){}
+  const prev=el.style.boxShadow;
+  el.style.transition='box-shadow .2s';
+  el.style.boxShadow='0 0 0 3px #E8C49A';
+  setTimeout(()=>{el.style.boxShadow=prev||'';},1500);
+}
+function _mfJump(key){
+  // Make sure the section holding the field is actually on screen first.
+  if(key==='hearingmode'||key==='judge'){
+    const hms=document.getElementById('modal-hearing-mode-section');
+    if(hms&&hms.style.display==='none')hms.style.display='';
+  }
+  if(key==='time'){
+    const tt=document.getElementById('fc-time-toggle');
+    if(tt&&!tt.checked){tt.checked=true;toggleTimePanel();}
+  }
+  const el=document.getElementById(_MF_TARGET[key]);
+  _mfFlash(el);
+  if(el&&typeof el.focus==='function'&&el.tagName!=='DIV'){try{el.focus();}catch(e){}}
+}
+function _hideMissingPanel(){
+  const p=document.getElementById('modal-missing-panel');
+  if(p){p.style.display='none';p.innerHTML='';}
+}
+// Re-check what's still missing and restyle the rows in place (no rebuild —
+// that would steal focus from whatever the user is typing in).
+function _syncMissingPanel(){
+  const p=document.getElementById('modal-missing-panel');
+  if(!p||p.style.display==='none')return;
+  const left=_missingEventFields().map(m=>m.key);
+  // Answering one item can raise a new requirement (picking a court format
+  // then needs a judge) — rebuild so the new item gets its own control.
+  const rows=Array.prototype.map.call(p.querySelectorAll('[data-mfkey]'),r=>r.dataset.mfkey);
+  if(left.some(k=>rows.indexOf(k)===-1)){ _showMissingPanel(_missingEventFields()); return; }
+  p.querySelectorAll('[data-mfkey]').forEach(row=>{
+    const done=left.indexOf(row.dataset.mfkey)===-1;
+    const mark=row.querySelector('.mf-mark');
+    if(mark){mark.textContent=done?'✓':'!';mark.style.color=done?'#6A8C6E':'#C9823A';mark.style.borderColor=done?'#B4CCAD':'#E8C49A';}
+    row.style.opacity=done?'.68':'1';
+  });
+  const n=left.length;
+  const head=p.querySelector('.mf-head');
+  if(head){
+    head.textContent=n?('Before you save — '+n+' item'+(n>1?'s':'')+' still needed'):'All set — you can save now';
+    head.style.color=n?'#C9823A':'#6A8C6E';
+  }
+  const sub=p.querySelector('.mf-sub');
+  if(sub)sub.textContent=n?'Fill them in right here, or use “show me” to jump to the field in the form.':'Everything this event needs is filled in.';
+  const icon=p.querySelector('.mf-icon');
+  if(icon)icon.textContent=n?'⚠':'✓';
+  const btn=p.querySelector('.mf-save');
+  if(btn){btn.disabled=n>0;btn.style.opacity=n?'.4':'1';btn.style.cursor=n?'not-allowed':'pointer';}
+  p.style.background=n?'#FFF8EE':'#F1F6F0';
+  p.style.borderColor=n?'#F0D9BB':'#B4CCAD';
+}
+// One row's inline control — the same value the form field holds, kept in sync
+// both ways so the user can fill it here or up in the form.
+function _mfBuildControl(key){
+  const box=document.createElement('div');
+  box.style.cssText='margin-top:7px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;';
+  const inputCss='font-size:13px;padding:6px 10px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;background:#fff;color:#2C2620;box-sizing:border-box;outline:none;';
+  const g=id=>document.getElementById(id);
+  if(key==='hearingmode'){
+    [['virtual','📡 Virtual'],['in-person','🏛 In Person'],['office','🏢 At the Office']].forEach(([v,lbl])=>{
+      const b=document.createElement('button');
+      b.type='button';b.textContent=lbl;
+      b.style.cssText='font-size:13px;padding:6px 14px;border:1px solid #DDD5CA;border-radius:8px;background:#fff;color:#5A5048;cursor:pointer;font-family:inherit;transition:all .15s;';
+      b.onmouseenter=()=>{if(getHearingMode()!==v)b.style.borderColor='#C9823A';};
+      b.onmouseleave=()=>{if(getHearingMode()!==v)b.style.borderColor='#DDD5CA';};
+      b.onclick=()=>{
+        const hms=g('modal-hearing-mode-section');
+        if(hms&&hms.style.display==='none')hms.style.display='';
+        setHearingMode(v);
+        box.querySelectorAll('button').forEach(x=>{x.style.background='#fff';x.style.fontWeight='400';x.style.borderColor='#DDD5CA';});
+        b.style.background='#FAF0E6';b.style.fontWeight='600';b.style.borderColor='#C9823A';
+        _syncMissingPanel();
+      };
+      if(getHearingMode()===v){b.style.background='#FAF0E6';b.style.fontWeight='600';b.style.borderColor='#C9823A';}
+      box.appendChild(b);
+    });
+  }else if(key==='judge'){
+    if(typeof populateVirtualJudgeDropdown==='function')populateVirtualJudgeDropdown();
+    const src=g('vh-judge');
+    const sel=document.createElement('select');
+    sel.style.cssText=inputCss+'min-width:240px;cursor:pointer;';
+    sel.innerHTML=src?src.innerHTML:'<option value="">— Select judge —</option>';
+    sel.value=src?src.value:'';
+    sel.onchange=()=>{
+      if(src){src.value=sel.value;if(typeof onVirtualJudgeChange==='function')onVirtualJudgeChange();}
+      _syncMissingPanel();
+    };
+    box.appendChild(sel);
+    const add=document.createElement('button');
+    add.type='button';add.textContent='+ Add new judge…';
+    add.style.cssText='font-size:11px;font-weight:600;color:#6B7FA3;background:transparent;border:none;padding:0;cursor:pointer;font-family:inherit;text-decoration:underline;text-underline-offset:2px;';
+    add.onclick=()=>{if(typeof openJudgeFromEvent==='function')openJudgeFromEvent();};
+    box.appendChild(add);
+  }else if(key==='time'){
+    const mk=(id,lbl)=>{
+      const w=document.createElement('label');
+      w.style.cssText='display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9E9186;';
+      const i=document.createElement('input');
+      i.type='time';i.style.cssText=inputCss;
+      i.value=(g(id)||{}).value||'';
+      i.onchange=()=>{
+        const tgt=g(id); if(tgt)tgt.value=i.value;
+        const tt=g('fc-time-toggle');
+        if(tt&&!tt.checked){tt.checked=true;if(typeof toggleTimePanel==='function')toggleTimePanel();}
+        if(tgt)tgt.value=i.value; // toggleTimePanel resets when switching on
+        if(typeof updateTimeDisplay==='function')updateTimeDisplay();
+        _syncMissingPanel();
+      };
+      w.appendChild(document.createTextNode(lbl));
+      w.appendChild(i);
+      return w;
+    };
+    box.appendChild(mk('fc-time-start','Start'));
+    box.appendChild(mk('fc-time-end','End'));
+  }else if(key==='casetype'){
+    const src=g('fc-casetype');
+    const sel=document.createElement('select');
+    sel.style.cssText=inputCss+'min-width:240px;cursor:pointer;';
+    sel.innerHTML=src?src.innerHTML:'';
+    sel.value=src?src.value:'';
+    sel.onchange=()=>{
+      if(src){src.value=sel.value;if(typeof onCaseTypeChangeModal==='function')onCaseTypeChangeModal();}
+      _syncMissingPanel();
+    };
+    box.appendChild(sel);
+  }else if(key==='reason'){
+    const ta=document.createElement('textarea');
+    ta.rows=2;ta.placeholder='Reason…';
+    ta.style.cssText=inputCss+'width:100%;resize:vertical;';
+    ta.value=(g('fc-history-note')||{}).value||'';
+    ta.oninput=()=>{const t=g('fc-history-note');if(t){t.value=ta.value;t.style.borderColor='';}_syncMissingPanel();};
+    box.style.display='block';
+    box.appendChild(ta);
+  }else{
+    // client name / reschedule date — a plain mirror of the form field
+    const srcId=_MF_TARGET[key];
+    const i=document.createElement('input');
+    i.type=(key==='newdate')?'date':'text';
+    i.style.cssText=inputCss+(key==='newdate'?'cursor:pointer;':'min-width:260px;');
+    i.value=(g(srcId)||{}).value||'';
+    const push=()=>{const t=g(srcId);if(t)t.value=i.value;_syncMissingPanel();};
+    i.oninput=push;i.onchange=push;
+    box.appendChild(i);
+  }
+  return box;
+}
+function _showMissingPanel(list){
+  const p=document.getElementById('modal-missing-panel');
+  if(!p){ // no panel in the DOM — fall back to the old alert so nothing is lost
+    alert(list.map(m=>'• '+m.label+' — '+m.hint).join('\n'));
+    return;
+  }
+  p.innerHTML='';
+  p.style.cssText='display:block;margin:14px 0 4px;padding:14px 16px;background:#FFF8EE;border:1px solid #F0D9BB;border-radius:10px;';
+  const head=document.createElement('div');
+  head.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:2px;';
+  const icon=document.createElement('span');
+  icon.className='mf-icon';icon.textContent='⚠';icon.style.cssText='font-size:14px;';
+  const h=document.createElement('div');
+  h.className='mf-head';
+  h.style.cssText='font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#C9823A;';
+  h.textContent='Before you save — '+list.length+' item'+(list.length>1?'s':'')+' still needed';
+  head.appendChild(icon);head.appendChild(h);
+  p.appendChild(head);
+  const sub=document.createElement('div');
+  sub.className='mf-sub';
+  sub.style.cssText='font-size:11.5px;color:#9E9186;margin-bottom:10px;';
+  sub.textContent='Fill them in right here, or use “show me” to jump to the field in the form.';
+  p.appendChild(sub);
+  list.forEach(m=>{
+    const row=document.createElement('div');
+    row.dataset.mfkey=m.key;
+    row.style.cssText='padding:10px 0;border-top:1px solid #F0E2CE;';
+    const top=document.createElement('div');
+    top.style.cssText='display:flex;align-items:center;gap:8px;';
+    const mark=document.createElement('span');
+    mark.className='mf-mark';mark.textContent='!';
+    mark.style.cssText='display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1px solid #E8C49A;border-radius:50%;font-size:10px;font-weight:700;color:#C9823A;flex-shrink:0;';
+    const lbl=document.createElement('span');
+    lbl.style.cssText='font-size:13px;font-weight:600;color:#2C2620;';
+    lbl.textContent=m.label;
+    const hint=document.createElement('span');
+    hint.style.cssText='font-size:11.5px;color:#9E9186;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    hint.textContent=m.hint;
+    hint.title=m.hint;
+    const jump=document.createElement('button');
+    jump.type='button';jump.textContent='show me ↗';
+    jump.style.cssText='flex-shrink:0;font-size:11px;font-weight:600;color:#6B7FA3;background:transparent;border:none;padding:0;cursor:pointer;font-family:inherit;text-decoration:underline;text-underline-offset:2px;white-space:nowrap;';
+    jump.onclick=()=>_mfJump(m.key);
+    top.appendChild(mark);top.appendChild(lbl);top.appendChild(hint);top.appendChild(jump);
+    row.appendChild(top);
+    row.appendChild(_mfBuildControl(m.key));
+    p.appendChild(row);
+  });
+  const foot=document.createElement('div');
+  foot.style.cssText='display:flex;justify-content:flex-end;gap:8px;margin-top:12px;';
+  const save=document.createElement('button');
+  save.type='button';save.className='mf-save';save.textContent='Save event';
+  save.style.cssText='font-size:12.5px;font-weight:600;padding:7px 16px;border:none;border-radius:8px;background:#2C2620;color:#FBF8F3;cursor:not-allowed;opacity:.4;font-family:inherit;';
+  save.onclick=()=>{if(!save.disabled)saveEvent();};
+  foot.appendChild(save);
+  p.appendChild(foot);
+  _syncMissingPanel();
+  try{p.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){}
+}
 
 // ── saveEvent ──
 window.saveEvent=function(){
   const client=document.getElementById('fc-client').value.trim(),type=document.getElementById('fc-casetype').value;
-  // PERSONAL TASK + OFFICE TASK are personal-to-the-user / firm-wide events;
-  // they don't belong to a client or a case file, so client + case type are
-  // optional for these two event types only.
-  const _evt=(document.getElementById('fc-eventtype')||{}).value||'';
-  const _isStandalone=(_evt==='PERSONAL TASK'||_evt==='OFFICE TASK'||_evt==='TASK');
-  if(!_isStandalone){
-    if(!client){alert('Client name is required.');return;}
-    if(!type){alert('Case type is required.');return;}
-  }
-  // Skip the hearing field requirements when the user is just closing the
-  // event out (a status change or the compact finish dialog) — those fields
-  // are hidden there and aren't needed to mark a hearing done.
-  const _finishing = !!pendingStatus || !!(document.getElementById('modal') && document.getElementById('modal').classList.contains('finish-only'));
-  // Hearings always need a format (Virtual / In Person / At the Office) and —
-  // for court formats — a judge. MASTER PREP is exempt from the format/time
-  // requirements (it can be a plain office appointment), but if a court
-  // format IS assigned to a prep, it's a real hearing and needs its judge.
-  const _isMasterPrep=isMasterPrepType(_evt);
-  if(isHearingEventType(_evt) && !_finishing){
-    const _hm=getHearingMode();
-    if(!_isMasterPrep && _hm!=='virtual' && _hm!=='in-person' && _hm!=='office'){
-      alert('Hearings always need a format.\n\nChoose Virtual, In Person, or At the Office for this hearing.');
-      const _hmsEl=document.getElementById('modal-hearing-mode-section');
-      if(_hmsEl){ try{ _hmsEl.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
-      return;
-    }
-    if(_hm==='virtual' || _hm==='in-person'){
-      const _jsel=document.getElementById('vh-judge');
-      if(!_jsel || !_jsel.value){
-        alert('Hearings always need a judge.\n\nSelect the judge for this hearing.');
-        const _vd=document.getElementById('modal-virtual-details');
-        if(_vd){ try{ _vd.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
-        if(_jsel){ try{ _jsel.focus(); }catch(e){} }
-        return;
-      }
-    }
-  }
-  // Hearings always need a time — surface a clear alert and bounce the
-  // user back to the time picker if they tried to save without one.
-  // MASTER PREP is exempt: a time is only kept if the user sets one.
-  if(isHearingEventType(_evt) && !_isMasterPrep && !_finishing){
-    const _tt=document.getElementById('fc-time-toggle');
-    const _tsEl=document.getElementById('fc-time-start');
-    const _ts=(_tsEl&&_tsEl.value||'').trim();
-    if(!_tt || !_tt.checked || !_ts){
-      alert('Hearings always need a time.\n\nPick a start time for this hearing — turn the Time toggle on and set the start (and end, if you have it).');
-      if(_tt) _tt.checked = true;
-      const _panel=document.getElementById('time-range-panel');
-      if(_panel){ _panel.classList.add('open'); _panel.style.background='#FAF0E6'; _panel.style.borderColor='#E8C49A'; }
-      if(_tsEl){ try{ _tsEl.scrollIntoView({block:'center',behavior:'smooth'}); _tsEl.focus(); }catch(e){} }
-      return;
-    }
-  }
+  // Everything the event still needs (client, case type, hearing format,
+  // judge, time, reason, new date) is collected in one pass and shown inline
+  // above the buttons with the controls to fill it in — see
+  // _missingEventFields / _showMissingPanel.
+  const _missing=_missingEventFields();
+  if(_missing.length){ _showMissingPanel(_missing); return; }
+  _hideMissingPanel();
   const historyNote=document.getElementById('fc-history-note').value.trim();
   if(['completed','cancelled','deleted'].includes(pendingStatus)&&!historyNote){const labels={completed:'completion',cancelled:'cancellation',deleted:'deletion'};alert(`A reason is required when marking as ${pendingStatus}.`);document.getElementById('fc-history-note').focus();document.getElementById('fc-history-note').style.borderColor='#B85C5C';return;}
   const tOn=document.getElementById('fc-time-toggle')&&document.getElementById('fc-time-toggle').checked;
@@ -26790,6 +27008,13 @@ if(csEl) csEl.addEventListener('input',function(){
   }
   _debouncedRenderCases();
 });
+// Editing the form directly (rather than the panel's inline controls) keeps
+// the "before you save" panel up to date.
+(function(){
+  const _m=document.getElementById('modal');
+  if(!_m)return;
+  ['change','input'].forEach(ev=>_m.addEventListener(ev,()=>{try{_syncMissingPanel();}catch(e){}}));
+})();
 ['cases-filter-type','cases-filter-atty'].forEach(id=>{
   const el=document.getElementById(id);
   // Picking a case type from the dropdown drops any Personal/Office tile
