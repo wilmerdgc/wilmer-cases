@@ -1076,6 +1076,20 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .case-event-sub { font-size: 11px; color: var(--ink-muted); margin-top: 2px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; }
 .case-event-check { margin: 2px 2px 0 0; width: 15px; height: 15px; cursor: pointer; accent-color: #6A8C6E; flex-shrink: 0; }
 
+/* ── Next Steps: full event detail panel ───────── */
+.case-event-row.detail-open { margin-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent; background: var(--cream); }
+.evt-detail-toggle { border: none; background: transparent; color: var(--ink-faint); cursor: pointer; font-size: 11px; line-height: 1; padding: 3px 5px; border-radius: 5px; flex-shrink: 0; font-family: inherit; }
+.evt-detail-toggle:hover { background: var(--cream-dark); color: var(--ink-muted); }
+.evt-detail-panel { display: none; margin: 0 0 6px; padding: 9px 12px 10px; border: 1px solid var(--cream-dark); border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: var(--cream); }
+.evt-detail-panel.open { display: block; }
+.evt-detail-grid { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 3px 10px; align-items: baseline; }
+.evt-detail-head { grid-column: 1 / -1; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--slate); margin: 9px 0 2px; padding-bottom: 3px; border-bottom: 0.5px solid var(--cream-dark); }
+.evt-detail-head:first-child { margin-top: 0; }
+.evt-detail-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint); line-height: 1.6; word-break: break-word; }
+.evt-detail-value { font-size: 11.5px; color: var(--ink); line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; }
+.evt-detail-block { grid-column: 1 / -1; font-size: 11.5px; color: var(--ink); line-height: 1.55; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; }
+.evt-detail-id { margin-top: 9px; padding-top: 6px; border-top: 0.5px solid var(--cream-dark); font-size: 9px; color: var(--ink-faint); letter-spacing: 0.03em; }
+
 /* ── Case detail tabs ──────────────────────────── */
 .cd-tab-nav { display: flex; gap: 0; border-bottom: 1.5px solid var(--border); margin-bottom: 22px; }
 .cd-tab-btn { border: none; border-radius: 0; border-bottom: 2px solid transparent; padding: 9px 18px; background: transparent; font-size: 13px; color: var(--ink-muted); cursor: pointer; font-family: var(--font-body); transition: color 0.15s; }
@@ -9209,6 +9223,221 @@ function appendSoMeta(container, r, fg){
     wrap.appendChild(btn);
   }
   container.appendChild(wrap);
+}
+
+
+// ── Full event detail (Case Information → Next Steps) ──────────────
+// Renders every piece of information stored on one event record — schedule,
+// hearing setup, case identity, reminders, notes, checklist, documents,
+// custom columns and history — read-only, so an event can be read in full
+// from the case page without opening the editor. Anything on the record we
+// don't have a dedicated row for still shows up under "Other fields", so
+// nothing stored on the event is hidden.
+const _EVT_DETAIL_SHOWN_KEYS = ['id','clid','client','type','anum','atty','assigned','event','date','timeStart','timeEnd','notes','hearingMode','hearingJudgeId','virtualLink','checklist','docs','soIssueDate','history','_parentId','deletedStatus','deletedDate','finishedStatus','attendedStatus','closedWithCase'];
+
+function _evtFmtTimeRange(r){
+  const f=t=>{
+    if(!t) return '';
+    const p=String(t).split(':');const h=Number(p[0]);const mi=Number(p[1]||0);
+    if(isNaN(h)) return String(t);
+    const am=h>=12?'PM':'AM';const hh=(h%12)||12;
+    return hh+':'+String(isNaN(mi)?0:mi).padStart(2,'0')+' '+am;
+  };
+  if(!r.timeStart&&!r.timeEnd) return '';
+  return (r.timeStart?f(r.timeStart):'')+(r.timeEnd?(' – '+f(r.timeEnd)):'');
+}
+
+function _evtRelativeDay(dateStr){
+  if(!dateStr) return '';
+  const d=parseDate(dateStr);
+  if(!d||isNaN(d)) return '';
+  const diff=Math.round((d-TODAY)/86400000);
+  if(diff===0) return 'today';
+  if(diff>0) return 'in '+diff+' day'+(diff===1?'':'s');
+  const n=Math.abs(diff);
+  return n+' day'+(n===1?'':'s')+' ago';
+}
+
+// Reminder records attached to one event (the "⏰ REMINDER" rows the app
+// creates alongside a scheduled event), oldest first.
+function _evtLinkedReminders(r){
+  return (records||[]).filter(rx=>rx&&rx.id!==r.id&&rx.notes&&rx.notes.startsWith('⏰ REMINDER')
+      &&(rx._parentId===r.id||(!rx._parentId&&(rx.clid||rx.client)===(r.clid||r.client)&&rx.date&&r.date&&parseDate(rx.date)<parseDate(r.date))))
+    .sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+}
+
+function buildEventDetailPanel(r){
+  const panel=document.createElement('div');
+  panel.className='evt-detail-panel';
+  // Text inside the panel is for reading/copying — don't let a click bubble
+  // up into the row and open the editor.
+  panel.onclick=e=>e.stopPropagation();
+  const grid=document.createElement('div');grid.className='evt-detail-grid';
+  panel.appendChild(grid);
+
+  const head=text=>{const h=document.createElement('div');h.className='evt-detail-head';h.textContent=text;grid.appendChild(h);};
+  const addRow=(label,value,opts)=>{
+    if(value===null||value===undefined||value==='') return null;
+    const o=opts||{};
+    const l=document.createElement('div');l.className='evt-detail-label';l.textContent=label||'';
+    const v=document.createElement('div');v.className='evt-detail-value';
+    if(o.node) v.appendChild(value); else v.textContent=String(value);
+    if(o.color) v.style.color=o.color;
+    grid.appendChild(l);grid.appendChild(v);
+    return v;
+  };
+  const addBlock=text=>{
+    if(!text) return null;
+    const b=document.createElement('div');b.className='evt-detail-block';b.textContent=String(text);
+    grid.appendChild(b);
+    return b;
+  };
+
+  // ── Event ──
+  const es=(typeof getEventStyle==='function')?(getEventStyle(r.event||'')||{}):{};
+  head('Event');
+  addRow('Event type',(es.icon?es.icon+' ':'')+(r.event||'(no event type)'),{color:es.color||''});
+  const rel=_evtRelativeDay(r.date);
+  addRow('Date',r.date?(fmtDate(r.date)+(rel?'  ·  '+rel:'')):'No date set');
+  addRow('Time',_evtFmtTimeRange(r)||'Not set');
+  const statusVal=r.deletedStatus?'Deleted'
+    :r.finishedStatus?(String(r.finishedStatus).charAt(0).toUpperCase()+String(r.finishedStatus).slice(1))
+    :r.attendedStatus?'Attended':'Active — not finished';
+  addRow('Status',statusVal);
+  if(r.deletedDate) addRow('Closed on',fmtDate(r.deletedDate));
+
+  // ── Hearing setup (hearing event types only) ──
+  if(typeof isHearingEventType==='function'&&isHearingEventType(r.event||'')){
+    head('Hearing');
+    addRow('Format', r.hearingMode==='virtual'?'📡 Virtual (Webex)'
+      :r.hearingMode==='in-person'?'🏛 In person'
+      :r.hearingMode==='office'?'🏢 At the office':'Not set');
+    const hj=r.hearingJudgeId?((typeof judges!=='undefined'?judges:[])||[]).find(x=>x&&x.id===r.hearingJudgeId):null;
+    if(hj) addRow('Judge',(hj.role==='Referee'?'Ref. ':'')+(hj.name||'')+(hj.difficulty?' — '+hj.difficulty+' difficulty':''));
+    if(r.virtualLink){
+      const a=document.createElement('a');
+      a.href=r.virtualLink;a.target='_blank';a.rel='noopener';a.textContent=r.virtualLink;
+      a.style.cssText='color:var(--slate);text-decoration:underline;';
+      addRow('Webex link',a,{node:true});
+    }
+  }
+
+  // ── Scheduling order specifics ──
+  if(r.event==='SCHEDULING ORDER'){
+    head('Scheduling order');
+    addRow('Issue date', r.soIssueDate?fmtDate(r.soIssueDate):'Not set');
+    const att=(typeof getSoAttachment==='function')?getSoAttachment(r):null;
+    if(att){
+      const b=document.createElement('button');
+      b.type='button';b.textContent='📎 '+(att.name||'Attachment');
+      b.style.cssText='font-family:inherit;font-size:11px;padding:2px 9px;border:1px solid var(--border);border-radius:12px;background:#fff;color:var(--slate);cursor:pointer;';
+      b.onclick=e=>{e.stopPropagation();const fname=(att.name||'attachment').replace(/\s*\([^)]*\)\s*$/,'').trim();openDocViewer(att.fileData,att.mimeType,fname);};
+      addRow('Attachment',b,{node:true});
+    }
+  }
+
+  // ── Case identity carried on the event row ──
+  head('Case');
+  addRow('Client',r.client||'');
+  addRow('Client ID',r.clid||'');
+  addRow('A-number',r.anum||'');
+  addRow('Case type',r.type||'');
+  addRow('Paralegal',r.atty||'');
+  addRow('Assigned',r.assigned||'');
+
+  // ── Notes (full text, never truncated) ──
+  if(r.notes&&String(r.notes).trim()){
+    head('Notes');
+    addBlock(r.notes);
+  }
+
+  // ── Reminders linked to this event ──
+  const rems=_evtLinkedReminders(r);
+  if(rems.length){
+    head('Reminders ('+rems.length+')');
+    rems.forEach((rm,i)=>{
+      let lead=rm.date?fmtDate(rm.date):'No date';
+      if(rm.date&&r.date){
+        const diff=Math.round((parseDate(r.date)-parseDate(rm.date))/86400000);
+        if(diff>0) lead+=' ('+diff+'d before)';
+      }
+      const txt=String(rm.notes||'').replace(/^⏰ REMINDER:\s*/,'').trim();
+      addRow(i===0?'Reminder':'',lead+(txt?' — '+txt:''));
+    });
+  }
+
+  // ── Checklist / documents stored on the event ──
+  const chk=Array.isArray(r.checklist)?r.checklist.filter(x=>String(x||'').trim()):[];
+  if(chk.length){
+    head('Checklist ('+chk.length+')');
+    chk.forEach((c,i)=>addRow(i===0?'Items':'','• '+String(c)));
+  }
+  const dcs=(Array.isArray(r.docs)?r.docs:[]).filter(d=>String((d&&d.name)||d||'').trim());
+  if(dcs.length){
+    head('Documents ('+dcs.length+')');
+    dcs.forEach((d,i)=>addRow(i===0?'Files':'','📄 '+String((d&&d.name)||d)));
+  }
+
+  // ── Custom columns configured in Settings ──
+  const customs=((typeof customColumns!=='undefined'&&customColumns)?customColumns:[]).filter(c=>c&&r[c.key]);
+  if(customs.length){
+    head('Custom fields');
+    customs.forEach(c=>addRow(c.label||c.key,r[c.key]));
+  }
+
+  // ── Linked events (parent / sub-events created with this one) ──
+  const label=x=>(x.event||'Event')+(x.date?' — '+fmtDate(x.date):'')+(x.finishedStatus?' ('+x.finishedStatus+')':'');
+  if(r._parentId){
+    const p=(records||[]).find(x=>x&&x.id===r._parentId);
+    head('Linked');
+    addRow('Part of',p?label(p):String(r._parentId));
+  }
+  const kids=(records||[]).filter(x=>x&&x._parentId===r.id&&!(x.notes&&x.notes.startsWith('⏰ REMINDER')));
+  if(kids.length){
+    if(!r._parentId) head('Linked');
+    kids.forEach((k,i)=>addRow(i===0?'Sub-events':'',label(k)));
+  }
+
+  // ── History log, in full ──
+  const hist=(Array.isArray(r.history)?r.history:[]).filter(Boolean);
+  if(hist.length){
+    head('History ('+hist.length+')');
+    hist.forEach(h=>{
+      const tag=h.type?(String(h.type).charAt(0).toUpperCase()+String(h.type).slice(1)):'Entry';
+      const when=h.date?fmtDate(h.date):'';
+      addRow(tag,(when?when:'')+(h.note?(when?' — ':'')+h.note:'')||'—');
+    });
+  }
+
+  // ── Anything else stored on the record ──
+  const shown=new Set(_EVT_DETAIL_SHOWN_KEYS.concat(((typeof customColumns!=='undefined'&&customColumns)?customColumns:[]).map(c=>c&&c.key)));
+  Object.keys(r).forEach(k=>{
+    if(shown.has(k)) return;
+    const raw=r[k];
+    if(raw===''||raw===null||raw===undefined||typeof raw==='function') return;
+    let v;
+    if(typeof raw==='object'){ try{ v=JSON.stringify(raw); }catch(e){ v=String(raw); } }
+    else v=String(raw);
+    if(!v||v==='{}'||v==='[]') return;
+    if(!panel._otherHead){ head('Other fields'); panel._otherHead=true; }
+    addRow(k, v.length>500?v.slice(0,500)+'…':v);
+  });
+
+  const idLine=document.createElement('div');
+  idLine.className='evt-detail-id';
+  idLine.textContent='Record ID: '+(r.id||'—');
+  panel.appendChild(idLine);
+  return panel;
+}
+
+// Open/close one event's detail panel (and keep its row visually attached).
+function _toggleEventDetail(row,detail,btn,force){
+  const open=(force===undefined)?!detail.classList.contains('open'):!!force;
+  detail.classList.toggle('open',open);
+  row.classList.toggle('detail-open',open);
+  btn.textContent=open?'▴':'▾';
+  btn.title=open?'Hide event details':'Show all event details';
+  btn.setAttribute('aria-expanded',open?'true':'false');
 }
 
 let weekendPref = (function(){ try{ return localStorage.getItem('weekShowWeekend')==='1'; }catch{ return false; } })();
@@ -21124,6 +21353,22 @@ function openCaseDetail(clid){
   const activeSecEl=document.createElement('div');activeSecEl.className='case-detail-section';
   const atRow=document.createElement('div');atRow.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:6px;border-bottom:0.5px solid #DDD5CA';
   atRow.innerHTML=`<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#6B7FA3">Next Steps <span style="font-weight:400;font-size:10px;color:#C4BAB0">(${active.length})</span></div>`;
+  // Every Next Steps row registers its detail panel here so the header can
+  // open or close all of them at once.
+  const _evtDetailPanels=[];
+  const detailsAllBtn=document.createElement('button');
+  detailsAllBtn.type='button';
+  detailsAllBtn.className='btn-sm';
+  detailsAllBtn.style.cssText='font-size:11px;padding:3px 11px;border-radius:20px;border-color:#C4BAB0;color:#9E9186;font-weight:600;';
+  detailsAllBtn.textContent='▾ Details';
+  detailsAllBtn.title='Show every field stored on each event';
+  detailsAllBtn.onclick=()=>{
+    const open=!_evtDetailPanels.every(p=>p.detail.classList.contains('open'));
+    _evtDetailPanels.forEach(p=>_toggleEventDetail(p.row,p.detail,p.btn,open));
+    detailsAllBtn.textContent=open?'▴ Details':'▾ Details';
+    detailsAllBtn.title=open?'Hide the event details':'Show every field stored on each event';
+  };
+  if(active.length) atRow.appendChild(detailsAllBtn);
   const addEvtBtn=document.createElement('button');addEvtBtn.className='btn-sm btn-primary';addEvtBtn.style.cssText='font-size:11px;padding:3px 11px;border-radius:20px';addEvtBtn.textContent='+ Add Event';addEvtBtn.onclick=openAddFromCase;atRow.appendChild(addEvtBtn);
   // Email Client button
   const emailClientBtn=document.createElement('button');emailClientBtn.className='btn-sm';emailClientBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:20px;border-color:#6B7FA3;color:#6B7FA3;margin-left:4px;font-weight:600;';emailClientBtn.textContent='✉ Email Client';
@@ -21336,7 +21581,20 @@ function openCaseDetail(clid){
     _fchk.title='Finish this event';
     _fchk.onclick=(e)=>{ e.stopPropagation(); _fchk.checked=false; if(typeof _openTaskFinish==='function')_openTaskFinish(r.id); };
     row.insertBefore(_fchk,row.firstChild);
+    // Full detail for this event — every field stored on the record, shown
+    // read-only underneath the row when the ▾ chevron is clicked.
+    const _detail=buildEventDetailPanel(r);
+    const _dToggle=document.createElement('button');
+    _dToggle.type='button';
+    _dToggle.className='evt-detail-toggle';
+    _dToggle.textContent='▾';
+    _dToggle.title='Show all event details';
+    _dToggle.setAttribute('aria-expanded','false');
+    _dToggle.onclick=(e)=>{ e.stopPropagation(); _toggleEventDetail(row,_detail,_dToggle); };
+    row.appendChild(_dToggle);
     activeSecEl.appendChild(row);
+    activeSecEl.appendChild(_detail);
+    _evtDetailPanels.push({row:row,detail:_detail,btn:_dToggle});
   });}
   body.appendChild(activeSecEl);
 
