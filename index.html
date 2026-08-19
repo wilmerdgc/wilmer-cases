@@ -14830,6 +14830,26 @@ function getCases(){
   _casesCache=Object.values(map).map(c=>{ c.closed=_isCaseClosed(c.clid||c.client); return c; }).sort((a,b)=>(a.client||'').localeCompare(b.client||''));
   return _casesCache;
 }
+// ── Case category (Personal / Office) ────────────────────────────────────
+// The Personal-or-Office category of a case lives in
+// caseMeta[clid].caseCategory and is separate from the legal case type
+// (Defensive Asylum, BIA Appeal, …). A few legacy cases carry it as the case
+// type instead ('PERSONAL' / 'OFFICE'), so honour both. Returns '' for a case
+// that was never marked either way.
+function caseCategoryOfCase(c){
+  if(!c)return '';
+  const clid=c.clid||c.client;
+  const m=(typeof caseMeta!=='undefined'&&caseMeta[clid])||{};
+  if(m.caseCategory==='Personal'||m.caseCategory==='Office')return m.caseCategory;
+  const t=(c.type||'').toUpperCase();
+  if(t==='PERSONAL'||c.client==='Personal')return 'Personal';
+  if(t==='OFFICE'||c.client==='Office')return 'Office';
+  return '';
+}
+// Set by the Personal / Office stat tiles — filters the case list by category
+// instead of by legal case type. The two are mutually exclusive.
+let _casesCategoryFilter='';
+
 let _caseFilterOptsDirty=true;
 function dirtyCaseFilterOpts(){_caseFilterOptsDirty=true;}
 function _rebuildCaseFilterDropdowns(){
@@ -14863,6 +14883,7 @@ function renderCases(){
     return _caseRespondents(c).some(r=>(r.name||'').toLowerCase().includes(q)||(r.anum||'').toLowerCase().includes(q));
   });}
   if(ft)cases=cases.filter(c=>c.type===ft);
+  if(_casesCategoryFilter)cases=cases.filter(c=>caseCategoryOfCase(c)===_casesCategoryFilter);
   if(fa)cases=cases.filter(c=>c.atty===fa);
   // closed cases sink to the bottom of the results (stable — alphabetical within each group)
   cases=cases.slice().sort((a,b)=>(a.closed?1:0)-(b.closed?1:0));
@@ -14934,8 +14955,22 @@ function renderCasesTypeStats(){
   if(!el)return;
   const all=getCases();
   const typeCounts={};
-  all.forEach(c=>{ const t=c.type||'Other'; typeCounts[t]=(typeCounts[t]||0)+1; });
-  const sorted=Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]);
+  const catCounts={Personal:0,Office:0};
+  all.forEach(c=>{
+    const cat=caseCategoryOfCase(c);
+    if(cat)catCounts[cat]++;
+    // PERSONAL / OFFICE are not legal case types — those cases are counted by
+    // the category tiles instead, so they don't show up in two places.
+    const t=c.type||'Other';
+    const tu=t.toUpperCase();
+    if(tu==='PERSONAL'||tu==='OFFICE')return;
+    typeCounts[t]=(typeCounts[t]||0)+1;
+  });
+  // Category tiles ride along with the type tiles, keyed '__cat:Personal' /
+  // '__cat:Office' so both sort together by count.
+  const sorted=[...Object.entries(typeCounts),
+                ...Object.entries(catCounts).filter(e=>e[1]>0).map(e=>['__cat:'+e[0],e[1]])]
+               .sort((a,b)=>b[1]-a[1]);
   const total=all.length;
   const max=sorted.length?sorted[0][1]:1;
   // Colors per type
@@ -14960,20 +14995,28 @@ function renderCasesTypeStats(){
   // Total card — counts every case; the closed portion is broken out below it
   const closedN=all.filter(c=>c.closed).length;
   const totalCard=document.createElement('div');
-  totalCard.className='ct-stat'+(currentFilter===''?' ct-active':'');
+  totalCard.className='ct-stat'+((currentFilter===''&&!_casesCategoryFilter)?' ct-active':'');
   totalCard.title='Show all case types'+(closedN?' ('+(total-closedN)+' active, '+closedN+' closed)':'');
   totalCard.innerHTML=`<div class="ct-stat-num">${total}</div><div class="ct-stat-label">All Cases</div>${closedN?`<div style="font-size:9.5px;color:#9A7B3F;margin-top:1px;">${total-closedN} active · ${closedN} closed</div>`:''}<div class="ct-stat-bar" style="width:100%;background:var(--parchment)"></div>`;
-  totalCard.onclick=()=>{ document.getElementById('cases-filter-type').value=''; renderCasesTypeStats(); renderCases(); };
+  totalCard.onclick=()=>{ document.getElementById('cases-filter-type').value=''; _casesCategoryFilter=''; renderCasesTypeStats(); renderCases(); };
   el.appendChild(totalCard);
   sorted.forEach(([t,n])=>{
+    const isCat=t.indexOf('__cat:')===0;
+    const cat=isCat?t.slice(6):'';
     const card=document.createElement('div');
-    card.className='ct-stat'+(currentFilter===t?' ct-active':'');
-    card.title='Filter by '+t;
-    const color=typeColors[t]||'#9E9186';
+    const active=isCat?(_casesCategoryFilter===cat):(currentFilter===t&&!_casesCategoryFilter);
+    card.className='ct-stat'+(active?' ct-active':'');
+    card.title=isCat?('Show cases marked '+cat+' in Case Information'):('Filter by '+t);
+    const color=isCat?(cat==='Personal'?'#7A6EA0':'#8A8079'):(typeColors[t]||'#9E9186');
     const pct=Math.round(n/max*100);
-    const label=shortLabels[t]||t;
+    const label=isCat?cat:(shortLabels[t]||t);
     card.innerHTML=`<div class="ct-stat-num" style="color:${color}">${n}</div><div class="ct-stat-label">${label}</div><div class="ct-stat-bar" style="width:${pct}%;background:${color}40"></div>`;
-    card.onclick=()=>{ document.getElementById('cases-filter-type').value=t; renderCasesTypeStats(); renderCases(); };
+    card.onclick=()=>{
+      const tf=document.getElementById('cases-filter-type');
+      if(isCat){ tf.value=''; _casesCategoryFilter=cat; }
+      else { tf.value=t; _casesCategoryFilter=''; }
+      renderCasesTypeStats(); renderCases();
+    };
     el.appendChild(card);
   });
 }
@@ -26749,7 +26792,9 @@ if(csEl) csEl.addEventListener('input',function(){
 });
 ['cases-filter-type','cases-filter-atty'].forEach(id=>{
   const el=document.getElementById(id);
-  if(el) el.addEventListener('change',_debouncedRenderCases);
+  // Picking a case type from the dropdown drops any Personal/Office tile
+  // filter — the two filter the list on different fields.
+  if(el) el.addEventListener('change',()=>{ if(id==='cases-filter-type')_casesCategoryFilter=''; _debouncedRenderCases(); });
 });
 
 // ── Task quick-add modal ─────────────────────────────────────
