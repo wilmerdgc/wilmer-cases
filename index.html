@@ -1053,6 +1053,9 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .judge-picker-item-meta { font-size: 10px; color: var(--ink-muted); }
 .judge-picker-none { padding: 8px 12px; font-size: 12px; font-style: italic; color: var(--ink-muted); cursor: pointer; border-top: 1px solid var(--border); }
 .judge-picker-none:hover { background: var(--rose-light); color: var(--rose); }
+.judge-picker-add { padding: 8px 12px; font-size: 12px; font-weight: 600; color: var(--sage); cursor: pointer; border-top: 1px solid var(--border); }
+.judge-picker-add-sub { font-size: 10px; font-weight: 400; color: var(--ink-muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.judge-picker-add:hover { background: #F0F5F0; }
 /* Judge info popover */
 .judge-info-pop {
   position: fixed;
@@ -12938,7 +12941,7 @@ function openJudgeModal(id){
   document.getElementById('judge-modal').style.display='flex';
   requestAnimationFrame(()=>autoGrowAllNotes(document.getElementById('judge-modal')));
 }
-function closeJudgeModal(){document.getElementById('judge-modal').style.display='none';editingJudgeId=null;window._judgePickerReturn=false;window._judgePickerReturnBrief=false;}
+function closeJudgeModal(){document.getElementById('judge-modal').style.display='none';editingJudgeId=null;window._judgePickerReturn=false;window._judgePickerReturnBrief=false;window._judgePickerReturnCase=null;}
 // Open the Judge modal from the Motion and Brief Creator's Judge field so
 // a judge missing from the list can be created (with court venue) and then
 // auto-selected back on the motion form.
@@ -13014,7 +13017,14 @@ function saveJudge(){
   // Capture the return flags before closeJudgeModal() clears them.
   const _returnToEvent=window._judgePickerReturn;
   const _returnToBrief=window._judgePickerReturnBrief;
+  const _returnToCase=window._judgePickerReturnCase;
   closeJudgeModal();renderJudges();
+  // Came from a client's Judge field on the case page → assign the judge that
+  // was just created to that client and refresh the card.
+  if(_returnToCase&&typeof _returnToCase.assign==='function'){
+    try{ _returnToCase.assign(data.id); }catch(e){}
+    showToast(data.name+' added and assigned ✓');
+  }
   // Came from the event hearing picker → refresh that dropdown and select
   // the judge just created/edited so the user continues without re-searching.
   if(_returnToEvent){
@@ -20676,6 +20686,43 @@ function openCaseDetail(clid){
         it.onmousedown=e=>{e.preventDefault();if(respondentIdx===-1){caseMeta[clid][judgeKey]=j.id;}else if(caseMeta[clid].respondents[respondentIdx]){caseMeta[clid].respondents[respondentIdx][judgeKey]=j.id;}markUnsaved();picker.remove();onDone();showToast(j.name+' assigned ✓');};
         lw.appendChild(it);
       });
+      // Not on the list yet? Create the judge from right here — the Judge
+      // form opens with whatever was typed as the name, and on save the new
+      // judge joins the judges list and is assigned to this client.
+      const addIt=document.createElement('div');
+      addIt.className='judge-picker-add';
+      const _typedQ=(q||'').trim();
+      const _addMain=document.createElement('div');
+      _addMain.textContent='+ Add a new judge';
+      addIt.appendChild(_addMain);
+      if(_typedQ){
+        const _addSub=document.createElement('div');
+        _addSub.className='judge-picker-add-sub';
+        _addSub.textContent='“'+_typedQ+'”';
+        addIt.appendChild(_addSub);
+      }
+      addIt.title='Opens the Judge form, then assigns the new judge to this client';
+      addIt.onmousedown=e=>{
+        e.preventDefault();
+        const typed=(si.value||'').trim();
+        picker.remove();
+        window._judgePickerReturnCase={
+          assign(judgeId){
+            if(!caseMeta[clid])caseMeta[clid]={};
+            if(respondentIdx===-1){caseMeta[clid][judgeKey]=judgeId;}
+            else if((caseMeta[clid].respondents||[])[respondentIdx]){caseMeta[clid].respondents[respondentIdx][judgeKey]=judgeId;}
+            markUnsaved();
+            try{onDone();}catch(err){}
+          }
+        };
+        openJudgeModal(null);
+        const nm=document.getElementById('jm-name');
+        if(nm){
+          if(typed)nm.value=typed;
+          setTimeout(()=>{try{nm.focus();nm.select();}catch(err){}},60);
+        }
+      };
+      lw.appendChild(addIt);
       const ni2=document.createElement('div');ni2.className='judge-picker-none';ni2.textContent='— None / Remove';
       ni2.onmousedown=e=>{e.preventDefault();if(respondentIdx===-1){delete caseMeta[clid][judgeKey];}else if(caseMeta[clid].respondents[respondentIdx]){delete caseMeta[clid].respondents[respondentIdx][judgeKey];}markUnsaved();picker.remove();onDone();};
       lw.appendChild(ni2);
