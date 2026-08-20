@@ -3711,6 +3711,126 @@ const cardBg={overdue:'#F9EDED',urgent:'#FAF0E6',thisweek:'#FAF0E6',nextweek:'#F
 const cardColor={overdue:'#B85C5C',urgent:'#C9823A',thisweek:'#C9823A',nextweek:'#C9823A',['15days']:'#6A8C6E',ok:'#6A8C6E','no-date':'#9E9186'};
 function initials(name){return name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);}
 function fmtTime(t){if(!t)return'';const[h,m]=t.split(':');const hr=parseInt(h);const ampm=hr>=12?'PM':'AM';const h12=hr%12||12;return`${h12}:${m} ${ampm}`;}
+// ── Assignee circle ──────────────────────────────────────────────────
+// The little round avatar next to a task: the assignee's initials on a color
+// picked from their name, or an empty dashed circle when nobody is on it.
+// Clicking it opens a picker, so an unassigned task can be handed to someone
+// without opening the event.
+const ASSIGNEE_COLORS=['#6A8C6E','#6B7FA3','#C9823A','#B85C5C','#8A7CA8','#4F8A8B','#B07B4F'];
+function assigneeColor(name){
+  let h=0;const s=String(name||'');
+  for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;
+  return ASSIGNEE_COLORS[h%ASSIGNEE_COLORS.length];
+}
+function makeAssigneeCircle(rec,size,onChange){
+  size=size||24;
+  const who=(rec&&rec.assigned)||'';
+  const el=document.createElement('span');
+  el.className='assignee-circle';
+  if(who){
+    const c=assigneeColor(who);
+    el.style.cssText='width:'+size+'px;height:'+size+'px;border-radius:50%;background:'+c+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:'+Math.round(size*0.4)+'px;font-weight:700;flex-shrink:0;cursor:pointer;user-select:none;transition:box-shadow .12s;';
+    el.textContent=initials(who);
+    el.title='Assigned to '+who+' — click to change';
+    el.onmouseenter=()=>{el.style.boxShadow='0 0 0 2px #fff, 0 0 0 3.5px '+c+'66;';};
+    el.onmouseleave=()=>{el.style.boxShadow='none';};
+  } else {
+    el.style.cssText='width:'+size+'px;height:'+size+'px;border-radius:50%;border:1.5px dashed #C4BAB0;background:#fff;color:#C4BAB0;display:flex;align-items:center;justify-content:center;font-size:'+Math.round(size*0.55)+'px;font-weight:600;line-height:1;flex-shrink:0;cursor:pointer;user-select:none;transition:border-color .12s,color .12s;';
+    el.textContent='+';
+    el.title='Unassigned — click to assign';
+    el.onmouseenter=()=>{el.style.borderColor='#6A8C6E';el.style.color='#6A8C6E';};
+    el.onmouseleave=()=>{el.style.borderColor='#C4BAB0';el.style.color='#C4BAB0';};
+  }
+  el.onclick=e=>{e.stopPropagation();openAssigneePicker(el,rec.id,onChange);};
+  return el;
+}
+function closeAssigneePicker(){
+  const p=document.getElementById('assignee-picker');
+  if(p)p.remove();
+  document.removeEventListener('mousedown',_assigneeOutside,true);
+  document.removeEventListener('keydown',_assigneeEsc,true);
+}
+function _assigneeOutside(e){
+  const p=document.getElementById('assignee-picker');
+  if(p&&!p.contains(e.target))closeAssigneePicker();
+}
+function _assigneeEsc(e){ if(e.key==='Escape')closeAssigneePicker(); }
+function openAssigneePicker(anchorEl,recordId,onChange){
+  closeAssigneePicker();
+  const rec=records.find(x=>x.id===recordId);
+  if(!rec)return;
+  const pick=document.createElement('div');
+  pick.id='assignee-picker';
+  pick.style.cssText='position:fixed;z-index:9000;min-width:186px;max-height:280px;overflow-y:auto;background:#fff;border:1px solid #DDD5CA;border-radius:10px;box-shadow:0 6px 22px rgba(44,38,32,0.16);padding:6px;font-family:inherit;';
+  pick.onclick=e=>e.stopPropagation();
+
+  const hdr=document.createElement('div');
+  hdr.style.cssText='font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;padding:5px 8px 7px;';
+  hdr.textContent='Assign to';
+  pick.appendChild(hdr);
+
+  const choose=name=>{
+    rec.assigned=name;
+    if(typeof _invalidateCasesCache==='function')_invalidateCasesCache();
+    if(typeof dirtyFilterOpts==='function')dirtyFilterOpts();
+    markUnsaved();
+    closeAssigneePicker();
+    showToast(name?('Assigned to '+name):'Assignee cleared');
+    if(typeof onChange==='function')onChange();
+  };
+
+  const names=['Me',...paralegals.filter(p=>p&&p!=='Me')];
+  names.forEach(name=>{
+    const opt=document.createElement('div');
+    const isCur=rec.assigned===name;
+    opt.style.cssText='display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:12px;color:#2C2620;'+(isCur?'background:#F0F5F0;':'');
+    opt.onmouseenter=()=>{opt.style.background='#F7F3ED';};
+    opt.onmouseleave=()=>{opt.style.background=isCur?'#F0F5F0':'transparent';};
+    const dot=document.createElement('span');
+    const c=assigneeColor(name);
+    dot.style.cssText='width:21px;height:21px;border-radius:50%;background:'+c+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;';
+    dot.textContent=initials(name);
+    const lbl=document.createElement('span');
+    lbl.style.cssText='flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    lbl.textContent=name;
+    opt.appendChild(dot);opt.appendChild(lbl);
+    if(isCur){
+      const chk=document.createElement('span');
+      chk.style.cssText='font-size:11px;color:#6A8C6E;flex-shrink:0;';
+      chk.textContent='✓';
+      opt.appendChild(chk);
+    }
+    opt.onclick=()=>choose(name);
+    pick.appendChild(opt);
+  });
+
+  if(rec.assigned){
+    const sep=document.createElement('div');
+    sep.style.cssText='height:1px;background:#EDE8E0;margin:5px 4px;';
+    pick.appendChild(sep);
+    const clr=document.createElement('div');
+    clr.style.cssText='padding:6px 8px;border-radius:7px;cursor:pointer;font-size:11.5px;color:#9E9186;';
+    clr.textContent='Unassign';
+    clr.onmouseenter=()=>{clr.style.background='#F7F3ED';};
+    clr.onmouseleave=()=>{clr.style.background='transparent';};
+    clr.onclick=()=>choose('');
+    pick.appendChild(clr);
+  }
+
+  document.body.appendChild(pick);
+  // Anchor under the circle, nudged back on screen when it would overflow.
+  const b=anchorEl.getBoundingClientRect();
+  const w=pick.offsetWidth,h=pick.offsetHeight;
+  let left=Math.min(b.right-w,window.innerWidth-w-10);
+  let top=b.bottom+6;
+  if(top+h>window.innerHeight-10)top=Math.max(10,b.top-h-6);
+  pick.style.left=Math.max(10,left)+'px';
+  pick.style.top=top+'px';
+  setTimeout(()=>{
+    document.addEventListener('mousedown',_assigneeOutside,true);
+    document.addEventListener('keydown',_assigneeEsc,true);
+  },0);
+}
 function todayStr(){return TODAY.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
 function addDateDays(dateStr,days){if(!dateStr)return'';const[y,m,d]=dateStr.split('-').map(Number);const dt=new Date(y,m-1,d);dt.setDate(dt.getDate()+days);return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');}
 </script>
@@ -21324,6 +21444,10 @@ function openCaseDetail(clid){
     const row=document.createElement('div');row.className='case-event-row';row.onclick=()=>openEdit(r.id);
     const s=r.date?status(parseDate(r.date)):'no-date';const cls=badgeClass(s);
     const sb2=r.date?`<span class="badge ${cls}">${fmtDate(r.date)}</span>`:'<span class="badge no-date">No date</span>';
+    // Hearings carry a start (and often an end) time — show it under the date,
+    // since "which morning" is the first thing you need off this list.
+    const _timeHtml=r.timeStart?`<div class="wk-time-badge" style="margin-top:4px;">${fmtTime(r.timeStart)}${r.timeEnd?' &ndash; '+fmtTime(r.timeEnd):''}</div>`:'';
+    const _rightHtml=`<div class="case-event-right" style="flex-shrink:0;display:flex;align-items:center;gap:9px;"><div style="display:flex;flex-direction:column;align-items:flex-end;">${sb2}${_timeHtml}</div></div>`;
     const esC=getEventStyle(r.event||'');
     const evLabel=(esC.icon?esC.icon+' ':'')+(r.event||'(No event type)');
     const colorStyle=esC.color?`color:${esC.color};`:'';
@@ -21352,9 +21476,15 @@ function openCaseDetail(clid){
     const _isRemRow=!!(r.notes&&r.notes.startsWith('⏰ REMINDER'));
     if(_isRemRow){
       const reminderText=(r.notes||'').replace(/^⏰ REMINDER:\s*/,'');
-      row.innerHTML=`<div class="case-event-left"><div class="case-event-name" style="color:#C9823A;font-weight:600;">🔔 Reminder</div><div class="case-event-sub" style="font-style:italic;color:var(--ink-faint);opacity:.85;">${escHtml(reminderText)}</div></div><div style="flex-shrink:0">${sb2}</div>`;
+      row.innerHTML=`<div class="case-event-left"><div class="case-event-name" style="color:#C9823A;font-weight:600;">🔔 Reminder</div><div class="case-event-sub" style="font-style:italic;color:var(--ink-faint);opacity:.85;">${escHtml(reminderText)}</div></div>${_rightHtml}`;
     } else {
-      row.innerHTML=`<div class="case-event-left"><div class="case-event-name" style="${colorStyle}font-weight:600;">${evLabel}${cdHtml}${judgeBadge}</div><div class="case-event-sub">${r.notes?escHtml(r.notes):'—'}</div></div><div style="flex-shrink:0">${sb2}</div>`;
+      row.innerHTML=`<div class="case-event-left"><div class="case-event-name" style="${colorStyle}font-weight:600;">${evLabel}${cdHtml}${judgeBadge}</div><div class="case-event-sub">${r.notes?escHtml(r.notes):'—'}</div></div>${_rightHtml}`;
+    }
+    // Tasks show who they belong to, and an empty circle is the way to hand
+    // one to someone right from the list.
+    if(isTaskKindEvent(r.event)&&!_isRemRow){
+      const _rightEl=row.querySelector('.case-event-right');
+      if(_rightEl)_rightEl.appendChild(makeAssigneeCircle(r,24,()=>openCaseDetail(clid)));
     }
     appendSoMeta(row.querySelector('.case-event-left'),r,'#C9823A');
     // Per-event finish checkbox — clicking it opens the finish options
