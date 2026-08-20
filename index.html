@@ -1069,6 +1069,9 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .nc-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#9E9186; margin-bottom:5px; }
 .nc-input { width:100%; padding:9px 12px; font-size:13px; border:1px solid #DDD5CA; border-radius:8px; font-family:inherit; box-sizing:border-box; outline:none; background:#fff; color:#2C2620; transition:border-color .12s; }
 .nc-input:focus { border-color:#6A8C6E; }
+/* Checkboxes in the New Case document panel — the global `input` rule above
+   stretches them to full width otherwise. */
+.ncd-cb { width:14px !important; height:14px; min-width:14px; padding:0 !important; margin:0; flex:0 0 auto; cursor:pointer; accent-color:#6A8C6E; box-shadow:none !important; border-radius:3px; }
 .case-event-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 8px 12px; border: 1px solid var(--cream-dark); border-radius: var(--radius-sm); margin-bottom: 5px; cursor: pointer; background: #fff; transition: border-color 0.12s; }
 .case-event-row:hover { border-color: var(--border); background: var(--cream); }
 .case-event-left { flex: 1; min-width: 0; }
@@ -2462,6 +2465,33 @@ window.addEventListener('load',()=>autoGrowAllNotes());
       <div style="font-size:18px;font-weight:600;font-family:'Lora',Georgia,serif;color:#2C2620;flex:1;">New Case</div>
     </div>
     <div style="max-width:640px;">
+
+      <!-- Document intake: drop images / PDFs and let the form fill itself -->
+      <div style="background:#FDFAF7;border:1px solid #EDE8E0;border-radius:14px;padding:20px 22px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:11px;flex-wrap:wrap;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;">Documents — read &amp; auto-fill</div>
+          <button type="button" onclick="ncdToggleManual()" style="font-size:10px;padding:3px 10px;border:1px solid #DDD5CA;border-radius:20px;background:#fff;color:#9E9186;cursor:pointer;font-family:inherit;">Paste text instead</button>
+        </div>
+        <div id="ncp-doc-drop" onclick="document.getElementById('ncp-doc-input').click()" style="border:1.5px dashed #DDD5CA;border-radius:10px;padding:18px 14px;text-align:center;cursor:pointer;background:#fff;transition:border-color .12s,background .12s;">
+          <div style="font-size:21px;line-height:1;margin-bottom:6px;">🗂</div>
+          <div style="font-size:12.5px;color:#5C5148;font-weight:600;">Drop images or PDFs here</div>
+          <div style="font-size:11px;color:#9E9186;margin-top:3px;">click to browse &middot; or paste a screenshot with &#8984;/Ctrl+V</div>
+          <div style="font-size:10px;color:#C4BAB0;margin-top:7px;line-height:1.5;">Notices, receipts, IDs, hearing notices&hellip; They are read on this device — nothing is uploaded — and the values are matched to the fields below.</div>
+        </div>
+        <input id="ncp-doc-input" type="file" accept="image/*,application/pdf,.pdf" multiple style="display:none" onchange="ncdFilesChosen(this.files);this.value='';"/>
+        <div id="ncp-doc-manual-wrap" style="display:none;margin-top:10px;">
+          <textarea id="ncp-doc-manual" rows="4" placeholder="Paste the text of a notice, receipt or form here…" style="width:100%;padding:9px 12px;font-size:12px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;resize:vertical;background:#fff;"></textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:6px;">
+            <button type="button" onclick="ncdReadPastedText()" style="font-size:11px;padding:5px 13px;border:1px solid #DDD5CA;border-radius:8px;background:#fff;color:#5C5148;cursor:pointer;font-family:inherit;font-weight:600;">Read this text</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#5C5148;cursor:pointer;"><input type="checkbox" id="ncp-doc-spa" class="ncd-cb"/> May be in Spanish</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#5C5148;cursor:pointer;"><input type="checkbox" id="ncp-doc-attach" checked class="ncd-cb"/> Save the files to the case</label>
+        </div>
+        <div id="ncp-doc-files" style="display:flex;flex-direction:column;gap:6px;margin-top:11px;"></div>
+        <div id="ncp-doc-suggest"></div>
+      </div>
 
       <!-- Identity card -->
       <div style="background:#FDFAF7;border:1px solid #EDE8E0;border-radius:14px;padding:20px 22px;margin-bottom:16px;">
@@ -24387,6 +24417,834 @@ function _ncApplyClients(key,cid){
   return clients.length;
 }
 
+// ── New Case: document intake (images / PDFs → auto-filled fields) ────
+// Drop a photo of an ID, a Notice to Appear, an I-797 receipt or a hearing
+// notice on the New Case form and the fields below fill themselves.
+//
+// Everything runs in this browser — these are client documents, so nothing is
+// uploaded anywhere. A PDF's own text layer is read with pdf.js; a scanned PDF
+// or a photo goes through Tesseract OCR. Both libraries are pulled from a CDN
+// the first time a file is dropped (never on page load), and every value the
+// parser finds is shown as an editable suggestion — the form is only touched
+// when the user clicks "Fill the form".
+const NCD_ATTACH_MAX = 4 * 1024 * 1024;   // bigger files are read but not stored
+const NCD_ATTACH_TOTAL = 6 * 1024 * 1024; // and the batch as a whole stays under this
+const NCD_PDF_SRC = [
+  {lib:'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js',      worker:'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js'},
+  {lib:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', worker:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'},
+  {lib:'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js', worker:'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'}
+];
+const NCD_TESS_SRC = [
+  'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js',
+  'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js'
+];
+const NCD_PDF_TEXT_PAGES = 15;   // pages read from a text-layer PDF
+const NCD_PDF_OCR_PAGES  = 4;    // pages rendered + OCR'd from a scanned PDF
+
+let _ncdFiles = [];   // {id,name,size,type,file,status,msg,text,dataUrl}
+let _ncdSug   = [];   // suggestions currently on screen
+let _ncdState = {};   // key → {checked,value,applied} — survives re-renders
+let _ncdSeq = 0, _ncdWired = false;
+
+function _ncdEl(id){ return document.getElementById(id); }
+function _ncdEscRx(s){ return String(s||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+
+// ── Lazy CDN loading ──────────────────────────────────────────────────
+function _ncdLoadScript(url){
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src=url; s.async=true;
+    s.onload=()=>resolve();
+    s.onerror=()=>{ s.remove(); reject(new Error('load failed: '+url)); };
+    document.head.appendChild(s);
+  });
+}
+async function _ncdPdfLib(){
+  if(window.pdfjsLib && window.pdfjsLib.getDocument) return window.pdfjsLib;
+  for(const src of NCD_PDF_SRC){
+    try{
+      await _ncdLoadScript(src.lib);
+      if(window.pdfjsLib && window.pdfjsLib.getDocument){
+        try{ window.pdfjsLib.GlobalWorkerOptions.workerSrc = src.worker; }catch(e){}
+        return window.pdfjsLib;
+      }
+    }catch(e){}
+  }
+  throw new Error('PDF reader could not be loaded — check the connection, or use “Paste text instead”.');
+}
+async function _ncdTesseract(){
+  if(window.Tesseract && window.Tesseract.recognize) return window.Tesseract;
+  for(const url of NCD_TESS_SRC){
+    try{
+      await _ncdLoadScript(url);
+      if(window.Tesseract && window.Tesseract.recognize) return window.Tesseract;
+    }catch(e){}
+  }
+  throw new Error('Text recognition could not be loaded — check the connection, or use “Paste text instead”.');
+}
+
+// ── Text extraction ───────────────────────────────────────────────────
+function _ncdOcrLang(){ return (_ncdEl('ncp-doc-spa')||{}).checked ? 'eng+spa' : 'eng'; }
+
+async function _ncdOcr(image, rec, label){
+  const T = await _ncdTesseract();
+  const res = await T.recognize(image, _ncdOcrLang(), {
+    logger: m => {
+      if(!rec || !m) return;
+      if(m.status === 'recognizing text'){
+        _ncdSetStatus(rec, 'working', (label?label+' — ':'') + 'reading ' + Math.round((m.progress||0)*100) + '%');
+      } else if(m.status){
+        _ncdSetStatus(rec, 'working', String(m.status).replace(/^\w/,c=>c.toUpperCase()) + '…');
+      }
+    }
+  });
+  return ((res && res.data && res.data.text) || '');
+}
+
+// pdf.js gives loose text items; regroup them into visual lines so that the
+// "label: value" parsing below has something line-shaped to work with.
+function _ncdItemsToLines(items){
+  const rows = [];
+  (items||[]).forEach(it=>{
+    const str = (it && it.str) || '';
+    if(!str.trim()) return;
+    const tr = it.transform || [0,0,0,0,0,0];
+    const y = Math.round(tr[5]);
+    let row = rows.find(r => Math.abs(r.y - y) <= 3);
+    if(!row){ row = {y, parts:[]}; rows.push(row); }
+    row.parts.push({x: tr[4], str});
+  });
+  rows.sort((a,b)=> b.y - a.y);
+  return rows.map(r => r.parts.sort((a,b)=>a.x-b.x).map(p=>p.str).join(' ').replace(/\s+/g,' ').trim())
+             .filter(Boolean).join('\n');
+}
+
+async function _ncdPdfText(rec){
+  const pdfjs = await _ncdPdfLib();
+  const buf = await rec.file.arrayBuffer();
+  const doc = await pdfjs.getDocument({data:new Uint8Array(buf)}).promise;
+  const pages = Math.min(doc.numPages || 1, NCD_PDF_TEXT_PAGES);
+  const out = [];
+  for(let p=1; p<=pages; p++){
+    _ncdSetStatus(rec, 'working', 'Reading page ' + p + ' of ' + pages + '…');
+    const page = await doc.getPage(p);
+    out.push(_ncdItemsToLines((await page.getTextContent()).items));
+  }
+  let text = out.join('\n\n');
+
+  // Almost no text layer → it is a scan. Render the pages and OCR them.
+  if(text.replace(/\s/g,'').length < 40){
+    const ocrPages = Math.min(doc.numPages || 1, NCD_PDF_OCR_PAGES);
+    const chunks = [];
+    for(let p=1; p<=ocrPages; p++){
+      const page = await doc.getPage(p);
+      const viewport = page.getViewport({scale: 2});
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+      await page.render({canvasContext: canvas.getContext('2d'), viewport}).promise;
+      chunks.push(await _ncdOcr(canvas, rec, 'Scanned page ' + p + '/' + ocrPages));
+      canvas.width = canvas.height = 0;
+    }
+    text = chunks.join('\n\n');
+  }
+  try{ doc.destroy(); }catch(e){}
+  return text;
+}
+
+function _ncdReadDataUrl(rec){
+  if(!rec.file || rec.size > NCD_ATTACH_MAX) return;
+  const fr = new FileReader();
+  fr.onload = e => { rec.dataUrl = (e.target && e.target.result) || ''; };
+  fr.onerror = () => {};
+  fr.readAsDataURL(rec.file);
+}
+
+// ── Parsing: raw text → labelled values ───────────────────────────────
+function _ncdNorm(raw){
+  return String(raw||'')
+    .replace(/\r\n?/g,'\n')
+    .replace(/[‘’´]/g,"'")
+    .replace(/[“”]/g,'"')
+    .replace(/[–—]/g,'-')
+    .replace(/[ \t ]+/g,' ')
+    .split('\n').map(l=>l.trim()).join('\n')
+    .replace(/\n{3,}/g,'\n\n')
+    .trim();
+}
+
+// Find "Label: value" (or a label sitting on the line above its value, the
+// way it comes out of a scanned form).
+function _ncdLabeled(text, pats, test){
+  const lines = text.split('\n');
+  const qual = "(?:complete|full|legal|current|print(?:ed)?|your|applicant'?s?|respondent'?s?|client'?s?|beneficiary'?s?|petitioner'?s?)\\s+";
+  const rx = new RegExp('^[\\s\\d.)•\\-]{0,6}(?:' + qual + '){0,2}(?:' + pats.join('|') + ')\\s*[:\\-=]?\\s*(.*)$', 'i');
+  for(let i=0;i<lines.length;i++){
+    const m = lines[i].match(rx);
+    if(!m) continue;
+    let v = (m[1]||'').replace(/^[\s:.\-=]+/,'').trim();
+    if(v.length < 2){
+      for(let j=i+1;j<Math.min(i+3,lines.length);j++){
+        const nx = (lines[j]||'').trim();
+        if(nx){ v = nx; break; }
+      }
+    }
+    v = v.replace(/\s*\((?:last|first|middle|given|family)[^)]*\)\s*/ig,' ')
+         .replace(/[\s.,;:]+$/,'').trim();
+    if(v && (!test || test(v))) return v;
+  }
+  return '';
+}
+
+const NCD_MONTHS = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,
+                    ene:1,abr:4,ago:8,dic:12,set:9};
+function _ncdISO(y,m,d){
+  y=+y; m=+m; d=+d;
+  if(!y||!m||!d||m<1||m>12||d<1||d>31||y<1900||y>2100) return '';
+  return y + '-' + String(m).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+}
+function _ncdDate(s){
+  const t = String(s||'');
+  let m = t.match(/\b(\d{4})[\/.\-](\d{1,2})[\/.\-](\d{1,2})\b/);
+  if(m) return _ncdISO(m[1],m[2],m[3]);
+  m = t.match(/\b([A-Za-zÀ-ÿ]{3,10})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b/);
+  if(m){ const mo = NCD_MONTHS[m[1].slice(0,3).toLowerCase()]; if(mo) return _ncdISO(m[3],mo,m[2]); }
+  m = t.match(/\b(\d{1,2})\s+(?:de\s+)?([A-Za-zÀ-ÿ]{3,10})\.?\s+(?:de\s+)?(\d{4})\b/);
+  if(m){ const mo = NCD_MONTHS[m[2].slice(0,3).toLowerCase()]; if(mo) return _ncdISO(m[3],mo,m[1]); }
+  m = t.match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})\b/);   // US m/d/y
+  if(m){ let y=+m[3]; if(y<100) y += (y>50?1900:2000); return _ncdISO(y,m[1],m[2]); }
+  return '';
+}
+
+function _ncdCleanName(v){
+  return String(v||'')
+    .replace(/\d.*$/,'')
+    .replace(/[^A-Za-zÀ-ÿ'\-. ]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+const NCD_NAME_NOISE = /^(?:NONE|N\/?A|UNKNOWN|SAME|MR|MRS|MS|DE|EL|LA|OF|THE)$/i;
+function _ncdIsName(v){
+  const c = _ncdCleanName(v);
+  return c.length >= 2 && c.length <= 60 && !NCD_NAME_NOISE.test(c) && /[A-Za-z]{2}/.test(c);
+}
+// One component of a name (a "Last Name" box, say) — never a whole name, which
+// is what "NOMBRE COMPLETO: PEREZ, Carlos" would otherwise hand back.
+function _ncdIsNamepart(v){
+  return _ncdIsName(v) && String(v).indexOf(',') === -1
+      && _ncdCleanName(v).split(' ').filter(Boolean).length <= 3;
+}
+// "SMITH, John Paul" / "John Paul SMITH" / "John Smith" → parts
+function _ncdSplitName(raw){
+  const v = _ncdCleanName(String(raw||'').replace(/\s*\(.*?\)\s*/g,' '));
+  if(!v) return null;
+  if(v.indexOf(',') > -1 || String(raw).indexOf(',') > -1){
+    const bits = String(raw).split(',');
+    const last = _ncdCleanName(bits[0]);
+    const rest = _ncdCleanName(bits.slice(1).join(' ')).split(' ').filter(Boolean);
+    if(last && rest.length) return {lastName:last, firstName:rest[0], middleName:rest.slice(1).join(' ')};
+    return null;
+  }
+  const w = v.split(' ').filter(Boolean);
+  if(w.length < 2) return null;
+  // Trailing ALL-CAPS run is the family name (the firm's own convention too).
+  const caps = [];
+  for(let i=w.length-1;i>=0;i--){
+    if(/^[A-ZÀ-Ý'\-]{2,}$/.test(w[i]) && !/^[A-ZÀ-Ý'\-]{2,}$/.test(w[0])) caps.unshift(w[i]);
+    else break;
+  }
+  if(caps.length && caps.length < w.length){
+    const head = w.slice(0, w.length - caps.length);
+    return {lastName: caps.join(' '), firstName: head[0], middleName: head.slice(1).join(' ')};
+  }
+  return {lastName: w[w.length-1], firstName: w[0], middleName: w.slice(1,-1).join(' ')};
+}
+
+function _ncdFormatANum(digits){
+  const d = String(digits||'').replace(/\D/g,'');
+  if(d.length === 9) return d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6);
+  if(d.length === 8) return d.slice(0,2)+'-'+d.slice(2,5)+'-'+d.slice(5);
+  return d;
+}
+function _ncdFormatPhone(raw){
+  const d = String(raw||'').replace(/\D/g,'').replace(/^1(?=\d{10}$)/,'');
+  if(d.length === 10) return '('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6);
+  return String(raw||'').trim();
+}
+
+// Case type: what the document looks like → the closest type the firm uses.
+const NCD_CASE_HINTS = [
+  {re:/NOTICE TO APPEAR|\bI[\s\-]?862\b|REMOVAL PROCEEDINGS|IMMIGRATION COURT|EXECUTIVE OFFICE FOR IMMIGRATION REVIEW/, words:['REMOVAL','DEPORT','COURT','EOIR','NTA','DEFENSE','DEFENSA']},
+  {re:/\bI[\s\-]?589\b|APPLICATION FOR ASYLUM|WITHHOLDING OF REMOVAL|\bASILO\b/,        words:['ASYLUM','589','ASILO']},
+  {re:/\bI[\s\-]?821D\b|\bDACA\b|DEFERRED ACTION FOR CHILDHOOD/,                        words:['DACA','821D','DEFERRED']},
+  {re:/TEMPORARY PROTECTED STATUS|\bTPS\b|\bI[\s\-]?821\b/,                             words:['TPS','821','PROTECTED']},
+  {re:/\bI[\s\-]?360\b|SPECIAL IMMIGRANT JUVENILE|\bSIJS?\b/,                           words:['SIJ','JUVENILE','360']},
+  {re:/\bI[\s\-]?918\b|\bU[\s\-]?VISA\b|VICTIM OF CRIMINAL ACTIVITY/,                    words:['918','U VISA','U-VISA','UVISA','CRIME','CRIMEN']},
+  {re:/\bI[\s\-]?914\b|\bT[\s\-]?VISA\b|VICTIM OF (?:A SEVERE FORM OF )?TRAFFICKING/,    words:['914','T VISA','T-VISA','TRAFFIC']},
+  {re:/\bVAWA\b|VIOLENCE AGAINST WOMEN/,                                                words:['VAWA']},
+  {re:/\bI[\s\-]?130\b|PETITION FOR ALIEN RELATIVE/,                                    words:['130','FAMILY','RELATIVE','FAMILIA']},
+  {re:/\bI[\s\-]?485\b|ADJUSTMENT OF STATUS|REGISTER PERMANENT RESIDENCE/,              words:['485','ADJUST','RESIDEN','GREEN CARD']},
+  {re:/\bI[\s\-]?751\b|REMOVE (?:THE )?CONDITIONS ON RESIDENCE/,                        words:['751','CONDITION']},
+  {re:/\bI[\s\-]?765\b|EMPLOYMENT AUTHORIZATION/,                                       words:['765','WORK','EAD','EMPLOY','PERMIT','PERMISO']},
+  {re:/\bI[\s\-]?601A?\b|PROVISIONAL (?:UNLAWFUL PRESENCE )?WAIVER|WAIVER OF GROUNDS/,  words:['601','WAIVER','PERDON','PERDÓN']},
+  {re:/\bI[\s\-]?730\b|REFUGEE\/ASYLEE RELATIVE PETITION/,                              words:['730','REFUGEE','ASYLEE']},
+  {re:/\bN[\s\-]?400\b|APPLICATION FOR NATURALIZATION/,                                 words:['400','NATURAL','CITIZEN','CIUDADAN']},
+  {re:/\bI[\s\-]?286\b|CUSTODY REDETERMINATION|BOND HEARING/,                           words:['BOND','286','CUSTODY','FIANZA']}
+];
+function _ncdGuessCaseType(U){
+  const types = (typeof caseTypes !== 'undefined' && Array.isArray(caseTypes)) ? caseTypes : [];
+  if(!types.length) return '';
+  for(const h of NCD_CASE_HINTS){
+    if(!h.re.test(U)) continue;
+    const hit = types.find(t => { const tu = String(t).toUpperCase(); return h.words.some(w => tu.indexOf(w) > -1); });
+    if(hit) return hit;
+  }
+  return '';
+}
+const NCD_DOC_TYPES = [
+  [/NOTICE TO APPEAR|\bI[\s\-]?862\b/,                 'Notice to Appear (I-862)'],
+  [/NOTICE OF HEARING/,                                'Notice of Hearing'],
+  [/SCHEDULING ORDER/,                                 'Scheduling Order'],
+  [/\bI[\s\-]?797\b|NOTICE OF ACTION|RECEIPT NOTICE/,  'USCIS Notice of Action (I-797)'],
+  [/REQUEST FOR (?:ADDITIONAL )?EVIDENCE|\bRFE\b/,     'Request for Evidence'],
+  [/\bEOIR[\s\-]?33\b/,                                'EOIR-33 Change of Address'],
+  [/\bEOIR[\s\-]?28\b|\bG[\s\-]?28\b/,                 'Notice of Appearance'],
+  [/\bI[\s\-]?589\b/,                                  'I-589 Asylum Application'],
+  [/PERMANENT RESIDENT CARD|RESIDENT ALIEN/,           'Permanent Resident Card'],
+  [/EMPLOYMENT AUTHORIZATION (?:DOCUMENT|CARD)/,       'Employment Authorization Document'],
+  [/\bPASSPORT\b|PASAPORTE/,                           'Passport'],
+  [/DRIVER'?S? LICEN[SC]E/,                            "Driver's License"],
+  [/BIRTH CERTIFICATE|ACTA DE NACIMIENTO|CERTIFICADO DE NACIMIENTO/, 'Birth Certificate'],
+  [/MARRIAGE CERTIFICATE|ACTA DE MATRIMONIO/,          'Marriage Certificate']
+];
+
+// Hearing dates that deserve their own row in "Schedule Events".
+function _ncdHearings(T){
+  const lines = T.split('\n');
+  const out = [];
+  for(let i=0;i<lines.length;i++){
+    const L = lines[i].toUpperCase();
+    if(!/HEARING|AUDIENCIA/.test(L)) continue;
+    const type = /MASTER|PRELIMINAR/.test(L) ? 'MASTER'
+               : (/INDIVIDUAL|MERITS|MÉRITO|MERITO/.test(L) ? 'INDIVIDUAL' : '');
+    if(!type) continue;
+    let d = _ncdDate(lines[i]);
+    for(let j=i+1; !d && j<Math.min(i+4,lines.length); j++) d = _ncdDate(lines[j]);
+    if(!d) continue;
+    if(!out.some(o => o.type===type && o.date===d)) out.push({type, date:d});
+  }
+  return out;
+}
+
+// The whole parse for one document.
+function _ncdParse(raw, srcName){
+  const T = _ncdNorm(raw);
+  const U = T.toUpperCase();
+  const f = {};
+  const put = (k,v) => { v = String(v==null?'':v).trim(); if(v && !f[k]) f[k] = {value:v, src:srcName}; };
+
+  // A-number
+  let m = T.match(/\b(?:Alien\s*(?:Registration)?\s*(?:Number|No\.?|#)|A[\s\-]?Number|A\s*#|USCIS\s*(?:#|Number|No\.?)|N[uúü]mero\s*A)\s*[:#\-]?\s{0,2}A?[ \-]*((?:\d[ \-]*){8,9})(?!\d)/i)
+        || T.match(/\bA[ \-.:#]{0,3}((?:\d[ \-]*){8,9})(?!\d)/);
+  if(m) put('anum', _ncdFormatANum(m[1]));
+
+  // Names — labelled fields first (forms), then free-form headings.
+  const last  = _ncdLabeled(T, ['family\\s*name(?:\\s*\\(last\\s*name\\))?','last\\s*name','surname','apellidos?','apellido\\s*paterno'], _ncdIsNamepart);
+  const first = _ncdLabeled(T, ['given\\s*name(?:\\s*\\(first\\s*name\\))?','first\\s*name','nombres?(?!\\s*completo)(?:\\s*de\\s*pila)?','primer\\s*nombre'], _ncdIsNamepart);
+  const mid   = _ncdLabeled(T, ['middle\\s*name','middle\\s*initial','segundo\\s*nombre'], _ncdIsNamepart);
+  if(last)  put('lastName',  _ncdCleanName(last).toUpperCase());
+  if(first) put('firstName', _ncdCleanName(first));
+  if(mid)   put('middleName',_ncdCleanName(mid));
+  if(!f.lastName || !f.firstName){
+    const full = _ncdLabeled(T, ['in\\s*the\\s*matter\\s*of','name\\s*of\\s*respondent',"respondent'?s?\\s*name",'respondent',"applicant'?s?\\s*name",'applicant',"beneficiary'?s?\\s*name",'beneficiary',"petitioner'?s?\\s*name",'client\\s*name','full\\s*name','name\\s*of\\s*applicant','nombre\\s*completo','nombre\\s*del\\s*solicitante'], v => _ncdIsName(v) && v.split(/\s+/).length >= 2);
+    const parts = full ? _ncdSplitName(full) : null;
+    if(parts){
+      put('lastName',  parts.lastName.toUpperCase());
+      put('firstName', parts.firstName);
+      if(parts.middleName) put('middleName', parts.middleName);
+    }
+  }
+
+  // Client / file number used by the firm
+  m = T.match(/\b(?:Client\s*(?:ID|No\.?|Number|#)|Cl\.?\s*ID|File\s*(?:No\.?|Number|#)|Matter\s*(?:No\.?|Number|#)|ID)\s*[:#\-]?\s*(\d{3,7})\b/i);
+  if(m) put('clid', m[1]);
+
+  // Contact details
+  const emails = T.match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/g) || [];
+  const firmDomain = ((typeof firmInfo !== 'undefined' && firmInfo && firmInfo.email) || '').split('@')[1] || '';
+  const email = emails.find(e => {
+    const dom = e.split('@')[1].toLowerCase();
+    if(/(?:^|\.)(?:uscis|dhs|usdoj|justice|state|ice)\.gov$/.test(dom) || /\.gov$/.test(dom)) return false;
+    if(firmDomain && dom === firmDomain.toLowerCase()) return false;
+    return true;
+  });
+  if(email) put('email', email);
+
+  const phone = _ncdLabeled(T, ['(?:day\\s*time\\s*|mobile\\s*|cell\\s*|home\\s*|daytime\\s*)?(?:tele)?phone(?:\\s*number)?','tel\\.?','cell','mobile','tel[eé]fono','celular'], v => (v.replace(/\D/g,'').length >= 10));
+  if(phone) put('phone', _ncdFormatPhone((phone.match(/[\d().\-\s+]{10,}/)||[phone])[0]));
+
+  const dob = _ncdDate(_ncdLabeled(T, ['date\\s*of\\s*birth','birth\\s*date','\\bd\\.?o\\.?b\\.?\\b','fecha\\s*de\\s*nacimiento'], v => !!_ncdDate(v)));
+  if(dob) put('dob', dob);
+
+  let country = _ncdLabeled(T, ['country\\s*of\\s*birth','country\\s*of\\s*nationality','country\\s*of\\s*citizenship','nationality','citizen\\s*of','pa[ií]s\\s*de\\s*nacimiento','nacionalidad'], v => /^[A-Za-zÀ-ÿ' \-.]{3,40}$/.test(v));
+  if(!country){
+    const pob = _ncdLabeled(T, ['place\\s*of\\s*birth','lugar\\s*de\\s*nacimiento'], v => v.length >= 3);
+    if(pob) country = pob.split(',').pop().trim();
+  }
+  if(country) put('countryOfBirth', country.replace(/[.,;:]+$/,''));
+
+  // Address — a labelled line, or any line that ends in "ST, NY 11373"
+  let addr = _ncdLabeled(T, ['(?:current\\s*|present\\s*|mailing\\s*|home\\s*|street\\s*|physical\\s*|residential\\s*)?address','residence','direcci[oó]n','domicilio'], v => v.length >= 6 && /[A-Za-z]/.test(v) && !/^[A-Za-z ]+$/.test(v));
+  const zipLine = (T.split('\n').find(l => /\d{1,6}\s+\S.*\b[A-Z]{2}\s+\d{5}(?:-\d{4})?\b/.test(l)) || '').trim();
+  if((!addr || !/\d{5}/.test(addr)) && zipLine) addr = zipLine;
+  else if(addr && !/\d{5}/.test(addr) && zipLine) addr = addr + ', ' + zipLine;
+  if(addr) put('address', addr.replace(/[.,;:]+$/,''));
+
+  // Document identity
+  m = T.match(/\b([A-Z]{3}\d{10})\b/);
+  if(m) put('receipt', m[1]);
+  const court = _ncdLabeled(T, ['immigration\\s*court','court\\s*address','name\\s*and\\s*address\\s*of\\s*(?:the\\s*)?immigration\\s*court'], v => v.length >= 4);
+  if(court) put('court', court);
+  const docHit = NCD_DOC_TYPES.find(d => d[0].test(U));
+  if(docHit) put('docType', docHit[1]);
+
+  const ct = _ncdGuessCaseType(U);
+  if(ct) put('caseType', ct);
+
+  return {fields:f, events:_ncdHearings(T), text:T};
+}
+
+// ── From parsed values to on-screen suggestions ───────────────────────
+const NCD_LABELS = {
+  lastName:'Family Name (Last Name)', firstName:'Given Name (First Name)', middleName:'Middle Name',
+  clid:'Client ID', anum:'A-Number', email:'Email', caseType:'Case Type',
+  dob:'Date of Birth', countryOfBirth:'Country of Birth', phone:'Phone', address:'Address',
+  receipt:'Receipt Number', court:'Immigration Court', docType:'Document type'
+};
+// key → the field on the New Case form it belongs in.
+const NCD_FIELD_MAP = [
+  ['lastName',  {kind:'input',  id:'ncp-lastName', upper:true}],
+  ['firstName', {kind:'input',  id:'ncp-firstName'}],
+  ['middleName',{kind:'input',  id:'ncp-middleName'}],
+  ['clid',      {kind:'input',  id:'ncp-clid'}],
+  ['anum',      {kind:'input',  id:'ncp-anum'}],
+  ['email',     {kind:'input',  id:'ncp-email'}],
+  ['caseType',  {kind:'select', id:'ncp-type'}]
+];
+// Words that make a custom column the right home for a parsed value.
+const NCD_CUSTOM_SYNONYMS = {
+  address:        ['address','direccion','dirección','domicilio','street','mailing'],
+  countryOfBirth: ['country','pais','país','nationality','nacionalidad','birthplace'],
+  dob:            ['dob','date of birth','birth date','birthday','fecha de nacimiento','nacimiento'],
+  phone:          ['phone','telephone','tel','cell','mobile','celular','telefono','teléfono','contact number'],
+  email:          ['email','e-mail','correo'],
+  anum:           ['a-number','a number','anumber','alien'],
+  receipt:        ['receipt','uscis number','case number'],
+  court:          ['court','venue','tribunal','juzgado'],
+  clid:           ['client id','file number','matter']
+};
+// Values with no home field are offered as a Notes block instead of dropped.
+const NCD_NOTE_ORDER = ['docType','receipt','dob','countryOfBirth','phone','address','court'];
+
+function _ncdAllText(){
+  return _ncdFiles.filter(f => f.status==='done' && f.text).map(f => f.text).join('\n\n');
+}
+
+function _ncdBuildSuggestions(){
+  const merged = {}, events = [];
+  _ncdFiles.filter(f => f.status==='done' && f.text).forEach(f => {
+    const parsed = _ncdParse(f.text, f.name);
+    Object.keys(parsed.fields).forEach(k => { if(!merged[k]) merged[k] = parsed.fields[k]; });
+    parsed.events.forEach(ev => {
+      if(!events.some(e => e.type===ev.type && e.date===ev.date)) events.push(Object.assign({src:f.name}, ev));
+    });
+  });
+
+  const sug = [], claimed = {};
+  NCD_FIELD_MAP.forEach(([key, target]) => {
+    const hit = merged[key];
+    if(!hit) return;
+    claimed[key] = true;
+    sug.push({key, label:NCD_LABELS[key]||key, value:hit.value, src:hit.src, target});
+  });
+
+  // Custom columns: by name ("Address", "Country"…), then by looking the
+  // column's own label up in the document text.
+  (typeof customColumns !== 'undefined' ? customColumns : []).forEach(col => {
+    if(!col || !col.key) return;
+    const label = String(col.label||col.key).toLowerCase();
+    let srcKey = '';
+    Object.keys(NCD_CUSTOM_SYNONYMS).forEach(k => {
+      if(srcKey || !merged[k]) return;
+      if(NCD_CUSTOM_SYNONYMS[k].some(w => label.indexOf(w) > -1)) srcKey = k;
+    });
+    let value = '', from = '';
+    if(srcKey){ value = merged[srcKey].value; from = merged[srcKey].src; claimed[srcKey] = true; }
+    else {
+      const found = _ncdLabeled(_ncdAllText(), [_ncdEscRx(String(col.label||''))], v => v.length >= 2 && v.length <= 120);
+      if(found){ value = found; from = 'document'; }
+    }
+    if(!value) return;
+    if(col.type === 'select'){
+      const opt = (col.options||[]).find(o => String(o).toLowerCase() === String(value).toLowerCase());
+      if(!opt) return;
+      value = opt;
+    }
+    sug.push({key:'col:'+col.key, label:col.label||col.key, value, src:from,
+              target:{kind: col.type==='select' ? 'select' : 'input', id:'ncp-'+col.key}});
+  });
+
+  events.forEach(ev => {
+    sug.push({key:'event:'+ev.type+':'+ev.date, label:'Schedule event', value:ev.type+' — '+ev.date,
+              src:ev.src, readOnly:true, target:{kind:'event', eventType:ev.type, date:ev.date}});
+  });
+
+  const leftovers = NCD_NOTE_ORDER.filter(k => merged[k] && !claimed[k]);
+  if(leftovers.length){
+    const lines = leftovers.map(k => (NCD_LABELS[k]||k) + ': ' + merged[k].value);
+    sug.push({key:'notes', label:'Add to notes', value:lines.join('\n'), multiline:true,
+              src:(merged[leftovers[0]]||{}).src, target:{kind:'notes', id:'ncp-notes'}});
+  }
+  return sug;
+}
+
+function _ncdTargetValue(target){
+  if(!target) return '';
+  const el = _ncdEl(target.id);
+  return el ? String(el.value||'').trim() : '';
+}
+function _ncdTargetExists(sug){
+  if(sug.target.kind === 'event') return true;
+  const el = _ncdEl(sug.target.id);
+  if(!el) return false;
+  if(sug.target.kind === 'select'){
+    return Array.from(el.options||[]).some(o => o.value === sug.value);
+  }
+  return true;
+}
+
+function _ncdRebuild(){
+  _ncdSug = _ncdBuildSuggestions().filter(_ncdTargetExists);
+  _ncdSug.forEach(s => {
+    if(!_ncdState[s.key]){
+      // Pre-checked only when the form field is still empty — a value the
+      // user already typed is never overwritten without them saying so.
+      const occupied = s.target.kind !== 'event' && s.target.kind !== 'notes' && !!_ncdTargetValue(s.target);
+      _ncdState[s.key] = {checked: !occupied, value: s.value, applied: false, occupied};
+    } else if(!_ncdState[s.key].applied && !_ncdState[s.key].touched){
+      _ncdState[s.key].value = s.value;
+    }
+  });
+  _ncdRenderSuggestions();
+}
+
+// ── Rendering ─────────────────────────────────────────────────────────
+function _ncdFmtSize(n){
+  if(!n) return '';
+  return n < 1024*1024 ? Math.max(1,Math.round(n/1024))+' KB' : (n/1024/1024).toFixed(1)+' MB';
+}
+function _ncdSetStatus(rec, status, msg){
+  rec.status = status; rec.msg = msg || '';
+  _ncdRenderFiles();
+}
+function _ncdRenderFiles(){
+  const host = _ncdEl('ncp-doc-files');
+  if(!host) return;
+  host.innerHTML = '';
+  _ncdFiles.forEach(rec => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 10px;background:#fff;border:1px solid #E3DCD0;border-radius:8px;';
+    const icon = document.createElement('span');
+    icon.style.cssText = 'font-size:13px;flex-shrink:0;';
+    icon.textContent = rec.status==='error' ? '⚠️' : (rec.status==='done' ? '✅' : (/^image\//.test(rec.type) ? '🖼' : '📄'));
+    const mid = document.createElement('div');
+    mid.style.cssText = 'flex:1;min-width:0;';
+    const nm = document.createElement('div');
+    nm.style.cssText = 'font-size:11.5px;color:#2C2620;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    nm.textContent = rec.name;
+    const st = document.createElement('div');
+    st.style.cssText = 'font-size:10px;margin-top:1px;color:' + (rec.status==='error' ? '#B85C5C' : '#9E9186') + ';';
+    st.textContent = [rec.msg, _ncdFmtSize(rec.size)].filter(Boolean).join(' · ');
+    mid.appendChild(nm); mid.appendChild(st);
+    const rm = document.createElement('button');
+    rm.type = 'button'; rm.textContent = '✕'; rm.title = 'Remove';
+    rm.style.cssText = 'font-size:11px;padding:2px 7px;border:1px solid #DDD5CA;border-radius:6px;background:#F7F3ED;color:#9E9186;cursor:pointer;flex-shrink:0;';
+    rm.onclick = () => { _ncdFiles = _ncdFiles.filter(f => f.id !== rec.id); _ncdRenderFiles(); _ncdRebuild(); };
+    row.appendChild(icon); row.appendChild(mid); row.appendChild(rm);
+    host.appendChild(row);
+  });
+}
+
+function _ncdRenderSuggestions(){
+  const host = _ncdEl('ncp-doc-suggest');
+  if(!host) return;
+  host.innerHTML = '';
+  const working = _ncdFiles.some(f => f.status === 'working' || f.status === 'queued');
+  if(!_ncdSug.length){
+    if(!working && _ncdFiles.some(f => f.status === 'done')){
+      const none = document.createElement('div');
+      none.style.cssText = 'margin-top:11px;font-size:11px;color:#9E9186;font-style:italic;';
+      none.textContent = 'Nothing recognizable found in these documents — fill the fields in by hand.';
+      host.appendChild(none);
+    }
+    return;
+  }
+  const box = document.createElement('div');
+  box.style.cssText = 'margin-top:12px;border:1px solid #DDE7DE;background:#F6FAF6;border-radius:10px;padding:13px 14px;';
+
+  const head = document.createElement('div');
+  head.style.cssText = 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6A8C6E;margin-bottom:10px;';
+  const pending = _ncdSug.filter(s => !_ncdState[s.key].applied).length;
+  head.textContent = 'Found ' + _ncdSug.length + ' value' + (_ncdSug.length>1?'s':'') + (pending ? '' : ' · all filled in');
+  box.appendChild(head);
+
+  _ncdSug.forEach((s, i) => {
+    const st = _ncdState[s.key];
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:flex-start;gap:9px;padding:7px 0;border-top:' + (i?'1px solid #E4EDE4':'none') + ';';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = !!st.checked;
+    cb.className = 'ncd-cb';
+    cb.style.marginTop = '19px';
+    cb.onchange = () => { st.checked = cb.checked; _ncdRenderSuggestions(); };
+
+    const col = document.createElement('div');
+    col.style.cssText = 'flex:1;min-width:0;';
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;margin-bottom:3px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;';
+    lbl.appendChild(document.createTextNode(s.label));
+    if(st.applied){
+      const chip = document.createElement('span');
+      chip.style.cssText = 'font-size:9px;color:#6A8C6E;background:#E6F0E7;border-radius:8px;padding:1px 6px;letter-spacing:.03em;';
+      chip.textContent = '✓ filled';
+      lbl.appendChild(chip);
+    } else if(st.occupied){
+      const chip = document.createElement('span');
+      chip.style.cssText = 'font-size:9px;color:#C9823A;background:#FAF0E6;border-radius:8px;padding:1px 6px;letter-spacing:.03em;';
+      chip.textContent = 'field not empty';
+      lbl.appendChild(chip);
+    }
+    col.appendChild(lbl);
+
+    if(s.readOnly){
+      const v = document.createElement('div');
+      v.style.cssText = 'font-size:12px;color:#2C2620;padding:3px 0;';
+      v.textContent = st.value;
+      col.appendChild(v);
+    } else {
+      const inp = s.multiline ? document.createElement('textarea') : document.createElement('input');
+      if(s.multiline){ inp.rows = Math.min(4, String(st.value||'').split('\n').length); }
+      else { inp.type = 'text'; }
+      inp.value = st.value;
+      inp.style.cssText = 'width:100%;padding:6px 9px;font-size:12px;border:1px solid #DDD5CA;border-radius:7px;font-family:inherit;box-sizing:border-box;outline:none;background:#fff;color:#2C2620;resize:vertical;';
+      inp.oninput = () => { st.value = inp.value; st.touched = true; };
+      col.appendChild(inp);
+    }
+    if(s.src){
+      const src = document.createElement('div');
+      src.style.cssText = 'font-size:9.5px;color:#C4BAB0;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+      src.textContent = 'from ' + s.src;
+      col.appendChild(src);
+    }
+    row.appendChild(cb); row.appendChild(col);
+    box.appendChild(row);
+  });
+
+  const actions = document.createElement('div');
+  actions.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap;';
+  const clear = document.createElement('button');
+  clear.type = 'button'; clear.textContent = 'Dismiss';
+  clear.style.cssText = 'font-size:11px;padding:6px 13px;border:1px solid #DDD5CA;border-radius:8px;background:#fff;color:#9E9186;cursor:pointer;font-family:inherit;';
+  clear.onclick = () => { _ncdSug = []; _ncdState = {}; _ncdRenderSuggestions(); };
+  const apply = document.createElement('button');
+  apply.type = 'button';
+  const n = _ncdSug.filter(s => _ncdState[s.key].checked).length;
+  apply.textContent = n ? 'Fill the form (' + n + ')' : 'Fill the form';
+  apply.disabled = !n;
+  apply.style.cssText = 'font-size:11.5px;font-weight:600;padding:6px 16px;border:none;border-radius:8px;background:' + (n ? '#2C2620' : '#DDD5CA') + ';color:#F7F3ED;cursor:' + (n?'pointer':'default') + ';font-family:inherit;';
+  apply.onclick = ncdApplySuggestions;
+  actions.appendChild(clear); actions.appendChild(apply);
+  box.appendChild(actions);
+  host.appendChild(box);
+}
+
+function _ncdFlash(el){
+  if(!el) return;
+  const prevBg = el.style.background, prevBorder = el.style.borderColor;
+  el.style.background = '#EFF7F0'; el.style.borderColor = '#6A8C6E';
+  setTimeout(() => { el.style.background = prevBg || ''; el.style.borderColor = prevBorder || '#DDD5CA'; }, 1500);
+}
+
+// ── Writing the values into the form ─────────────────────────────────
+function ncdApplySuggestions(){
+  let filled = 0, events = 0;
+  _ncdSug.forEach(s => {
+    const st = _ncdState[s.key];
+    if(!st || !st.checked) return;
+    const value = String(st.value||'').trim();
+    if(!value) return;
+    const t = s.target;
+    if(t.kind === 'event'){
+      if(typeof _ncExtras === 'undefined') return;
+      const arr = _ncExtras.page.events;
+      if(!arr.some(e => e.type===t.eventType && e.date===t.date)){
+        arr.push({type:t.eventType, date:t.date, notes:''});
+        if(typeof _ncRenderEvents === 'function') _ncRenderEvents('page');
+        events++;
+      }
+    } else {
+      const el = _ncdEl(t.id);
+      if(!el) return;
+      if(t.kind === 'select'){
+        if(!Array.from(el.options||[]).some(o => o.value === value)) return;
+        el.value = value;
+      } else if(t.kind === 'notes'){
+        const cur = String(el.value||'').trim();
+        if(cur.indexOf(value) > -1) { st.applied = true; st.checked = false; return; }
+        el.value = cur ? cur + '\n' + value : value;
+      } else {
+        el.value = t.upper ? value.toUpperCase() : value;
+      }
+      _ncdFlash(el);
+      filled++;
+    }
+    st.applied = true; st.checked = false; st.occupied = false;
+  });
+  _ncdRenderSuggestions();
+  const bits = [];
+  if(filled) bits.push(filled + ' field' + (filled>1?'s':''));
+  if(events) bits.push(events + ' event' + (events>1?'s':''));
+  if(typeof showToast === 'function'){
+    showToast(bits.length ? 'Filled ' + bits.join(' and ') + ' ✓' : 'Nothing left to fill');
+  }
+}
+
+// ── Intake queue ──────────────────────────────────────────────────────
+function _ncdAccepts(file){
+  return /^image\//.test(file.type) || file.type === 'application/pdf'
+      || /\.(pdf|png|jpe?g|gif|bmp|webp|heic|heif|tiff?)$/i.test(file.name||'');
+}
+async function _ncdProcess(rec){
+  try{
+    _ncdSetStatus(rec, 'working', 'Reading…');
+    let text;
+    if(rec.type === 'application/pdf' || /\.pdf$/i.test(rec.name)) text = await _ncdPdfText(rec);
+    else text = await _ncdOcr(rec.file, rec, '');
+    rec.text = _ncdNorm(text);
+    if(!rec.text){ _ncdSetStatus(rec, 'error', 'No readable text found'); return; }
+    _ncdSetStatus(rec, 'done', 'Read ' + rec.text.replace(/\s+/g,' ').trim().split(' ').length + ' words'
+      + (rec.size > NCD_ATTACH_MAX ? ' · too large to save with the case' : ''));
+    _ncdRebuild();
+  }catch(e){
+    _ncdSetStatus(rec, 'error', (e && e.message) || 'Could not read this file');
+  }
+}
+function ncdFilesChosen(list){
+  const files = Array.from(list||[]);
+  if(!files.length) return;
+  let skipped = 0;
+  files.forEach(f => {
+    if(!_ncdAccepts(f)){ skipped++; return; }
+    const rec = {id:'ncd'+(++_ncdSeq), name:f.name || ('Scan '+_ncdSeq), size:f.size||0,
+                 type:f.type||'', file:f, status:'queued', msg:'Queued…', text:'', dataUrl:''};
+    _ncdFiles.push(rec);
+    _ncdReadDataUrl(rec);
+    _ncdProcess(rec);
+  });
+  if(skipped && typeof showToast === 'function') showToast(skipped + ' file' + (skipped>1?'s':'') + ' skipped — images and PDFs only');
+  _ncdRenderFiles();
+}
+function ncdToggleManual(){
+  const wrap = _ncdEl('ncp-doc-manual-wrap');
+  if(!wrap) return;
+  const show = wrap.style.display === 'none';
+  wrap.style.display = show ? '' : 'none';
+  if(show) setTimeout(() => { const t = _ncdEl('ncp-doc-manual'); if(t) t.focus(); }, 30);
+}
+function ncdReadPastedText(){
+  const ta = _ncdEl('ncp-doc-manual');
+  const text = _ncdNorm((ta||{value:''}).value);
+  if(!text){ if(typeof showToast === 'function') showToast('Paste some text first'); return; }
+  const rec = {id:'ncd'+(++_ncdSeq), name:'Pasted text', size:0, type:'text/plain', file:null,
+               status:'done', msg:'Read ' + text.split(/\s+/).length + ' words', text, dataUrl:''};
+  _ncdFiles.push(rec);
+  if(ta) ta.value = '';
+  _ncdRenderFiles();
+  _ncdRebuild();
+}
+
+// Drag & drop + paste, wired once and only active while the New Case page is up.
+function _ncdAddViewOpen(){
+  const v = _ncdEl('cases-add-view');
+  return !!v && v.style.display !== 'none';
+}
+function _ncdWire(){
+  if(_ncdWired) return;
+  const drop = _ncdEl('ncp-doc-drop');
+  if(!drop) return;
+  _ncdWired = true;
+  const on = () => { drop.style.borderColor = '#6A8C6E'; drop.style.background = '#F6FAF6'; };
+  const off = () => { drop.style.borderColor = '#DDD5CA'; drop.style.background = '#fff'; };
+  ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); on(); }));
+  ['dragleave','dragend'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); off(); }));
+  drop.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation(); off();
+    if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) ncdFilesChosen(e.dataTransfer.files);
+  });
+  document.addEventListener('paste', e => {
+    if(!_ncdAddViewOpen()) return;
+    const tag = ((e.target && e.target.tagName) || '').toLowerCase();
+    if(tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable)) return;
+    const items = (e.clipboardData && e.clipboardData.files) || [];
+    const files = Array.from(items).filter(_ncdAccepts);
+    if(!files.length) return;
+    e.preventDefault();
+    ncdFilesChosen(files);
+  });
+}
+function ncdReset(){
+  _ncdFiles = []; _ncdSug = []; _ncdState = {};
+  const manual = _ncdEl('ncp-doc-manual'); if(manual) manual.value = '';
+  const wrap = _ncdEl('ncp-doc-manual-wrap'); if(wrap) wrap.style.display = 'none';
+  const attach = _ncdEl('ncp-doc-attach'); if(attach) attach.checked = true;
+  _ncdRenderFiles();
+  _ncdRenderSuggestions();
+  _ncdWire();
+}
+// Files dropped on the form are saved into the new case's Documents tab so the
+// intake paperwork lives with the case, not just in the parsed fields.
+function _ncdAttachToCase(caseId){
+  const attach = _ncdEl('ncp-doc-attach');
+  if(!attach || !attach.checked || typeof caseMeta === 'undefined') return 0;
+  const docs = _ncdFiles.filter(f => f.dataUrl && f.file);
+  if(!docs.length) return 0;
+  if(!caseMeta[caseId]) caseMeta[caseId] = {};
+  if(!Array.isArray(caseMeta[caseId].docSections)) caseMeta[caseId].docSections = [];
+  let sec = caseMeta[caseId].docSections.find(s => s.sectionName === 'Intake Documents');
+  if(!sec){ sec = {sectionName:'Intake Documents', docs:[]}; caseMeta[caseId].docSections.push(sec); }
+  const stamp = (typeof todayStr === 'function') ? todayStr() : new Date().toISOString().slice(0,10);
+  let n = 0, bytes = 0, skipped = 0;
+  docs.forEach(f => {
+    if(sec.docs.some(d => d && d.name === f.name)) return;
+    // The case store lives in localStorage, so a batch of big scans has to be
+    // kept in check — the text was already read out of them either way.
+    if(bytes + f.dataUrl.length > NCD_ATTACH_TOTAL){ skipped++; return; }
+    bytes += f.dataUrl.length;
+    sec.docs.push({name:f.name, fileData:f.dataUrl, mimeType:f.type||'application/octet-stream', uploadedAt:stamp});
+    n++;
+  });
+  if(skipped && typeof showToast === 'function'){
+    showToast(skipped + ' file' + (skipped>1?'s were':' was') + ' too large to save with the case');
+  }
+  if(n){
+    if(!Array.isArray(caseMeta[caseId].caseNotesList)) caseMeta[caseId].caseNotesList = [];
+    caseMeta[caseId].caseNotesList.push({date:stamp, text:'📎 ' + n + ' intake document' + (n>1?'s':'') + ' saved from the New Case form'});
+  }
+  return n;
+}
+
 // ── New Case Modal ──
 function openAddCasePage(){
   // Hide other views
@@ -24445,6 +25303,9 @@ function openAddCasePage(){
 
   // Reset + render the linked-events and additional-clients sections.
   if(typeof _ncResetExtras==='function')_ncResetExtras('page');
+
+  // Reset the document intake panel (dropped files + suggestions).
+  if(typeof ncdReset==='function')ncdReset();
 
   setTimeout(()=>{const el=document.getElementById('ncp-lastName');if(el)el.focus();},50);
 }
@@ -24531,6 +25392,9 @@ function saveAddCasePage(){
   if(email) caseMeta[caseId].clientEmail=email;
   caseMeta[caseId].caseCategory=(document.getElementById('ncp-category')||{value:'Office'}).value||'Office';
 
+  // Files dropped on the intake panel travel with the case.
+  const _ncDocCount=(typeof _ncdAttachToCase==='function')?_ncdAttachToCase(caseId):0;
+
   if(type&&!caseTypes.includes(type)) caseTypes.push(type);
   if(atty&&!paralegals.includes(atty)) paralegals.push(atty);
 
@@ -24542,6 +25406,7 @@ function saveAddCasePage(){
   const _extraBits=[];
   if(_evRecs.length)_extraBits.push(_evRecs.length+' event'+(_evRecs.length>1?'s':''));
   if(_clCount)_extraBits.push(_clCount+' client'+(_clCount>1?'s':''));
+  if(_ncDocCount)_extraBits.push(_ncDocCount+' document'+(_ncDocCount>1?'s':''));
   showToast('Case created: '+client+(_extraBits.length?' (+'+_extraBits.join(', ')+')':'')+' ✓');
   document.getElementById('cases-add-view').style.display='none';
   openCaseDetail(caseId);
