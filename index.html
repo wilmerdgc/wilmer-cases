@@ -2635,6 +2635,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
     <div class="tag-add-row"><input id="new-eventtype" type="text" placeholder="Add event type..."/><button onclick="addTag('eventtype')">Add</button></div>
   </div>
   <div class="settings-section"><div class="settings-section-title">Venues</div><div class="tag-list" id="venue-tags"></div><div class="tag-add-row"><input id="new-venue" type="text" placeholder="Add venue..."/><button onclick="addVenue()">Add</button></div></div>
+  <div class="settings-section"><div class="settings-section-title">Billing concepts</div><div style="font-size:11px;color:#8A7E72;margin-bottom:8px;">What a payment is for — the Concept column in a case's Payments ledger. Anything new typed there is added to this list automatically. Click a concept to rename it.</div><div class="tag-list" id="billingconcept-tags"></div><div class="tag-add-row"><input id="new-billingconcept" type="text" placeholder="Add concept..."/><button onclick="addBillingConcept()">Add</button></div></div>
   <div class="settings-section"><div class="settings-section-title">All records</div><div style="overflow-x:auto"><table class="settings-table"><thead><tr id="settings-thead"></tr></thead><tbody id="settings-tbody"></tbody></table></div><div style="margin-top:14px"><button class="btn-primary btn-sm" onclick="openAdd()">+ Add event</button></div></div>
 
   <!-- Firm / Attorney Info for G-28 & forms -->
@@ -3540,6 +3541,16 @@ let paralegalEmails={}; // {paralegalName: email}
 let firmInfo={lastName:'',firstName:'',middleName:'',firmName:'',barNumber:'',licensingAuthority:'',street:'',apt:'',city:'',state:'',zip:'',country:'United States',phone:'',mobile:'',email:'',fax:''};
 let venues=['26 FEDERAL PLAZA','290 BROADWAY','201 VARICK ST','KINGS Family Court','QUEENS Family Court','BRONX Family Court','NASSAU Family Court','SUFFOLK Family Court'];
 function saveVenues(){ try{ localStorage.setItem('casetracker_venues', JSON.stringify(venues)); }catch(e){} }
+// Billing concepts — what a payment is FOR ("concepto"), as opposed to how it
+// was paid (Credit / Cash / Zelle…, see BILLING_PAY_TYPES). Firm-wide list,
+// editable in Settings and extended straight from the Payments ledger: type a
+// concept that isn't on the list and it joins it.
+let billingConcepts=['Retainer','Monthly Payment','Consultation',
+  'Motion to Reopen','Motion to Reconsider','Motion to Change Venue','Motion Webex',
+  'Individual Prep','Master Prep','Bond Hearing',
+  '30 Days Call Up','60 Days Call Up','90 Days Call Up',
+  'Asylum Application (I-589)','Work Permit (I-765)','Adjustment of Status (I-485)',
+  'BIA Appeal','Filing Fee','Translation','Copies / Mailing','Other'];
 function loadVenues(){ try{ const d=localStorage.getItem('casetracker_venues'); if(d) venues=JSON.parse(d); }catch(e){} }
 function saveParalegalEmails(){ try{ localStorage.setItem('casetracker_paralegal_emails', JSON.stringify(paralegalEmails)); }catch(e){} }
 function loadParalegalEmails(){ try{ const d=localStorage.getItem('casetracker_paralegal_emails'); if(d) paralegalEmails=JSON.parse(d); }catch(e){} }
@@ -7551,7 +7562,7 @@ function migrateDocLists(){Object.keys(caseTypeDocLists).forEach(ct=>{const arr=
 function addCaseType(){const inp=document.getElementById('new-casetype');const val=inp.value.trim();if(!val){alert('Case type name required.');return;}if(caseTypes.includes(val)){alert('Case type already exists.');return;}caseTypes.push(val);inp.value='';renderCaseTypesSection();updateSettingsSaveBar();dirtyFilterOpts();}
 
 // ── Settings rendering ──
-function renderSettings(){renderColVis();renderParalegalTags();renderAttorneyTags();renderCalendarStaffTags();renderEventTypeTags();renderTags('casetype',caseTypes);renderVenueTags();renderSettingsTable();renderFirmInfoFields();}
+function renderSettings(){renderColVis();renderParalegalTags();renderAttorneyTags();renderCalendarStaffTags();renderEventTypeTags();renderTags('casetype',caseTypes);renderVenueTags();renderBillingConceptTags();renderSettingsTable();renderFirmInfoFields();}
 function renderFirmInfoFields(){
   const fields=['lastName','firstName','middleName','firmName','barNumber','licensingAuthority','street','apt','city','state','zip','phone','mobile','email','fax'];
   fields.forEach(k=>{const el=document.getElementById('fi-'+k);if(el)el.value=firmInfo[k]||'';});
@@ -7566,6 +7577,19 @@ function renderVenueTags(){
     tag.appendChild(label);tag.appendChild(removeBtn);el.appendChild(tag);});
 }
 function addVenue(){const inp=document.getElementById('new-venue');const val=inp.value.trim();if(!val)return;if(venues.includes(val)){showToast('Venue already exists');return;}venues.push(val);inp.value='';updateSettingsSaveBar();renderVenueTags();}
+function renderBillingConceptTags(){
+  const el=document.getElementById('billingconcept-tags');if(!el)return;el.innerHTML='';
+  billingConcepts.forEach((v,i)=>{const tag=document.createElement('span');tag.className='tag';tag.title='Click to edit';tag.style.cursor='pointer';
+    const label=document.createElement('span');label.textContent=v;label.style.cursor='pointer';
+    label.onclick=()=>{const nv=prompt('Edit billing concept:',v);if(nv&&nv.trim()){billingConcepts[i]=nv.trim();updateSettingsSaveBar();renderBillingConceptTags();}};
+    const removeBtn=document.createElement('button');removeBtn.className='tag-remove';removeBtn.innerHTML='×';
+    removeBtn.onclick=(e)=>{e.stopPropagation();billingConcepts.splice(i,1);updateSettingsSaveBar();renderBillingConceptTags();};
+    tag.appendChild(label);tag.appendChild(removeBtn);el.appendChild(tag);});
+}
+function addBillingConcept(){const inp=document.getElementById('new-billingconcept');const val=inp.value.trim();if(!val)return;if(_billingConceptExists(val)){showToast('Concept already exists');return;}billingConcepts.push(val);inp.value='';updateSettingsSaveBar();renderBillingConceptTags();}
+// Case-insensitive membership test — "Motion Webex" and "motion webex" are
+// the same concept, so the ledger's auto-add doesn't create near-duplicates.
+function _billingConceptExists(val){const v=String(val||'').trim().toLowerCase();return billingConcepts.some(c=>String(c||'').trim().toLowerCase()===v);}
 function renderParalegalTags(){
   const el=document.getElementById('paralegal-tags');if(!el)return;el.innerHTML='';
   el.style.cssText='display:flex;flex-direction:column;gap:6px;margin-bottom:10px;';
@@ -14552,12 +14576,12 @@ function saveAllData(){
   if(typeof _remoteClosed!=='undefined' && _remoteClosed){ return; }
   // GUARD: a client signed into the client portal only ever reads.
   if(window._clientReadOnly){ return; }
-  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
+  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();// Auto-push events to Google Calendar when signed in as the target email
 try{ _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync(); }catch(e){}
 }catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypesUpdatedAt)eventTypesUpdatedAt=p.eventTypesUpdatedAt;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);caseTypes=_withRecordCaseTypes(p.caseTypes);if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.calendarStaff&&Array.isArray(p.calendarStaff)&&p.calendarStaff.length)calendarStaff=p.calendarStaff;if(p.calendarStaffEmails)Object.assign(calendarStaffEmails,p.calendarStaffEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}if(p.recordTombstones&&typeof p.recordTombstones==='object'){recordTombstones=_pruneTombstones(p.recordTombstones);}if(p.i589Template&&typeof p.i589Template==='object')i589Template=p.i589Template;return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypesUpdatedAt)eventTypesUpdatedAt=p.eventTypesUpdatedAt;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);caseTypes=_withRecordCaseTypes(p.caseTypes);if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.calendarStaff&&Array.isArray(p.calendarStaff)&&p.calendarStaff.length)calendarStaff=p.calendarStaff;if(p.calendarStaffEmails)Object.assign(calendarStaffEmails,p.calendarStaffEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.billingConcepts&&Array.isArray(p.billingConcepts)&&p.billingConcepts.length)billingConcepts=p.billingConcepts;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}if(p.recordTombstones&&typeof p.recordTombstones==='object'){recordTombstones=_pruneTombstones(p.recordTombstones);}if(p.i589Template&&typeof p.i589Template==='object')i589Template=p.i589Template;return true;}catch(e){return false;}}
 // One pending-render flag, used by both the debounced timer and the global
 // focusout listener: if the user is mid-edit when the timer fires, we set
 // the flag and re-try after they blur, so we never yank focus mid-type.
@@ -18252,6 +18276,7 @@ function restoreFromBackup(input){
     caseTypes = _union(caseTypes, backup.caseTypes);
     eventTypes = _union(eventTypes, backup.eventTypes);
     venues = _union(venues, backup.venues);
+    if(Array.isArray(backup.billingConcepts)) billingConcepts = _union(billingConcepts, backup.billingConcepts);
     if(backup.paralegalEmails) Object.keys(backup.paralegalEmails).forEach(k => { if(!paralegalEmails[k]) paralegalEmails[k]=backup.paralegalEmails[k]; });
     if(backup.attorneyEmails)  Object.keys(backup.attorneyEmails ).forEach(k => { if(!attorneyEmails[k])  attorneyEmails[k] =backup.attorneyEmails[k]; });
     if(Array.isArray(backup.calendarStaff)) calendarStaff = _union(calendarStaff, backup.calendarStaff);
@@ -19777,6 +19802,8 @@ function renderCaseBilling(clid){
   if(!dl){dl=document.createElement('datalist');dl.id='billing-staff-dl';document.body.appendChild(dl);}
   dl.innerHTML=[...new Set([...(typeof paralegals!=='undefined'?paralegals:[]),...(typeof attorneys!=='undefined'?attorneys.map(a=>(a&&a.name)||a):[])])]
     .filter(n=>n&&typeof n==='string').sort().map(n=>`<option value="${escHtml(n)}">`).join('');
+  // Concept suggestions — the firm-wide list from Settings → Billing concepts.
+  _refreshBillingConceptList();
 
   // ── Payment plan card ──
   const plan=document.createElement('div');plan.className='billing-card';
@@ -19835,7 +19862,7 @@ function renderCaseBilling(clid){
   const wrap=document.createElement('div');wrap.style.cssText='overflow-x:auto;';
   const tbl=document.createElement('div');tbl.style.cssText='min-width:780px;';
   const head=document.createElement('div');head.className='billing-pay-grid';head.style.marginBottom='6px';
-  ['Staff','Office','Date','Type','Description','Payment','Additional',''].forEach(h=>{
+  ['Staff','Office','Date','Type','Concept','Payment','Additional',''].forEach(h=>{
     const c=document.createElement('div');c.className='billing-label';c.style.marginBottom='0';c.textContent=h;head.appendChild(c);});
   tbl.appendChild(head);
   // Newest payments on top, like the legacy app. Rows hold references into
@@ -19855,7 +19882,23 @@ function renderCaseBilling(clid){
      const opts=BILLING_PAY_TYPES.includes(pay.type)||!pay.type?BILLING_PAY_TYPES:[pay.type,...BILLING_PAY_TYPES];
      opts.forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=t;if(t===(pay.type||'Credit'))o.selected=true;s.appendChild(o);});
      s.onchange=()=>{pay.type=s.value;save();};row.appendChild(s);}
-    mk('desc','text','Description…');
+    // Concept — pick one of the firm's billing concepts or type a new one,
+    // which is added to the list for next time (same idea as the venue
+    // auto-add on the Judge form).
+    {const i=document.createElement('input');i.className='billing-in';i.type='text';i.placeholder='Concept…';
+     i.setAttribute('list','billing-concept-dl');
+     i.title='Pick a concept or type a new one — new ones are saved to the list';
+     i.value=(pay.desc==null)?'':pay.desc;
+     i.oninput=()=>{pay.desc=i.value;save();};
+     i.onchange=()=>{
+       const v=(i.value||'').trim();
+       if(!v||_billingConceptExists(v))return;
+       billingConcepts.push(v);
+       _refreshBillingConceptList();
+       save();
+       showToast('“'+v+'” added to billing concepts');
+     };
+     row.appendChild(i);}
     mk('amount','number','0.00');
     mk('additional','number','0.00');
     {const del=document.createElement('button');del.type='button';del.innerHTML='&#215;';del.title='Remove payment';
@@ -19876,6 +19919,14 @@ function renderCaseBilling(clid){
   const tot=document.createElement('div');tot.className='billing-card';tot.id='billing-totals-card';
   body.appendChild(tot);
   _refreshBillingTotals(clid);
+}
+// (Re)builds the <datalist> backing the ledger's Concept field.
+function _refreshBillingConceptList(){
+  let cl=document.getElementById('billing-concept-dl');
+  if(!cl){cl=document.createElement('datalist');cl.id='billing-concept-dl';document.body.appendChild(cl);}
+  cl.innerHTML=(Array.isArray(billingConcepts)?billingConcepts:[])
+    .filter(c=>c&&typeof c==='string')
+    .map(c=>`<option value="${escHtml(c)}">`).join('');
 }
 // Rebuilds only the totals card so typing in amount fields doesn't lose focus.
 function _refreshBillingTotals(clid){
@@ -19923,7 +19974,7 @@ function printBillingStatement(clid){
     +'<h1>Statement of Account</h1>'
     +'<div class="sub">'+escHtml(String(name))+' — Case #'+escHtml(String(clid))+' · '+today+'</div>'
     +'<div>Total Cost: <strong>'+_money(b.totalCost)+'</strong> &nbsp;·&nbsp; Retainer: <strong>'+_money(b.retainer)+'</strong> &nbsp;·&nbsp; Monthly: <strong>'+_money(b.monthly)+'</strong></div>'
-    +'<table><thead><tr><th>Date</th><th>Staff</th><th>Office</th><th>Type</th><th>Description</th><th>Payment</th><th>Additional</th></tr></thead>'
+    +'<table><thead><tr><th>Date</th><th>Staff</th><th>Office</th><th>Type</th><th>Concept</th><th>Payment</th><th>Additional</th></tr></thead>'
     +'<tbody>'+(rows||'<tr><td colspan="7" style="text-align:center;color:#999">No payments recorded</td></tr>')+'</tbody></table>'
     +'<div class="tot">'
     +'<div><span>Total Paid</span><strong>'+_money(t.paid)+'</strong></div>'
@@ -25750,6 +25801,7 @@ function applyPayload(p){
   if(p.calendarStaffEmails)Object.assign(calendarStaffEmails,p.calendarStaffEmails);
   if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);
   if(p.venues&&Array.isArray(p.venues))venues=p.venues;
+  if(p.billingConcepts&&Array.isArray(p.billingConcepts)&&p.billingConcepts.length)billingConcepts=p.billingConcepts;
   if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);
   if(p.i589Template&&typeof p.i589Template==='object'&&((p.i589Template._updatedAt||0)>=((i589Template&&i589Template._updatedAt)||0)))i589Template=p.i589Template;
   // Adopt deletion tombstones (newer deletedAt wins) and enforce them:
@@ -25992,7 +26044,7 @@ async function _recSyncPush(changedIds, deletedIds){
 function _persistLocalSnapshotQuiet(){
   try{
     const prevEpoch = parseInt(localStorage.getItem('wilmer_save_epoch')||'0') || 0;
-    const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:prevEpoch||Date.now()};
+    const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:prevEpoch||Date.now()};
     localStorage.setItem((typeof STORAGE_KEY !== 'undefined' ? STORAGE_KEY : 'casetracker_v1'), JSON.stringify(payload));
   }catch(e){}
 }
@@ -26358,6 +26410,10 @@ function _mergePayloads(cloudData, localData){
   merged.paralegalEmails    = _mergeMap(cloudData.paralegalEmails,    localData.paralegalEmails,    _localNewer);
   merged.attorneyEmails     = _mergeMap(cloudData.attorneyEmails,     localData.attorneyEmails,     _localNewer);
   merged.calendarStaff      = _unionNames(cloudData.calendarStaff, localData.calendarStaff);
+  // Billing concepts get the same union protection as the name lists above:
+  // a device saving with a stale copy must not wipe a concept another device
+  // just added from the ledger.
+  merged.billingConcepts    = _unionNames(cloudData.billingConcepts, localData.billingConcepts);
   merged.calendarStaffEmails= _mergeMap(cloudData.calendarStaffEmails, localData.calendarStaffEmails, _localNewer);
   merged.attorneySignatures = _mergeMap(cloudData.attorneySignatures, localData.attorneySignatures, _localNewer);
   // ── Event-type config: merged per entry (like records) instead of
@@ -26465,7 +26521,7 @@ function _syncToFirestore(savedAt){
       records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,
       caseTypes,caseTypeDocLists,caseTypeStages,
       customColumns,colVis,caseMeta:caseMetaClean,callUpTypes,judges,caseIssueTypes,
-      customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,
+      customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,firmInfo,bondPrepQuestions,recordTombstones,i589Template,
       _savedAt:savedAt||Date.now(),_deviceId:_deviceId
     }));
     // Step 2b: write caseMeta out to its own sharded docs (wilmer/cm_*).
@@ -26486,7 +26542,7 @@ function _syncToFirestore(savedAt){
       'records','paralegals','eventTypes','eventTypesUpdatedAt','eventTypeMeta',
       'caseTypes','caseTypeDocLists','caseTypeStages',
       'customColumns','colVis','callUpTypes','judges','caseIssueTypes',
-      'customChecklists','paralegalEmails','attorneys','attorneyEmails','calendarStaff','calendarStaffEmails','attorneySignatures','venues','firmInfo','bondPrepQuestions','recordTombstones','i589Template',
+      'customChecklists','paralegalEmails','attorneys','attorneyEmails','calendarStaff','calendarStaffEmails','attorneySignatures','venues','billingConcepts','firmInfo','bondPrepQuestions','recordTombstones','i589Template',
       '_savedAt','_deviceId'
     ];
     function _buildWritable(merged){
@@ -26661,7 +26717,7 @@ function forcePullFromCloud(){
       _dataInitialized=true; // explicit pull permits saves again
       try{
         const _now=Date.now();
-        const lp={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
+        const lp={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
         if(!window._clientReadOnly) localStorage.setItem('casetracker_v1',JSON.stringify(lp));
         localStorage.setItem('wilmer_save_epoch',String((cloudData&&cloudData._savedAt)||_now));
       }catch(e){}
@@ -27314,7 +27370,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         _dataInitialized=true; // cloud was applied — safe to autosave
         try{
           const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
+          const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
           if(!window._clientReadOnly) localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
@@ -27359,7 +27415,7 @@ db.collection('wilmer').doc('data').onSnapshot(
           // re-push to Firestore and cause an infinite ping-pong loop.
           try{
             const _now=Date.now();
-            const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
+            const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
             if(!window._clientReadOnly) localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
             localStorage.setItem('wilmer_save_epoch',String(Math.max(cloudEpoch, _now)));
             _lastLocalSave=_now;
@@ -27406,7 +27462,7 @@ db.collection('wilmer').onSnapshot(
     if(touched){
       try{
         const _now=Date.now();
-        const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
+        const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
         if(!window._clientReadOnly) localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
         _lastLocalSave=_now;
         _refreshSavedHashes();
