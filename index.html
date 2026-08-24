@@ -2173,7 +2173,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
     </div>
     <select id="f-type" style="width:auto"><option value="">All case types</option></select>
     <select id="f-category" title="Filter by case category — Office or Personal" style="width:auto"><option value="">Personal &amp; Office</option><option value="Office">Office</option><option value="Personal">Personal</option></select>
-    <input id="f-search" type="text" placeholder="Search client, A# or Cl ID" style="width:180px"/>
+    <input id="f-search" type="text" placeholder="Search any client, A# or Cl ID" style="width:180px"/>
   </div>
   <!-- DAY VIEW -->
   <div id="view-today" style="display:none">
@@ -2414,7 +2414,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
 <!-- CASES -->
 <div id="pane-cases" style="display:none">
   <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
-    <input id="cases-search" type="text" placeholder="Search by client name, A-number or Client ID…" style="max-width:340px"/>
+    <input id="cases-search" type="text" placeholder="Search by any client name, A-number or Client ID…" style="max-width:340px"/>
     <select id="cases-filter-type" style="width:auto"><option value="">All case types</option></select>
     <select id="cases-filter-atty" style="width:auto"><option value="">All paralegals</option></select>
     <span style="flex:1"></span>
@@ -4000,7 +4000,7 @@ function inboxNoteSearchCase(q){
     const key=r.clid||r.client;
     if(!key||seen.has(key))return;
     if(_isCaseClosed(key))return;
-    if(!q||r.client.toLowerCase().includes(q.toLowerCase())||(r.clid||'').toLowerCase().includes(q.toLowerCase())){
+    if(caseMatchesSearch(key,r,q)){
       seen.add(key);
       cases.push({clid:key,client:r.client||key});
     }
@@ -5389,7 +5389,7 @@ function inboxMainNoteSearch(q){
   records.forEach(r=>{
     const key=r.clid||r.client;
     if(!key||seen.has(key))return;
-    if(!q||r.client.toLowerCase().includes(q.toLowerCase())||(r.clid||'').toLowerCase().includes(q.toLowerCase())){
+    if(caseMatchesSearch(key,r,q)){
       seen.add(key); cases.push({clid:key,client:r.client||key});
     }
   });
@@ -5495,7 +5495,7 @@ function inboxAttachCaseSearch(q){
     const key=r.clid||r.client;
     if(!key||seen.has(key))return;
     if(_isCaseClosed(key))return;
-    if(!q||r.client.toLowerCase().includes(q.toLowerCase())||(r.clid||'').toLowerCase().includes(q.toLowerCase())){
+    if(caseMatchesSearch(key,r,q)){
       seen.add(key); cases.push({clid:key,client:r.client||key});
     }
   });
@@ -5575,7 +5575,7 @@ function inboxOpenCaseSearch(q){
     const key=r.clid||r.client;
     if(!key||seen.has(key))return;
     if(_isCaseClosed(key))return;
-    if(!q||r.client.toLowerCase().includes(q.toLowerCase())||(r.clid||'').toLowerCase().includes(q.toLowerCase())||(r.anum||'').toLowerCase().includes(q.toLowerCase())){
+    if(caseMatchesSearch(key,r,q)){
       seen.add(key);
       cases.push({clid:key,client:r.client||key,anum:r.anum||''});
     }
@@ -7477,7 +7477,7 @@ function gmailSaveCaseSearch(q){
     const key = r.clid || r.client;
     if(!key || seen.has(key)) return;
     if(_isCaseClosed(key)) return;
-    if(!q || r.client.toLowerCase().includes(q.toLowerCase()) || (r.clid||'').toLowerCase().includes(q.toLowerCase())){
+    if(caseMatchesSearch(key, r, q)){
       seen.add(key); cases.push({ clid: key, client: r.client || key });
     }
   });
@@ -8695,7 +8695,7 @@ function getFiltered(){
     if(evtSet.size&&!evtSet.has(r.event))return false;
     if(ctype&&r.type!==ctype)return false;
     if(cat&&caseCategoryOf(r)!==cat)return false;
-    if(q&&!r.client.toLowerCase().includes(q)&&!(r.anum||'').toLowerCase().includes(q)&&!(r.clid||'').toLowerCase().includes(q))return false;
+    if(q&&!caseMatchesSearch(r.clid||r.client,r,q))return false;
     return true;
   });
 }
@@ -8716,7 +8716,7 @@ function getFilteredFinished(){
     if(evtSet.size&&!evtSet.has(r.event))return false;
     if(ctype&&r.type!==ctype)return false;
     if(cat&&caseCategoryOf(r)!==cat)return false;
-    if(q&&!r.client.toLowerCase().includes(q)&&!(r.anum||'').toLowerCase().includes(q)&&!(r.clid||'').toLowerCase().includes(q))return false;
+    if(q&&!caseMatchesSearch(r.clid||r.client,r,q))return false;
     return true;
   });
 }
@@ -9310,6 +9310,41 @@ function buildEventBoard(boardEl, rows, finishedRows, periodLabel) {
 function getWeekStart(offset) {
   const d = new Date(TODAY), day = d.getDay(), diff = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diff + offset * 7); d.setHours(0, 0, 0, 0); return d;
+}
+
+// ── Case search: match ANY client on the case ──────────────────────
+// Every case search in the app runs through caseMatchesSearch() so one
+// query behaves the same everywhere. A case matches when the text is found
+// in the Cl ID, or in ANY of its clients — the lead plus every rider — on
+// their full name, first / middle / last name, or A-number. A purely
+// numeric query (digits, spaces, dashes) also matches A-numbers and Cl IDs
+// typed without their dashes.
+function caseSearchFields(clid, rec){
+  const m=(clid&&typeof caseMeta!=='undefined'&&caseMeta[clid])||{};
+  const out=[clid];
+  if(rec) out.push(rec.client,rec.clid,rec.anum);
+  out.push(m.clientFirstName,m.clientMiddleName,m.clientLastName);
+  (m.respondents||[]).forEach(r=>{ if(r) out.push(r.name,r.firstName,r.middleName,r.lastName,r.anum); });
+  return out;
+}
+function caseMatchesSearch(clid, rec, q){
+  const query=String(q||'').trim().toLowerCase();
+  if(!query) return true;
+  // Fast path: the fields carried on the record / case row itself, which is
+  // what the vast majority of searches hit. Only when those miss do we pull
+  // the rest of the clients out of caseMeta.
+  if(rec && [rec.client,rec.clid,rec.anum].some(f=>String(f||'').toLowerCase().includes(query))) return true;
+  const fields=caseSearchFields(clid,rec);
+  if(fields.some(f=>String(f||'').toLowerCase().includes(query))) return true;
+  // "240308888" should still find A# 240-308-888.
+  if(/^[\d\s-]+$/.test(query)){
+    const digits=query.replace(/\D/g,'');
+    if(digits.length>=3) return fields.some(f=>{
+      const d=String(f||'').replace(/\D/g,'');
+      return d.length>=3 && d.includes(digits);
+    });
+  }
+  return false;
 }
 
 // Case category: every case is either Office (a firm case) or Personal.
@@ -10680,9 +10715,7 @@ function renderSchedulingOrders(){
   // Search filter
   if(searchQ){
     soRecs = soRecs.filter(r =>
-      (r.client||'').toLowerCase().includes(searchQ) ||
-      (r.anum||'').toLowerCase().includes(searchQ) ||
-      (r.clid||'').toLowerCase().includes(searchQ) ||
+      caseMatchesSearch(r.clid||r.client, r, searchQ) ||
       (r.notes||'').toLowerCase().includes(searchQ) ||
       (r.atty||'').toLowerCase().includes(searchQ)
     );
@@ -11209,9 +11242,7 @@ function renderDeadlines(){
   if(filterStatus==='active') recs = recs.filter(r=>!r.finishedStatus&&!r.deletedStatus);
   if(filterType!=='all') recs = recs.filter(r=>r.event===filterType);
   if(searchQ) recs = recs.filter(r=>
-    (r.client||'').toLowerCase().includes(searchQ)||
-    (r.anum||'').toLowerCase().includes(searchQ)||
-    (r.clid||'').toLowerCase().includes(searchQ)||
+    caseMatchesSearch(r.clid||r.client, r, searchQ)||
     (r.notes||'').toLowerCase().includes(searchQ)||
     (r.atty||'').toLowerCase().includes(searchQ)
   );
@@ -14316,7 +14347,7 @@ async function doScheduleComposeEmail(sendAt){
 }
 
 // ── Finished & All Events ──
-function renderFinished(){rebuildFilterOptions();const q=(document.getElementById('f-search').value||'').toLowerCase();const atty=document.getElementById('f-atty').value;const rows=records.filter(r=>{if(!r.finishedStatus&&!r.deletedStatus)return false;if(_isRecordCaseClosed(r))return false;if(atty&&r.atty!==atty)return false;if(!eventTypeMatches(r.event))return false;if(q&&!r.client.toLowerCase().includes(q)&&!(r.anum||'').toLowerCase().includes(q)&&!(r.clid||'').toLowerCase().includes(q))return false;return true;});rows.sort((a,b)=>{const ha=a.history&&a.history.length?a.history[a.history.length-1].date:'';const hb=b.history&&b.history.length?b.history[b.history.length-1].date:'';return hb.localeCompare(ha);});const tr=document.getElementById('thead-finished');tr.innerHTML='';allColumns().forEach(col=>{if(colVis[col.key]!==false||col.always){const th=document.createElement('th');th.textContent=col.label;tr.appendChild(th);}});const ts=document.createElement('th');ts.textContent='Status';tr.appendChild(ts);const te2=document.createElement('th');tr.appendChild(te2);const tbody=document.getElementById('tbody-finished');tbody.innerHTML='';const sm={completed:{label:'Completed',bg:'#EBF1EB',color:'#6A8C6E'},attended:{label:'Attended',bg:'#EEF1F7',color:'#6B7FA3'},cancelled:{label:'Cancelled',bg:'#F9EDED',color:'#B85C5C'},rescheduled:{label:'Rescheduled',bg:'#EEF1F7',color:'#6B7FA3'},deleted:{label:'Deleted',bg:'#EDE8E0',color:'#9E9186'}};const frag=document.createDocumentFragment();rows.forEach(r=>{const isDel=!!r.deletedStatus;const smk=isDel?'deleted':r.finishedStatus;const s2=sm[smk]||{label:smk,bg:'#f5f5f5',color:'#888'};const re=(r.history||[]).slice().reverse().find(h=>['completed','attended','cancelled','deleted'].includes(h.type)&&h.note);const tr2=document.createElement('tr');tr2.className='finished-row';let c='';if(colVis.clid!==false)c+=`<td class="muted">${r.clid||'—'}</td>`;c+=`<td style="font-weight:500;text-decoration:line-through;color:#C4BAB0">${r.client}</td>`;if(colVis.anum!==false)c+=`<td class="muted">${r.anum||'—'}</td>`;if(colVis.type!==false)c+=`<td class="muted">${r.type}</td>`;if(colVis.atty!==false)c+=`<td class="muted">${r.atty||'—'}</td>`;if(colVis.event!==false)c+=`<td class="muted">${r.event||'—'}</td>`;if(colVis.date!==false)c+=`<td class="muted">${fmtDate(r.date)}</td>`;if(colVis.assigned!==false)c+=`<td class="muted">${r.assigned||'—'}</td>`;customColumns.forEach(col=>{if(colVis[col.key]!==false)c+=`<td class="muted">${r[col.key]||'—'}</td>`;});if(colVis.notes!==false)c+=`<td class="muted">${r.notes||'—'}</td>`;c+=`<td><span class="finished-status-badge" style="background:${s2.bg};color:${s2.color}">${s2.label}</span>${re?`<div style="font-size:11px;color:#9E9186;margin-top:4px;font-style:italic">"${re.note}"</div>`:''}</td>`;c+=isDel?`<td><button class="edit-btn" onclick="restoreRecord('${r.id}')" style="color:#6B7FA3;border-color:#CBD5E8">&#8635; Restore</button></td>`:`<td><button class="edit-btn" onclick="openEdit('${r.id}')">Edit</button></td>`;tr2.innerHTML=c;frag.appendChild(tr2);});tbody.appendChild(frag);document.getElementById('empty-finished').style.display=rows.length?'none':'block';document.getElementById('tbl-finished').style.display=rows.length?'':'none';}
+function renderFinished(){rebuildFilterOptions();const q=(document.getElementById('f-search').value||'').toLowerCase();const atty=document.getElementById('f-atty').value;const rows=records.filter(r=>{if(!r.finishedStatus&&!r.deletedStatus)return false;if(_isRecordCaseClosed(r))return false;if(atty&&r.atty!==atty)return false;if(!eventTypeMatches(r.event))return false;if(q&&!caseMatchesSearch(r.clid||r.client,r,q))return false;return true;});rows.sort((a,b)=>{const ha=a.history&&a.history.length?a.history[a.history.length-1].date:'';const hb=b.history&&b.history.length?b.history[b.history.length-1].date:'';return hb.localeCompare(ha);});const tr=document.getElementById('thead-finished');tr.innerHTML='';allColumns().forEach(col=>{if(colVis[col.key]!==false||col.always){const th=document.createElement('th');th.textContent=col.label;tr.appendChild(th);}});const ts=document.createElement('th');ts.textContent='Status';tr.appendChild(ts);const te2=document.createElement('th');tr.appendChild(te2);const tbody=document.getElementById('tbody-finished');tbody.innerHTML='';const sm={completed:{label:'Completed',bg:'#EBF1EB',color:'#6A8C6E'},attended:{label:'Attended',bg:'#EEF1F7',color:'#6B7FA3'},cancelled:{label:'Cancelled',bg:'#F9EDED',color:'#B85C5C'},rescheduled:{label:'Rescheduled',bg:'#EEF1F7',color:'#6B7FA3'},deleted:{label:'Deleted',bg:'#EDE8E0',color:'#9E9186'}};const frag=document.createDocumentFragment();rows.forEach(r=>{const isDel=!!r.deletedStatus;const smk=isDel?'deleted':r.finishedStatus;const s2=sm[smk]||{label:smk,bg:'#f5f5f5',color:'#888'};const re=(r.history||[]).slice().reverse().find(h=>['completed','attended','cancelled','deleted'].includes(h.type)&&h.note);const tr2=document.createElement('tr');tr2.className='finished-row';let c='';if(colVis.clid!==false)c+=`<td class="muted">${r.clid||'—'}</td>`;c+=`<td style="font-weight:500;text-decoration:line-through;color:#C4BAB0">${r.client}</td>`;if(colVis.anum!==false)c+=`<td class="muted">${r.anum||'—'}</td>`;if(colVis.type!==false)c+=`<td class="muted">${r.type}</td>`;if(colVis.atty!==false)c+=`<td class="muted">${r.atty||'—'}</td>`;if(colVis.event!==false)c+=`<td class="muted">${r.event||'—'}</td>`;if(colVis.date!==false)c+=`<td class="muted">${fmtDate(r.date)}</td>`;if(colVis.assigned!==false)c+=`<td class="muted">${r.assigned||'—'}</td>`;customColumns.forEach(col=>{if(colVis[col.key]!==false)c+=`<td class="muted">${r[col.key]||'—'}</td>`;});if(colVis.notes!==false)c+=`<td class="muted">${r.notes||'—'}</td>`;c+=`<td><span class="finished-status-badge" style="background:${s2.bg};color:${s2.color}">${s2.label}</span>${re?`<div style="font-size:11px;color:#9E9186;margin-top:4px;font-style:italic">"${re.note}"</div>`:''}</td>`;c+=isDel?`<td><button class="edit-btn" onclick="restoreRecord('${r.id}')" style="color:#6B7FA3;border-color:#CBD5E8">&#8635; Restore</button></td>`:`<td><button class="edit-btn" onclick="openEdit('${r.id}')">Edit</button></td>`;tr2.innerHTML=c;frag.appendChild(tr2);});tbody.appendChild(frag);document.getElementById('empty-finished').style.display=rows.length?'none':'block';document.getElementById('tbl-finished').style.display=rows.length?'':'none';}
 function _sortAllEvents(rows){
   const {key,dir} = _allEventsSort;
   return rows.slice().sort((a,b)=>{
@@ -14339,7 +14370,7 @@ function renderAllEvents(){
     if(atty&&r.atty!==atty)return false;
     if(!eventTypeMatches(r.event))return false;
     if(ctypea&&r.type!==ctypea)return false;
-    if(q&&!r.client.toLowerCase().includes(q)&&!(r.anum||'').toLowerCase().includes(q)&&!(r.clid||'').toLowerCase().includes(q))return false;
+    if(q&&!caseMatchesSearch(r.clid||r.client,r,q))return false;
     return true;
   });
   rows = _sortAllEvents(rows);
@@ -15040,12 +15071,7 @@ function renderCases(){
     const meta=caseMeta[c.clid||c.client];
     return (meta&&meta.respondents&&meta.respondents.length)?meta.respondents:[];
   }
-  if(q){cases=cases.filter(c=>{
-    if((c.client||'').toLowerCase().includes(q))return true;
-    if((c.anum||'').toLowerCase().includes(q))return true;
-    if((c.clid||'').toLowerCase().includes(q))return true;
-    return _caseRespondents(c).some(r=>(r.name||'').toLowerCase().includes(q)||(r.anum||'').toLowerCase().includes(q));
-  });}
+  if(q){cases=cases.filter(c=>caseMatchesSearch(c.clid||c.client,c,q));}
   if(ft)cases=cases.filter(c=>c.type===ft);
   if(fa)cases=cases.filter(c=>c.atty===fa);
   // closed cases sink to the bottom of the results (stable — alphabetical within each group)
@@ -15230,8 +15256,8 @@ function renderSIJTable(){
   function _sijMatch(c){
     if(!_q)return true;
     const m=caseMeta[c.clid]||{};
-    const fields=[c.client,c.clid,c.anum,c.atty,c.type,m.clientFirstName,m.clientLastName,m.clientMiddleName,m.clientCountry,m.clientCountryOfBirth,m.clientEmail];
-    (m.respondents||[]).forEach(function(r){fields.push(r.name,r.anum);});
+    if(caseMatchesSearch(c.clid||c.client,c,_q))return true;
+    const fields=[c.atty,c.type,m.clientCountry,m.clientCountryOfBirth,m.clientEmail];
     if(fields.some(function(f){return String(f||'').toLowerCase().includes(_q);}))return true;
     if(_qDigits.length>=3){
       if(String(c.anum||'').replace(/\D/g,'').includes(_qDigits))return true;
@@ -15958,7 +15984,7 @@ function renderMasterPrep(){
     <div style="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);margin-bottom:4px;">Master Hearing Prep</div>
     <div style="font-size:13px;color:var(--ink-muted);margin-bottom:16px;">Pick a case — the prep form is filled with the client(s), A-numbers, hearing, and judge, and saved to that case.</div>
     <div style="position:relative;max-width:420px;margin-bottom:8px;">
-      <input id="mhp-case-search" type="text" placeholder="Search client, A-number or Client ID…" autocomplete="off" oninput="_mhpFilterCases(this.value)" style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;background:#fff;"/>
+      <input id="mhp-case-search" type="text" placeholder="Search any client, A-number or Client ID…" autocomplete="off" oninput="_mhpFilterCases(this.value)" style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;background:#fff;"/>
     </div>
     <div id="mhp-case-list" style="display:flex;flex-direction:column;gap:4px;max-width:640px;"></div>
     <div id="mhp-open-host" style="margin-top:16px;"></div>`;
@@ -15972,7 +15998,7 @@ function _mhpFilterCases(q){
   q=(q||'').toLowerCase().trim();
   let cases=_mhpAllCasesCache;
   if(q){
-    cases=cases.filter(c=>((c.client||'').toLowerCase().includes(q)||(c.anum||'').toLowerCase().includes(q)||(c.clid||'').toLowerCase().includes(q)));
+    cases=cases.filter(c=>caseMatchesSearch(c.clid||c.client,c,q));
   }
   cases=cases.slice(0,40);
   if(!cases.length){ list.innerHTML='<div style="font-size:12px;color:var(--ink-faint);font-style:italic;padding:8px 2px;">No cases match.</div>'; return; }
@@ -16195,7 +16221,7 @@ function renderI589Tool(){
     <div style="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);margin-bottom:4px;">I-589 Application</div>
     <div style="font-size:13px;color:var(--ink-muted);margin-bottom:16px;">Pick a case — the form opens prefilled with the client's name, A-number, and date of birth. Everything you type is saved to the case, and ⬇ Filled PDF downloads the completed I-589.</div>
     <div style="position:relative;max-width:420px;margin-bottom:8px;">
-      <input id="i589-case-search" type="text" placeholder="Search client, A-number or Client ID…" autocomplete="off" oninput="_i589FilterCases(this.value)" style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;background:#fff;"/>
+      <input id="i589-case-search" type="text" placeholder="Search any client, A-number or Client ID…" autocomplete="off" oninput="_i589FilterCases(this.value)" style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;background:#fff;"/>
     </div>
     <div id="i589-case-list" style="display:flex;flex-direction:column;gap:4px;max-width:640px;"></div>
     <div id="i589-open-host" style="margin-top:16px;"></div>`;
@@ -16209,7 +16235,7 @@ function _i589FilterCases(q){
   q=(q||'').toLowerCase().trim();
   let cases=_i589AllCasesCache;
   if(q){
-    cases=cases.filter(c=>((c.client||'').toLowerCase().includes(q)||(c.anum||'').toLowerCase().includes(q)||(c.clid||'').toLowerCase().includes(q)));
+    cases=cases.filter(c=>caseMatchesSearch(c.clid||c.client,c,q));
   }
   cases=cases.slice(0,40);
   if(!cases.length){ list.innerHTML='<div style="font-size:12px;color:var(--ink-faint);font-style:italic;padding:8px 2px;">No cases match.</div>'; return; }
@@ -16586,7 +16612,7 @@ function renderBriefGenerator(){
 
     <!-- Case picker -->
     <div style="position:relative;margin-bottom:14px;">
-      <input id="bg-case-search" type="text" placeholder="Search client name, A#, or Cl ID…" autocomplete="off"
+      <input id="bg-case-search" type="text" placeholder="Search any client name, A#, or Cl ID…" autocomplete="off"
         style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"
         oninput="_briefCaseSearch(this.value)" onfocus="_briefCaseSearch(this.value)"/>
       <div id="bg-case-drop" style="display:none;position:absolute;top:calc(100%+3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:200;max-height:240px;overflow-y:auto;"></div>
@@ -17200,8 +17226,7 @@ function _briefCaseSearch(q){
     const key = r.clid || r.client;
     if(!key || seen.has(key)) return;
     if(_isCaseClosed && _isCaseClosed(key)) return;
-    const hay = ((r.client||'') + ' ' + (r.clid||'') + ' ' + (r.anum||'')).toLowerCase();
-    if(hay.indexOf(query) < 0) return;
+    if(!caseMatchesSearch(key, r, query)) return;
     seen.add(key);
     matches.push({ clid: key, client: r.client || key, anum: r.anum || '' });
   });
@@ -18376,7 +18401,7 @@ function renderBondPrep(){
         <div style="padding:12px 16px;border-bottom:1px solid var(--cream-dark);background:var(--cream);">
           <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:6px;">Pick a case</div>
           <div style="position:relative;">
-            <input id="bp-case-search" type="text" placeholder="Search by client name or Cl ID…" autocomplete="off"
+            <input id="bp-case-search" type="text" placeholder="Search by any client name or Cl ID…" autocomplete="off"
               style="width:100%;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;background:#fff;outline:none;box-sizing:border-box;"
               oninput="_bondPrepCaseSearch(this.value)" onfocus="_bondPrepCaseSearch(this.value)"/>
             <div id="bp-case-drop" style="display:none;position:absolute;top:calc(100%+3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:200;max-height:220px;overflow-y:auto;"></div>
@@ -18537,8 +18562,7 @@ function _bondPrepCaseSearch(q){
     const key = r.clid || r.client;
     if(!key || seen.has(key)) return;
     if(typeof _isCaseClosed==='function' && _isCaseClosed(key)) return;
-    const hay = (r.client||'').toLowerCase() + ' ' + (r.clid||'').toLowerCase() + ' ' + (r.anum||'').toLowerCase();
-    if(ql && !hay.includes(ql)) return;
+    if(ql && !caseMatchesSearch(key, r, ql)) return;
     seen.add(key);
     results.push({ clid: key, client: r.client||key, anum: r.anum||'' });
   });
@@ -27970,7 +27994,8 @@ function saveNewTask(){
       const cases=getCases().filter(c=>!c.closed);
       const q=caseText.toLowerCase();
       const hit=cases.find(c=>(c.client||'').toLowerCase()===q||(c.clid||'').toLowerCase()===q)
-              ||cases.find(c=>(c.client||'').toLowerCase().includes(q)||(c.clid||'').toLowerCase().includes(q));
+              ||cases.find(c=>(c.client||'').toLowerCase().includes(q)||(c.clid||'').toLowerCase().includes(q))
+              ||cases.find(c=>caseMatchesSearch(c.clid||c.client,c,q));
       if(hit) clid=hit.clid||hit.client||'';
     }
     if(clid){
@@ -28449,9 +28474,8 @@ function acInput(field, val){
   } else {
     matches = cases.filter(c=>{
       if(field==='clid')   return (c.clid||'').toLowerCase().includes(q);
-      if(field==='anum')   return (c.anum||'').toLowerCase().includes(q);
-      // client: search both name and clid
-      return (c.client||'').toLowerCase().includes(q)||(c.clid||'').toLowerCase().includes(q);
+      // client / A# both match ANY client on the case — lead or rider.
+      return caseMatchesSearch(c.clid||c.client, c, q);
     }).slice(0,10);
   }
 
