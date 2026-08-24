@@ -20720,12 +20720,21 @@ function openCaseDetail(clid){
   }
 
   function _openJudgePickerInCell(anchorEl,judgeKey,respondentIdx,onDone){
-    document.querySelectorAll('.judge-picker').forEach(p=>p.remove());
+    // Tear down any picker still open (its scroll/resize listeners too).
+    document.querySelectorAll('.judge-picker').forEach(p=>{ if(p._close)p._close(); else p.remove(); });
     const picker=document.createElement('div');picker.className='judge-picker open';
     const sw=document.createElement('div');sw.className='judge-picker-search';
     const si=document.createElement('input');si.type='text';si.placeholder='Search judge…';
     sw.appendChild(si);picker.appendChild(sw);
     const lw=document.createElement('div');picker.appendChild(lw);
+    function _closePicker(){
+      picker.remove();
+      window.removeEventListener('scroll',_place,true);
+      window.removeEventListener('resize',_place);
+      document.removeEventListener('mousedown',_outside);
+    }
+    function _outside(e){ if(!picker.contains(e.target)&&!anchorEl.contains(e.target)) _closePicker(); }
+    picker._close=_closePicker;
     function bl(q){
       lw.innerHTML='';
       judges.filter(j=>!q||(j.name+j.venue+j.role).toLowerCase().includes(q.toLowerCase())).forEach(j=>{
@@ -20734,7 +20743,7 @@ function openCaseDetail(clid){
                   j.webex==='no'?'<span style="font-size:9px;background:#F9EDED;color:#B85C5C;border-radius:6px;padding:1px 5px;font-weight:600;margin-left:4px;">In Person</span>':
                   j.webex==='depends'?'<span style="font-size:9px;background:#FAF0E6;color:#C9823A;border-radius:6px;padding:1px 5px;font-weight:600;margin-left:4px;">Depends</span>':'';
         it.innerHTML='<span class="judge-picker-item-name">'+j.name+wb+'</span><span class="judge-picker-item-meta">'+j.role+(j.venue?' · '+j.venue:'')+'</span>';
-        it.onmousedown=e=>{e.preventDefault();if(respondentIdx===-1){caseMeta[clid][judgeKey]=j.id;}else if(caseMeta[clid].respondents[respondentIdx]){caseMeta[clid].respondents[respondentIdx][judgeKey]=j.id;}markUnsaved();picker.remove();onDone();showToast(j.name+' assigned ✓');};
+        it.onmousedown=e=>{e.preventDefault();if(respondentIdx===-1){caseMeta[clid][judgeKey]=j.id;}else if(caseMeta[clid].respondents[respondentIdx]){caseMeta[clid].respondents[respondentIdx][judgeKey]=j.id;}markUnsaved();_closePicker();onDone();showToast(j.name+' assigned ✓');};
         lw.appendChild(it);
       });
       // Not on the list yet? Create the judge from right here — the Judge
@@ -20756,7 +20765,7 @@ function openCaseDetail(clid){
       addIt.onmousedown=e=>{
         e.preventDefault();
         const typed=(si.value||'').trim();
-        picker.remove();
+        _closePicker();
         window._judgePickerReturnCase={
           assign(judgeId){
             if(!caseMeta[clid])caseMeta[clid]={};
@@ -20775,14 +20784,36 @@ function openCaseDetail(clid){
       };
       lw.appendChild(addIt);
       const ni2=document.createElement('div');ni2.className='judge-picker-none';ni2.textContent='— None / Remove';
-      ni2.onmousedown=e=>{e.preventDefault();if(respondentIdx===-1){delete caseMeta[clid][judgeKey];}else if(caseMeta[clid].respondents[respondentIdx]){delete caseMeta[clid].respondents[respondentIdx][judgeKey];}markUnsaved();picker.remove();onDone();};
+      ni2.onmousedown=e=>{e.preventDefault();if(respondentIdx===-1){delete caseMeta[clid][judgeKey];}else if(caseMeta[clid].respondents[respondentIdx]){delete caseMeta[clid].respondents[respondentIdx][judgeKey];}markUnsaved();_closePicker();onDone();};
       lw.appendChild(ni2);
     }
     bl('');
-    si.addEventListener('input',()=>bl(si.value));
-    si.addEventListener('keydown',e=>{if(e.key==='Escape')picker.remove();});
-    anchorEl.style.position='relative';anchorEl.appendChild(picker);
-    setTimeout(()=>{si.focus();const close=e=>{if(!picker.contains(e.target)&&!anchorEl.contains(e.target)){picker.remove();document.removeEventListener('mousedown',close);}};document.addEventListener('mousedown',close);},0);
+    si.addEventListener('input',()=>{bl(si.value);_place();});
+    si.addEventListener('keydown',e=>{if(e.key==='Escape')_closePicker();});
+    // The judge cell lives inside `.case-info-item`, which clips its overflow —
+    // anchoring the list inside it swallowed everything under the search box
+    // (the list "didn't drop"). Float the picker on <body> with fixed
+    // positioning instead and keep it pinned to the cell.
+    document.body.appendChild(picker);
+    function _place(){
+      const r=anchorEl.getBoundingClientRect();
+      if(!r.width&&!r.height) return; // cell went away (re-render)
+      const w=Math.max(r.width,240);
+      let left=Math.min(r.left,window.innerWidth-w-8); if(left<8)left=8;
+      const h=Math.min(picker.offsetHeight||260,260);
+      const below=window.innerHeight-r.bottom-8;
+      let top=r.bottom+4;
+      if(below<h&&r.top-8>below) top=Math.max(8,r.top-4-h);
+      picker.style.position='fixed';
+      picker.style.left=left+'px';
+      picker.style.top=top+'px';
+      picker.style.width=w+'px';
+      picker.style.right='auto';
+    }
+    _place();
+    window.addEventListener('scroll',_place,true);
+    window.addEventListener('resize',_place);
+    setTimeout(()=>{si.focus();document.addEventListener('mousedown',_outside);},0);
   }
 
   // Quick-add client modal
