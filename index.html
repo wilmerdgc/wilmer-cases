@@ -15823,6 +15823,11 @@ function renderToolsPage(){
         <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Exhibit Packet ↗</div>
         <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Open the Exhibit Packet app in a new tab. Shift-click this tile to change the URL it points to.</div>
       </div>
+      <div onclick="renderSIJStatusTool()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
+        <div style="font-size:24px;margin-bottom:8px;">🧒</div>
+        <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Special Juvenile Status</div>
+        <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Family Court paperwork for the SIJ track. Pick a case and the Notice of Appearance (GF-29) comes out captioned, with the county, docket and child already filled in.</div>
+      </div>
       <div onclick="renderBriefGenerator()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
         <div style="font-size:24px;margin-bottom:8px;">📝</div>
         <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Motion and Brief Creator</div>
@@ -15830,6 +15835,378 @@ function renderToolsPage(){
       </div>
     </div>`;
 }
+
+// ══════════════════════════════════════════════════
+// SPECIAL JUVENILE STATUS — the SIJ family-court paperwork desk.
+// Pick a case and the tool fills the Family Court forms the SIJ track
+// runs on. First document: the Notice of Appearance (NY General Form
+// GF-29). The blank form at templates/notice-of-appearance-gf29.pdf is
+// the firm's own copy — the Romero Firm signature block is already
+// printed on it — so we only set its nine AcroForm fields with pdf-lib
+// and hand the filled PDF back.
+//
+// The caption facts (county, file no., docket no., petitioner,
+// respondents) are stored on caseMeta[clid].sijStatus, so they're typed
+// once per case and are already there for the next document. The
+// per-document values (subject child, DOB, attorney, date) are derived
+// from the case each time, and a manual edit to those sticks too — see
+// _sijNoaSet.
+// ══════════════════════════════════════════════════
+const SIJ_NOA_TEMPLATE_URL='templates/notice-of-appearance-gf29.pdf';
+let _sijNoaTemplateBytes=null;   // cached template, fetched once per session
+let _sijNoaBlobUrl=null;         // live preview URL, revoked before each rebuild
+
+// The GF-29 AcroForm field names, verbatim. The form's author left odd
+// spacing in three of them ('Respondent s', 'File #', 'date of appe') —
+// these strings must match the PDF exactly, so don't tidy them up.
+// `save:true` marks the caption facts that persist on the case.
+const _SIJ_NOA_FIELDS=[
+  {key:'county',      pdf:'COUNTY',        label:'County',              hint:'e.g. QUEENS',                              save:true, county:true},
+  {key:'fileNo',      pdf:'File #',        label:'File No.',            hint:'Family Court file number',                 save:true},
+  {key:'docketNo',    pdf:'Docket #',      label:'Docket No.',          hint:'e.g. G-01234-26',                          save:true},
+  {key:'petitioner',  pdf:'Petitioner',    label:'Petitioner',          hint:'Guardian / petitioner, as captioned',      save:true},
+  {key:'respondents', pdf:'Respondent s',  label:'Respondent(s)',       hint:'Parent(s) — one per line',                 save:true, multiline:true},
+  {key:'child',       pdf:'Child',         label:'Subject child',       hint:'The child the guardianship is for'},
+  {key:'childDob',    pdf:'DOB',           label:"Child's DOB",         hint:'MM/DD/YYYY'},
+  {key:'attorney',    pdf:'Attorney',      label:'Appearing attorney',  hint:'Fills the “I, ____ of The Romero Firm LLC” line'},
+  {key:'dated',       pdf:'date of appe',  label:'Dated',               hint:'e.g. August 26, 2026'}
+];
+
+// County choices for the datalist — taken from the Family Court venues
+// the firm already keeps ("QUEENS Family Court" → "QUEENS") so the tool
+// never drifts from the venue list on the Settings page.
+function _sijCountyOptions(){
+  const out=[];
+  (typeof venues!=='undefined'&&Array.isArray(venues)?venues:[]).forEach(v=>{
+    if(!/family\s*court/i.test(v||'')) return;
+    const c=String(v).replace(/family\s*court/i,'').trim().toUpperCase();
+    if(c&&!out.includes(c)) out.push(c);
+  });
+  return out;
+}
+
+// "2026-08-26" → "08/26/2026" (the format the DOB line on GF-29 uses).
+function _sijFmtDobUS(iso){
+  const d=(typeof parseDate==='function')?parseDate(iso):null;
+  if(!d) return String(iso||'');
+  const p=n=>String(n).padStart(2,'0');
+  return p(d.getMonth()+1)+'/'+p(d.getDate())+'/'+d.getFullYear();
+}
+// Today as "August 26, 2026" — how the firm dates the Dated line.
+function _sijFmtDateLong(d){
+  return (d||new Date()).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+}
+
+// Case-derived defaults for one child on one case, before the saved
+// caption facts are layered on top (see _sijNoaLoadCase).
+function _sijNoaDefaults(clid, childIdx){
+  const meta=(typeof caseMeta==='object'&&caseMeta[clid])||{};
+  const baseRec=(records||[]).find(r=>(r.clid||r.client)===clid)||{};
+  const clients=_briefAllClients(clid);
+  const child=clients.find(c=>c.idx===childIdx)||clients[0]||{};
+  // County comes from the case's Family Court judge — the only place a
+  // case records which courthouse its FC side sits in.
+  let county='';
+  if(meta.judgeFCId&&Array.isArray(judges)){
+    const j=judges.find(x=>x.id===meta.judgeFCId);
+    const venue=(j&&j.venue)||'';
+    if(/family\s*court/i.test(venue)) county=venue.replace(/family\s*court/i,'').trim().toUpperCase();
+  }
+  // Attorney: the firm owner by default, because the signature block
+  // printed on the GF-29 is his — a case's assigned attorney typed on
+  // the "I, ____" line would contradict the name signed below it. The
+  // field is editable for the days that's actually who appears.
+  // ", Esq." is added unless the name already carries a suffix.
+  const fi=(typeof firmInfo==='object'&&firmInfo)||{};
+  let attorney=[fi.firstName,fi.middleName,fi.lastName].filter(Boolean).join(' ').trim()
+    ||(meta.attorneyAssigned||baseRec.atty||'').trim();
+  if(attorney&&!/\b(esq|esquire)\b/i.test(attorney)) attorney+=', Esq.';
+  // The child's name: prefer the structured name fields on the lead,
+  // fall back to the plain name a rider (or the record) carries.
+  let childName=(child.name||'').trim();
+  if(child._isLead){
+    const structured=[meta.clientFirstName,meta.clientMiddleName,meta.clientLastName].filter(Boolean).join(' ').trim();
+    if(structured) childName=structured;
+  }else{
+    const structured=[child.firstName,child.middleName,child.lastName].filter(Boolean).join(' ').trim();
+    if(structured) childName=structured;
+  }
+  return {
+    county:county, fileNo:'', docketNo:'', petitioner:'', respondents:'',
+    child:childName,
+    childDob:child.dob?_sijFmtDobUS(child.dob):'',
+    attorney:attorney,
+    dated:_sijFmtDateLong(new Date())
+  };
+}
+
+function renderSIJStatusTool(){
+  const el=document.getElementById('tools-content');
+  if(!el)return;
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <button onclick="renderToolsPage()" style="font-size:11px;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--ink-muted);cursor:pointer;font-family:inherit;">← Back</button>
+      <div style="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--ink);">🧒 Special Juvenile Status</div>
+    </div>
+    <div style="font-size:13px;color:var(--ink-muted);margin-bottom:14px;line-height:1.55;">Family Court paperwork for the SIJ track. Pick a case, check the caption, then generate the form.</div>
+
+    <!-- Document picker. Only the Notice of Appearance is built so far;
+         the rest of the SIJ family-court set lands on this same row. -->
+    <div style="display:flex;gap:8px;margin-bottom:18px;">
+      <button type="button" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--sage);border-radius:20px;background:var(--sage);color:#fff;cursor:default;font-family:inherit;">Notice of Appearance</button>
+      <span style="align-self:center;font-size:11px;color:var(--ink-faint);">General Form GF-29 (9/2008)</span>
+    </div>
+
+    <!-- Case picker -->
+    <div style="position:relative;margin-bottom:14px;">
+      <input id="sij-noa-search" type="text" placeholder="Search any client name, A#, or Cl ID…" autocomplete="off"
+        style="width:100%;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"
+        oninput="_sijNoaCaseSearch(this.value)" onfocus="_sijNoaCaseSearch(this.value)"/>
+      <div id="sij-noa-drop" style="display:none;position:absolute;top:calc(100%+3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);z-index:200;max-height:240px;overflow-y:auto;"></div>
+      <div id="sij-noa-selected" style="font-size:11px;color:var(--sage);font-weight:600;margin-top:6px;min-height:14px;"></div>
+    </div>
+
+    <!-- Sibling picker: one notice per child, so this switches which one -->
+    <div id="sij-noa-children" style="display:none;margin-bottom:18px;padding:12px 14px;background:#FAF0E6;border:1px solid #E8C49A;border-radius:8px;"></div>
+
+    <div id="sij-noa-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:20px;"></div>
+
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <button id="sij-noa-dl" onclick="generateSIJNoticeOfAppearance(true)" style="font-size:13px;font-weight:600;padding:9px 22px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Download .pdf</button>
+      <button onclick="generateSIJNoticeOfAppearance(false)" style="font-size:13px;font-weight:600;padding:9px 18px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Preview</button>
+      <button onclick="_sijNoaResetToCase()" title="Throw away the edits and rebuild every field from the case" style="font-size:12px;padding:9px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-faint);cursor:pointer;font-family:inherit;">Reset to case data</button>
+      <span id="sij-noa-status" style="font-size:11px;color:var(--ink-muted);"></span>
+    </div>
+
+    <iframe id="sij-noa-preview" style="display:none;width:100%;height:700px;margin-top:18px;border:1px solid var(--border);border-radius:var(--radius-md);background:#fff;"></iframe>
+
+    <datalist id="sij-noa-counties">${_sijCountyOptions().map(c=>'<option value="'+escHtml(c)+'"></option>').join('')}</datalist>`;
+  window._sijNoaClid=null;
+  window._sijNoaChildIdx=-1;
+  window._sijNoaValues=_SIJ_NOA_FIELDS.reduce((o,f)=>{o[f.key]=(f.key==='dated')?_sijFmtDateLong(new Date()):'';return o;},{});
+  _sijNoaRenderForm();
+}
+
+function _sijNoaCaseSearch(q){
+  const drop=document.getElementById('sij-noa-drop');
+  if(!drop)return;
+  drop.innerHTML='';
+  const query=String(q||'').toLowerCase();
+  if(!query){drop.style.display='none';return;}
+  const seen=new Set(), matches=[];
+  (records||[]).forEach(r=>{
+    const key=r.clid||r.client;
+    if(!key||seen.has(key))return;
+    if(_isCaseClosed&&_isCaseClosed(key))return;
+    if(!caseMatchesSearch(key,r,query))return;
+    seen.add(key);
+    matches.push({clid:key,client:r.client||key,anum:r.anum||'',sij:(r.type||'').includes('Special Juvenile')});
+  });
+  if(!matches.length){drop.style.display='none';return;}
+  // SIJ cases first — this tool is for them, even though any case can be
+  // captioned on a Family Court appearance.
+  matches.sort((a,b)=>(b.sij?1:0)-(a.sij?1:0));
+  matches.slice(0,8).forEach(m=>{
+    const it=document.createElement('div');
+    it.style.cssText='padding:7px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--cream-dark);';
+    it.innerHTML='<span style="font-weight:600;color:var(--ink);">'+escHtml(m.client)+'</span>'
+      +(m.clid&&m.clid!==m.client?'<span style="font-size:11px;color:var(--ink-faint);margin-left:6px;">#'+escHtml(m.clid)+'</span>':'')
+      +(m.anum?'<span style="font-size:11px;color:var(--ink-faint);margin-left:6px;">A-'+escHtml(m.anum)+'</span>':'')
+      +(m.sij?'<span style="font-size:9px;font-weight:700;letter-spacing:.05em;color:#C9823A;background:#FAF0E6;border-radius:9px;padding:2px 6px;margin-left:6px;">SIJ</span>':'');
+    it.onmouseenter=()=>it.style.background='var(--cream)';
+    it.onmouseleave=()=>it.style.background='';
+    it.onclick=()=>{_sijNoaPickCase(m.clid,m.client);drop.style.display='none';};
+    drop.appendChild(it);
+  });
+  drop.style.display='block';
+}
+
+function _sijNoaPickCase(clid, displayName){
+  window._sijNoaClid=clid;
+  const meta=(typeof caseMeta==='object'&&caseMeta[clid])||{};
+  // Default child = the case's lead client, same as everywhere else.
+  window._sijNoaChildIdx=(meta.leadIdx!==undefined)?meta.leadIdx:-1;
+  _sijNoaLoadCase();
+  const sel=document.getElementById('sij-noa-selected');
+  if(sel) sel.textContent='✓ '+(displayName||clid)+' — caption pre-filled below';
+  const search=document.getElementById('sij-noa-search');
+  if(search) search.value=displayName||clid;
+  _sijNoaRenderChildren();
+  _sijNoaRenderForm();
+}
+
+// Case defaults, with anything already saved on the case layered on top.
+function _sijNoaLoadCase(){
+  const clid=window._sijNoaClid;
+  const vals=_sijNoaDefaults(clid,window._sijNoaChildIdx);
+  const saved=((typeof caseMeta==='object'&&caseMeta[clid])||{}).sijStatus||{};
+  Object.keys(vals).forEach(k=>{
+    // 'dated' is always today — a notice carries the day it's signed,
+    // never whatever day the case was last touched.
+    if(k!=='dated'&&saved[k]) vals[k]=saved[k];
+  });
+  window._sijNoaValues=vals;
+}
+
+function _sijNoaResetToCase(){
+  if(!window._sijNoaClid){_sijNoaStatus('Pick a case first.',true);return;}
+  window._sijNoaValues=_sijNoaDefaults(window._sijNoaClid,window._sijNoaChildIdx);
+  _sijNoaRenderForm();
+  _sijNoaStatus('Fields rebuilt from the case — nothing saved yet.',false);
+}
+
+// Cases with siblings file one notice per child. This row switches which
+// child the notice is for; the caption facts stay put.
+function _sijNoaRenderChildren(){
+  const panel=document.getElementById('sij-noa-children');
+  if(!panel)return;
+  const clid=window._sijNoaClid;
+  if(!clid){panel.style.display='none';return;}
+  const clients=_briefAllClients(clid).filter(c=>(c.name||'').trim());
+  if(clients.length<2){panel.style.display='none';return;}
+  const cur=window._sijNoaChildIdx;
+  panel.innerHTML='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#C9823A;margin-bottom:8px;">'
+    +'This case has '+clients.length+' children — one notice each</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:8px;">'
+    +clients.map(c=>{
+      const on=c.idx===cur;
+      return '<button type="button" onclick="_sijNoaPickChild('+c.idx+')" style="font-size:12px;font-weight:600;padding:6px 14px;border:1px solid '
+        +(on?'var(--sage)':'var(--border)')+';border-radius:20px;background:'+(on?'var(--sage)':'#fff')+';color:'
+        +(on?'#fff':'var(--ink-muted)')+';cursor:pointer;font-family:inherit;">'+escHtml(c.name)+'</button>';
+    }).join('')
+    +'</div>';
+  panel.style.display='';
+}
+
+function _sijNoaPickChild(idx){
+  window._sijNoaChildIdx=idx;
+  // Keep whatever caption facts are on screen; only the child lines move.
+  const fresh=_sijNoaDefaults(window._sijNoaClid,idx);
+  window._sijNoaValues.child=fresh.child;
+  window._sijNoaValues.childDob=fresh.childDob;
+  _sijNoaRenderChildren();
+  _sijNoaRenderForm();
+}
+
+function _sijNoaRenderForm(){
+  const form=document.getElementById('sij-noa-form');
+  if(!form)return;
+  const v=window._sijNoaValues||{};
+  form.innerHTML=_SIJ_NOA_FIELDS.map(f=>{
+    const val=escHtml(v[f.key]||'');
+    const input=f.multiline
+      ? '<textarea rows="3" oninput="_sijNoaSet(\''+f.key+'\',this.value)" placeholder="'+escHtml(f.hint)+'"'
+        +' style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;resize:vertical;">'+val+'</textarea>'
+      : '<input type="text" value="'+val+'" placeholder="'+escHtml(f.hint)+'"'+(f.county?' list="sij-noa-counties"':'')
+        +' oninput="_sijNoaSet(\''+f.key+'\',this.value)"'
+        +' style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>';
+    return '<div>'
+      +'<label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">'+escHtml(f.label)+'</label>'
+      +input
+      +'</div>';
+  }).join('');
+}
+
+// Every keystroke lands on the case file: the caption facts are what a
+// second document on the same case needs, and an edit to a derived line
+// is a correction worth keeping too. 'dated' stays out — it's the day
+// this one notice is signed.
+function _sijNoaSet(key, val){
+  if(!window._sijNoaValues) window._sijNoaValues={};
+  window._sijNoaValues[key]=val;
+  const clid=window._sijNoaClid;
+  if(!clid||key==='dated')return;
+  if(!caseMeta[clid])caseMeta[clid]={};
+  if(!caseMeta[clid].sijStatus)caseMeta[clid].sijStatus={};
+  caseMeta[clid].sijStatus[key]=val;
+  caseMeta[clid]._updatedAt=Date.now();
+  if(typeof markUnsaved==='function')markUnsaved();
+}
+
+function _sijNoaStatus(msg, err){
+  const s=document.getElementById('sij-noa-status');
+  if(!s)return;
+  s.textContent=msg||'';
+  s.style.color=err?'#B85C5C':'var(--sage)';
+}
+
+// Fetch the blank GF-29 once per session. Kept as bytes so pdf-lib can
+// reload a clean copy for each generate — filling the same PDFDocument
+// twice would stack values.
+async function _sijNoaTemplate(){
+  if(_sijNoaTemplateBytes) return _sijNoaTemplateBytes;
+  const resp=await fetch(SIJ_NOA_TEMPLATE_URL);
+  if(!resp.ok) throw new Error('template not found ('+resp.status+')');
+  _sijNoaTemplateBytes=new Uint8Array(await resp.arrayBuffer());
+  return _sijNoaTemplateBytes;
+}
+
+// Fill the GF-29 and either download it or show it in the preview frame.
+async function generateSIJNoticeOfAppearance(download){
+  const btn=document.getElementById('sij-noa-dl');
+  if(typeof PDFLib==='undefined'){_sijNoaStatus('pdf-lib not loaded — refresh the page and try again.',true);return;}
+  const v=window._sijNoaValues||{};
+  if(!(v.child||'').trim()){_sijNoaStatus('Pick a case (or type the subject child) first.',true);return;}
+  if(btn&&download){btn.disabled=true;btn.textContent='Generating…';}
+  _sijNoaStatus('',false);
+  try{
+    const bytes=await _sijNoaTemplate();
+    const pdfDoc=await PDFLib.PDFDocument.load(bytes,{ignoreEncryption:true});
+    const form=pdfDoc.getForm();
+    _SIJ_NOA_FIELDS.forEach(f=>{
+      const val=(v[f.key]||'').trim();
+      if(!val)return;
+      // A field the firm later renames in the PDF shouldn't take the
+      // whole notice down — skip it and fill the rest.
+      try{form.getTextField(f.pdf).setText(val);}catch(e){console.warn('GF-29 field missing:',f.pdf);}
+    });
+    // The form's own text is Times New Roman. pdf-lib falls back to
+    // Helvetica when it regenerates a field's appearance, so build the
+    // appearances ourselves with Times first and then save without the
+    // automatic pass — otherwise the filled lines don't match the form.
+    try{
+      const times=await pdfDoc.embedFont(PDFLib.StandardFonts.TimesRoman);
+      form.updateFieldAppearances(times);
+    }catch(e){ console.warn('GF-29: falling back to the default field font',e); }
+    const out=await pdfDoc.save({updateFieldAppearances:false});
+    const blob=new Blob([out],{type:'application/pdf'});
+    if(!download){
+      if(_sijNoaBlobUrl) URL.revokeObjectURL(_sijNoaBlobUrl);
+      _sijNoaBlobUrl=URL.createObjectURL(blob);
+      const frame=document.getElementById('sij-noa-preview');
+      if(frame){frame.src=_sijNoaBlobUrl;frame.style.display='';}
+      _sijNoaStatus('Preview below — check the caption before you download.',false);
+      return;
+    }
+    // Filename follows the house style the other generators use:
+    // "<Cl ID> <LASTNAME> <First> Notice of Appearance.pdf".
+    const clean=s=>String(s||'').replace(/['’"”“]/g,'').replace(/[,\-–—\\/:*?<>|]/g,' ').replace(/\s+/g,' ').trim();
+    const segs=[];
+    if(window._sijNoaClid) segs.push(clean(window._sijNoaClid));
+    const parts=clean(v.child).split(/\s+/);
+    if(parts.length>=2){segs.push(parts[parts.length-1].toUpperCase());segs.push(parts.slice(0,-1).join(' '));}
+    else if(parts.length) segs.push(parts[0].toUpperCase());
+    segs.push('Notice of Appearance');
+    const fname=(segs.join(' ').replace(/\s+/g,' ').trim()||'Notice of Appearance')+'.pdf';
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=fname;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+    if(window._sijNoaClid&&typeof recordCreatedDoc==='function'){
+      recordCreatedDoc(window._sijNoaClid,{kind:'Notice of Appearance',title:'Notice of Appearance (GF-29)',filename:fname});
+    }
+    // The template is the firm's pre-signed copy, so there's nothing to
+    // sign — only the caption to check.
+    _sijNoaStatus('✓ Downloaded — check the caption before filing.',false);
+  }catch(e){
+    console.error('generateSIJNoticeOfAppearance',e);
+    _sijNoaStatus('Failed: '+(e&&e.message?e.message:'unknown error'),true);
+  }finally{
+    if(btn&&download){btn.disabled=false;btn.textContent='Download .pdf';}
+  }
+}
+
 
 // ══════════════════════════════════════════════════
 // MASTER HEARING PREP — embeds tools/master-hearing-prep.html in an iframe,
