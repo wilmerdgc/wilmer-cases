@@ -16985,6 +16985,7 @@ function renderBriefGenerator(){
       <button id="bg-dt-motion" type="button" onclick="_briefSetDocType('motion')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--sage);border-radius:20px;background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Motion / Brief</button>
       <button id="bg-dt-witness" type="button" onclick="_briefSetDocType('witness')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Witness List</button>
       <button id="bg-dt-asylumfee" type="button" onclick="_briefSetDocType('asylumfee')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Asylum Fee</button>
+      <button id="bg-dt-i589" type="button" onclick="_briefSetDocType('i589')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">I-589</button>
     </div>
 
     <!-- Case picker -->
@@ -17016,6 +17017,9 @@ function renderBriefGenerator(){
 
     <!-- Asylum Fee mode -->
     <div id="bg-asylumfee-panel" style="display:none;"></div>
+
+    <!-- I-589 mode -->
+    <div id="bg-i589-panel" style="display:none;"></div>
   `;
   window._briefClid = null;
   window._briefValues = {};
@@ -17025,6 +17029,7 @@ function renderBriefGenerator(){
   }
   if(!window._wlOpts) window._wlOpts = { cover:true, cert:true };
   if(!window._afOpts) window._afOpts = { feeType:'initial', receipt:'', cover:true, cert:true, exhibits:true };
+  if(!window._i589Opts) window._i589Opts = { receipt:'', cover:true, cert:true, exhibits:true, feeExhibit:true };
   _briefRenderForm();
 }
 
@@ -17035,31 +17040,37 @@ function _blankWitness(){
   return { name:'', role:'', residence:'', summary:'', language:'', length:'', phone:'', other:'', videoMotion:false };
 }
 
-// Switch the creator between Motion/Brief mode, Witness List mode and
-// Asylum Fee mode. The case picker at the top is shared (it pre-fills the
-// respondent caption + filename for every mode); only the form body and
-// the Generate button swap out.
+// Switch the creator between Motion/Brief mode, Witness List mode,
+// Asylum Fee mode and I-589 mode. The case picker at the top is shared
+// (it pre-fills the respondent caption + filename for every mode); only
+// the form body and the Generate button swap out.
 function _briefSetDocType(type){
   window._briefDocType = type;
   const isWitness = type === 'witness';
   const isAsylumFee = type === 'asylumfee';
-  const isMotion = !isWitness && !isAsylumFee;
+  const isI589 = type === 'i589';
+  const isMotion = !isWitness && !isAsylumFee && !isI589;
   const show = (id, on) => { const el = document.getElementById(id); if(el) el.style.display = on ? '' : 'none'; };
   show('bg-form', isMotion);
   show('bg-motion-generate', isMotion);
   show('bg-witness-panel', isWitness);
   show('bg-asylumfee-panel', isAsylumFee);
+  show('bg-i589-panel', isI589);
   // Multi-respondent picker / paper-file warning are motion concepts —
-  // keep them out of the witness / asylum-fee views.
-  if(!isMotion){
-    show('bg-respondents-panel', false);
-    show('bg-paper-warn', false);
-  } else {
+  // keep them out of the witness / asylum-fee views. The I-589 filing is
+  // one application per applicant, so it keeps the respondent picker:
+  // whoever is included is captioned and listed in the exhibit index.
+  if(isMotion || isI589){
     _briefRenderRespondentsPanel();
     if(window._briefClid){
       const meta = (caseMeta && caseMeta[window._briefClid]) || {};
-      show('bg-paper-warn', meta.filingSystem === 'paper');
+      show('bg-paper-warn', isMotion && meta.filingSystem === 'paper');
+    } else {
+      show('bg-paper-warn', false);
     }
+  } else {
+    show('bg-respondents-panel', false);
+    show('bg-paper-warn', false);
   }
   // Tab button styling.
   const active = 'font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--sage);border-radius:20px;background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;';
@@ -17068,8 +17079,10 @@ function _briefSetDocType(type){
   style('bg-dt-motion', isMotion);
   style('bg-dt-witness', isWitness);
   style('bg-dt-asylumfee', isAsylumFee);
+  style('bg-dt-i589', isI589);
   if(isWitness) _renderWitnessPanel();
   if(isAsylumFee) _renderAsylumFeePanel();
+  if(isI589) _renderI589FilingPanel();
 }
 
 // ── Witness List editor ────────────────────────────────────────────
@@ -17248,6 +17261,101 @@ function _renderAsylumFeePanel(){
       <button type="button" onclick="generateAsylumFee()" id="bg-asylumfee-btn" style="font-size:13px;font-weight:600;padding:9px 22px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Generate .docx</button>
       <span id="bg-asylumfee-status" style="font-size:11px;color:var(--ink-muted);"></span>
     </div>`;
+}
+
+// ── I-589 filing editor ────────────────────────────────────────────
+// The cover package the firm files with the respondents' asylum
+// applications: the same motion-style cover page (attorney heading +
+// EOIR caption + judge box + the bold title "RESPONDENT'S I-589
+// APPLICATIONS"), a certificate of service and a two-tab exhibit index
+// — Exhibit A is the application itself, Exhibit B the fee payment
+// receipt. The applications and the receipt are inserted behind their
+// tab pages when the filing is assembled. No proposed order and no
+// attorney affirmation, same as the asylum-fee package.
+function _renderI589FilingPanel(){
+  const panel = document.getElementById('bg-i589-panel');
+  if(!panel) return;
+  if(!window._i589Opts) window._i589Opts = { receipt:'', cover:true, cert:true, exhibits:true, feeExhibit:true };
+  const o = window._i589Opts;
+  const v = window._briefValues || {};
+  // Judge / Next Hearing pickers — same suggestion sources as the motion
+  // form (saved judges sorted by the case's venue; the case's upcoming
+  // hearings), each over a free-text input so the user can adjust.
+  const pick = (fieldKey, inputId, label) => {
+    const sugg = (typeof _briefSuggestions === 'function') ? _briefSuggestions(fieldKey) : [];
+    if(!sugg.length) return '';
+    return '<select onchange="if(this.value){_briefApplySuggestion(\'' + fieldKey + '\',this.value);var i=document.getElementById(\'' + inputId + '\');if(i)i.value=window._briefValues[\'' + fieldKey + '\']||\'\';this.selectedIndex=0;}" '
+      + 'style="font-size:11px;padding:4px 8px;border:1px solid #B8C4DB;border-radius:6px;background:#fff;color:#4F6A91;font-family:inherit;cursor:pointer;max-width:100%;margin-bottom:5px;">'
+      + '<option value="">' + label + '</option>'
+      + sugg.map(s => '<option value="' + escHtml(s.value).replace(/"/g,'&quot;') + '">' + escHtml(s.label) + '</option>').join('')
+      + '</select>';
+  };
+  // Live preview of the exhibit index so the user can see who the
+  // applications are being filed for before generating.
+  const applicants = _i589Applicants();
+  const applicantList = applicants.length
+    ? applicants.map(a => '<li style="margin-bottom:2px;">' + escHtml(a.name) + (a.anum ? ' <span style="color:var(--ink-faint);">(' + escHtml(a.anum) + ')</span>' : '') + '</li>').join('')
+    : '<li style="color:var(--ink-faint);font-style:italic;">Pick a case above</li>';
+  panel.innerHTML = `
+    <div style="font-size:12px;color:var(--ink-muted);margin-bottom:14px;line-height:1.5;">Pick a case above to caption the document, then Generate. The package is the <b>motion-style cover page</b> (attorney heading + court caption + title), a <b>certificate of service</b> and a <b>table of exhibits</b> with two tab pages — <b>Tab A: the I-589 application(s)</b> and <b>Tab B: the fee payment receipt</b> — no proposed order or attorney affirmation is included. On a multi-client case, check the riders above to file their applications together.</div>
+    <div style="margin-bottom:16px;padding:10px 14px;background:var(--cream);border-radius:var(--radius-md);border:1px solid var(--border);">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:5px;">Applications included</div>
+      <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--ink);line-height:1.5;">${applicantList}</ul>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      <div>
+        <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">Immigration Judge</label>
+        ${pick('field14','i589f-judge','👤 Pick a judge…')}
+        <input id="i589f-judge" type="text" value="${escHtml(v.field14||'').replace(/"/g,'&quot;')}" placeholder="e.g. Bartleson, Thomas" oninput="window._briefValues['field14']=this.value"
+          style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+      </div>
+      <div>
+        <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">Next Hearing</label>
+        ${pick('field15','i589f-hearing','📅 Pick from case events…')}
+        <input id="i589f-hearing" type="text" value="${escHtml(v.field15||'').replace(/"/g,'&quot;')}" placeholder="e.g. April 1, 2026, at 8.30 AM" oninput="window._briefValues['field15']=this.value"
+          style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+      </div>
+      <div>
+        <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">Payment receipt number (optional)</label>
+        <input type="text" value="${escHtml(o.receipt||'').replace(/"/g,'&quot;')}" placeholder="e.g. Pay.gov receipt / tracking ID" oninput="window._i589Opts.receipt=this.value"
+          style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+      </div>
+    </div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px;padding:10px 14px;background:var(--cream);border-radius:var(--radius-md);border:1px solid var(--border);">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.cover?'checked':''} onchange="window._i589Opts.cover=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include cover page (caption)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.cert?'checked':''} onchange="window._i589Opts.cert=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include certificate of service
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.exhibits?'checked':''} onchange="window._i589Opts.exhibits=this.checked;_renderI589FilingPanel()" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include table of exhibits + tab pages
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:${o.exhibits?'var(--ink)':'var(--ink-faint)'};cursor:pointer;">
+        <input type="checkbox" ${o.feeExhibit?'checked':''} ${o.exhibits?'':'disabled'} onchange="window._i589Opts.feeExhibit=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Tab B — fee payment receipt
+      </label>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <button type="button" onclick="generateI589Filing()" id="bg-i589-btn" style="font-size:13px;font-weight:600;padding:9px 22px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Generate .docx</button>
+      <span id="bg-i589-status" style="font-size:11px;color:var(--ink-muted);"></span>
+    </div>`;
+}
+
+// The applicants the filing covers — one I-589 per included respondent.
+// Reads the same "; "-separated Field5 / Field6 lists the captions use,
+// so the lead / include toggles drive it.
+function _i589Applicants(){
+  const v = window._briefValues || {};
+  const names = String(v.field5 || '').split('\n')[0].split(';').map(s => s.trim()).filter(Boolean);
+  const anums = String(v.field6 || '').split(';').map(s => s.trim()).filter(Boolean);
+  return names.map((name, i) => ({
+    name,
+    anum: anums[i] ? ('A' + anums[i].replace(/^A[- ]?/i, '')) : ''
+  }));
 }
 
 // Return suggestions for a field — case-derived where it makes sense
@@ -17653,9 +17761,11 @@ function _briefPickCase(clid, displayName){
   }
   _briefRenderRespondentsPanel();
   _briefRenderForm();
-  // The Asylum Fee panel shows case-derived inputs (judge / next hearing)
-  // — refresh it so a case picked while that tab is open fills them in.
+  // The Asylum Fee / I-589 panels show case-derived inputs (judge / next
+  // hearing) — refresh them so a case picked while that tab is open
+  // fills them in.
   if(window._briefDocType==='asylumfee' && typeof _renderAsylumFeePanel==='function') _renderAsylumFeePanel();
+  if(window._briefDocType==='i589' && typeof _renderI589FilingPanel==='function') _renderI589FilingPanel();
 }
 
 // Show the multi-respondent picker if the case has 2+ clients. Each row
@@ -17729,6 +17839,9 @@ function _briefRefreshFromSelection(){
   window._briefValues.field20 = fresh.field20;
   _briefRenderRespondentsPanel();
   _briefRenderForm();
+  // The I-589 exhibit index lists one application per included applicant,
+  // so it has to follow the lead / include toggles too.
+  if(window._briefDocType==='i589' && typeof _renderI589FilingPanel==='function') _renderI589FilingPanel();
 }
 
 async function generateMotionWebex(){
@@ -18491,6 +18604,288 @@ async function generateAsylumFee(){
     setStatus('✓ Downloaded — open it in Word to review.', false);
   }catch(e){
     console.error('generateAsylumFee', e);
+    setStatus('Failed: ' + (e && e.message ? e.message : 'unknown error'), true);
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = 'Generate .docx'; }
+  }
+}
+
+// ── I-589 filing generator ─────────────────────────────────────────
+// Builds the I-589 filing package from scratch with JSZip (same approach
+// as the Asylum Fee package). Page 1 mirrors the first page of the
+// motion-webex template: attorney heading + detained status over the
+// EOIR court caption, the Immigration Judge / Next Hearing box and the
+// bold title "RESPONDENT'S I-589 APPLICATIONS". Then a certificate of
+// service and a two-tab exhibit index — Tab A for the applications, Tab
+// B for the fee payment receipt, each a separator page with a large
+// centered letter the documents get inserted after. No proposed order
+// and no attorney affirmation, by design.
+async function generateI589Filing(){
+  const btn = document.getElementById('bg-i589-btn');
+  const status = document.getElementById('bg-i589-status');
+  const setStatus = (msg, err) => { if(status){ status.textContent = msg; status.style.color = err ? '#B85C5C' : 'var(--sage)'; } };
+  if(typeof JSZip === 'undefined'){ setStatus('JSZip not loaded — refresh the page and try again.', true); return; }
+  const opts = window._i589Opts || { receipt:'', cover:true, cert:true, exhibits:true, feeExhibit:true };
+  if(!opts.cover && !opts.cert && !opts.exhibits){ setStatus('Check at least one section to include.', true); return; }
+  const v = window._briefValues || {};
+  const respLine = (v.field5 || '').split('\n')[0].trim();
+  if(!respLine){ setStatus('Pick a case first so the filing is captioned.', true); return; }
+  if(btn){ btn.disabled = true; btn.textContent = 'Generating…'; }
+  setStatus('', false);
+  try{
+    const esc = (typeof _escXml === 'function') ? _escXml : (s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+    const run = (text, opt) => {
+      const o = opt || {};
+      const rpr = (o.bold ? '<w:b/>' : '') + (o.underline ? '<w:u w:val="single"/>' : '')
+        + (o.sz ? '<w:sz w:val="' + o.sz + '"/><w:szCs w:val="' + o.sz + '"/>' : '');
+      const parts = String(text==null?'':text).split('\n');
+      const runs = parts.map(p => '<w:t xml:space="preserve">' + esc(p) + '</w:t>').join('<w:br/>');
+      return '<w:r>' + (rpr ? '<w:rPr>' + rpr + '</w:rPr>' : '') + runs + '</w:r>';
+    };
+    const para = (inner, opt) => {
+      const o = opt || {};
+      const ind = (o.left != null || o.hanging != null)
+        ? '<w:ind' + (o.left != null ? ' w:left="' + o.left + '"' : '') + (o.hanging != null ? ' w:hanging="' + o.hanging + '"' : '') + '/>'
+        : '';
+      const ppr = (o.jc ? '<w:jc w:val="' + o.jc + '"/>' : '') + ind + (o.after != null ? '<w:spacing w:after="' + o.after + '"/>' : '');
+      return '<w:p>' + (ppr ? '<w:pPr>' + ppr + '</w:pPr>' : '') + (inner || '') + '</w:p>';
+    };
+    const tcell = (w, inner, borders) => '<w:tc><w:tcPr><w:tcW w:w="' + w + '" w:type="dxa"/>'
+      + (borders ? '<w:tcBorders>' + borders + '</w:tcBorders>' : '') + '</w:tcPr>' + (inner || para('')) + '</w:tc>';
+
+    const anum = (v.field6 || '').trim();
+    // Multi-client cases: fields 5/6 are "; "-separated lists. Stacked
+    // versions put one name / one A-number per line in the captions.
+    const respList = respLine ? respLine.split(';').map(s => s.trim()).filter(Boolean) : [];
+    const respStack = respList.map((s, i) => s + (i < respList.length - 1 ? ';' : '')).join('\n');
+    const anumList = anum ? anum.split(';').map(s => s.trim()).filter(Boolean).map(s => 'A' + s.replace(/^A[- ]?/i, '')) : [];
+    const anumStack = anumList.map((s, i) => s + (i < anumList.length - 1 ? ';' : '')).join('\n');
+    const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
+    const respWord = plural ? 'Respondents' : 'Respondent';
+    const addr = (typeof _briefSplitAddr === 'function') ? _briefSplitAddr(v.field4 || '') : [String(v.field4||''), ''];
+    // Bold centered document title, pluralized like the motion titles.
+    const docTitle = (plural ? "RESPONDENTS'" : "RESPONDENT'S") + ' I-589 APPLICATIONS';
+    const readableTitle = (plural ? "Respondents'" : "Respondent's") + ' I-589 Applications';
+    const receipt = String(opts.receipt || '').trim();
+    const feeExhibit = !!opts.feeExhibit;
+    const pageBreak = para('<w:r><w:br w:type="page"/></w:r>');
+    const sigBlock = String(v.field20 || '').split('\n').filter(l => l.trim()).map(l => para(run(l), { after:0 })).join('');
+    const blank = (n) => Array.from({ length:n||1 }, () => para('', { after:0 })).join('');
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const longDate = (s) => {
+      const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s||'').trim());
+      if(m){ const d = new Date(+m[3], +m[1]-1, +m[2]); if(!isNaN(d)) return MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); }
+      return String(s||'').trim();
+    };
+    // Submission date / place come from Field 16 ("MM/DD/YYYY, Place").
+    const subParts = String(v.field16 || '').split(',');
+    const subDateRaw = (subParts[0] || '').trim();
+    const subPlace = subParts.slice(1).join(',').trim();
+    let coverDate = longDate(subDateRaw);
+    if(!coverDate){ const t = new Date(); coverDate = MONTHS[t.getMonth()] + ' ' + t.getDate() + ', ' + t.getFullYear(); }
+
+    // Same EOIR court caption the motion-webex template uses. The
+    // respondent box is bordered on the top, right and bottom only — no
+    // line on its left side — with a bordered spacer column separating
+    // it from the "File No.:" column, and the table is centered.
+    const captionBlock = () => {
+      let c = '';
+      c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
+      c += para(run('EXECUTIVE OFFICE FOR IMMIGRATION REVIEW'), { jc:'center', after:0 });
+      c += para(run((v.field3 || 'IMMIGRATION COURT')), { jc:'center', after:0 });
+      if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
+      if(addr[1]) c += para(run(addr[1]), { jc:'center', after:120 });
+      c += para(run('In the Matter of:'), { after:40 });
+      const bT = '<w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+      const bB = '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+      const bR = '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+      const bL = '<w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+      const boxRow = (leftInner, rightInner, extras) => '<w:tr>'
+        + tcell(5040, leftInner, (extras||'') + bR)
+        + tcell(1165, para('', { after:0 }), bL)
+        + tcell(3145, rightInner || para('', { after:0 }), '')
+        + '</w:tr>';
+      // Hanging indent keeps additional A-numbers aligned under the first
+      // one, to the right of the "File No.:" label.
+      const fileNo = 'File No.: ' + (anumStack || '____________');
+      c += '<w:tbl><w:tblPr><w:tblW w:w="9350" w:type="dxa"/><w:jc w:val="center"/>'
+        + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
+        + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="1165"/><w:gridCol w:w="3145"/></w:tblGrid>'
+        + boxRow(para(run(respStack || '____________', { bold:true }), { after:0 }), para(run(fileNo), { after:0, left:1152, hanging:1152 }), bT)
+        + boxRow(para('', { after:0 }), null)
+        + boxRow(para(run('In Removal Proceedings,'), { after:0 }), null)
+        + boxRow(para(run('       ' + respWord + '.'), { after:0 }), null, bB)
+        + '</w:tbl>';
+      c += para('', { after:200 });
+      return c;
+    };
+
+    // ── Cover page ────────────────────────────────────────────────
+    // Mirrors the first page of the motion-webex template: the attorney
+    // heading (signature block left, detained status right) over the
+    // EOIR court caption, the Immigration Judge / Next Hearing box and
+    // the bold document title. One page only.
+    let coverLetter = '';
+    if(opts.cover){
+      const attyInner = String(v.field20 || '').split('\n').filter(l => l.trim())
+        .map(l => para(run(l), { after:0 })).join('') || para('');
+      const statusInner = para(run((v.field2 || 'NON-DETAINED'), { bold:true }), { jc:'right', after:0 });
+      coverLetter += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
+        + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
+        + '<w:tblGrid><w:gridCol w:w="6240"/><w:gridCol w:w="3120"/></w:tblGrid>'
+        + '<w:tr>' + tcell(6240, attyInner, '') + tcell(3120, statusInner, '') + '</w:tr></w:tbl>';
+      coverLetter += para('', { after:200 });
+      coverLetter += captionBlock();
+      // Immigration Judge / Next Hearing box.
+      const jhHead = para(run('Immigration Judge', { bold:true }), { after:0 });
+      const nhHead = para(run('Next Hearing', { bold:true }), { after:0 });
+      const jhVal  = para(run(v.field14 || ''), { after:0 });
+      const nhVal  = para(run(v.field15 || ''), { after:0 });
+      coverLetter += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
+        + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
+        + '<w:tblGrid><w:gridCol w:w="4680"/><w:gridCol w:w="4680"/></w:tblGrid>'
+        + '<w:tr>' + tcell(4680, jhHead, '') + tcell(4680, nhHead, '') + '</w:tr>'
+        + '<w:tr>' + tcell(4680, jhVal, '') + tcell(4680, nhVal, '') + '</w:tr></w:tbl>';
+      coverLetter += blank(2);
+      coverLetter += para(run(docTitle, { bold:true }), { jc:'center', after:240 });
+    }
+
+    // ── Certificate of service ────────────────────────────────────
+    let certificate = '';
+    if(opts.cert){
+      const svc = String(v.field18 || 'ECAS');
+      const isECAS = /ecas/i.test(svc);
+      const isICE  = /ice|efiling|e-filing/i.test(svc);
+      const isMail = /mail/i.test(svc) && !isICE;
+      const isPersonal = /personal/i.test(svc);
+      const box = (on) => on ? '☒ ' : '☐ ';
+      if(opts.cover) certificate += pageBreak;
+      certificate += para(run('CERTIFICATE OF SERVICE', { bold:true, sz:'28' }), { jc:'center', after:240 });
+      if(respList.length > 1){
+        certificate += para(run('Matter of: ', { bold:true }) + run(respStack), { after:120, left:1152, hanging:1152 });
+        certificate += para(run('File No.: ', { bold:true }) + run(anumStack || '____________'), { after:200, left:1152, hanging:1152 });
+      } else {
+        certificate += para(run('Matter of: ', { bold:true }) + run(respLine || '____________')
+          + run('          File No.: ', { bold:true }) + run(anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________'), { after:200 });
+      }
+      certificate += para(run('I hereby certify that the foregoing:'), { jc:'both', after:120 });
+      certificate += para(run(docTitle, { bold:true }), { jc:'center', after:120 });
+      certificate += para(run('and any attached pages were served on the Department of Homeland Security, Office of the Chief Counsel, by:'), { jc:'both', after:120 });
+      certificate += para(run(box(isMail) + 'United States Postal Service to the person and address below.'), { left:360, after:0 });
+      certificate += para(run(box(isICE) + 'Serving notice through the ICE E-Filing System.'), { left:360, after:0 });
+      certificate += para(run(box(isECAS) + 'Serving notice through the ECAS.'), { left:360, after:0 });
+      certificate += para(run(box(isPersonal) + 'Personal service to the person and address below.'), { left:360, after:200 });
+      certificate += para(run('I declare under penalty of perjury that the foregoing is true and correct.'), { jc:'both', after:200 });
+      const dateLine = [coverDate, subPlace].filter(Boolean).join(', ');
+      certificate += para(run(dateLine), { after:0 });
+      certificate += blank(2);
+      certificate += sigBlock;
+    }
+
+    // ── Table of exhibits + tab pages ─────────────────────────────
+    // Tab A is the application itself (one line per applicant when the
+    // filing covers a family), Tab B the fee payment receipt. Each tab
+    // is a separator page with a large centered letter — the documents
+    // get inserted right after their tab when the filing is assembled.
+    let exhibits = '';
+    if(opts.exhibits){
+      const appLabel = 'Form I-589, Application' + (respList.length > 1 ? 's' : '')
+        + ' for Asylum and for Withholding of Removal';
+      if(opts.cover || opts.cert) exhibits += pageBreak;
+      exhibits += para(run('TABLE OF EXHIBITS', { bold:true, sz:'28' }), { jc:'center', after:360 });
+      exhibits += para(run('Exhibit A:', { bold:true }) + run('  ' + appLabel), { left:720, hanging:720, after:respList.length > 1 ? 60 : 120 });
+      if(respList.length > 1){
+        respList.forEach((name, i) => {
+          const a = anumList[i] ? ' (' + anumList[i] + ')' : '';
+          exhibits += para(run(name + a), { left:1440, hanging:0, after:(i === respList.length - 1) ? 120 : 0 });
+        });
+      }
+      if(feeExhibit){
+        exhibits += para(run('Exhibit B:', { bold:true })
+          + run('  Fee Payment Receipt' + (receipt ? ' (Receipt No. ' + receipt + ')' : '')), { left:720, hanging:720, after:120 });
+      }
+      // Tab A — the application(s).
+      exhibits += pageBreak;
+      exhibits += blank(9);
+      exhibits += para(run('A', { bold:true, sz:'144' }), { jc:'center', after:0 });
+      // Tab B — the fee payment receipt.
+      if(feeExhibit){
+        exhibits += pageBreak;
+        exhibits += blank(9);
+        exhibits += para(run('B', { bold:true, sz:'144' }), { jc:'center', after:0 });
+      }
+    }
+
+    const sectPr = '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>'
+      + '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
+
+    const documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+      + '<w:body>' + coverLetter + certificate + exhibits + sectPr + '</w:body></w:document>';
+
+    const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      + '<Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+      + '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+      + '</Types>';
+    const rootRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+      + '</Relationships>';
+    const docRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+      + '</Relationships>';
+    const stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+      + '<w:docDefaults><w:rPrDefault><w:rPr>'
+      + '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>'
+      + '<w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>'
+      + '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>'
+      + '</w:styles>';
+
+    const zip = new JSZip();
+    zip.file('[Content_Types].xml', contentTypes);
+    zip.folder('_rels').file('.rels', rootRels);
+    const wordDir = zip.folder('word');
+    wordDir.file('document.xml', documentXml);
+    wordDir.file('styles.xml', stylesXml);
+    wordDir.folder('_rels').file('document.xml.rels', docRels);
+    const outBlob = await zip.generateAsync({ type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+
+    // Filename: "<Cl ID> <LASTNAME> <First> I-589 Applications.docx" —
+    // same space-only, punctuation-stripped house style as the motions.
+    const clean = s => String(s||'').replace(/['’"”“]/g,'').replace(/[,\-–—\\/:*?<>|]/g,' ').replace(/\s+/g,' ').trim();
+    const segs = [];
+    if(window._briefClid) segs.push(clean(window._briefClid));
+    let last = '', first = '';
+    if(window._briefClid && caseMeta[window._briefClid]){
+      last = (caseMeta[window._briefClid].clientLastName||'').trim();
+      first = (caseMeta[window._briefClid].clientFirstName||'').trim();
+    }
+    if(!last && !first && respLine){
+      const comma = respLine.indexOf(',');
+      if(comma > 0){ last = respLine.slice(0,comma).trim(); first = respLine.slice(comma+1).trim().split(/\s+/)[0] || ''; }
+      else { const p = respLine.split(/\s+/); if(p.length>=2){ last = p[p.length-1]; first = p.slice(0,-1).join(' '); } else last = respLine; }
+    }
+    if(last)  segs.push(clean(last).toUpperCase());
+    if(first) segs.push(clean(first));
+    segs.push('I589 Applications');
+    const fname = (segs.join(' ').replace(/\s+/g,' ').trim() || 'I589 Applications') + '.docx';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(outBlob);
+    a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    // Log the created document into the case's Documents tab.
+    if(window._briefClid && typeof recordCreatedDoc==='function'){
+      recordCreatedDoc(window._briefClid, { kind:'I-589 Filing', title:readableTitle, filename:fname });
+    }
+    setStatus('✓ Downloaded — open it in Word to review.', false);
+  }catch(e){
+    console.error('generateI589Filing', e);
     setStatus('Failed: ' + (e && e.message ? e.message : 'unknown error'), true);
   }finally{
     if(btn){ btn.disabled = false; btn.textContent = 'Generate .docx'; }
@@ -19919,7 +20314,7 @@ function renderCaseDocuments(clid){
   const docs=((caseMeta[clid]||{}).createdDocs||[]).slice();
   const intro=document.createElement('div');
   intro.style.cssText='font-size:12px;color:#9E9186;line-height:1.5;margin-bottom:14px;';
-  intro.textContent='Documents created for this case from the Motion and Brief Creator (motions, witness lists, asylum fee filings) are logged here.';
+  intro.textContent='Documents created for this case from the Motion and Brief Creator (motions, witness lists, asylum fee filings, I-589 filings) are logged here.';
   body.appendChild(intro);
   if(!docs.length){
     const e=document.createElement('div');
@@ -19931,7 +20326,7 @@ function renderCaseDocuments(clid){
   docs.forEach((d,i)=>{
     const row=document.createElement('div');
     row.style.cssText='display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #EDE8E0;border-radius:10px;background:#fff;margin-bottom:8px;cursor:pointer;transition:border-color .12s,box-shadow .12s;';
-    row.title='Open the '+((d.kind==='Witness List')?'Witness List tool':(d.kind==='Asylum Fee')?'Asylum Fee tool':'Motion and Brief Creator')+' for this case to generate another';
+    row.title='Open the '+((d.kind==='Witness List')?'Witness List tool':(d.kind==='Asylum Fee')?'Asylum Fee tool':(d.kind==='I-589 Filing')?'I-589 filing tool':'Motion and Brief Creator')+' for this case to generate another';
     row.onmouseenter=()=>{row.style.borderColor='#6A8C6E';row.style.boxShadow='0 1px 4px rgba(0,0,0,.06)';};
     row.onmouseleave=()=>{row.style.borderColor='#EDE8E0';row.style.boxShadow='none';};
     row.onclick=()=>openCreatedDocTool(clid,d.kind,d.title);
@@ -19984,6 +20379,9 @@ function openCreatedDocTool(clid, kind, title){
     if(!window._afOpts)window._afOpts={feeType:'initial',receipt:'',cover:true,cert:true,exhibits:true};
     window._afOpts.feeType=/annual/i.test(title||'')?'annual':'initial';
     if(typeof _briefSetDocType==='function')_briefSetDocType('asylumfee');
+  } else if(kind==='I-589 Filing'){
+    if(!window._i589Opts)window._i589Opts={receipt:'',cover:true,cert:true,exhibits:true,feeExhibit:true};
+    if(typeof _briefSetDocType==='function')_briefSetDocType('i589');
   } else {
     if(typeof _briefSetDocType==='function')_briefSetDocType('motion');
     if(title){
