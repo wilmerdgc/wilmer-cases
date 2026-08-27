@@ -2479,7 +2479,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
           <div style="font-size:21px;line-height:1;margin-bottom:6px;">🗂</div>
           <div style="font-size:12.5px;color:#5C5148;font-weight:600;">Drop images or PDFs here</div>
           <div style="font-size:11px;color:#9E9186;margin-top:3px;">click to browse &middot; or paste a screenshot with &#8984;/Ctrl+V</div>
-          <div style="font-size:10px;color:#C4BAB0;margin-top:7px;line-height:1.5;">Notices, receipts, IDs, hearing notices&hellip; They are read on this device — nothing is uploaded — and the values are matched to the fields below.</div>
+          <div style="font-size:10px;color:#C4BAB0;margin-top:7px;line-height:1.5;">Notices, receipts, IDs, hearing notices, or a screenshot of the court's Automated Case Information page — name, A-number, judge, court, and the next hearing's date, time and format are all picked up. They are read on this device — nothing is uploaded — and the values are matched to the fields below.</div>
         </div>
         <input id="ncp-doc-input" type="file" accept="image/*,application/pdf,.pdf" multiple style="display:none" onchange="ncdFilesChosen(this.files);this.value='';"/>
         <div id="ncp-doc-manual-wrap" style="display:none;margin-top:10px;">
@@ -2561,6 +2561,13 @@ window.addEventListener('load',()=>autoGrowAllNotes());
               <option value="Me">Me</option>
             </select>
           </div>
+        </div>
+        <div>
+          <label class="nc-label">Immigration Judge</label>
+          <select id="ncp-judge" class="nc-input" onchange="_ncJudgeVenueHint()">
+            <option value="">—</option>
+          </select>
+          <div id="ncp-judge-venue" style="font-size:10.5px;color:#9E9186;margin-top:5px;min-height:13px;"></div>
         </div>
       </div>
 
@@ -25476,6 +25483,24 @@ function _ncRenderEvents(key){
     dateInp.type='date';dateInp.value=ev.date||'';dateInp.title='Date';
     dateInp.style.cssText='font-size:11px;padding:2px 5px;border:1px solid #F0D9BB;border-radius:5px;background:#FFFCF7;color:#2C2620;font-weight:600;width:130px;flex-shrink:0;';
     dateInp.oninput=()=>{arr[idx].date=dateInp.value;if(typeof checkWeekendDate==='function')checkWeekendDate(dateInp.value);};
+    // Hearings carry a start time and a format (the two things a court's
+    // own case-information page states alongside the date).
+    const isHearing=(typeof isHearingEventType==='function')?isHearingEventType(ev.type):/MASTER|INDIVIDUAL|HEARING/i.test(ev.type);
+    let timeInp=null, modeSel=null;
+    if(isHearing){
+      timeInp=document.createElement('input');
+      timeInp.type='time';timeInp.value=ev.time||'';timeInp.title='Start time';
+      timeInp.style.cssText='font-size:11px;padding:2px 5px;border:1px solid #F0D9BB;border-radius:5px;background:#FFFCF7;color:#2C2620;width:95px;flex-shrink:0;';
+      timeInp.oninput=()=>{arr[idx].time=timeInp.value;};
+      modeSel=document.createElement('select');
+      modeSel.title='Format';
+      modeSel.style.cssText='font-size:11px;padding:2px 4px;border:1px solid #F0D9BB;border-radius:5px;background:#FFFCF7;color:#2C2620;width:105px;flex-shrink:0;font-family:inherit;';
+      [['','Format…'],['in-person','🏛 In Person'],['virtual','📡 Virtual'],['office','🏢 Office']].forEach(([v,t])=>{
+        const o=document.createElement('option');o.value=v;o.textContent=t;modeSel.appendChild(o);
+      });
+      modeSel.value=ev.mode||'';
+      modeSel.onchange=()=>{arr[idx].mode=modeSel.value;};
+    }
     const notesInp=document.createElement('input');
     notesInp.type='text';notesInp.value=ev.notes||'';notesInp.placeholder='Notes (optional)';
     notesInp.style.cssText='font-size:11px;padding:2px 6px;border:1px solid #F0D9BB;border-radius:5px;background:#FFFCF7;color:#2C2620;flex:1;min-width:60px;';
@@ -25484,7 +25509,11 @@ function _ncRenderEvents(key){
     rm.type='button';rm.textContent='✕';rm.title='Remove';
     rm.style.cssText='font-size:11px;padding:2px 7px;border:1px solid #F0D9BB;border-radius:5px;background:#fff;color:#C9823A;cursor:pointer;flex-shrink:0;';
     rm.onclick=()=>{arr.splice(idx,1);_ncRenderEvents(key);};
-    row.appendChild(tag);row.appendChild(dateInp);row.appendChild(notesInp);row.appendChild(rm);
+    row.appendChild(tag);row.appendChild(dateInp);
+    if(timeInp)row.appendChild(timeInp);
+    if(modeSel)row.appendChild(modeSel);
+    row.appendChild(notesInp);row.appendChild(rm);
+    row.style.flexWrap='wrap';
     rows.appendChild(row);
   });
 }
@@ -25538,15 +25567,49 @@ function _ncCollectClients(key){
 }
 // Build event records for a freshly created case. Each carries the case's
 // identity so it shows up correctly in every event view.
+// The judge picker lists every saved judge by name, with the courthouse
+// they sit in — that is what identifies the court on a new case.
+function _ncFillJudgeSelect(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const list=(typeof judges!=='undefined'&&Array.isArray(judges))?judges.slice():[];
+  list.sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+  el.innerHTML='<option value="">—</option>';
+  list.forEach(j=>{
+    if(!j||!j.name)return;
+    const o=document.createElement('option');
+    o.value=j.name;
+    o.textContent=j.name+(j.venue?(' — '+j.venue):'');
+    el.appendChild(o);
+  });
+}
+function _ncJudgeById(name){
+  if(!name||typeof judges==='undefined'||!Array.isArray(judges))return null;
+  return judges.find(j=>j&&j.name===name)||null;
+}
+function _ncJudgeVenueHint(){
+  const hint=document.getElementById('ncp-judge-venue');
+  if(!hint)return;
+  const j=_ncJudgeById((document.getElementById('ncp-judge')||{value:''}).value);
+  hint.textContent=j?('🏛 '+(j.venue||'no court saved for this judge')
+    +(j.webex==='yes'?' · Webex OK':j.webex==='no'?' · in person only':'')):'';
+}
 function _ncCollectEventRecords(key,caseRec){
   const out=[];
+  const judge=_ncJudgeById((document.getElementById(_ncPrefix[key]+'-judge')||{value:''}).value);
   (_ncExtras[key].events||[]).forEach(ev=>{
     if(!ev.type)return;
+    // Format, start time and judge only belong on an actual hearing.
+    const isHearing=(typeof isHearingEventType==='function')?isHearingEventType(ev.type):/MASTER|INDIVIDUAL|HEARING/i.test(ev.type);
+    const mode=isHearing?(ev.mode||''):'';
+    const onCourtRecord=(mode==='virtual'||mode==='in-person');
     out.push({
       id:'ev_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),
       clid:caseRec.clid,client:caseRec.client,type:caseRec.type,anum:caseRec.anum,
       atty:caseRec.atty,assigned:caseRec.assigned||'',
-      event:ev.type,date:ev.date||'',timeStart:'',timeEnd:'',hearingMode:'',
+      event:ev.type,date:ev.date||'',timeStart:(isHearing?(ev.time||''):''),timeEnd:'',hearingMode:mode,
+      hearingJudgeId:(onCourtRecord&&judge)?judge.id:'',
+      virtualLink:(mode==='virtual'&&judge&&judge.virtualRoom)?judge.virtualRoom:'',
       notes:(ev.notes||'').trim(),checklist:[],docs:[],history:[]
     });
   });
@@ -25563,8 +25626,13 @@ function _ncApplyClients(key,cid){
 }
 
 // ── New Case: document intake (images / PDFs → auto-filled fields) ────
-// Drop a photo of an ID, a Notice to Appear, an I-797 receipt or a hearing
-// notice on the New Case form and the fields below fill themselves.
+// Drop a photo of an ID, a Notice to Appear, an I-797 receipt, a hearing
+// notice — or a screenshot of EOIR's Automated Case Information page — on
+// the New Case form and the fields below fill themselves. The court pages
+// state a case the same way every time (name, A-number, docket date, then
+// the next hearing's type, format, date and time, the judge and the
+// courthouse), so all of it is recognised and the judge is matched against
+// the firm's saved judges list.
 //
 // Everything runs in this browser — these are client documents, so nothing is
 // uploaded anywhere. A PDF's own text layer is read with pdf.js; a scanned PDF
@@ -25713,6 +25781,10 @@ function _ncdNorm(raw){
     .replace(/[‘’´]/g,"'")
     .replace(/[“”]/g,'"')
     .replace(/[–—]/g,'-')
+    // "Name: X | A-Number: Y | Docket Date: Z" — the EOIR case-information
+    // page packs several labelled values into one piped row. Each is its own
+    // field, so give each its own line for the label parser below.
+    .replace(/[ \t]*\|[ \t]*/g,'\n')
     .replace(/[ \t ]+/g,' ')
     .split('\n').map(l=>l.trim()).join('\n')
     .replace(/\n{3,}/g,'\n\n')
@@ -25762,6 +25834,14 @@ function _ncdDate(s){
   return '';
 }
 
+// Court pages print names in block capitals. Last names stay uppercase (the
+// firm's own convention); a first or middle name shouted in caps is eased
+// back to title case.
+function _ncdTitleName(v){
+  const s = String(v||'');
+  if(/[a-zà-ÿ]/.test(s)) return s;
+  return s.toLowerCase().replace(/(^|[\s'\-])([a-zà-ÿ])/g, (m,a,b) => a + b.toUpperCase());
+}
 function _ncdCleanName(v){
   return String(v||'')
     .replace(/\d.*$/,'')
@@ -25864,7 +25944,39 @@ const NCD_DOC_TYPES = [
   [/MARRIAGE CERTIFICATE|ACTA DE MATRIMONIO/,          'Marriage Certificate']
 ];
 
+// "8:30 AM" / "8.30 a.m." / "14:00" → "08:30", ready for an <input type=time>.
+function _ncdTime(s){
+  let m = String(s||'').match(/\b(\d{1,2})\s*[:.]\s*([0-5]\d)\s*([AaPp])\.?\s*[Mm]\.?/);
+  if(m){
+    let h = (+m[1]) % 12;
+    if(/p/i.test(m[3])) h += 12;
+    return String(h).padStart(2,'0') + ':' + m[2];
+  }
+  m = String(s||'').match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+  if(m) return String(+m[1]).padStart(2,'0') + ':' + m[2];
+  return '';
+}
+// "08:30" → "8:30 AM", for reading the suggestion back.
+function _ncdTime12(t){
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t||''));
+  if(!m) return String(t||'');
+  const h = +m[1];
+  return ((h % 12) || 12) + ':' + m[2] + ' ' + (h < 12 ? 'AM' : 'PM');
+}
+// How the respondent appears: the two formats the app schedules hearings in.
+function _ncdHearingMode(s){
+  const U = String(s||'').toUpperCase();
+  if(/IN[\s\-]?PERSON|EN\s+PERSONA/.test(U)) return 'in-person';
+  if(/VIRTUAL|WEBEX|VIDEO|INTERNET[\s\-]?BASED|TELEPHONIC|REMOTE/.test(U)) return 'virtual';
+  return '';
+}
+
 // Hearing dates that deserve their own row in "Schedule Events".
+// EOIR's Automated Case Information page states the whole hearing in one
+// sentence — "Your upcoming MASTER hearing is IN PERSON on September 21,
+// 2026 at 8:30 AM." — so type, date, start time and format come out
+// together; a notice of hearing spreads the same facts over a few lines,
+// which the look-ahead covers.
 function _ncdHearings(T){
   const lines = T.split('\n');
   const out = [];
@@ -25877,9 +25989,80 @@ function _ncdHearings(T){
     let d = _ncdDate(lines[i]);
     for(let j=i+1; !d && j<Math.min(i+4,lines.length); j++) d = _ncdDate(lines[j]);
     if(!d) continue;
-    if(!out.some(o => o.type===type && o.date===d)) out.push({type, date:d});
+    const around = lines.slice(i, Math.min(i+4, lines.length)).join(' ');
+    const time = _ncdTime(around), mode = _ncdHearingMode(around);
+    const prev = out.find(o => o.type===type && o.date===d);
+    if(prev){ prev.time = prev.time || time; prev.mode = prev.mode || mode; }
+    else out.push({type, date:d, time, mode});
   }
   return out;
+}
+
+// ── Judge and court ───────────────────────────────────────────────────
+// Titles off, punctuation tidied — "Hon. Krasinski, Carolyn" → "Krasinski, Carolyn".
+function _ncdCleanJudge(v){
+  return String(v||'')
+    .replace(/\b(?:hon(?:orable)?|immigration\s+judge|judge|ij|juez)\b\.?/ig,' ')
+    .replace(/[^A-Za-zÀ-ÿ',.\- ]/g,' ')
+    .replace(/\s+/g,' ')
+    .replace(/^[,. ]+|[,. ]+$/g,'')
+    .trim();
+}
+// The saved judges list stores names first-name-first, so flip the
+// "Krasinski, Carolyn" the court pages print.
+function _ncdJudgeDisplay(v){
+  const s = _ncdCleanJudge(v);
+  const i = s.indexOf(',');
+  if(i > 0){
+    const last = s.slice(0,i).trim(), first = s.slice(i+1).trim();
+    if(last && first) return first + ' ' + last;
+  }
+  return s;
+}
+// Match a parsed judge to one the firm already has saved. Surnames repeat
+// across courts, so the court address breaks the tie when it is known.
+function _ncdMatchJudge(name, venueHint){
+  const list = (typeof judges !== 'undefined' && Array.isArray(judges)) ? judges : [];
+  if(!list.length) return null;
+  const norm = v => String(v||'').toLowerCase().replace(/[^a-zà-ÿ ]/g,' ').replace(/\s+/g,' ').trim();
+  const want = norm(_ncdJudgeDisplay(name)).split(' ').filter(Boolean);
+  if(!want.length) return null;
+  const wantLast = want[want.length-1], wantFirst = want[0];
+  const hits = list.filter(j => {
+    const got = norm(j.name).split(' ').filter(Boolean);
+    if(!got.length || got[got.length-1] !== wantLast) return false;
+    if(want.length < 2 || got.length < 2) return true;
+    return got[0] === wantFirst || got[0].charAt(0) === wantFirst.charAt(0);
+  });
+  if(!hits.length) return null;
+  if(hits.length > 1 && venueHint){
+    const vh = String(venueHint).toUpperCase();
+    const byVenue = hits.find(j => j.venue && vh.indexOf(String(j.venue).toUpperCase()) > -1);
+    if(byVenue) return byVenue;
+  }
+  return hits[0];
+}
+// "COURT ADDRESS" is a heading with the street on the line below it and the
+// city/state/ZIP under that — join them so the venue can be recognised.
+function _ncdCourtAddress(T){
+  const lines = String(T||'').split('\n');
+  for(let i=0;i<lines.length;i++){
+    if(!/^\s*(?:court\s*address|hearing\s*location|address\s*of\s*(?:the\s*)?court)\s*:?\s*$/i.test(lines[i])) continue;
+    const parts = [];
+    for(let j=i+1; j<Math.min(i+4,lines.length) && parts.length<2; j++){
+      const nx = (lines[j]||'').trim();
+      if(nx) parts.push(nx);
+    }
+    if(parts.length) return parts.join(', ');
+  }
+  return '';
+}
+// The venue the firm already knows, if the court address names one.
+function _ncdMatchVenue(addr){
+  const list = (typeof venues !== 'undefined' && Array.isArray(venues)) ? venues : [];
+  const U = String(addr||'').toUpperCase();
+  if(!U) return '';
+  return list.find(v => v && U.indexOf(String(v).toUpperCase()) > -1) || '';
 }
 
 // The whole parse for one document.
@@ -25899,15 +26082,15 @@ function _ncdParse(raw, srcName){
   const first = _ncdLabeled(T, ['given\\s*name(?:\\s*\\(first\\s*name\\))?','first\\s*name','nombres?(?!\\s*completo)(?:\\s*de\\s*pila)?','primer\\s*nombre'], _ncdIsNamepart);
   const mid   = _ncdLabeled(T, ['middle\\s*name','middle\\s*initial','segundo\\s*nombre'], _ncdIsNamepart);
   if(last)  put('lastName',  _ncdCleanName(last).toUpperCase());
-  if(first) put('firstName', _ncdCleanName(first));
-  if(mid)   put('middleName',_ncdCleanName(mid));
+  if(first) put('firstName', _ncdTitleName(_ncdCleanName(first)));
+  if(mid)   put('middleName',_ncdTitleName(_ncdCleanName(mid)));
   if(!f.lastName || !f.firstName){
-    const full = _ncdLabeled(T, ['in\\s*the\\s*matter\\s*of','name\\s*of\\s*respondent',"respondent'?s?\\s*name",'respondent',"applicant'?s?\\s*name",'applicant',"beneficiary'?s?\\s*name",'beneficiary',"petitioner'?s?\\s*name",'client\\s*name','full\\s*name','name\\s*of\\s*applicant','nombre\\s*completo','nombre\\s*del\\s*solicitante'], v => _ncdIsName(v) && v.split(/\s+/).length >= 2);
+    const full = _ncdLabeled(T, ['in\\s*the\\s*matter\\s*of','name\\s*of\\s*respondent',"respondent'?s?\\s*name",'respondent',"applicant'?s?\\s*name",'applicant',"beneficiary'?s?\\s*name",'beneficiary',"petitioner'?s?\\s*name",'client\\s*name','full\\s*name','name\\s*of\\s*applicant','nombre\\s*completo','nombre\\s*del\\s*solicitante','name'], v => _ncdIsName(v) && v.split(/\s+/).length >= 2 && !/^(?:of|de|del)\b/i.test(v));
     const parts = full ? _ncdSplitName(full) : null;
     if(parts){
       put('lastName',  parts.lastName.toUpperCase());
-      put('firstName', parts.firstName);
-      if(parts.middleName) put('middleName', parts.middleName);
+      put('firstName', _ncdTitleName(parts.firstName));
+      if(parts.middleName) put('middleName', _ncdTitleName(parts.middleName));
     }
   }
 
@@ -25951,6 +26134,19 @@ function _ncdParse(raw, srcName){
   if(m) put('receipt', m[1]);
   const court = _ncdLabeled(T, ['immigration\\s*court','court\\s*address','name\\s*and\\s*address\\s*of\\s*(?:the\\s*)?immigration\\s*court'], v => v.length >= 4);
   if(court) put('court', court);
+
+  // Court page identity: the presiding judge, the courthouse it sits in and
+  // the date the case was docketed.
+  const judgeRaw = _ncdLabeled(T, ['immigration\\s*judge','presiding\\s*judge','judge\\s*name','judge','\\bij\\b','juez'],
+                                v => _ncdIsName(v) && !/^(?:name|address|court)$/i.test(v.trim()));
+  if(judgeRaw){
+    const jn = _ncdJudgeDisplay(judgeRaw);
+    if(jn && jn.split(/\s+/).filter(Boolean).length >= 2) put('judge', jn);
+  }
+  const courtAddr = _ncdCourtAddress(T);
+  if(courtAddr) put('courtAddress', courtAddr);
+  const docketDate = _ncdDate(_ncdLabeled(T, ['docket\\s*date','date\\s*docketed'], v => !!_ncdDate(v)));
+  if(docketDate) put('docketDate', docketDate);
   const docHit = NCD_DOC_TYPES.find(d => d[0].test(U));
   if(docHit) put('docType', docHit[1]);
 
@@ -25965,7 +26161,8 @@ const NCD_LABELS = {
   lastName:'Family Name (Last Name)', firstName:'Given Name (First Name)', middleName:'Middle Name',
   clid:'Client ID', anum:'A-Number', email:'Email', caseType:'Case Type',
   dob:'Date of Birth', countryOfBirth:'Country of Birth', phone:'Phone', address:'Address',
-  receipt:'Receipt Number', court:'Immigration Court', docType:'Document type'
+  receipt:'Receipt Number', court:'Immigration Court', docType:'Document type',
+  judge:'Immigration Judge', courtAddress:'Court address', docketDate:'Docket date'
 };
 // key → the field on the New Case form it belongs in.
 const NCD_FIELD_MAP = [
@@ -25987,10 +26184,12 @@ const NCD_CUSTOM_SYNONYMS = {
   anum:           ['a-number','a number','anumber','alien'],
   receipt:        ['receipt','uscis number','case number'],
   court:          ['court','venue','tribunal','juzgado'],
+  courtAddress:   ['court address','courthouse','hearing location'],
+  judge:          ['judge','ij','juez','referee'],
   clid:           ['client id','file number','matter']
 };
 // Values with no home field are offered as a Notes block instead of dropped.
-const NCD_NOTE_ORDER = ['docType','receipt','dob','countryOfBirth','phone','address','court'];
+const NCD_NOTE_ORDER = ['docType','receipt','dob','countryOfBirth','phone','address','court','courtAddress','judge','docketDate'];
 
 function _ncdAllText(){
   return _ncdFiles.filter(f => f.status==='done' && f.text).map(f => f.text).join('\n\n');
@@ -26040,9 +26239,29 @@ function _ncdBuildSuggestions(){
               target:{kind: col.type==='select' ? 'select' : 'input', id:'ncp-'+col.key}});
   });
 
+  // The presiding judge, matched to the firm's saved list so the case (and
+  // the hearings below) point at the real record rather than loose text.
+  // Judges share surnames across courthouses, so the court address on the
+  // same page breaks the tie.
+  if(merged.judge && _ncdEl('ncp-judge')){
+    const venueHint = (merged.courtAddress || merged.court || {}).value || '';
+    const j = _ncdMatchJudge(merged.judge.value, venueHint);
+    if(j){
+      claimed.judge = true;
+      claimed.courtAddress = !!_ncdMatchVenue(venueHint);
+      sug.push({key:'judge', label:'Immigration Judge' + (j.venue ? ' · ' + j.venue : ''),
+                value:j.name, src:merged.judge.src, readOnly:true,
+                target:{kind:'select', id:'ncp-judge'}});
+    }
+  }
+
   events.forEach(ev => {
-    sug.push({key:'event:'+ev.type+':'+ev.date, label:'Schedule event', value:ev.type+' — '+ev.date,
-              src:ev.src, readOnly:true, target:{kind:'event', eventType:ev.type, date:ev.date}});
+    const bits = [ev.type + ' — ' + fmtDate(ev.date)];
+    if(ev.time) bits.push(_ncdTime12(ev.time));
+    if(ev.mode) bits.push(ev.mode === 'virtual' ? '📡 Virtual' : ev.mode === 'in-person' ? '🏛 In Person' : ev.mode);
+    sug.push({key:'event:'+ev.type+':'+ev.date, label:'Schedule event', value:bits.join(' · '),
+              src:ev.src, readOnly:true,
+              target:{kind:'event', eventType:ev.type, date:ev.date, time:ev.time||'', mode:ev.mode||''}});
   });
 
   const leftovers = NCD_NOTE_ORDER.filter(k => merged[k] && !claimed[k]);
@@ -26235,7 +26454,7 @@ function ncdApplySuggestions(){
       if(typeof _ncExtras === 'undefined') return;
       const arr = _ncExtras.page.events;
       if(!arr.some(e => e.type===t.eventType && e.date===t.date)){
-        arr.push({type:t.eventType, date:t.date, notes:''});
+        arr.push({type:t.eventType, date:t.date, time:t.time||'', mode:t.mode||'', notes:''});
         if(typeof _ncRenderEvents === 'function') _ncRenderEvents('page');
         events++;
       }
@@ -26245,6 +26464,7 @@ function ncdApplySuggestions(){
       if(t.kind === 'select'){
         if(!Array.from(el.options||[]).some(o => o.value === value)) return;
         el.value = value;
+        if(t.id === 'ncp-judge' && typeof _ncJudgeVenueHint === 'function') _ncJudgeVenueHint();
       } else if(t.kind === 'notes'){
         const cur = String(el.value||'').trim();
         if(cur.indexOf(value) > -1) { st.applied = true; st.checked = false; return; }
@@ -26419,9 +26639,16 @@ function openAddCasePage(){
   asgEl.innerHTML='<option value="">—</option><option value="Me">Me</option>';
   paralegals.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;asgEl.appendChild(o);});
 
+  // Populate the judge picker. Option values are the saved judge's own name
+  // so the document reader can match one straight from a court page; the
+  // id is looked back up when the case is saved.
+  _ncFillJudgeSelect('ncp-judge');
+
   // Clear fields
   ['ncp-lastName','ncp-firstName','ncp-middleName','ncp-clid','ncp-anum','ncp-email','ncp-notes'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   typeEl.value='';attyEl.value='';asgEl.value='';
+  const jEl=document.getElementById('ncp-judge'); if(jEl) jEl.value='';
+  _ncJudgeVenueHint();
 
   // Custom columns
   const customCard=document.getElementById('ncp-custom-card');
@@ -26536,6 +26763,9 @@ function saveAddCasePage(){
   if(middleName) caseMeta[caseId].clientMiddleName=middleName;
   if(email) caseMeta[caseId].clientEmail=email;
   caseMeta[caseId].caseCategory=(document.getElementById('ncp-category')||{value:'Office'}).value||'Office';
+  const _ncJudge=(typeof _ncJudgeById==='function')
+    ? _ncJudgeById((document.getElementById('ncp-judge')||{value:''}).value) : null;
+  if(_ncJudge) caseMeta[caseId].judgeId=_ncJudge.id;
 
   // Files dropped on the intake panel travel with the case.
   const _ncDocCount=(typeof _ncdAttachToCase==='function')?_ncdAttachToCase(caseId):0;
