@@ -18112,8 +18112,8 @@ async function generateWitnessList(){
       + (borders ? '<w:tcBorders>' + borders + '</w:tcBorders>' : '') + '</w:tcPr>' + (inner || para('')) + '</w:tc>';
     // The EOIR court caption used at the top of the motion-webex template:
     // centered DOJ / EOIR / court / address header, then "In the Matter of:"
-    // over a two-column box (respondent + "In Removal Proceedings,
-    // Respondent." on the left, "File No.: A###" on the right).
+    // over a two-column box (respondent + "In Removal Proceedings," on the
+    // left, "File No.: A###" on the right). No "Respondent." line.
     const captionBlock = () => {
       let c = '';
       c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
@@ -18124,8 +18124,7 @@ async function generateWitnessList(){
       c += para(run('In the Matter of:'), { after:40 });
       const leftInner = para(run(respStack || '____________', { bold:true }), { after:0 })
         + para('', { after:0 })
-        + para(run('In Removal Proceedings,'), { after:0 })
-        + para(run('       Respondent.'), { after:0 });
+        + para(run('In Removal Proceedings,'), { after:0 });
       // Hanging indent keeps additional A-numbers aligned under the first
       // one, to the right of the "File No.:" label.
       const rightInner = para(run('File No.: ' + (anumStack || '____________')), { after:0, left:1152, hanging:1152 });
@@ -18397,7 +18396,6 @@ async function generateAsylumFee(){
     const anumList = anum ? anum.split(';').map(s => s.trim()).filter(Boolean).map(s => 'A' + s.replace(/^A[- ]?/i, '')) : [];
     const anumStack = anumList.map((s, i) => s + (i < anumList.length - 1 ? ';' : '')).join('\n');
     const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
-    const respWord = plural ? 'Respondents' : 'Respondent';
     const addr = (typeof _briefSplitAddr === 'function') ? _briefSplitAddr(v.field4 || '') : [String(v.field4||''), ''];
     const feeLabel = (opts.feeType === 'annual') ? 'Annual Asylum Fee' : 'Initial Asylum Fee';
     // Bold centered document title, pluralized like the motion titles.
@@ -18420,10 +18418,12 @@ async function generateAsylumFee(){
     let coverDate = longDate(subDateRaw);
     if(!coverDate){ const t = new Date(); coverDate = MONTHS[t.getMonth()] + ' ' + t.getDate() + ', ' + t.getFullYear(); }
 
-    // Same EOIR court caption the motion-webex template uses. The
-    // respondent box is bordered on the top, right and bottom only — no
-    // line on its left side — with a bordered spacer column separating
-    // it from the "File No.:" column, and the table is centered.
+    // Same EOIR court caption the motion-webex template uses. The box is
+    // bordered on the top, right and bottom only — no line on its left
+    // side — with a bordered spacer column separating it from the
+    // "File No.:" column, and the table is centered. Everything from
+    // "In the Matter of:" down sits inside the box, under the top rule;
+    // the caption carries no "Respondent." line.
     const captionBlock = () => {
       let c = '';
       c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
@@ -18431,7 +18431,6 @@ async function generateAsylumFee(){
       c += para(run((v.field3 || 'IMMIGRATION COURT')), { jc:'center', after:0 });
       if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
       if(addr[1]) c += para(run(addr[1]), { jc:'center', after:120 });
-      c += para(run('In the Matter of:'), { after:40 });
       const bT = '<w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
       const bB = '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
       const bR = '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
@@ -18447,10 +18446,12 @@ async function generateAsylumFee(){
       c += '<w:tbl><w:tblPr><w:tblW w:w="9350" w:type="dxa"/><w:jc w:val="center"/>'
         + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
         + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="1165"/><w:gridCol w:w="3145"/></w:tblGrid>'
-        + boxRow(para(run(respStack || '____________', { bold:true }), { after:0 }), para(run(fileNo), { after:0, left:1152, hanging:1152 }), bT)
+        + boxRow(para(run('In the Matter of:'), { after:0 }), null, bT)
+        + boxRow(para('', { after:0 }), null)
+        + boxRow(para(run(respStack || '____________', { bold:true }), { after:0 }), para(run(fileNo), { after:0, left:1152, hanging:1152 }))
         + boxRow(para('', { after:0 }), null)
         + boxRow(para(run('In Removal Proceedings,'), { after:0 }), null)
-        + boxRow(para(run('       ' + respWord + '.'), { after:0 }), null, bB)
+        + boxRow(para('', { after:0 }), null, bB)
         + '</w:tbl>';
       c += para('', { after:200 });
       return c;
@@ -18661,7 +18662,6 @@ async function generateI589Filing(){
     const anumList = anum ? anum.split(';').map(s => s.trim()).filter(Boolean).map(s => 'A' + s.replace(/^A[- ]?/i, '')) : [];
     const anumStack = anumList.map((s, i) => s + (i < anumList.length - 1 ? ';' : '')).join('\n');
     const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
-    const respWord = plural ? 'Respondents' : 'Respondent';
     const addr = (typeof _briefSplitAddr === 'function') ? _briefSplitAddr(v.field4 || '') : [String(v.field4||''), ''];
     // Bold centered document title, pluralized like the motion titles.
     const docTitle = (plural ? "RESPONDENTS'" : "RESPONDENT'S") + ' I-589 APPLICATIONS';
@@ -18684,10 +18684,12 @@ async function generateI589Filing(){
     let coverDate = longDate(subDateRaw);
     if(!coverDate){ const t = new Date(); coverDate = MONTHS[t.getMonth()] + ' ' + t.getDate() + ', ' + t.getFullYear(); }
 
-    // Same EOIR court caption the motion-webex template uses. The
-    // respondent box is bordered on the top, right and bottom only — no
-    // line on its left side — with a bordered spacer column separating
-    // it from the "File No.:" column, and the table is centered.
+    // Same EOIR court caption the motion-webex template uses. The box is
+    // bordered on the top, right and bottom only — no line on its left
+    // side — with a bordered spacer column separating it from the
+    // "File No.:" column, and the table is centered. Everything from
+    // "In the Matter of:" down sits inside the box, under the top rule;
+    // the caption carries no "Respondent." line.
     const captionBlock = () => {
       let c = '';
       c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
@@ -18695,7 +18697,6 @@ async function generateI589Filing(){
       c += para(run((v.field3 || 'IMMIGRATION COURT')), { jc:'center', after:0 });
       if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
       if(addr[1]) c += para(run(addr[1]), { jc:'center', after:120 });
-      c += para(run('In the Matter of:'), { after:40 });
       const bT = '<w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
       const bB = '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
       const bR = '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
@@ -18711,10 +18712,12 @@ async function generateI589Filing(){
       c += '<w:tbl><w:tblPr><w:tblW w:w="9350" w:type="dxa"/><w:jc w:val="center"/>'
         + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
         + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="1165"/><w:gridCol w:w="3145"/></w:tblGrid>'
-        + boxRow(para(run(respStack || '____________', { bold:true }), { after:0 }), para(run(fileNo), { after:0, left:1152, hanging:1152 }), bT)
+        + boxRow(para(run('In the Matter of:'), { after:0 }), null, bT)
+        + boxRow(para('', { after:0 }), null)
+        + boxRow(para(run(respStack || '____________', { bold:true }), { after:0 }), para(run(fileNo), { after:0, left:1152, hanging:1152 }))
         + boxRow(para('', { after:0 }), null)
         + boxRow(para(run('In Removal Proceedings,'), { after:0 }), null)
-        + boxRow(para(run('       ' + respWord + '.'), { after:0 }), null, bB)
+        + boxRow(para('', { after:0 }), null, bB)
         + '</w:tbl>';
       c += para('', { after:200 });
       return c;
