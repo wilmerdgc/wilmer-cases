@@ -16993,6 +16993,8 @@ function renderBriefGenerator(){
       <button id="bg-dt-witness" type="button" onclick="_briefSetDocType('witness')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Witness List</button>
       <button id="bg-dt-asylumfee" type="button" onclick="_briefSetDocType('asylumfee')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Asylum Fee</button>
       <button id="bg-dt-i589" type="button" onclick="_briefSetDocType('i589')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">I-589</button>
+      <button id="bg-dt-schedorder" type="button" onclick="_briefSetDocType('schedorder')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Response to SO</button>
+      <button id="bg-dt-suppevid" type="button" onclick="_briefSetDocType('suppevid')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Supplemental Evidence</button>
     </div>
 
     <!-- Case picker -->
@@ -17027,6 +17029,12 @@ function renderBriefGenerator(){
 
     <!-- I-589 mode -->
     <div id="bg-i589-panel" style="display:none;"></div>
+
+    <!-- Response to Scheduling Order mode -->
+    <div id="bg-schedorder-panel" style="display:none;"></div>
+
+    <!-- Supplemental Evidence mode -->
+    <div id="bg-suppevid-panel" style="display:none;"></div>
   `;
   window._briefClid = null;
   window._briefValues = {};
@@ -17037,6 +17045,8 @@ function renderBriefGenerator(){
   if(!window._wlOpts) window._wlOpts = { cover:true, cert:true };
   if(!window._afOpts) window._afOpts = { feeType:'initial', receipt:'', cover:true, cert:true, exhibits:true };
   if(!window._i589Opts) window._i589Opts = { receipt:'', cover:true, cert:true, exhibits:true, feeExhibit:true };
+  if(!window._soOpts) window._soOpts = { orderDate:'', body:'', cover:true, cert:true };
+  if(!window._seOpts) window._seOpts = { tocTitle:'TABLE OF CONTENTS', startPage:1, cover:true, toc:true, cert:true, tabs:true, exhibits:[_blankExhibit(0)] };
   _briefRenderForm();
 }
 
@@ -17056,18 +17066,22 @@ function _briefSetDocType(type){
   const isWitness = type === 'witness';
   const isAsylumFee = type === 'asylumfee';
   const isI589 = type === 'i589';
-  const isMotion = !isWitness && !isAsylumFee && !isI589;
+  const isSchedOrder = type === 'schedorder';
+  const isSuppEvid = type === 'suppevid';
+  const isMotion = !isWitness && !isAsylumFee && !isI589 && !isSchedOrder && !isSuppEvid;
   const show = (id, on) => { const el = document.getElementById(id); if(el) el.style.display = on ? '' : 'none'; };
   show('bg-form', isMotion);
   show('bg-motion-generate', isMotion);
   show('bg-witness-panel', isWitness);
   show('bg-asylumfee-panel', isAsylumFee);
   show('bg-i589-panel', isI589);
+  show('bg-schedorder-panel', isSchedOrder);
+  show('bg-suppevid-panel', isSuppEvid);
   // Multi-respondent picker / paper-file warning are motion concepts —
   // keep them out of the witness / asylum-fee views. The I-589 filing is
   // one application per applicant, so it keeps the respondent picker:
   // whoever is included is captioned and listed in the exhibit index.
-  if(isMotion || isI589){
+  if(isMotion || isI589 || isSchedOrder || isSuppEvid){
     _briefRenderRespondentsPanel();
     if(window._briefClid){
       const meta = (caseMeta && caseMeta[window._briefClid]) || {};
@@ -17087,9 +17101,13 @@ function _briefSetDocType(type){
   style('bg-dt-witness', isWitness);
   style('bg-dt-asylumfee', isAsylumFee);
   style('bg-dt-i589', isI589);
+  style('bg-dt-schedorder', isSchedOrder);
+  style('bg-dt-suppevid', isSuppEvid);
   if(isWitness) _renderWitnessPanel();
   if(isAsylumFee) _renderAsylumFeePanel();
   if(isI589) _renderI589FilingPanel();
+  if(isSchedOrder) _renderSchedOrderPanel();
+  if(isSuppEvid) _renderSuppEvidPanel();
 }
 
 // ── Witness List editor ────────────────────────────────────────────
@@ -17363,6 +17381,203 @@ function _i589Applicants(){
     name,
     anum: anums[i] ? ('A' + anums[i].replace(/^A[- ]?/i, '')) : ''
   }));
+}
+
+// ── Shared judge / next-hearing pickers ────────────────────────────
+// Every filing package captions itself from the case the same way; these
+// two inputs are the only case-derived values the user usually adjusts.
+function _briefJudgeHearingRow(prefix){
+  const v = window._briefValues || {};
+  const pick = (fieldKey, inputId, label) => {
+    const sugg = (typeof _briefSuggestions === 'function') ? _briefSuggestions(fieldKey) : [];
+    if(!sugg.length) return '';
+    return '<select onchange="if(this.value){_briefApplySuggestion(\'' + fieldKey + '\',this.value);var i=document.getElementById(\'' + inputId + '\');if(i)i.value=window._briefValues[\'' + fieldKey + '\']||\'\';this.selectedIndex=0;}" '
+      + 'style="font-size:11px;padding:4px 8px;border:1px solid #B8C4DB;border-radius:6px;background:#fff;color:#4F6A91;font-family:inherit;cursor:pointer;max-width:100%;margin-bottom:5px;">'
+      + '<option value="">' + label + '</option>'
+      + sugg.map(s => '<option value="' + escHtml(s.value).replace(/"/g,'&quot;') + '">' + escHtml(s.label) + '</option>').join('')
+      + '</select>';
+  };
+  const lbl = t => '<label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">' + t + '</label>';
+  const inp = (id, val, ph, key) => '<input id="' + id + '" type="text" value="' + escHtml(val||'').replace(/"/g,'&quot;') + '" placeholder="' + escHtml(ph) + '" oninput="window._briefValues[\'' + key + '\']=this.value" '
+    + 'style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>';
+  return '<div>' + lbl('Immigration Judge') + pick('field14', prefix+'-judge', '👤 Pick a judge…')
+       + inp(prefix+'-judge', v.field14, 'e.g. Bartleson, Thomas', 'field14') + '</div>'
+       + '<div>' + lbl('Next Hearing') + pick('field15', prefix+'-hearing', '📅 Pick from case events…')
+       + inp(prefix+'-hearing', v.field15, 'e.g. April 1, 2026, at 8.30 AM', 'field15') + '</div>';
+}
+
+// ── Response to Scheduling Order editor ────────────────────────────
+// The short filing that answers the Court's scheduling order: the same
+// motion-style cover page, the response itself, and a certificate of
+// service. No proposed order page and no attorney affirmation — the
+// Court's own order is what set the deadlines; this only answers it.
+function _renderSchedOrderPanel(){
+  const panel = document.getElementById('bg-schedorder-panel');
+  if(!panel) return;
+  if(!window._soOpts) window._soOpts = { orderDate:'', body:'', cover:true, cert:true };
+  const o = window._soOpts;
+  panel.innerHTML = `
+    <div style="font-size:12px;color:var(--ink-muted);margin-bottom:14px;line-height:1.5;">Pick a case above to caption the document, date the Court's scheduling order, then Generate. The package is the <b>motion-style cover page</b> (attorney heading + court caption + title) and a <b>certificate of service</b> — <b>no proposed order page</b> and no attorney affirmation.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      ${_briefJudgeHearingRow('so')}
+      <div>
+        <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">Scheduling order dated</label>
+        <input type="text" value="${escHtml(o.orderDate||'').replace(/"/g,'&quot;')}" placeholder="e.g. August 19, 2026" oninput="window._soOpts.orderDate=this.value"
+          style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">Response — one paragraph per line</label>
+      <textarea rows="6" placeholder="Leave blank to use the standard response…" oninput="window._soOpts.body=this.value"
+        style="width:100%;font-size:13px;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;resize:vertical;line-height:1.5;">${escHtml(o.body||'')}</textarea>
+      <div style="font-size:10.5px;color:var(--ink-faint);margin-top:5px;line-height:1.45;">Left empty, the document says the respondent has complied with the order and is filing the materials it required, by its deadline.</div>
+    </div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px;padding:10px 14px;background:var(--cream);border-radius:var(--radius-md);border:1px solid var(--border);">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.cover?'checked':''} onchange="window._soOpts.cover=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include cover page (caption)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.cert?'checked':''} onchange="window._soOpts.cert=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include certificate of service
+      </label>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <button type="button" onclick="generateSchedOrderResponse()" id="bg-schedorder-btn" style="font-size:13px;font-weight:600;padding:9px 22px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Generate .docx</button>
+      <span id="bg-schedorder-status" style="font-size:11px;color:var(--ink-muted);"></span>
+    </div>`;
+}
+
+// ── Supplemental Evidence editor ───────────────────────────────────
+// The evidence packet: a cover page, a table of contents that paginates
+// the exhibits, a certificate of service and a lettered tab page in
+// front of each exhibit — the same shape the Exhibit Packet builds. No
+// proposed order page. Each exhibit carries its own tab letter, name and
+// page count; the page counts are what let the table of contents print
+// the page each exhibit starts on.
+const SE_TAB_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+function _blankExhibit(i){
+  return { letter: SE_TAB_LETTERS.charAt((i||0) % 26) || String((i||0)+1), title:'', pages:1 };
+}
+// Running page numbers: exhibit n starts where exhibit n-1 ended.
+function _sePaginate(){
+  const o = window._seOpts || {};
+  let page = Math.max(1, parseInt(o.startPage, 10) || 1);
+  return (o.exhibits||[]).map(ex => {
+    const n = Math.max(1, parseInt(ex.pages, 10) || 1);
+    const start = page;
+    page += n;
+    return { start, end: start + n - 1, pages: n };
+  });
+}
+function _sePageLabel(p){
+  return p.pages > 1 ? (p.start + '–' + p.end) : String(p.start);
+}
+function _seSet(i, key, val){
+  const ex = (window._seOpts.exhibits||[])[i];
+  if(!ex) return;
+  ex[key] = (key === 'pages') ? val : val;
+  if(key === 'pages') _renderSuppEvidPanel();
+}
+function _seAdd(){
+  window._seOpts.exhibits.push(_blankExhibit(window._seOpts.exhibits.length));
+  _renderSuppEvidPanel();
+}
+function _seDel(i){
+  window._seOpts.exhibits.splice(i, 1);
+  if(!window._seOpts.exhibits.length) window._seOpts.exhibits.push(_blankExhibit(0));
+  _renderSuppEvidPanel();
+}
+function _seMove(i, dir){
+  const arr = window._seOpts.exhibits, j = i + dir;
+  if(j < 0 || j >= arr.length) return;
+  const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  _renderSuppEvidPanel();
+}
+// Re-letter every tab A, B, C… in their current order.
+function _seRelabel(){
+  window._seOpts.exhibits.forEach((ex, i) => { ex.letter = SE_TAB_LETTERS.charAt(i % 26) || String(i+1); });
+  _renderSuppEvidPanel();
+}
+function _renderSuppEvidPanel(){
+  const panel = document.getElementById('bg-suppevid-panel');
+  if(!panel) return;
+  if(!window._seOpts) window._seOpts = { tocTitle:'TABLE OF CONTENTS', startPage:1, cover:true, toc:true, cert:true, tabs:true, exhibits:[_blankExhibit(0)] };
+  const o = window._seOpts;
+  if(!Array.isArray(o.exhibits) || !o.exhibits.length) o.exhibits = [_blankExhibit(0)];
+  const pages = _sePaginate();
+  const totalPages = pages.length ? (pages[pages.length-1].end - pages[0].start + 1) : 0;
+  const rows = o.exhibits.map((ex, i) => `
+    <div style="display:grid;grid-template-columns:64px 1fr 74px 92px 60px;gap:8px;align-items:center;padding:7px 0;border-top:${i?'1px solid #EDE8E0':'none'};">
+      <input type="text" value="${escHtml(ex.letter||'').replace(/"/g,'&quot;')}" title="Tab letter"
+        oninput="_seSet(${i},'letter',this.value)"
+        style="width:100%;text-align:center;font-size:13px;font-weight:700;padding:6px 4px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;color:var(--sage);"/>
+      <input type="text" value="${escHtml(ex.title||'').replace(/"/g,'&quot;')}" placeholder="What this exhibit is — e.g. Declaration of the Respondent"
+        oninput="_seSet(${i},'title',this.value)"
+        style="width:100%;font-size:13px;padding:6px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+      <input type="number" min="1" value="${escHtml(String(ex.pages==null?1:ex.pages))}" title="How many pages this exhibit runs"
+        oninput="_seSet(${i},'pages',this.value)"
+        style="width:100%;font-size:13px;padding:6px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+      <div style="font-size:11.5px;color:var(--ink-muted);text-align:center;white-space:nowrap;">p. <b style="color:var(--ink);">${escHtml(_sePageLabel(pages[i]))}</b></div>
+      <div style="display:flex;gap:2px;justify-content:flex-end;">
+        <button type="button" onclick="_seMove(${i},-1)" title="Move up" ${i===0?'disabled':''} style="border:none;background:transparent;color:${i===0?'#E3DCD0':'#C4BAB0'};cursor:${i===0?'default':'pointer'};font-size:12px;padding:2px 3px;">▲</button>
+        <button type="button" onclick="_seMove(${i},1)" title="Move down" ${i===o.exhibits.length-1?'disabled':''} style="border:none;background:transparent;color:${i===o.exhibits.length-1?'#E3DCD0':'#C4BAB0'};cursor:${i===o.exhibits.length-1?'default':'pointer'};font-size:12px;padding:2px 3px;">▼</button>
+        <button type="button" onclick="_seDel(${i})" title="Remove this exhibit" style="border:none;background:transparent;color:#C4BAB0;cursor:pointer;font-size:14px;padding:2px 3px;">✕</button>
+      </div>
+    </div>`).join('');
+  panel.innerHTML = `
+    <div style="font-size:12px;color:var(--ink-muted);margin-bottom:14px;line-height:1.5;">Pick a case above to caption the document, list the exhibits, then Generate. The package is the <b>motion-style cover page</b>, a <b>table of contents</b> that paginates the exhibits, a <b>certificate of service</b> and a <b>lettered tab page</b> in front of each exhibit — <b>no proposed order page</b> and no attorney affirmation. Give each exhibit its page count and the contents page numbers itself.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      ${_briefJudgeHearingRow('se')}
+      <div>
+        <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">First page number</label>
+        <input type="number" min="1" value="${escHtml(String(o.startPage||1))}" title="Where this packet's pagination starts — carry it on from an earlier filing if you need to"
+          oninput="window._seOpts.startPage=this.value;_renderSuppEvidPanel()"
+          style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">Table of contents heading</label>
+      <input type="text" value="${escHtml(o.tocTitle||'TABLE OF CONTENTS').replace(/"/g,'&quot;')}" placeholder="TABLE OF CONTENTS" oninput="window._seOpts.tocTitle=this.value"
+        style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:16px;background:#fff;">
+      <div style="display:grid;grid-template-columns:64px 1fr 74px 92px 60px;gap:8px;margin-bottom:4px;">
+        <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);text-align:center;">Tab</div>
+        <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);">Name in the table of contents</div>
+        <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);text-align:center;">Pages</div>
+        <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);text-align:center;">Starts at</div>
+        <div></div>
+      </div>
+      ${rows}
+      <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;">
+        <button type="button" onclick="_seAdd()" style="font-size:12px;font-weight:600;padding:5px 14px;border:1px solid var(--sage);border-radius:20px;background:#fff;color:var(--sage);cursor:pointer;font-family:inherit;">+ Add exhibit tab</button>
+        <button type="button" onclick="_seRelabel()" title="Re-letter every tab A, B, C… in this order" style="font-size:12px;padding:5px 14px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Re-letter A–Z</button>
+        <span style="font-size:11px;color:var(--ink-faint);margin-left:auto;">${o.exhibits.length} exhibit${o.exhibits.length===1?'':'s'} · ${totalPages} page${totalPages===1?'':'s'}</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px;padding:10px 14px;background:var(--cream);border-radius:var(--radius-md);border:1px solid var(--border);">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.cover?'checked':''} onchange="window._seOpts.cover=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include cover page (caption)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.toc?'checked':''} onchange="window._seOpts.toc=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include table of contents
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.cert?'checked':''} onchange="window._seOpts.cert=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include certificate of service
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.tabs?'checked':''} onchange="window._seOpts.tabs=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include a tab page per exhibit
+      </label>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <button type="button" onclick="generateSupplementalEvidence()" id="bg-suppevid-btn" style="font-size:13px;font-weight:600;padding:9px 22px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Generate .docx</button>
+      <span id="bg-suppevid-status" style="font-size:11px;color:var(--ink-muted);"></span>
+    </div>`;
 }
 
 // Return suggestions for a field — case-derived where it makes sense
@@ -17773,6 +17988,8 @@ function _briefPickCase(clid, displayName){
   // fills them in.
   if(window._briefDocType==='asylumfee' && typeof _renderAsylumFeePanel==='function') _renderAsylumFeePanel();
   if(window._briefDocType==='i589' && typeof _renderI589FilingPanel==='function') _renderI589FilingPanel();
+  if(window._briefDocType==='schedorder' && typeof _renderSchedOrderPanel==='function') _renderSchedOrderPanel();
+  if(window._briefDocType==='suppevid' && typeof _renderSuppEvidPanel==='function') _renderSuppEvidPanel();
 }
 
 // Show the multi-respondent picker if the case has 2+ clients. Each row
@@ -17849,6 +18066,8 @@ function _briefRefreshFromSelection(){
   // The I-589 exhibit index lists one application per included applicant,
   // so it has to follow the lead / include toggles too.
   if(window._briefDocType==='i589' && typeof _renderI589FilingPanel==='function') _renderI589FilingPanel();
+  if(window._briefDocType==='schedorder' && typeof _renderSchedOrderPanel==='function') _renderSchedOrderPanel();
+  if(window._briefDocType==='suppevid' && typeof _renderSuppEvidPanel==='function') _renderSuppEvidPanel();
 }
 
 async function generateMotionWebex(){
@@ -18896,6 +19115,360 @@ async function generateI589Filing(){
     setStatus('✓ Downloaded — open it in Word to review.', false);
   }catch(e){
     console.error('generateI589Filing', e);
+    setStatus('Failed: ' + (e && e.message ? e.message : 'unknown error'), true);
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = 'Generate .docx'; }
+  }
+}
+
+// ── Shared filing-package kit ──────────────────────────────────────
+// The Response to Scheduling Order and the Supplemental Evidence packet
+// open on the same page the motions do — attorney heading + detained
+// status over the EOIR caption, the Immigration Judge / Next Hearing box
+// and a bold title — and close with the same certificate of service. This
+// builds those pieces once from the shared Field values so each generator
+// below only has to describe what is actually its own.
+function _filingKit(v, docTitleBase){
+  const esc = (typeof _escXml === 'function') ? _escXml : (s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+  const run = (text, opt) => {
+    const o = opt || {};
+    const rpr = (o.bold ? '<w:b/>' : '') + (o.italic ? '<w:i/>' : '') + (o.underline ? '<w:u w:val="single"/>' : '')
+      + (o.sz ? '<w:sz w:val="' + o.sz + '"/><w:szCs w:val="' + o.sz + '"/>' : '');
+    const parts = String(text==null?'':text).split('\n');
+    const runs = parts.map(p => '<w:t xml:space="preserve">' + esc(p) + '</w:t>').join('<w:br/>');
+    return '<w:r>' + (rpr ? '<w:rPr>' + rpr + '</w:rPr>' : '') + runs + '</w:r>';
+  };
+  // A tab stop with dot leaders is what carries a page number out to the
+  // right margin in a table of contents.
+  const tabRun = () => '<w:r><w:tab/></w:r>';
+  const para = (inner, opt) => {
+    const o = opt || {};
+    const ind = (o.left != null || o.hanging != null)
+      ? '<w:ind' + (o.left != null ? ' w:left="' + o.left + '"' : '') + (o.hanging != null ? ' w:hanging="' + o.hanging + '"' : '') + '/>'
+      : '';
+    const tabs = o.tabs ? '<w:tabs>' + o.tabs.map(t => '<w:tab w:val="' + (t.val||'right') + '"'
+      + (t.leader ? ' w:leader="' + t.leader + '"' : '') + ' w:pos="' + t.pos + '"/>').join('') + '</w:tabs>' : '';
+    // WordprocessingML fixes the order of a paragraph's properties:
+    // tabs, then spacing, then indent, then justification.
+    const ppr = tabs + (o.after != null ? '<w:spacing w:after="' + o.after + '"/>' : '') + ind
+              + (o.jc ? '<w:jc w:val="' + o.jc + '"/>' : '');
+    return '<w:p>' + (ppr ? '<w:pPr>' + ppr + '</w:pPr>' : '') + (inner || '') + '</w:p>';
+  };
+  const tcell = (w, inner, borders) => '<w:tc><w:tcPr><w:tcW w:w="' + w + '" w:type="dxa"/>'
+    + (borders ? '<w:tcBorders>' + borders + '</w:tcBorders>' : '') + '</w:tcPr>' + (inner || para('')) + '</w:tc>';
+  const pageBreak = para('<w:r><w:br w:type="page"/></w:r>');
+  const blank = (n) => Array.from({ length:n||1 }, () => para('', { after:0 })).join('');
+
+  const respLine = (v.field5 || '').split('\n')[0].trim();
+  const anum = (v.field6 || '').trim();
+  const respList = respLine ? respLine.split(';').map(s => s.trim()).filter(Boolean) : [];
+  const respStack = respList.map((s, i) => s + (i < respList.length - 1 ? ';' : '')).join('\n');
+  const anumList = anum ? anum.split(';').map(s => s.trim()).filter(Boolean).map(s => 'A' + s.replace(/^A[- ]?/i, '')) : [];
+  const anumStack = anumList.map((s, i) => s + (i < anumList.length - 1 ? ';' : '')).join('\n');
+  const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
+  const respWord = plural ? 'Respondents' : 'Respondent';
+  const addr = (typeof _briefSplitAddr === 'function') ? _briefSplitAddr(v.field4 || '') : [String(v.field4||''), ''];
+  const docTitle = (plural ? "RESPONDENTS'" : "RESPONDENT'S") + ' ' + String(docTitleBase||'').toUpperCase();
+  const readableTitle = (plural ? "Respondents'" : "Respondent's") + ' ' + String(docTitleBase||'')
+    .toLowerCase().replace(/(^|[\s\-])([a-z])/g, (m,a,b) => a + b.toUpperCase());
+  const sigBlock = String(v.field20 || '').split('\n').filter(l => l.trim()).map(l => para(run(l), { after:0 })).join('');
+
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const longDate = (s) => {
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s||'').trim());
+    if(m){ const d = new Date(+m[3], +m[1]-1, +m[2]); if(!isNaN(d)) return MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); }
+    return String(s||'').trim();
+  };
+  // Submission date / place come from Field 16 ("MM/DD/YYYY, Place").
+  const subParts = String(v.field16 || '').split(',');
+  const subPlace = subParts.slice(1).join(',').trim();
+  let coverDate = longDate((subParts[0] || '').trim());
+  if(!coverDate){ const t = new Date(); coverDate = MONTHS[t.getMonth()] + ' ' + t.getDate() + ', ' + t.getFullYear(); }
+
+  // The EOIR court caption: the respondent box is bordered top, right and
+  // bottom only, a bordered spacer column separates it from the "File No.:"
+  // column, and the table is centered.
+  const captionBlock = () => {
+    let c = '';
+    c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
+    c += para(run('EXECUTIVE OFFICE FOR IMMIGRATION REVIEW'), { jc:'center', after:0 });
+    c += para(run((v.field3 || 'IMMIGRATION COURT')), { jc:'center', after:0 });
+    if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
+    if(addr[1]) c += para(run(addr[1]), { jc:'center', after:120 });
+    c += para(run('In the Matter of:'), { after:40 });
+    const bT = '<w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+    const bB = '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+    const bR = '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+    const bL = '<w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+    const boxRow = (leftInner, rightInner, extras) => '<w:tr>'
+      + tcell(5040, leftInner, (extras||'') + bR)
+      + tcell(1165, para('', { after:0 }), bL)
+      + tcell(3145, rightInner || para('', { after:0 }), '')
+      + '</w:tr>';
+    const fileNo = 'File No.: ' + (anumStack || '____________');
+    c += '<w:tbl><w:tblPr><w:tblW w:w="9350" w:type="dxa"/><w:jc w:val="center"/>'
+      + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
+      + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="1165"/><w:gridCol w:w="3145"/></w:tblGrid>'
+      + boxRow(para(run(respStack || '____________', { bold:true }), { after:0 }), para(run(fileNo), { after:0, left:1152, hanging:1152 }), bT)
+      + boxRow(para('', { after:0 }), null)
+      + boxRow(para(run('In Removal Proceedings,'), { after:0 }), null)
+      + boxRow(para(run('       ' + respWord + '.'), { after:0 }), null, bB)
+      + '</w:tbl>';
+    c += para('', { after:200 });
+    return c;
+  };
+
+  // Page 1: attorney heading + detained status, caption, judge box, title.
+  const coverPage = () => {
+    let x = '';
+    const attyInner = String(v.field20 || '').split('\n').filter(l => l.trim())
+      .map(l => para(run(l), { after:0 })).join('') || para('');
+    const statusInner = para(run((v.field2 || 'NON-DETAINED'), { bold:true }), { jc:'right', after:0 });
+    x += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
+      + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
+      + '<w:tblGrid><w:gridCol w:w="6240"/><w:gridCol w:w="3120"/></w:tblGrid>'
+      + '<w:tr>' + tcell(6240, attyInner, '') + tcell(3120, statusInner, '') + '</w:tr></w:tbl>';
+    x += para('', { after:200 });
+    x += captionBlock();
+    const jhHead = para(run('Immigration Judge', { bold:true }), { after:0 });
+    const nhHead = para(run('Next Hearing', { bold:true }), { after:0 });
+    x += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
+      + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
+      + '<w:tblGrid><w:gridCol w:w="4680"/><w:gridCol w:w="4680"/></w:tblGrid>'
+      + '<w:tr>' + tcell(4680, jhHead, '') + tcell(4680, nhHead, '') + '</w:tr>'
+      + '<w:tr>' + tcell(4680, para(run(v.field14 || ''), { after:0 }), '') + tcell(4680, para(run(v.field15 || ''), { after:0 }), '') + '</w:tr></w:tbl>';
+    x += blank(2);
+    x += para(run(docTitle, { bold:true }), { jc:'center', after:240 });
+    return x;
+  };
+
+  // Certificate of service — the service method is ticked from Field 18.
+  const certificate = (leadWithBreak) => {
+    const svc = String(v.field18 || 'ECAS');
+    const isECAS = /ecas/i.test(svc);
+    const isICE  = /ice|efiling|e-filing/i.test(svc);
+    const isMail = /mail/i.test(svc) && !isICE;
+    const isPersonal = /personal/i.test(svc);
+    const box = (on) => on ? '☒ ' : '☐ ';
+    let c = leadWithBreak ? pageBreak : '';
+    c += para(run('CERTIFICATE OF SERVICE', { bold:true, sz:'28' }), { jc:'center', after:240 });
+    if(respList.length > 1){
+      c += para(run('Matter of: ', { bold:true }) + run(respStack), { after:120, left:1152, hanging:1152 });
+      c += para(run('File No.: ', { bold:true }) + run(anumStack || '____________'), { after:200, left:1152, hanging:1152 });
+    } else {
+      c += para(run('Matter of: ', { bold:true }) + run(respLine || '____________')
+        + run('          File No.: ', { bold:true }) + run(anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________'), { after:200 });
+    }
+    c += para(run('I hereby certify that the foregoing:'), { jc:'both', after:120 });
+    c += para(run(docTitle, { bold:true }), { jc:'center', after:120 });
+    c += para(run('and any attached pages were served on the Department of Homeland Security, Office of the Chief Counsel, by:'), { jc:'both', after:120 });
+    c += para(run(box(isMail) + 'United States Postal Service to the person and address below.'), { left:360, after:0 });
+    c += para(run(box(isICE) + 'Serving notice through the ICE E-Filing System.'), { left:360, after:0 });
+    c += para(run(box(isECAS) + 'Serving notice through the ECAS.'), { left:360, after:0 });
+    c += para(run(box(isPersonal) + 'Personal service to the person and address below.'), { left:360, after:200 });
+    c += para(run('I declare under penalty of perjury that the foregoing is true and correct.'), { jc:'both', after:200 });
+    c += para(run([coverDate, subPlace].filter(Boolean).join(', ')), { after:0 });
+    c += blank(2);
+    c += sigBlock;
+    return c;
+  };
+
+  // A separator page carrying one large centered letter — the exhibit goes
+  // in right behind it when the filing is assembled.
+  const tabPage = (letter) => blank(9) + para(run(String(letter||''), { bold:true, sz:'144' }), { jc:'center', after:0 });
+
+  // Zip the body into a .docx and hand it to the browser.
+  const buildDocx = async (bodyXml) => {
+    const sectPr = '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>'
+      + '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
+    const documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+      + '<w:body>' + bodyXml + sectPr + '</w:body></w:document>';
+    const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      + '<Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+      + '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+      + '</Types>';
+    const rootRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+      + '</Relationships>';
+    const docRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+      + '</Relationships>';
+    const stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+      + '<w:docDefaults><w:rPrDefault><w:rPr>'
+      + '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>'
+      + '<w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>'
+      + '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>'
+      + '</w:styles>';
+    const zip = new JSZip();
+    zip.file('[Content_Types].xml', contentTypes);
+    zip.folder('_rels').file('.rels', rootRels);
+    const wordDir = zip.folder('word');
+    wordDir.file('document.xml', documentXml);
+    wordDir.file('styles.xml', stylesXml);
+    wordDir.folder('_rels').file('document.xml.rels', docRels);
+    return zip.generateAsync({ type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  };
+
+  // "<Cl ID> <LASTNAME> <First> <suffix>.docx" — the house filename style.
+  const filename = (suffix) => {
+    const clean = s => String(s||'').replace(/['’"”“]/g,'').replace(/[,\-–—\\/:*?<>|]/g,' ').replace(/\s+/g,' ').trim();
+    const segs = [];
+    if(window._briefClid) segs.push(clean(window._briefClid));
+    let last = '', first = '';
+    if(window._briefClid && caseMeta[window._briefClid]){
+      last = (caseMeta[window._briefClid].clientLastName||'').trim();
+      first = (caseMeta[window._briefClid].clientFirstName||'').trim();
+    }
+    if(!last && !first && respLine){
+      const comma = respLine.indexOf(',');
+      if(comma > 0){ last = respLine.slice(0,comma).trim(); first = respLine.slice(comma+1).trim().split(/\s+/)[0] || ''; }
+      else { const p = respLine.split(/\s+/); if(p.length>=2){ last = p[p.length-1]; first = p.slice(0,-1).join(' '); } else last = respLine; }
+    }
+    if(last)  segs.push(clean(last).toUpperCase());
+    if(first) segs.push(clean(first));
+    segs.push(suffix);
+    return (segs.join(' ').replace(/\s+/g,' ').trim() || suffix) + '.docx';
+  };
+
+  const download = (blob, fname) => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  };
+
+  return { run, tabRun, para, tcell, pageBreak, blank, sigBlock, captionBlock, coverPage,
+           certificate, tabPage, buildDocx, filename, download,
+           respLine, respList, respWord, plural, docTitle, readableTitle, coverDate, subPlace };
+}
+
+// ── Response to Scheduling Order generator ─────────────────────────
+// Answers the Court's scheduling order: cover page, the response itself,
+// certificate of service. Deliberately NO proposed order page — the order
+// being answered is the Court's own — and no attorney affirmation.
+async function generateSchedOrderResponse(){
+  const btn = document.getElementById('bg-schedorder-btn');
+  const status = document.getElementById('bg-schedorder-status');
+  const setStatus = (msg, err) => { if(status){ status.textContent = msg; status.style.color = err ? '#B85C5C' : 'var(--sage)'; } };
+  if(typeof JSZip === 'undefined'){ setStatus('JSZip not loaded — refresh the page and try again.', true); return; }
+  const opts = window._soOpts || { orderDate:'', body:'', cover:true, cert:true };
+  if(!opts.cover && !opts.cert && !String(opts.body||'').trim()){ setStatus('Check at least one section to include.', true); return; }
+  const v = window._briefValues || {};
+  if(!(v.field5 || '').split('\n')[0].trim()){ setStatus('Pick a case first so the filing is captioned.', true); return; }
+  if(btn){ btn.disabled = true; btn.textContent = 'Generating…'; }
+  setStatus('', false);
+  try{
+    const K = _filingKit(v, 'Response to Scheduling Order');
+    const orderDate = String(opts.orderDate || '').trim();
+    // The standard response, used whenever the user leaves the body empty.
+    const defaultBody = [
+      'Respondent, by and through undersigned counsel, respectfully responds to this Honorable Court\'s Scheduling Order'
+        + (orderDate ? ' dated ' + orderDate : '') + ' as follows:',
+      'Respondent has complied with the Scheduling Order and submits herewith the applications, supporting documentation and evidence required by the Court, within the deadline set by the Court.',
+      'Respondent respectfully requests that this Honorable Court accept the accompanying filing as timely and in compliance with its Scheduling Order.'
+    ];
+    const bodyLines = String(opts.body || '').split('\n').map(l => l.trim()).filter(Boolean);
+    const paras = bodyLines.length ? bodyLines : defaultBody;
+
+    let body = '';
+    if(opts.cover) body += K.coverPage();
+    // The response text. On its own page when there is no cover page.
+    let response = '';
+    if(!opts.cover) response += K.para(K.run(K.docTitle, { bold:true }), { jc:'center', after:240 });
+    paras.forEach(t => { response += K.para(K.run(t), { jc:'both', after:200 }); });
+    response += K.blank(1);
+    response += K.para(K.run('Respectfully submitted,'), { after:0 });
+    response += K.blank(2);
+    response += K.para(K.run([K.coverDate, K.subPlace].filter(Boolean).join(', ')), { after:120 });
+    response += K.sigBlock;
+    body += response;
+    if(opts.cert) body += K.certificate(true);
+
+    const fname = K.filename('Response to Scheduling Order');
+    K.download(await K.buildDocx(body), fname);
+    if(window._briefClid && typeof recordCreatedDoc==='function'){
+      recordCreatedDoc(window._briefClid, { kind:'Response to SO', title:K.readableTitle, filename:fname });
+    }
+    setStatus('✓ Downloaded — open it in Word to review.', false);
+  }catch(e){
+    console.error('generateSchedOrderResponse', e);
+    setStatus('Failed: ' + (e && e.message ? e.message : 'unknown error'), true);
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = 'Generate .docx'; }
+  }
+}
+
+// ── Supplemental Evidence generator ────────────────────────────────
+// The evidence packet: cover page, a table of contents that paginates the
+// exhibits (dot leaders out to the page each one starts on), certificate
+// of service, then a lettered tab page per exhibit. No proposed order
+// page and no attorney affirmation.
+async function generateSupplementalEvidence(){
+  const btn = document.getElementById('bg-suppevid-btn');
+  const status = document.getElementById('bg-suppevid-status');
+  const setStatus = (msg, err) => { if(status){ status.textContent = msg; status.style.color = err ? '#B85C5C' : 'var(--sage)'; } };
+  if(typeof JSZip === 'undefined'){ setStatus('JSZip not loaded — refresh the page and try again.', true); return; }
+  const opts = window._seOpts || {};
+  if(!opts.cover && !opts.toc && !opts.cert && !opts.tabs){ setStatus('Check at least one section to include.', true); return; }
+  const v = window._briefValues || {};
+  if(!(v.field5 || '').split('\n')[0].trim()){ setStatus('Pick a case first so the filing is captioned.', true); return; }
+  const exhibits = (opts.exhibits || []).filter(ex => String(ex.title||'').trim() || String(ex.letter||'').trim());
+  if((opts.toc || opts.tabs) && !exhibits.length){ setStatus('Add at least one exhibit tab, or turn the contents and tabs off.', true); return; }
+  if(btn){ btn.disabled = true; btn.textContent = 'Generating…'; }
+  setStatus('', false);
+  try{
+    const K = _filingKit(v, 'Supplemental Evidence');
+    const pages = _sePaginate();
+    let body = '';
+    if(opts.cover) body += K.coverPage();
+
+    // Table of contents — dot leaders out to the page each exhibit starts on.
+    if(opts.toc && exhibits.length){
+      if(opts.cover) body += K.pageBreak;
+      body += K.para(K.run(String(opts.tocTitle || 'TABLE OF CONTENTS').toUpperCase(), { bold:true, sz:'28' }), { jc:'center', after:360 });
+      body += K.para(K.run('Exhibit', { bold:true }) + K.tabRun() + K.run('Page', { bold:true }),
+                     { tabs:[{ val:'right', pos:9360 }], after:160 });
+      (opts.exhibits || []).forEach((ex, i) => {
+        const letter = String(ex.letter||'').trim();
+        const title = String(ex.title||'').trim();
+        if(!letter && !title) return;
+        const label = (letter ? 'Exhibit ' + letter + ':' : '') + (title ? '  ' + title : '');
+        body += K.para(K.run(letter ? 'Exhibit ' + letter + ':' : '', { bold:true })
+                       + K.run(title ? '  ' + title : '')
+                       + K.tabRun() + K.run(_sePageLabel(pages[i])),
+                       { tabs:[{ val:'right', leader:'dot', pos:9360 }], left:1080, hanging:1080, after:120 });
+      });
+    }
+
+    if(opts.cert) body += K.certificate(!!(opts.cover || opts.toc));
+
+    // One separator page per exhibit, in the order the tabs are listed.
+    if(opts.tabs && exhibits.length){
+      (opts.exhibits || []).forEach((ex, i) => {
+        const letter = String(ex.letter||'').trim();
+        const title = String(ex.title||'').trim();
+        if(!letter && !title) return;
+        body += K.pageBreak;
+        body += K.tabPage(letter || String(i+1));
+      });
+    }
+
+    const fname = K.filename('Supplemental Evidence');
+    K.download(await K.buildDocx(body), fname);
+    if(window._briefClid && typeof recordCreatedDoc==='function'){
+      recordCreatedDoc(window._briefClid, { kind:'Supplemental Evidence', title:K.readableTitle, filename:fname });
+    }
+    setStatus('✓ Downloaded — ' + exhibits.length + ' exhibit tab' + (exhibits.length===1?'':'s') + '. Open it in Word to review.', false);
+  }catch(e){
+    console.error('generateSupplementalEvidence', e);
     setStatus('Failed: ' + (e && e.message ? e.message : 'unknown error'), true);
   }finally{
     if(btn){ btn.disabled = false; btn.textContent = 'Generate .docx'; }
@@ -20324,7 +20897,7 @@ function renderCaseDocuments(clid){
   const docs=((caseMeta[clid]||{}).createdDocs||[]).slice();
   const intro=document.createElement('div');
   intro.style.cssText='font-size:12px;color:#9E9186;line-height:1.5;margin-bottom:14px;';
-  intro.textContent='Documents created for this case from the Motion and Brief Creator (motions, witness lists, asylum fee filings, I-589 filings) are logged here.';
+  intro.textContent='Documents created for this case from the Motion and Brief Creator (motions, witness lists, asylum fee filings, I-589 filings, scheduling-order responses, supplemental evidence) are logged here.';
   body.appendChild(intro);
   if(!docs.length){
     const e=document.createElement('div');
@@ -20336,7 +20909,8 @@ function renderCaseDocuments(clid){
   docs.forEach((d,i)=>{
     const row=document.createElement('div');
     row.style.cssText='display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #EDE8E0;border-radius:10px;background:#fff;margin-bottom:8px;cursor:pointer;transition:border-color .12s,box-shadow .12s;';
-    row.title='Open the '+((d.kind==='Witness List')?'Witness List tool':(d.kind==='Asylum Fee')?'Asylum Fee tool':(d.kind==='I-589 Filing')?'I-589 filing tool':'Motion and Brief Creator')+' for this case to generate another';
+    const _toolFor={'Witness List':'Witness List tool','Asylum Fee':'Asylum Fee tool','I-589 Filing':'I-589 filing tool','Response to SO':'Response to Scheduling Order tool','Supplemental Evidence':'Supplemental Evidence tool'};
+    row.title='Open the '+(_toolFor[d.kind]||'Motion and Brief Creator')+' for this case to generate another';
     row.onmouseenter=()=>{row.style.borderColor='#6A8C6E';row.style.boxShadow='0 1px 4px rgba(0,0,0,.06)';};
     row.onmouseleave=()=>{row.style.borderColor='#EDE8E0';row.style.boxShadow='none';};
     row.onclick=()=>openCreatedDocTool(clid,d.kind,d.title);
@@ -20392,6 +20966,12 @@ function openCreatedDocTool(clid, kind, title){
   } else if(kind==='I-589 Filing'){
     if(!window._i589Opts)window._i589Opts={receipt:'',cover:true,cert:true,exhibits:true,feeExhibit:true};
     if(typeof _briefSetDocType==='function')_briefSetDocType('i589');
+  } else if(kind==='Response to SO'){
+    if(!window._soOpts)window._soOpts={orderDate:'',body:'',cover:true,cert:true};
+    if(typeof _briefSetDocType==='function')_briefSetDocType('schedorder');
+  } else if(kind==='Supplemental Evidence'){
+    if(!window._seOpts)window._seOpts={tocTitle:'TABLE OF CONTENTS',startPage:1,cover:true,toc:true,cert:true,tabs:true,exhibits:[_blankExhibit(0)]};
+    if(typeof _briefSetDocType==='function')_briefSetDocType('suppevid');
   } else {
     if(typeof _briefSetDocType==='function')_briefSetDocType('motion');
     if(title){
