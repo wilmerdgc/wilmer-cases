@@ -17992,10 +17992,13 @@ function _briefPickCase(clid, displayName){
   if(window._briefDocType==='suppevid' && typeof _renderSuppEvidPanel==='function') _renderSuppEvidPanel();
 }
 
-// Show the multi-respondent picker if the case has 2+ clients. Each row
-// has a Lead radio button (which client is the primary in the caption /
-// signature line) and an Include checkbox (whether to list that client
-// alongside the lead in Field5 / Field6).
+// Show the multi-respondent picker if the case has 2+ clients. Two
+// separate decisions live on each row, and they are easy to confuse, so
+// both controls carry their own words: the Lead radio picks whose name
+// the caption and signature are written for, and the "In this document"
+// checkbox adds a rider's name alongside the lead. The row itself is not
+// a label — wrapping it in one made a click anywhere silently move the
+// lead.
 function _briefRenderRespondentsPanel(){
   const panel = document.getElementById('bg-respondents-panel');
   if(!panel) return;
@@ -18006,24 +18009,49 @@ function _briefRenderRespondentsPanel(){
   const meta = (caseMeta && caseMeta[clid]) || {};
   const selSet = window._briefSelection.included;
   const leadIdx = window._briefSelection.leadIdx;
-  let html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">'
+  const included = allClients.filter(cl => selSet.has(cl.idx) || leadIdx === cl.idx).length;
+
+  let html = '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px;">'
     + '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#C9823A;">This case has ' + allClients.length + ' clients</div>'
-    + '<div style="font-size:11px;color:#9E9186;">Pick the lead · check the riders to include</div>'
+    + '<div style="font-size:11px;color:#9E9186;">' + included + ' of ' + allClients.length + ' named in this document</div>'
     + '</div>'
-    + '<div style="display:flex;flex-direction:column;gap:5px;">';
+    // What each of the two controls actually does, in words, above the rows.
+    + '<div style="font-size:11px;color:#8A7E72;line-height:1.55;margin-bottom:10px;">'
+    + '<b style="color:#C9823A;">◉ Lead</b> — the client the caption and the signature block are written for.'
+    + ' &nbsp;·&nbsp; <b style="color:#6A8C6E;">☑ In this document</b> — also name this client alongside the lead.'
+    + '</div>'
+    + '<div style="display:flex;flex-direction:column;gap:6px;">';
+
   allClients.forEach(cl => {
     const display = _briefFormatClientName(cl, meta) || cl.name || ('Client ' + (cl.idx+1));
     const sub = [cl.anum ? ('A-' + (cl.anum||'').replace(/^A[- ]?/i,'')) : '', cl.relationship||''].filter(Boolean).join(' · ');
     const isLead = leadIdx === cl.idx;
     const isIncl = selSet.has(cl.idx) || isLead;
-    html += '<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid '+(isLead?'#C9823A':'var(--cream-dark)')+';border-radius:6px;background:#fff;cursor:pointer;font-size:12px;">'
+    const divider = '<span style="width:1px;align-self:stretch;background:' + (isLead?'#F0D9BB':'var(--cream-dark)') + ';flex-shrink:0;"></span>';
+
+    // Lead — one radio across the whole list.
+    const leadCtl = '<label style="display:flex;align-items:center;gap:6px;flex-shrink:0;cursor:pointer;font-size:11.5px;font-weight:600;'
+      + 'color:' + (isLead ? '#C9823A' : '#B3A79A') + ';white-space:nowrap;" title="Write the caption and signature block for this client">'
       + '<input type="radio" name="bg-lead" value="' + cl.idx + '" ' + (isLead?'checked':'') + ' onchange="_briefSetLead(' + cl.idx + ')" style="margin:0;cursor:pointer;accent-color:#C9823A;"/>'
-      + '<input type="checkbox" value="' + cl.idx + '" ' + (isIncl?'checked':'') + ' ' + (isLead?'disabled':'') + ' onchange="_briefToggleInclude(' + cl.idx + ', this.checked)" style="margin:0;cursor:pointer;accent-color:var(--sage);" title="' + (isLead?'The lead is always included':'Include this client in the motion') + '"/>'
-      + '<span style="flex:1;color:var(--ink);font-weight:' + (isLead?'600':'500') + ';">' + escHtml(display) + '</span>'
-      + (sub ? '<span style="font-size:10px;color:var(--ink-faint);">' + escHtml(sub) + '</span>' : '')
-      + (isLead ? '<span style="font-size:10px;font-weight:700;color:#C9823A;background:#FFF3DC;padding:2px 8px;border-radius:10px;">LEAD</span>' : '')
-      + '</label>';
+      + 'Lead</label>';
+
+    // In this document — the lead is always named, so its box is fixed.
+    const inclCtl = isLead
+      ? '<span style="display:flex;align-items:center;gap:6px;flex-shrink:0;font-size:11.5px;color:#B3A79A;white-space:nowrap;" title="The lead is always named in the document">'
+        + '<input type="checkbox" checked disabled style="margin:0;accent-color:var(--sage);"/>In this document <i style="font-style:normal;opacity:.75;">(always)</i></span>'
+      : '<label style="display:flex;align-items:center;gap:6px;flex-shrink:0;cursor:pointer;font-size:11.5px;font-weight:' + (isIncl?'600':'500') + ';'
+        + 'color:' + (isIncl ? '#6A8C6E' : '#8A7E72') + ';white-space:nowrap;" title="Name this client alongside the lead">'
+        + '<input type="checkbox" value="' + cl.idx + '" ' + (isIncl?'checked':'') + ' onchange="_briefToggleInclude(' + cl.idx + ', this.checked)" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>'
+        + 'In this document</label>';
+
+    html += '<div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px solid ' + (isLead?'#C9823A':'var(--cream-dark)') + ';'
+      + 'border-radius:7px;background:' + (isIncl ? '#fff' : '#FBF8F3') + ';font-size:12px;flex-wrap:wrap;">'
+      + leadCtl + divider + inclCtl + divider
+      + '<span style="flex:1;min-width:150px;color:' + (isIncl ? 'var(--ink)' : '#A79C90') + ';font-weight:' + (isLead?'700':'500') + ';">' + escHtml(display) + '</span>'
+      + (sub ? '<span style="font-size:10.5px;color:var(--ink-faint);white-space:nowrap;">' + escHtml(sub) + '</span>' : '')
+      + '</div>';
   });
+
   html += '</div>';
   panel.innerHTML = html;
   panel.style.display = '';
