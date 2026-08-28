@@ -18347,9 +18347,12 @@ function _eoirCaptionBox(prims, data){
     + tcell(1165, para('', { after:0 }), bL)
     + tcell(3145, rightInner || para('', { after:0 }), '')
     + '</w:tr>';
-  // Hanging indent keeps additional A-numbers aligned under the first one,
-  // to the right of the "File No.:" label.
-  const fileNo = para(run('File No.: ' + (d.anumStack || '____________')), { after:0, left:1152, hanging:1152 });
+  // A tab after the label puts the first A-number on the hanging indent,
+  // which is where every continuation line starts too — so a second and
+  // third A-number sit exactly under the first instead of a hair to its
+  // right, which is what a plain space gave.
+  const fileNo = para(run('File No.:') + '<w:r><w:tab/></w:r>' + run(d.anumStack || '____________'),
+                      { after:0, left:1152, hanging:1152 });
   c += '<w:tbl><w:tblPr><w:tblW w:w="9350" w:type="dxa"/><w:jc w:val="center"/>'
     + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
     + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="1165"/><w:gridCol w:w="3145"/></w:tblGrid>'
@@ -18362,6 +18365,31 @@ function _eoirCaptionBox(prims, data){
     + '</w:tbl>';
   c += para('', { after:200 });
   return c;
+}
+
+// The "Matter of: … File No.: …" line every certificate of service opens
+// with, laid out the way the motion template does it: the two labels side
+// by side, each with its values stacked underneath in its own column, so
+// a second respondent's name and a second A-number line up exactly under
+// the first. Cell margins are zeroed so the declared widths are the real
+// ones. `prims` are the caller's docx primitives ({run, para, tcell}).
+function _eoirMatterFileRow(prims, data){
+  const run = prims.run, para = prims.para, tcell = prims.tcell;
+  const d = data || {};
+  const cell = (w, label, value) => tcell(w,
+    (label ? para(run(label, { bold:true }), { after:0 }) : para(run(value || '____________'), { after:0 })), '');
+  return '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
+    + '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/>'
+    + '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>'
+    + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
+    + '<w:tblGrid><w:gridCol w:w="1250"/><w:gridCol w:w="4000"/><w:gridCol w:w="1150"/><w:gridCol w:w="2960"/></w:tblGrid>'
+    + '<w:tr>'
+    + cell(1250, 'Matter of:')
+    + cell(4000, '', d.respStack)
+    + cell(1150, 'File No.:')
+    + cell(2960, '', d.anumStack)
+    + '</w:tr></w:tbl>'
+    + para('', { after:200 });
 }
 
 // ── Witness List generator ─────────────────────────────────────────
@@ -18509,15 +18537,11 @@ async function generateWitnessList(){
     }
 
     // ── Witness List body ─────────────────────────────────────────
-    let caption = '';
-    if(respList.length > 1){
-      caption += para(run('In the Matter of:'), { after:0 });
-      respList.forEach((s, i) => { caption += para(run(s + (i < respList.length - 1 ? ';' : '')), { left:360, after:(i === respList.length - 1 ? 40 : 0) }); });
-    } else if(respLine) caption += para(run('In the Matter of: ' + respLine), { after:40 });
-    if(anumList.length > 1){
-      caption += para(run('A-Numbers:'), { after:0 });
-      anumList.forEach((s, i) => { caption += para(run(s + (i < anumList.length - 1 ? ';' : '')), { left:360, after:(i === anumList.length - 1 ? 200 : 0) }); });
-    } else if(anum) caption += para(run('A-Number: ' + anum), { after:200 });
+    // Same labelled row as the certificate, so the list's own header carries
+    // the A-numbers in the caption's format ("A246-509-991"), not the raw
+    // field value, and stacks them under one another.
+    const caption = _eoirMatterFileRow({ run, para, tcell },
+      { respStack: respStack || respLine, anumStack });
     const title = para(run('WITNESS LIST', { bold:true, sz:'28' }), { jc:'center', after:240 });
 
     // ── Certificate of service ────────────────────────────────────
@@ -18531,13 +18555,10 @@ async function generateWitnessList(){
       const box = (on) => on ? '☒ ' : '☐ ';
       certificate += pageBreak;
       certificate += para(run('CERTIFICATE OF SERVICE', { bold:true, sz:'28' }), { jc:'center', after:240 });
-      if(respList.length > 1){
-        certificate += para(run('Matter of: ', { bold:true }) + run(respStack), { after:120, left:1152, hanging:1152 });
-        certificate += para(run('File No.: ', { bold:true }) + run(anumStack || '____________'), { after:200, left:1152, hanging:1152 });
-      } else {
-        certificate += para(run('Matter of: ', { bold:true }) + run(respLine || '____________')
-          + run('          File No.: ', { bold:true }) + run(anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________'), { after:200 });
-      }
+      // Labels side by side, values stacked and aligned — the same row the
+      // caption's "File No." uses, and the same the motion template prints.
+      certificate += _eoirMatterFileRow({ run, para, tcell },
+        { respStack: respStack || respLine, anumStack });
       certificate += para(run('I hereby certify that the foregoing WITNESS LIST and any attached pages were served on the Department of Homeland Security, Office of the Chief Counsel, by:'), { jc:'both', after:120 });
       certificate += para(run(box(isMail) + 'United States Postal Service to the person and address below.'), { left:360, after:0 });
       certificate += para(run(box(isICE) + 'Serving notice through the ICE E-Filing System.'), { left:360, after:0 });
@@ -18745,13 +18766,10 @@ async function generateAsylumFee(){
       const box = (on) => on ? '☒ ' : '☐ ';
       if(opts.cover) certificate += pageBreak;
       certificate += para(run('CERTIFICATE OF SERVICE', { bold:true, sz:'28' }), { jc:'center', after:240 });
-      if(respList.length > 1){
-        certificate += para(run('Matter of: ', { bold:true }) + run(respStack), { after:120, left:1152, hanging:1152 });
-        certificate += para(run('File No.: ', { bold:true }) + run(anumStack || '____________'), { after:200, left:1152, hanging:1152 });
-      } else {
-        certificate += para(run('Matter of: ', { bold:true }) + run(respLine || '____________')
-          + run('          File No.: ', { bold:true }) + run(anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________'), { after:200 });
-      }
+      // Labels side by side, values stacked and aligned — the same row the
+      // caption's "File No." uses, and the same the motion template prints.
+      certificate += _eoirMatterFileRow({ run, para, tcell },
+        { respStack: respStack || respLine, anumStack });
       certificate += para(run('I hereby certify that the foregoing:'), { jc:'both', after:120 });
       certificate += para(run(feeTitle, { bold:true }), { jc:'center', after:120 });
       certificate += para(run('and any attached pages were served on the Department of Homeland Security, Office of the Chief Counsel, by:'), { jc:'both', after:120 });
@@ -18976,13 +18994,10 @@ async function generateI589Filing(){
       const box = (on) => on ? '☒ ' : '☐ ';
       if(opts.cover) certificate += pageBreak;
       certificate += para(run('CERTIFICATE OF SERVICE', { bold:true, sz:'28' }), { jc:'center', after:240 });
-      if(respList.length > 1){
-        certificate += para(run('Matter of: ', { bold:true }) + run(respStack), { after:120, left:1152, hanging:1152 });
-        certificate += para(run('File No.: ', { bold:true }) + run(anumStack || '____________'), { after:200, left:1152, hanging:1152 });
-      } else {
-        certificate += para(run('Matter of: ', { bold:true }) + run(respLine || '____________')
-          + run('          File No.: ', { bold:true }) + run(anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________'), { after:200 });
-      }
+      // Labels side by side, values stacked and aligned — the same row the
+      // caption's "File No." uses, and the same the motion template prints.
+      certificate += _eoirMatterFileRow({ run, para, tcell },
+        { respStack: respStack || respLine, anumStack });
       certificate += para(run('I hereby certify that the foregoing:'), { jc:'both', after:120 });
       certificate += para(run(docTitle, { bold:true }), { jc:'center', after:120 });
       certificate += para(run('and any attached pages were served on the Department of Homeland Security, Office of the Chief Counsel, by:'), { jc:'both', after:120 });
@@ -19209,13 +19224,9 @@ function _filingKit(v, docTitleBase){
     const box = (on) => on ? '☒ ' : '☐ ';
     let c = leadWithBreak ? pageBreak : '';
     c += para(run('CERTIFICATE OF SERVICE', { bold:true, sz:'28' }), { jc:'center', after:240 });
-    if(respList.length > 1){
-      c += para(run('Matter of: ', { bold:true }) + run(respStack), { after:120, left:1152, hanging:1152 });
-      c += para(run('File No.: ', { bold:true }) + run(anumStack || '____________'), { after:200, left:1152, hanging:1152 });
-    } else {
-      c += para(run('Matter of: ', { bold:true }) + run(respLine || '____________')
-        + run('          File No.: ', { bold:true }) + run(anum ? ('A' + anum.replace(/^A[- ]?/i,'')) : '____________'), { after:200 });
-    }
+    // Labels side by side, values stacked and aligned — the same row the
+    // caption's "File No." uses, and the same the motion template prints.
+    c += _eoirMatterFileRow({ run, para, tcell }, { respStack: respStack || respLine, anumStack });
     c += para(run('I hereby certify that the foregoing:'), { jc:'both', after:120 });
     c += para(run(docTitle, { bold:true }), { jc:'center', after:120 });
     c += para(run('and any attached pages were served on the Department of Homeland Security, Office of the Chief Counsel, by:'), { jc:'both', after:120 });
