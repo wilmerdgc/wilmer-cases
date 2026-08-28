@@ -18315,6 +18315,55 @@ async function generateMotionWebex(){
   }
 }
 
+// ── The firm's EOIR caption ────────────────────────────────────────
+// One caption, used by every document the app generates, matching the
+// motion-webex template: the centered DOJ / EOIR / court / address
+// header, then a ruled box holding everything from "In the Matter of:"
+// down — the bold respondent name with "File No.: A###" opposite it and
+// "In Removal Proceedings," under it. The label sits inside the rules,
+// not above them, and the caption carries no "Respondent." line.
+//
+// `prims` are the caller's own docx primitives ({run, para, tcell}), so
+// each generator keeps its own XML helpers and only the caption's shape
+// is shared.
+function _eoirCaptionBox(prims, data){
+  const run = prims.run, para = prims.para, tcell = prims.tcell;
+  const d = data || {};
+  const addr = d.addr || ['', ''];
+  let c = '';
+  c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
+  c += para(run('EXECUTIVE OFFICE FOR IMMIGRATION REVIEW'), { jc:'center', after:0 });
+  c += para(run(d.courtName || 'IMMIGRATION COURT'), { jc:'center', after:0 });
+  if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
+  if(addr[1]) c += para(run(addr[1]), { jc:'center', after:120 });
+  // Ruled top, right and bottom only — no line down the left side — with a
+  // bordered spacer column between the name and the file number.
+  const bT = '<w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+  const bB = '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+  const bR = '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+  const bL = '<w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+  const boxRow = (leftInner, rightInner, extras) => '<w:tr>'
+    + tcell(5040, leftInner, (extras||'') + bR)
+    + tcell(1165, para('', { after:0 }), bL)
+    + tcell(3145, rightInner || para('', { after:0 }), '')
+    + '</w:tr>';
+  // Hanging indent keeps additional A-numbers aligned under the first one,
+  // to the right of the "File No.:" label.
+  const fileNo = para(run('File No.: ' + (d.anumStack || '____________')), { after:0, left:1152, hanging:1152 });
+  c += '<w:tbl><w:tblPr><w:tblW w:w="9350" w:type="dxa"/><w:jc w:val="center"/>'
+    + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
+    + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="1165"/><w:gridCol w:w="3145"/></w:tblGrid>'
+    + boxRow(para(run('In the Matter of:'), { after:0 }), null, bT)
+    + boxRow(para('', { after:0 }), null)
+    + boxRow(para(run(d.respStack || '____________', { bold:true }), { after:0 }), fileNo)
+    + boxRow(para('', { after:0 }), null)
+    + boxRow(para(run('In Removal Proceedings,'), { after:0 }), null)
+    + boxRow(para('', { after:0 }), null, bB)
+    + '</w:tbl>';
+  c += para('', { after:200 });
+  return c;
+}
+
 // ── Witness List generator ─────────────────────────────────────────
 // Unlike the motion generator (which fills a fixed Word template), the
 // witness list is a small, fully dynamic document — a "Witness List"
@@ -18364,33 +18413,10 @@ async function generateWitnessList(){
     // <w:*/> border elements). Used to build the motion-style caption box.
     const tcell = (w, inner, borders) => '<w:tc><w:tcPr><w:tcW w:w="' + w + '" w:type="dxa"/>'
       + (borders ? '<w:tcBorders>' + borders + '</w:tcBorders>' : '') + '</w:tcPr>' + (inner || para('')) + '</w:tc>';
-    // The EOIR court caption used at the top of the motion-webex template:
-    // centered DOJ / EOIR / court / address header, then "In the Matter of:"
-    // over a two-column box (respondent + "In Removal Proceedings," on the
-    // left, "File No.: A###" on the right). No "Respondent." line.
-    const captionBlock = () => {
-      let c = '';
-      c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
-      c += para(run('EXECUTIVE OFFICE FOR IMMIGRATION REVIEW'), { jc:'center', after:0 });
-      c += para(run((v.field3 || 'IMMIGRATION COURT')), { jc:'center', after:0 });
-      if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
-      if(addr[1]) c += para(run(addr[1]), { jc:'center', after:120 });
-      c += para(run('In the Matter of:'), { after:40 });
-      const leftInner = para(run(respStack || '____________', { bold:true }), { after:0 })
-        + para('', { after:0 })
-        + para(run('In Removal Proceedings,'), { after:0 });
-      // Hanging indent keeps additional A-numbers aligned under the first
-      // one, to the right of the "File No.:" label.
-      const rightInner = para(run('File No.: ' + (anumStack || '____________')), { after:0, left:1152, hanging:1152 });
-      const leftCell = tcell(5040, leftInner, '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>');
-      const rightCell = tcell(4320, rightInner, '');
-      c += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
-        + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
-        + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="4320"/></w:tblGrid>'
-        + '<w:tr>' + leftCell + rightCell + '</w:tr></w:tbl>';
-      c += para('', { after:200 });
-      return c;
-    };
+    // The firm's EOIR caption — the same one every generated document
+    // uses, including the motion template.
+    const captionBlock = () => _eoirCaptionBox({ run, para, tcell },
+      { courtName: v.field3 || 'IMMIGRATION COURT', addr, respStack, anumStack });
 
     // Build the numbered witness blocks.
     const SUBS = [
@@ -18672,44 +18698,10 @@ async function generateAsylumFee(){
     let coverDate = longDate(subDateRaw);
     if(!coverDate){ const t = new Date(); coverDate = MONTHS[t.getMonth()] + ' ' + t.getDate() + ', ' + t.getFullYear(); }
 
-    // Same EOIR court caption the motion-webex template uses. The box is
-    // bordered on the top, right and bottom only — no line on its left
-    // side — with a bordered spacer column separating it from the
-    // "File No.:" column, and the table is centered. Everything from
-    // "In the Matter of:" down sits inside the box, under the top rule;
-    // the caption carries no "Respondent." line.
-    const captionBlock = () => {
-      let c = '';
-      c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
-      c += para(run('EXECUTIVE OFFICE FOR IMMIGRATION REVIEW'), { jc:'center', after:0 });
-      c += para(run((v.field3 || 'IMMIGRATION COURT')), { jc:'center', after:0 });
-      if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
-      if(addr[1]) c += para(run(addr[1]), { jc:'center', after:120 });
-      const bT = '<w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
-      const bB = '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
-      const bR = '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
-      const bL = '<w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
-      const boxRow = (leftInner, rightInner, extras) => '<w:tr>'
-        + tcell(5040, leftInner, (extras||'') + bR)
-        + tcell(1165, para('', { after:0 }), bL)
-        + tcell(3145, rightInner || para('', { after:0 }), '')
-        + '</w:tr>';
-      // Hanging indent keeps additional A-numbers aligned under the first
-      // one, to the right of the "File No.:" label.
-      const fileNo = 'File No.: ' + (anumStack || '____________');
-      c += '<w:tbl><w:tblPr><w:tblW w:w="9350" w:type="dxa"/><w:jc w:val="center"/>'
-        + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
-        + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="1165"/><w:gridCol w:w="3145"/></w:tblGrid>'
-        + boxRow(para(run('In the Matter of:'), { after:0 }), null, bT)
-        + boxRow(para('', { after:0 }), null)
-        + boxRow(para(run(respStack || '____________', { bold:true }), { after:0 }), para(run(fileNo), { after:0, left:1152, hanging:1152 }))
-        + boxRow(para('', { after:0 }), null)
-        + boxRow(para(run('In Removal Proceedings,'), { after:0 }), null)
-        + boxRow(para('', { after:0 }), null, bB)
-        + '</w:tbl>';
-      c += para('', { after:200 });
-      return c;
-    };
+    // The firm's EOIR caption — the same one every generated document
+    // uses, including the motion template.
+    const captionBlock = () => _eoirCaptionBox({ run, para, tcell },
+      { courtName: v.field3 || 'IMMIGRATION COURT', addr, respStack, anumStack });
 
     // ── Cover page ────────────────────────────────────────────────
     // Mirrors the first page of the motion-webex template (the same one
@@ -18938,44 +18930,10 @@ async function generateI589Filing(){
     let coverDate = longDate(subDateRaw);
     if(!coverDate){ const t = new Date(); coverDate = MONTHS[t.getMonth()] + ' ' + t.getDate() + ', ' + t.getFullYear(); }
 
-    // Same EOIR court caption the motion-webex template uses. The box is
-    // bordered on the top, right and bottom only — no line on its left
-    // side — with a bordered spacer column separating it from the
-    // "File No.:" column, and the table is centered. Everything from
-    // "In the Matter of:" down sits inside the box, under the top rule;
-    // the caption carries no "Respondent." line.
-    const captionBlock = () => {
-      let c = '';
-      c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
-      c += para(run('EXECUTIVE OFFICE FOR IMMIGRATION REVIEW'), { jc:'center', after:0 });
-      c += para(run((v.field3 || 'IMMIGRATION COURT')), { jc:'center', after:0 });
-      if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
-      if(addr[1]) c += para(run(addr[1]), { jc:'center', after:120 });
-      const bT = '<w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
-      const bB = '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
-      const bR = '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
-      const bL = '<w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
-      const boxRow = (leftInner, rightInner, extras) => '<w:tr>'
-        + tcell(5040, leftInner, (extras||'') + bR)
-        + tcell(1165, para('', { after:0 }), bL)
-        + tcell(3145, rightInner || para('', { after:0 }), '')
-        + '</w:tr>';
-      // Hanging indent keeps additional A-numbers aligned under the first
-      // one, to the right of the "File No.:" label.
-      const fileNo = 'File No.: ' + (anumStack || '____________');
-      c += '<w:tbl><w:tblPr><w:tblW w:w="9350" w:type="dxa"/><w:jc w:val="center"/>'
-        + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
-        + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="1165"/><w:gridCol w:w="3145"/></w:tblGrid>'
-        + boxRow(para(run('In the Matter of:'), { after:0 }), null, bT)
-        + boxRow(para('', { after:0 }), null)
-        + boxRow(para(run(respStack || '____________', { bold:true }), { after:0 }), para(run(fileNo), { after:0, left:1152, hanging:1152 }))
-        + boxRow(para('', { after:0 }), null)
-        + boxRow(para(run('In Removal Proceedings,'), { after:0 }), null)
-        + boxRow(para('', { after:0 }), null, bB)
-        + '</w:tbl>';
-      c += para('', { after:200 });
-      return c;
-    };
+    // The firm's EOIR caption — the same one every generated document
+    // uses, including the motion template.
+    const captionBlock = () => _eoirCaptionBox({ run, para, tcell },
+      { courtName: v.field3 || 'IMMIGRATION COURT', addr, respStack, anumStack });
 
     // ── Cover page ────────────────────────────────────────────────
     // Mirrors the first page of the motion-webex template: the attorney
@@ -19194,7 +19152,6 @@ function _filingKit(v, docTitleBase){
   const anumList = anum ? anum.split(';').map(s => s.trim()).filter(Boolean).map(s => 'A' + s.replace(/^A[- ]?/i, '')) : [];
   const anumStack = anumList.map((s, i) => s + (i < anumList.length - 1 ? ';' : '')).join('\n');
   const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
-  const respWord = plural ? 'Respondents' : 'Respondent';
   const addr = (typeof _briefSplitAddr === 'function') ? _briefSplitAddr(v.field4 || '') : [String(v.field4||''), ''];
   const docTitle = (plural ? "RESPONDENTS'" : "RESPONDENT'S") + ' ' + String(docTitleBase||'').toUpperCase();
   const readableTitle = (plural ? "Respondents'" : "Respondent's") + ' ' + String(docTitleBase||'')
@@ -19213,38 +19170,10 @@ function _filingKit(v, docTitleBase){
   let coverDate = longDate((subParts[0] || '').trim());
   if(!coverDate){ const t = new Date(); coverDate = MONTHS[t.getMonth()] + ' ' + t.getDate() + ', ' + t.getFullYear(); }
 
-  // The EOIR court caption: the respondent box is bordered top, right and
-  // bottom only, a bordered spacer column separates it from the "File No.:"
-  // column, and the table is centered.
-  const captionBlock = () => {
-    let c = '';
-    c += para(run('UNITED STATES DEPARTMENT OF JUSTICE'), { jc:'center', after:0 });
-    c += para(run('EXECUTIVE OFFICE FOR IMMIGRATION REVIEW'), { jc:'center', after:0 });
-    c += para(run((v.field3 || 'IMMIGRATION COURT')), { jc:'center', after:0 });
-    if(addr[0]) c += para(run(addr[0]), { jc:'center', after:0 });
-    if(addr[1]) c += para(run(addr[1]), { jc:'center', after:120 });
-    c += para(run('In the Matter of:'), { after:40 });
-    const bT = '<w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
-    const bB = '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
-    const bR = '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
-    const bL = '<w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
-    const boxRow = (leftInner, rightInner, extras) => '<w:tr>'
-      + tcell(5040, leftInner, (extras||'') + bR)
-      + tcell(1165, para('', { after:0 }), bL)
-      + tcell(3145, rightInner || para('', { after:0 }), '')
-      + '</w:tr>';
-    const fileNo = 'File No.: ' + (anumStack || '____________');
-    c += '<w:tbl><w:tblPr><w:tblW w:w="9350" w:type="dxa"/><w:jc w:val="center"/>'
-      + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
-      + '<w:tblGrid><w:gridCol w:w="5040"/><w:gridCol w:w="1165"/><w:gridCol w:w="3145"/></w:tblGrid>'
-      + boxRow(para(run(respStack || '____________', { bold:true }), { after:0 }), para(run(fileNo), { after:0, left:1152, hanging:1152 }), bT)
-      + boxRow(para('', { after:0 }), null)
-      + boxRow(para(run('In Removal Proceedings,'), { after:0 }), null)
-      + boxRow(para(run('       ' + respWord + '.'), { after:0 }), null, bB)
-      + '</w:tbl>';
-    c += para('', { after:200 });
-    return c;
-  };
+  // The firm's EOIR caption — the same one every generated document uses,
+  // including the motion template.
+  const captionBlock = () => _eoirCaptionBox({ run, para, tcell },
+    { courtName: v.field3 || 'IMMIGRATION COURT', addr, respStack, anumStack });
 
   // Page 1: attorney heading + detained status, caption, judge box, title.
   const coverPage = () => {
@@ -19375,7 +19304,7 @@ function _filingKit(v, docTitleBase){
 
   return { run, tabRun, para, tcell, pageBreak, blank, sigBlock, captionBlock, coverPage,
            certificate, tabPage, buildDocx, filename, download,
-           respLine, respList, respWord, plural, docTitle, readableTitle, coverDate, subPlace };
+           respLine, respList, plural, docTitle, readableTitle, coverDate, subPlace };
 }
 
 // ── Response to Scheduling Order generator ─────────────────────────
@@ -19406,11 +19335,13 @@ async function generateSchedOrderResponse(){
     const bodyLines = String(opts.body || '').split('\n').map(l => l.trim()).filter(Boolean);
     const paras = bodyLines.length ? bodyLines : defaultBody;
 
+    // Page 1 is the cover — attorney heading, caption, judge box — and ends
+    // with the title. The response starts a fresh page under its own copy of
+    // the caption and title, the way the motion template lays it out.
     let body = '';
-    if(opts.cover) body += K.coverPage();
-    // The response text. On its own page when there is no cover page.
-    let response = '';
-    if(!opts.cover) response += K.para(K.run(K.docTitle, { bold:true }), { jc:'center', after:240 });
+    if(opts.cover) body += K.coverPage() + K.pageBreak;
+    let response = K.captionBlock();
+    response += K.para(K.run(K.docTitle, { bold:true }), { jc:'center', after:240 });
     paras.forEach(t => { response += K.para(K.run(t), { jc:'both', after:200 }); });
     response += K.blank(1);
     response += K.para(K.run('Respectfully submitted,'), { after:0 });
