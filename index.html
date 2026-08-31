@@ -16421,11 +16421,35 @@ let _i589Active=null;        // { frame, handler, clid }
 let _i589SaveTimers={};      // per-clid debounce timers
 
 function _i589Teardown(){
+  try{ if(_i589FsPrevCss!==null) _i589SetFullscreen(false); }catch(e){}
   if(_i589Active&&_i589Active.handler){
     try{ window.removeEventListener('message',_i589Active.handler); }catch(e){}
   }
   _i589Active=null;
 }
+
+// Full screen: an iframe can't grow past its own box, so the tool's ⛶ button
+// asks us to lift its frame over the whole viewport. The app stays mounted
+// underneath — leaving puts the frame back exactly as it was.
+let _i589FsPrevCss=null;
+function _i589SetFullscreen(on){
+  const f=_i589Active&&_i589Active.frame;
+  if(!f) return;
+  if(on){
+    if(_i589FsPrevCss===null) _i589FsPrevCss=f.style.cssText;
+    f.style.cssText='position:fixed;inset:0;width:100vw;height:100vh;max-width:none;max-height:none;min-height:0;margin:0;border:0;border-radius:0;z-index:99999;background:#f7f4ef;display:block;';
+    document.body.style.overflow='hidden';
+  } else {
+    f.style.cssText=_i589FsPrevCss||'';
+    _i589FsPrevCss=null;
+    document.body.style.overflow='';
+  }
+  try{ f.contentWindow.postMessage({type:'i589-fullscreen-state',on:!!on},'*'); }catch(e){}
+}
+// Esc from the app side too, in case focus is outside the frame.
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&_i589FsPrevCss!==null) _i589SetFullscreen(false);
+});
 
 // The paper form wants mm/dd/yyyy; case data stores ISO yyyy-mm-dd.
 function _i589FmtDate(iso){
@@ -16526,6 +16550,8 @@ function _openI589(clid,hostEl,opts){
   const frame=document.createElement('iframe');
   frame.src=I589_TOOL_URL;
   frame.title='I-589 Filler';
+  frame.allow='fullscreen';
+  frame.allowFullscreen=true;
   frame.style.cssText='width:100%;height:'+(opts.height||'calc(100vh - 190px)')+';min-height:520px;border:1px solid var(--border);border-radius:10px;background:#f7f4ef;display:block;';
   function handler(e){
     if(e.source!==frame.contentWindow) return;
@@ -16537,6 +16563,8 @@ function _openI589(clid,hostEl,opts){
       _i589SaveState(clid,d.state);
     } else if(d.type==='i589-template'){
       _i589SaveTemplate(d.template);
+    } else if(d.type==='i589-fullscreen'){
+      _i589SetFullscreen(!!d.on);
     } else if(d.type==='i589-save-version'){
       let s; try{ s=JSON.parse(JSON.stringify(d.state||{})); }catch(err){ s=null; }
       if(s){

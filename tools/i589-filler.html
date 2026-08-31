@@ -239,6 +239,57 @@ body{font-family:var(--font-body);background:var(--cream);color:var(--ink);heigh
 .field-row.na-set input,.field-row.na-set select,.field-row.na-set textarea{background:var(--slate-light);color:var(--slate);font-style:italic;pointer-events:none;opacity:.85}
 .field-row.na-set .radio-group,.field-row.na-set .cb-row{opacity:.4;pointer-events:none}
 
+/* ── COMMENTS (per-field notes) ────────────────────────────────────────────── */
+.field-header{gap:6px}
+.field-header .field-label{flex:1;min-width:0}
+.cm-btn{padding:1px 7px;font-size:10px;line-height:1.5;border:1px solid var(--border);border-radius:10px;background:#fff;color:var(--ink-faint);cursor:pointer;font-family:var(--font-body);transition:all .15s;flex-shrink:0}
+.cm-btn:hover{border-color:var(--amber);color:var(--amber);background:var(--amber-light)}
+.cm-btn.has{background:var(--amber-light);border-color:var(--amber-mid);color:var(--amber)}
+.cm-note{margin-top:5px;padding:6px 9px;background:var(--amber-light);border:1px solid var(--amber-mid);border-left:3px solid var(--amber);border-radius:var(--radius-sm);font-size:11px;color:var(--ink-soft);line-height:1.45;white-space:pre-wrap;cursor:text}
+.cm-note:hover{background:#F6E7D4}
+.cm-when{display:block;margin-top:4px;font-size:9px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.05em}
+.cm-box{margin-top:5px;display:flex;flex-direction:column;gap:5px}
+.cm-actions{display:flex;align-items:center;gap:6px}
+.cm-mini{padding:3px 11px;font-size:10px;font-weight:600;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;color:var(--ink-soft);cursor:pointer;font-family:var(--font-body);transition:all .15s}
+.cm-mini:hover{border-color:var(--ink-faint);color:var(--ink)}
+.cm-mini.save{background:var(--amber);border-color:var(--amber);color:#fff}
+.cm-mini.save:hover{background:#b5722e;color:#fff}
+.cm-mini.del{color:var(--rose);border-color:#E8C4C4}
+.cm-mini.del:hover{background:var(--rose-light);color:var(--rose)}
+.cm-hint{margin-left:auto;font-size:9px;color:var(--ink-muted)}
+/* the comment box stays live even on N/A'd or rule-locked rows */
+.field-row .cm-box textarea{width:100%;min-height:58px;resize:vertical;padding:7px 9px;border:1px solid var(--amber-mid);border-radius:var(--radius-sm);font-size:12px;font-family:var(--font-body);color:var(--ink);background:#FFFDF9;outline:none;opacity:1;pointer-events:auto;font-style:normal;text-transform:none;transition:border-color .18s,box-shadow .18s}
+.field-row .cm-box textarea:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(201,130,58,.14)}
+#cm-open-btn.has{border-color:var(--amber-mid);color:var(--amber-mid)}
+
+/* COMMENTS PANEL */
+#cm-panel{position:fixed;top:0;right:0;width:360px;max-width:92vw;height:100vh;background:#fff;border-left:1px solid var(--border);box-shadow:var(--shadow-md);z-index:9000;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease}
+#cm-panel.open{transform:translateX(0)}
+#cm-hdr{display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--ink);flex-shrink:0}
+#cm-hdr h3{font-family:var(--font-display);font-size:13px;color:var(--cream);font-weight:600;flex:1}
+#cm-close{background:transparent;border:none;color:rgba(255,255,255,.6);font-size:18px;cursor:pointer;padding:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm)}
+#cm-close:hover{color:#fff;background:rgba(255,255,255,.1)}
+#cm-general{padding:10px 16px;border-bottom:1px solid var(--border);background:var(--cream-dark);flex-shrink:0}
+#cm-general label{display:block;font-size:9px;font-weight:700;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
+#cm-general textarea{width:100%;min-height:58px;resize:vertical;padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:var(--font-body);color:var(--ink);background:#fff;outline:none}
+#cm-general textarea:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(201,130,58,.14)}
+#cm-list{flex:1;overflow-y:auto;padding:6px 0}
+.cm-item{display:flex;gap:8px;padding:9px 16px;border-bottom:1px solid var(--cream-dark);cursor:pointer;transition:background .12s}
+.cm-item:hover{background:var(--cream)}
+.cm-item-main{flex:1;min-width:0}
+.cm-item-lbl{font-size:10px;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-item-txt{font-size:11px;color:var(--ink-soft);line-height:1.45;white-space:pre-wrap}
+.cm-item-meta{display:flex;align-items:center;gap:6px;margin-top:4px}
+.cm-item-pg{font-size:9px;background:var(--parchment);color:var(--ink-muted);padding:1px 6px;border-radius:10px}
+.cm-item-when{font-size:9px;color:var(--ink-faint)}
+.cm-item-del{background:transparent;border:none;color:var(--ink-faint);font-size:13px;cursor:pointer;padding:0 2px;align-self:flex-start;border-radius:4px}
+.cm-item-del:hover{color:var(--rose);background:var(--rose-light)}
+#cm-overlay{position:fixed;inset:0;background:rgba(44,38,32,.3);z-index:8999;display:none}
+#cm-overlay.on{display:block}
+
+/* FULL SCREEN */
+#fs-btn.active{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.5);color:#fff}
+
 /* REVIEW PANEL */
 #review-panel{position:fixed;top:0;right:0;width:340px;height:100vh;background:#fff;border-left:1px solid var(--border);box-shadow:var(--shadow-lg);z-index:9000;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease}
 #review-panel.open{transform:translateX(0)}
@@ -1722,7 +1773,7 @@ function applyRules(){
         // update the actual input element
         const inp=el.querySelector('input[type=checkbox]');
         if(inp) inp.checked=false;
-        const tinp=el.querySelector('input[type=text],input[type=tel],textarea,select');
+        const tinp=el.querySelector('input[type=text],input[type=tel],textarea:not(.cm-ta),select');
         if(tinp) tinp.value='';
         const radios=el.querySelectorAll('input[type=radio]');
         radios.forEach(r=>r.checked=false);
@@ -1876,8 +1927,12 @@ function importXLSX(e){
       for(let r=start;r<rows.length;r++){
         const fid=String(rows[r][0]||'').trim();
         const val=String(rows[r][3]||'').trim();
-        if(!fid||fid.startsWith('▸')||!val)continue;
-        if(FD.find(f=>f.id===fid)){V[fid]=val;n++;}
+        const cmt=String(rows[r][5]||'').trim();
+        if(!fid||fid.startsWith('▸'))continue;
+        if(!FD.find(f=>f.id===fid))continue;
+        if(cmt&&window._cmSetText) window._cmSetText(fid,cmt);
+        if(!val)continue;
+        V[fid]=val;n++;
       }
       buildForm();drawOver();
       document.getElementById('imp-file').value='';
@@ -2191,21 +2246,24 @@ function exportXLSX(){
   // Title rows
   ws_data.push(['I-589 Application — Filled Data Export']);
   ws_data.push([`Exported: ${new Date().toLocaleString()}`]);
+  const _gen=(window._cmText?window._cmText('__general'):'');
+  if(_gen) ws_data.push([`General note: ${_gen}`]);
   ws_data.push([]);
 
   // Column headers
-  ws_data.push(['FIELD ID','PART','QUESTION / LABEL','VALUE','PAGE']);
+  ws_data.push(['FIELD ID','PART','QUESTION / LABEL','VALUE','PAGE','COMMENT']);
 
   let lastPart=null;
   FD.forEach(f=>{
     const val=V[f.id];
-    if(!val&&val!==false) return; // skip empty
+    const cmt=(window._cmText?window._cmText(f.id):'');
+    if(!val&&val!==false&&!cmt) return; // skip empty (unless it carries a comment)
     if(f.part!==lastPart){
       ws_data.push([]); // blank separator
       ws_data.push(['','',`▸  ${PART_NAMES[f.part]||f.part}`,'','']);
       lastPart=f.part;
     }
-    ws_data.push([f.id, f.part, f.lbl, String(val), f.pg]);
+    ws_data.push([f.id, f.part, f.lbl, String(val==null?'':val), f.pg, cmt]);
   });
 
   // Summary row
@@ -2217,17 +2275,17 @@ function exportXLSX(){
   const ws=XLSX.utils.aoa_to_sheet(ws_data);
 
   // Column widths
-  ws['!cols']=[{wch:20},{wch:8},{wch:52},{wch:38},{wch:6}];
+  ws['!cols']=[{wch:20},{wch:8},{wch:52},{wch:38},{wch:6},{wch:40}];
 
   XLSX.utils.book_append_sheet(wb,ws,'I-589 Data');
 
   // Also add a blank "all fields" sheet for reference
-  const ws2_data=[['FIELD ID','PART','QUESTION / LABEL','VALUE (fill here)','PAGE']];
+  const ws2_data=[['FIELD ID','PART','QUESTION / LABEL','VALUE (fill here)','PAGE','COMMENT']];
   FD.forEach(f=>{
-    ws2_data.push([f.id, f.part, f.lbl, V[f.id]||'', f.pg]);
+    ws2_data.push([f.id, f.part, f.lbl, V[f.id]||'', f.pg, (window._cmText?window._cmText(f.id):'')]);
   });
   const ws2=XLSX.utils.aoa_to_sheet(ws2_data);
-  ws2['!cols']=[{wch:20},{wch:8},{wch:52},{wch:38},{wch:6}];
+  ws2['!cols']=[{wch:20},{wch:8},{wch:52},{wch:38},{wch:6},{wch:40}];
   XLSX.utils.book_append_sheet(wb,ws2,'All Fields');
 
   XLSX.writeFile(wb,'i589_export.xlsx');
@@ -3144,13 +3202,13 @@ function toggleNA(fid){
     row.classList.remove('na-set');
     const btn=row.querySelector('.na-btn');if(btn)btn.classList.remove('active');
     // clear the actual input
-    const inp=row.querySelector('input:not(.na-btn),select,textarea');
+    const inp=row.querySelector('input:not(.na-btn),select,textarea:not(.cm-ta)');
     if(inp){inp.value='';inp.disabled=false;}
   } else {
     V[fid]='N/A';
     row.classList.add('na-set');
     const btn=row.querySelector('.na-btn');if(btn)btn.classList.add('active');
-    const inp=row.querySelector('input:not(.na-btn):not([type=checkbox]):not([type=radio]),select,textarea');
+    const inp=row.querySelector('input:not(.na-btn):not([type=checkbox]):not([type=radio]),select,textarea:not(.cm-ta)');
     if(inp){inp.value='N/A';}
   }
   goPage(FD.find(f=>f.id===fid)?.pg||curPg);
@@ -4031,8 +4089,9 @@ else{ _initFillOnPdf(); }
   var _clid=null, _saveTimer=null, _loading=false;
 
   function i589GetState(){
-    var s={ v:1, vals:{}, fontOvr:{}, fontGlobal:{} };
+    var s={ v:1, vals:{}, fontOvr:{}, fontGlobal:{}, comments:{} };
     try{ s.vals=JSON.parse(JSON.stringify(V)); }catch(e){}
+    try{ s.comments=JSON.parse(JSON.stringify(window.CM||{})); }catch(e){}
     try{ s.fontOvr=JSON.parse(JSON.stringify(fontOvr)); }catch(e){}
     try{ s.fontGlobal=JSON.parse(JSON.stringify(fontGlobal)); }catch(e){}
     return s;
@@ -4047,6 +4106,11 @@ else{ _initFillOnPdf(); }
       var fo=(state&&state.fontOvr)||{};
       Object.keys(fo).forEach(function(k){ fontOvr[k]=fo[k]; });
       if(state&&state.fontGlobal){ try{ Object.assign(fontGlobal,state.fontGlobal); }catch(e){} }
+      if(window.CM){
+        Object.keys(window.CM).forEach(function(k){ delete window.CM[k]; });
+        var cm=(state&&state.comments)||{};
+        Object.keys(cm).forEach(function(k){ if(cm[k]&&cm[k].text) window.CM[k]=cm[k]; });
+      }
       buildForm(); drawOver(); applyRules(); updateProg();
     }finally{ _loading=false; }
   }
@@ -4236,6 +4300,327 @@ else{ _initFillOnPdf(); }
   function _announce(){ try{ window.parent.postMessage({type:'i589-ready'},'*'); }catch(e){} }
   if(document.readyState==='complete'){ _announce(); }
   else{ window.addEventListener('load',_announce); }
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     FULL SCREEN + COMMENTS
+     · Full screen: the ⛶ button in the header. Standalone this uses the
+       browser's Fullscreen API; embedded in the case tracker it asks the
+       parent to lift the iframe over the whole viewport (an iframe can't
+       grow past its own box on its own). Esc leaves either way.
+     · Comments: a 💬 note on any field — a question for the client, where an
+       answer came from, a reminder — plus one general note for the filing.
+       Notes ride the same save path as the answers (updateProg → the bridge),
+       so the parent stores them on the case and per saved version. Standalone
+       they are kept in localStorage. They never print on the PDF.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  var EMBEDDED=(window.parent&&window.parent!==window);
+  var LS_KEY='i589_comments_standalone';
+  var GENERAL='__general';
+
+  // fieldId -> {text, at}. GENERAL holds the note for the filing as a whole.
+  window.CM=window.CM||{};
+  var CM=window.CM;
+
+  // ── comment model ─────────────────────────────────────────────────────────
+  function cmGet(id){ var c=CM[id]; return (c&&c.text)?c.text:''; }
+  function cmSet(id,text){
+    text=String(text==null?'':text).trim();
+    if(text) CM[id]={text:text,at:Date.now()};
+    else delete CM[id];
+    cmPersist();
+  }
+  function cmCount(){
+    return Object.keys(CM).filter(function(k){ return CM[k]&&CM[k].text; }).length;
+  }
+  function cmWhen(ts){
+    if(!ts) return '';
+    var d=new Date(ts);
+    return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  }
+  function cmPersist(){
+    cmSyncBadge();
+    if(!EMBEDDED){ try{ localStorage.setItem(LS_KEY,JSON.stringify(CM)); }catch(e){} }
+    // every save path in this tool funnels through updateProg(); the parent
+    // bridge listens there, so a note change is stored like any answer.
+    try{ updateProg(); }catch(e){}
+    var p=document.getElementById('cm-panel');
+    if(p&&p.classList.contains('open')) cmRenderList();
+  }
+  // Read/write hooks for the XLSX export/import.
+  window._cmText=cmGet;
+  window._cmSetText=function(id,text){ cmSet(id,text); cmRefreshRow(id); };
+
+  // ── per-field UI ──────────────────────────────────────────────────────────
+  function cmRowUI(f,row){
+    var hdr=row.querySelector('.field-header');
+    if(hdr&&!hdr.querySelector('.cm-btn')){
+      var b=document.createElement('button');
+      b.type='button'; b.className='cm-btn'; b.textContent='💬';
+      b.onclick=function(e){ e.preventDefault(); cmToggleEditor(f.id); };
+      hdr.insertBefore(b,hdr.querySelector('.na-btn')||null);
+    }
+    cmRefreshRow(f.id,row);
+  }
+  function cmRefreshRow(fid,row){
+    row=row||document.getElementById('fr-'+fid);
+    if(!row) return;
+    var txt=cmGet(fid);
+    var btn=row.querySelector('.cm-btn');
+    if(btn){
+      btn.classList.toggle('has',!!txt);
+      btn.title=txt?('Comment: '+txt):'Add a comment about this field';
+    }
+    var editing=row.classList.contains('cm-editing');
+    var note=row.querySelector('.cm-note');
+    if(txt&&!editing){
+      if(!note){
+        note=document.createElement('div'); note.className='cm-note';
+        note.onclick=function(){ cmToggleEditor(fid); };
+        row.appendChild(note);
+      }
+      note.textContent=txt;
+      var w=document.createElement('span'); w.className='cm-when';
+      w.textContent='Noted '+cmWhen(CM[fid]&&CM[fid].at);
+      note.appendChild(w);
+      note.style.display='';
+    } else if(note){
+      note.style.display='none';
+    }
+  }
+  function cmToggleEditor(fid){
+    var row=document.getElementById('fr-'+fid); if(!row) return;
+    if(row.querySelector('.cm-box')){ cmCloseEditor(fid,true); return; }
+    row.classList.add('cm-editing');
+    var box=document.createElement('div'); box.className='cm-box';
+    var ta=document.createElement('textarea');
+    ta.className='cm-ta';           // so the form's own selectors skip it
+    ta.value=cmGet(fid);
+    ta.placeholder='Note about this answer — a question for the client, where it came from, a reminder…';
+    ta.addEventListener('keydown',function(ev){
+      if(ev.key==='Escape'){ ev.stopPropagation(); cmCloseEditor(fid,true); }
+      else if(ev.key==='Enter'&&(ev.metaKey||ev.ctrlKey)){ ev.preventDefault(); cmCloseEditor(fid,true); }
+    });
+    var acts=document.createElement('div'); acts.className='cm-actions';
+    var save=document.createElement('button');
+    save.type='button'; save.className='cm-mini save'; save.textContent='Save';
+    save.onclick=function(){ cmCloseEditor(fid,true); };
+    var del=document.createElement('button');
+    del.type='button'; del.className='cm-mini del'; del.textContent='Delete';
+    del.onclick=function(){ ta.value=''; cmCloseEditor(fid,true); };
+    var hint=document.createElement('span'); hint.className='cm-hint';
+    hint.textContent='⌘/Ctrl+Enter saves · Esc closes';
+    acts.appendChild(save); acts.appendChild(del); acts.appendChild(hint);
+    box.appendChild(ta); box.appendChild(acts);
+    row.appendChild(box);
+    cmRefreshRow(fid,row);
+    ta.focus();
+  }
+  function cmCloseEditor(fid,commit){
+    var row=document.getElementById('fr-'+fid); if(!row) return;
+    var box=row.querySelector('.cm-box'); if(!box) return;
+    var ta=box.querySelector('textarea');
+    var val=ta?ta.value:'';
+    box.parentNode.removeChild(box);
+    row.classList.remove('cm-editing');
+    if(commit) cmSet(fid,val); else cmRefreshRow(fid,row);
+    cmRefreshRow(fid,row);
+  }
+
+  // Every rebuilt field row gets the 💬 button and its note.
+  var _origMakeField=makeField;
+  makeField=function(f){
+    var row=_origMakeField.apply(this,arguments);
+    try{ cmRowUI(f,row); }catch(e){}
+    return row;
+  };
+
+  // ── panel ─────────────────────────────────────────────────────────────────
+  function cmBuildPanel(){
+    if(document.getElementById('cm-panel')) return;
+    var ov=document.createElement('div'); ov.id='cm-overlay';
+    ov.onclick=cmClosePanel;
+    var p=document.createElement('div'); p.id='cm-panel';
+    p.innerHTML='<div id="cm-hdr"><h3>Comments</h3><button id="cm-close" type="button">✕</button></div>'
+      +'<div id="cm-general"><label>General note for this I-589</label>'
+      +'<textarea id="cm-general-ta" placeholder="Anything about this filing as a whole — missing documents, open questions, next steps…"></textarea></div>'
+      +'<div id="cm-list"></div>';
+    document.body.appendChild(ov);
+    document.body.appendChild(p);
+    document.getElementById('cm-close').onclick=cmClosePanel;
+    var g=document.getElementById('cm-general-ta');
+    g.addEventListener('input',function(){
+      clearTimeout(g._t);
+      g._t=setTimeout(function(){ cmSet(GENERAL,g.value); },500);
+    });
+  }
+  function cmEsc(s){
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function cmRenderList(){
+    var list=document.getElementById('cm-list'); if(!list) return;
+    list.innerHTML='';
+    var n=0;
+    FD.forEach(function(f){
+      var txt=cmGet(f.id); if(!txt) return;
+      n++;
+      var it=document.createElement('div'); it.className='cm-item';
+      it.innerHTML='<div class="cm-item-main">'
+        +'<div class="cm-item-lbl">'+cmEsc(f.lbl)+'</div>'
+        +'<div class="cm-item-txt">'+cmEsc(txt)+'</div>'
+        +'<div class="cm-item-meta"><span class="cm-item-pg">p.'+f.pg+'</span>'
+        +'<span class="cm-item-when">'+cmEsc(cmWhen(CM[f.id]&&CM[f.id].at))+'</span></div></div>'
+        +'<button class="cm-item-del" type="button" title="Delete this comment">✕</button>';
+      it.onclick=function(){ cmJumpTo(f); };
+      it.querySelector('.cm-item-del').onclick=function(e){
+        e.stopPropagation();
+        if(!confirm('Delete this comment?')) return;
+        cmSet(f.id,'');
+        cmRefreshRow(f.id);
+      };
+      list.appendChild(it);
+    });
+    if(!n){
+      list.innerHTML='<div style="padding:24px;text-align:center;font-size:12px;color:var(--ink-faint);line-height:1.6">'
+        +'No field comments yet.<br>Hit 💬 next to any question to leave one.</div>';
+    }
+  }
+  function cmJumpTo(f){
+    cmClosePanel();
+    try{ if(appMode!=='fill') setMode('fill'); }catch(e){}
+    setPart(f.part);
+    setTimeout(function(){
+      goPage(f.pg);
+      var el=document.getElementById('fr-'+f.id);
+      if(el){
+        el.scrollIntoView({block:'center',behavior:'smooth'});
+        el.style.outline='2px solid var(--amber)';
+        setTimeout(function(){ el.style.outline=''; },1800);
+        cmToggleEditor(f.id);
+      }
+    },120);
+  }
+  function cmOpenPanel(){
+    cmBuildPanel();
+    var g=document.getElementById('cm-general-ta');
+    if(g) g.value=cmGet(GENERAL);
+    cmRenderList();
+    document.getElementById('cm-panel').classList.add('open');
+    document.getElementById('cm-overlay').classList.add('on');
+  }
+  function cmClosePanel(){
+    var p=document.getElementById('cm-panel'), o=document.getElementById('cm-overlay');
+    if(p) p.classList.remove('open');
+    if(o) o.classList.remove('on');
+  }
+  function cmPanelOpen(){
+    var p=document.getElementById('cm-panel');
+    return !!(p&&p.classList.contains('open'));
+  }
+  function cmSyncBadge(){
+    var b=document.getElementById('cm-open-btn'); if(!b) return;
+    var n=cmCount();
+    b.textContent=n?('💬 Comments · '+n):'💬 Comments';
+    b.classList.toggle('has',n>0);
+  }
+  // Keep the header count honest no matter what changed the form.
+  var _origProg=updateProg;
+  updateProg=function(){ var r=_origProg.apply(this,arguments); try{ cmSyncBadge(); }catch(e){} return r; };
+
+  // JSON export carries the notes alongside the answers (old shape preserved).
+  var _origExportJSON=exportJSON;
+  exportJSON=function(){
+    if(!cmCount()) return _origExportJSON.apply(this,arguments);
+    var out={};
+    try{ out=JSON.parse(JSON.stringify(V)); }catch(e){ out={}; }
+    out._comments=JSON.parse(JSON.stringify(CM));
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));
+    a.download='i589_data.json'; a.click();
+  };
+
+  // ── full screen ───────────────────────────────────────────────────────────
+  var _fsOn=false;
+  function fsSyncBtn(){
+    var b=document.getElementById('fs-btn'); if(!b) return;
+    b.textContent=_fsOn?'⛶ Exit full screen':'⛶ Full screen';
+    b.title=_fsOn?'Back to the normal layout (Esc)':'Fill this form using the whole screen';
+    b.classList.toggle('active',_fsOn);
+  }
+  function fsSet(on){
+    on=!!on;
+    if(EMBEDDED){
+      // Inside the case tracker: the parent lifts this frame over the app.
+      _fsOn=on;
+      try{ window.parent.postMessage({type:'i589-fullscreen',on:on},'*'); }catch(e){}
+    } else {
+      try{
+        if(on&&document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+        else if(!on&&document.fullscreenElement&&document.exitFullscreen) document.exitFullscreen();
+      }catch(e){}
+      _fsOn=!!document.fullscreenElement;
+    }
+    fsSyncBtn();
+  }
+  function fsToggle(){ fsSet(!_fsOn); }
+  document.addEventListener('fullscreenchange',function(){
+    if(EMBEDDED) return;
+    _fsOn=!!document.fullscreenElement;
+    fsSyncBtn();
+  });
+  // The parent tells us when it dropped out of full screen on its own.
+  window.addEventListener('message',function(e){
+    var d=e.data||{};
+    if(d.type==='i589-fullscreen-state'){ _fsOn=!!d.on; fsSyncBtn(); }
+  });
+
+  // Esc closes the comments panel first, then leaves full screen.
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Escape') return;
+    if(cmPanelOpen()){ cmClosePanel(); return; }
+    var t=e.target&&e.target.tagName;
+    if(t==='INPUT'||t==='TEXTAREA'||t==='SELECT') return;
+    if(_fsOn) fsSet(false);
+  });
+
+  // ── header buttons ────────────────────────────────────────────────────────
+  function init(){
+    var bar=document.getElementById('bar');
+    if(bar&&!document.getElementById('cm-open-btn')){
+      var anchor=document.getElementById('uc-btn');
+      var fs=document.createElement('button');
+      fs.id='fs-btn'; fs.type='button'; fs.className='btn btn-outline';
+      fs.onclick=fsToggle;
+      var cb=document.createElement('button');
+      cb.id='cm-open-btn'; cb.type='button'; cb.className='btn btn-outline';
+      cb.title='Notes and comments on this form';
+      cb.onclick=cmOpenPanel;
+      if(anchor&&anchor.parentNode){
+        anchor.parentNode.insertBefore(cb,anchor.nextSibling);
+        anchor.parentNode.insertBefore(fs,cb.nextSibling);
+      } else if(bar){
+        bar.appendChild(cb); bar.appendChild(fs);
+      }
+    }
+    var rebuild=false;
+    if(!EMBEDDED){
+      try{
+        var raw=localStorage.getItem(LS_KEY);
+        if(raw){
+          var o=JSON.parse(raw)||{};
+          Object.keys(o).forEach(function(k){ if(o[k]&&o[k].text){ CM[k]=o[k]; rebuild=true; } });
+        }
+      }catch(e){}
+    }
+    if(rebuild){ try{ buildForm(); }catch(e){} }
+    cmSyncBadge();
+    fsSyncBtn();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init);
+  else init();
 })();
 </script>
 </body></html>
