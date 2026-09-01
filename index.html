@@ -2479,7 +2479,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
           <div style="font-size:21px;line-height:1;margin-bottom:6px;">🗂</div>
           <div style="font-size:12.5px;color:#5C5148;font-weight:600;">Drop images or PDFs here</div>
           <div style="font-size:11px;color:#9E9186;margin-top:3px;">click to browse &middot; or paste a screenshot with &#8984;/Ctrl+V</div>
-          <div style="font-size:10px;color:#C4BAB0;margin-top:7px;line-height:1.5;">Notices, receipts, IDs, hearing notices, or a screenshot of the court's Automated Case Information page — name, A-number, judge, court, and the next hearing's date, time and format are all picked up. They are read on this device — nothing is uploaded — and the values are matched to the fields below.</div>
+          <div style="font-size:10px;color:#C4BAB0;margin-top:7px;line-height:1.5;">Notices, receipts, IDs, hearing notices, or a screenshot of the court's Automated Case Information or document-upload page — name, A-number, judge, court, the next hearing's date, time and format, and any riders listed on the case are all picked up. They are read on this device — nothing is uploaded — and the values are matched to the fields below.</div>
         </div>
         <input id="ncp-doc-input" type="file" accept="image/*,application/pdf,.pdf" multiple style="display:none" onchange="ncdFilesChosen(this.files);this.value='';"/>
         <div id="ncp-doc-manual-wrap" style="display:none;margin-top:10px;">
@@ -26177,12 +26177,17 @@ function _ncApplyClients(key,cid){
 
 // ── New Case: document intake (images / PDFs → auto-filled fields) ────
 // Drop a photo of an ID, a Notice to Appear, an I-797 receipt, a hearing
-// notice — or a screenshot of EOIR's Automated Case Information page — on
-// the New Case form and the fields below fill themselves. The court pages
-// state a case the same way every time (name, A-number, docket date, then
-// the next hearing's type, format, date and time, the judge and the
-// courthouse), so all of it is recognised and the judge is matched against
-// the firm's saved judges list.
+// notice — or a screenshot of one of EOIR's own case pages — on the New Case
+// form and the fields below fill themselves. The court states a case the same
+// way every time, so all of it is recognised:
+//
+//   · Automated Case Information — name, A-number, docket date, then the next
+//     hearing's type, format, date and time, the judge (matched against the
+//     firm's saved judges list) and the courthouse.
+//   · Upload Documents to the Following Case — the lead's A-number, alien
+//     name, case type and charging document date, plus every rider listed
+//     under it, each becoming an "Additional clients" row with its own
+//     A-number.
 //
 // Everything runs in this browser — these are client documents, so nothing is
 // uploaded anywhere. A PDF's own text layer is read with pdf.js; a scanned PDF
@@ -26335,6 +26340,13 @@ function _ncdNorm(raw){
     // page packs several labelled values into one piped row. Each is its own
     // field, so give each its own line for the label parser below.
     .replace(/[ \t]*\|[ \t]*/g,'\n')
+    // The court's document-upload page lays the case block out as a grid, so
+    // a copied row arrives as "A-Number 235-861-437 Case Type Removal" — two
+    // labelled values on one line. Give the second label its own line, but
+    // only where a value actually follows it, so prose like "Riders found for
+    // this A-Number." is left alone.
+    .replace(/(\S)[ \t]+(?=(?:A[ \t\-]?Number|Alien\s*(?:Registration\s*)?Number)[ \t]*[:#\-]?[ \t]*A?[ \t\-]*\d)/gi,'$1\n')
+    .replace(/(\S)[ \t]+(?=(?:Alien\s*Name|Case\s*Type|Case\s*Status|Charging\s*Doc(?:ument)?\.?\s*Date|Docket\s*Date|Hearing\s*Date)[ \t]*[:\-]?[ \t]*\S)/gi,'$1\n')
     .replace(/[ \t ]+/g,' ')
     .split('\n').map(l=>l.trim()).join('\n')
     .replace(/\n{3,}/g,'\n\n')
@@ -26548,6 +26560,58 @@ function _ncdHearings(T){
   return out;
 }
 
+// ── Riders on a court case ───────────────────────────────────────────
+// The court's document-upload page ("Upload Documents to the Following
+// Case") states the lead case at the top — A-number, alien name, case type,
+// charging document date — and then lists everyone who rides on the lead's
+// A-number:
+//
+//   235-861-434  VINUEZA BENAVIDES, JOHANA MARIBEL  07/04/2026
+//
+// Riders are the case's co-clients, so each one becomes a row in "Additional
+// clients", carrying its own A-number.
+const NCD_RIDER_HEAD = /\briders?\b.*\b(?:found|for\s+this|associated|on\s+this)\b|\bselect\s+all\s+riders\b|^\s*riders?\s*:?\s*$/i;
+const NCD_RIDER_STOP = /^(?:enter\s+document\s+details|document\s+details|document\s+type|upload|choose\s+file|browse|submit|cancel|save)\b/i;
+function _ncdRiders(T, leadAnum){
+  const lines = String(T||'').split('\n');
+  let start = -1;
+  for(let i=0;i<lines.length;i++){ if(NCD_RIDER_HEAD.test(lines[i])){ start = i + 1; break; } }
+  if(start < 0) return [];
+  const out = [];
+  for(let i=start;i<lines.length;i++){
+    const line = lines[i].trim();
+    if(!line) continue;
+    if(NCD_RIDER_STOP.test(line)) break;
+    const m = line.match(/\b((?:\d[ \-]*){9})(?!\d)/);
+    if(!m) continue;
+    const anum = _ncdFormatANum(m[1]);
+    if(leadAnum && anum === leadAnum) continue;
+    if(out.some(r => r.anum === anum)) continue;
+    // The name sits after the A-number on the row; when the table is read
+    // column by column it lands on the line below instead.
+    let nameRaw = line.slice(m.index + m[0].length);
+    if(!/[A-Za-zÀ-ÿ]{2}/.test(nameRaw)) nameRaw = lines[i+1] || '';
+    nameRaw = nameRaw.replace(/\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}\b.*$/,'').trim();
+    const parts = _ncdSplitName(nameRaw);
+    if(!parts || !parts.lastName || !parts.firstName) continue;
+    out.push({anum,
+              lastName:  _ncdCleanName(parts.lastName).toUpperCase(),
+              firstName: _ncdTitleName(_ncdCleanName(parts.firstName)),
+              middleName:_ncdTitleName(_ncdCleanName(parts.middleName||'')),
+              date: _ncdDate(line)});
+  }
+  return out;
+}
+// A case type the court states ("Removal") is only a firm case type when the
+// firm uses that very name — a near-miss is worse than no answer here.
+function _ncdMatchCaseType(v){
+  const types = (typeof caseTypes !== 'undefined' && Array.isArray(caseTypes)) ? caseTypes : [];
+  const norm = x => String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const want = norm(v);
+  if(!want) return '';
+  return types.find(t => norm(t) === want) || '';
+}
+
 // ── Judge and court ───────────────────────────────────────────────────
 // Titles off, punctuation tidied — "Hon. Krasinski, Carolyn" → "Krasinski, Carolyn".
 function _ncdCleanJudge(v){
@@ -26626,6 +26690,13 @@ function _ncdParse(raw, srcName){
   let m = T.match(/\b(?:Alien\s*(?:Registration)?\s*(?:Number|No\.?|#)|A[\s\-]?Number|A\s*#|USCIS\s*(?:#|Number|No\.?)|N[uúü]mero\s*A)\s*[:#\-]?\s{0,2}A?[ \-]*((?:\d[ \-]*){8,9})(?!\d)/i)
         || T.match(/\bA[ \-.:#]{0,3}((?:\d[ \-]*){8,9})(?!\d)/);
   if(m) put('anum', _ncdFormatANum(m[1]));
+  if(!f.anum){
+    // A court page column can put the label on one line and the number on the
+    // next, which the pattern above cannot see.
+    const an = _ncdLabeled(T, ['a[\\s\\-]?number','alien\\s*(?:registration\\s*)?number'],
+                           v => { const d = v.replace(/\D/g,'').length; return d === 8 || d === 9; });
+    if(an) put('anum', _ncdFormatANum(an));
+  }
 
   // Names — labelled fields first (forms), then free-form headings.
   const last  = _ncdLabeled(T, ['family\\s*name(?:\\s*\\(last\\s*name\\))?','last\\s*name','surname','apellidos?','apellido\\s*paterno'], _ncdIsNamepart);
@@ -26635,7 +26706,7 @@ function _ncdParse(raw, srcName){
   if(first) put('firstName', _ncdTitleName(_ncdCleanName(first)));
   if(mid)   put('middleName',_ncdTitleName(_ncdCleanName(mid)));
   if(!f.lastName || !f.firstName){
-    const full = _ncdLabeled(T, ['in\\s*the\\s*matter\\s*of','name\\s*of\\s*respondent',"respondent'?s?\\s*name",'respondent',"applicant'?s?\\s*name",'applicant',"beneficiary'?s?\\s*name",'beneficiary',"petitioner'?s?\\s*name",'client\\s*name','full\\s*name','name\\s*of\\s*applicant','nombre\\s*completo','nombre\\s*del\\s*solicitante','name'], v => _ncdIsName(v) && v.split(/\s+/).length >= 2 && !/^(?:of|de|del)\b/i.test(v));
+    const full = _ncdLabeled(T, ['in\\s*the\\s*matter\\s*of','name\\s*of\\s*respondent',"respondent'?s?\\s*name",'respondent','alien\\s*name',"applicant'?s?\\s*name",'applicant',"beneficiary'?s?\\s*name",'beneficiary',"petitioner'?s?\\s*name",'client\\s*name','full\\s*name','name\\s*of\\s*applicant','nombre\\s*completo','nombre\\s*del\\s*solicitante','name'], v => _ncdIsName(v) && v.split(/\s+/).length >= 2 && !/^(?:of|de|del)\b/i.test(v));
     const parts = full ? _ncdSplitName(full) : null;
     if(parts){
       put('lastName',  parts.lastName.toUpperCase());
@@ -26697,13 +26768,25 @@ function _ncdParse(raw, srcName){
   if(courtAddr) put('courtAddress', courtAddr);
   const docketDate = _ncdDate(_ncdLabeled(T, ['docket\\s*date','date\\s*docketed'], v => !!_ncdDate(v)));
   if(docketDate) put('docketDate', docketDate);
+  const chargingDate = _ncdDate(_ncdLabeled(T, ['charging\\s*doc(?:ument)?\\.?\\s*date','date\\s*of\\s*(?:the\\s*)?charging\\s*document','nta\\s*date'], v => !!_ncdDate(v)));
+  if(chargingDate) put('chargingDate', chargingDate);
   const docHit = NCD_DOC_TYPES.find(d => d[0].test(U));
   if(docHit) put('docType', docHit[1]);
 
-  const ct = _ncdGuessCaseType(U);
-  if(ct) put('caseType', ct);
+  // A court page states its own case type ("Removal"). Take that over a guess
+  // from the document's wording — and when the firm has no such case type,
+  // record what the court said rather than reaching for the nearest name.
+  const ctRaw = _ncdLabeled(T, ['case\\s*type','type\\s*of\\s*case','proceeding\\s*type','case\\s*category'],
+                            v => /^[A-Za-zÀ-ÿ' \-\/.]{3,60}$/.test(v));
+  const ctFirm = ctRaw ? _ncdMatchCaseType(ctRaw) : '';
+  if(ctFirm) put('caseType', ctFirm);
+  else if(ctRaw) put('courtCaseType', ctRaw);
+  else {
+    const ct = _ncdGuessCaseType(U);
+    if(ct) put('caseType', ct);
+  }
 
-  return {fields:f, events:_ncdHearings(T), text:T};
+  return {fields:f, events:_ncdHearings(T), riders:_ncdRiders(T, (f.anum||{}).value||''), text:T};
 }
 
 // ── From parsed values to on-screen suggestions ───────────────────────
@@ -26712,7 +26795,8 @@ const NCD_LABELS = {
   clid:'Client ID', anum:'A-Number', email:'Email', caseType:'Case Type',
   dob:'Date of Birth', countryOfBirth:'Country of Birth', phone:'Phone', address:'Address',
   receipt:'Receipt Number', court:'Immigration Court', docType:'Document type',
-  judge:'Immigration Judge', courtAddress:'Court address', docketDate:'Docket date'
+  judge:'Immigration Judge', courtAddress:'Court address', docketDate:'Docket date',
+  courtCaseType:'Case type (court)', chargingDate:'Charging document date'
 };
 // key → the field on the New Case form it belongs in.
 const NCD_FIELD_MAP = [
@@ -26736,22 +26820,28 @@ const NCD_CUSTOM_SYNONYMS = {
   court:          ['court','venue','tribunal','juzgado'],
   courtAddress:   ['court address','courthouse','hearing location'],
   judge:          ['judge','ij','juez','referee'],
-  clid:           ['client id','file number','matter']
+  clid:           ['client id','file number','matter'],
+  chargingDate:   ['charging','nta date','notice to appear date']
 };
 // Values with no home field are offered as a Notes block instead of dropped.
-const NCD_NOTE_ORDER = ['docType','receipt','dob','countryOfBirth','phone','address','court','courtAddress','judge','docketDate'];
+const NCD_NOTE_ORDER = ['docType','courtCaseType','receipt','dob','countryOfBirth','phone','address','court','courtAddress','judge','docketDate','chargingDate'];
 
 function _ncdAllText(){
   return _ncdFiles.filter(f => f.status==='done' && f.text).map(f => f.text).join('\n\n');
 }
 
 function _ncdBuildSuggestions(){
-  const merged = {}, events = [];
+  const merged = {}, events = [], riders = [];
   _ncdFiles.filter(f => f.status==='done' && f.text).forEach(f => {
     const parsed = _ncdParse(f.text, f.name);
     Object.keys(parsed.fields).forEach(k => { if(!merged[k]) merged[k] = parsed.fields[k]; });
     parsed.events.forEach(ev => {
       if(!events.some(e => e.type===ev.type && e.date===ev.date)) events.push(Object.assign({src:f.name}, ev));
+    });
+    (parsed.riders||[]).forEach(r => {
+      const seen = riders.some(x => (r.anum && x.anum === r.anum)
+                                 || (x.lastName === r.lastName && x.firstName === r.firstName));
+      if(!seen) riders.push(Object.assign({src:f.name}, r));
     });
   });
 
@@ -26814,6 +26904,24 @@ function _ncdBuildSuggestions(){
               target:{kind:'event', eventType:ev.type, date:ev.date, time:ev.time||'', mode:ev.mode||''}});
   });
 
+  // Riders travel on the lead's A-number, so they are co-clients of the same
+  // case: one "Additional clients" row each, name in the firm's form and the
+  // rider's own A-number alongside. The relationship is left for whoever
+  // opens the case — the court's page never states it.
+  const leadAnum  = (merged.anum||{}).value || '';
+  const leadLast  = ((merged.lastName||{}).value || '').toUpperCase();
+  const leadFirst = ((merged.firstName||{}).value || '').toLowerCase();
+  riders.forEach(r => {
+    if(r.anum && leadAnum && r.anum === leadAnum) return;
+    if(!r.anum && r.lastName === leadLast && String(r.firstName).toLowerCase() === leadFirst) return;
+    const shown = [r.firstName, r.middleName, r.lastName].filter(Boolean).join(' ');
+    sug.push({key:'client:'+(r.anum || shown), label:'Additional client · rider',
+              value: shown + (r.anum ? '  ·  A# ' + r.anum : ''),
+              src:r.src, readOnly:true,
+              target:{kind:'client', lastName:r.lastName, firstName:r.firstName,
+                      middleName:r.middleName||'', anum:r.anum||''}});
+  });
+
   const leftovers = NCD_NOTE_ORDER.filter(k => merged[k] && !claimed[k]);
   if(leftovers.length){
     const lines = leftovers.map(k => (NCD_LABELS[k]||k) + ': ' + merged[k].value);
@@ -26829,7 +26937,7 @@ function _ncdTargetValue(target){
   return el ? String(el.value||'').trim() : '';
 }
 function _ncdTargetExists(sug){
-  if(sug.target.kind === 'event') return true;
+  if(sug.target.kind === 'event' || sug.target.kind === 'client') return true;
   const el = _ncdEl(sug.target.id);
   if(!el) return false;
   if(sug.target.kind === 'select'){
@@ -26844,7 +26952,8 @@ function _ncdRebuild(){
     if(!_ncdState[s.key]){
       // Pre-checked only when the form field is still empty — a value the
       // user already typed is never overwritten without them saying so.
-      const occupied = s.target.kind !== 'event' && s.target.kind !== 'notes' && !!_ncdTargetValue(s.target);
+      const occupied = s.target.kind !== 'event' && s.target.kind !== 'client'
+                    && s.target.kind !== 'notes' && !!_ncdTargetValue(s.target);
       _ncdState[s.key] = {checked: !occupied, value: s.value, applied: false, occupied};
     } else if(!_ncdState[s.key].applied && !_ncdState[s.key].touched){
       _ncdState[s.key].value = s.value;
@@ -26993,7 +27102,7 @@ function _ncdFlash(el){
 
 // ── Writing the values into the form ─────────────────────────────────
 function ncdApplySuggestions(){
-  let filled = 0, events = 0;
+  let filled = 0, events = 0, clients = 0;
   _ncdSug.forEach(s => {
     const st = _ncdState[s.key];
     if(!st || !st.checked) return;
@@ -27007,6 +27116,19 @@ function ncdApplySuggestions(){
         arr.push({type:t.eventType, date:t.date, time:t.time||'', mode:t.mode||'', notes:''});
         if(typeof _ncRenderEvents === 'function') _ncRenderEvents('page');
         events++;
+      }
+    } else if(t.kind === 'client'){
+      if(typeof _ncExtras === 'undefined') return;
+      const arr = _ncExtras.page.clients;
+      const already = arr.some(c =>
+        (t.anum && String(c.anum||'').replace(/\D/g,'') === t.anum.replace(/\D/g,'')) ||
+        (String(c.lastName||'').toUpperCase() === t.lastName.toUpperCase() &&
+         String(c.firstName||'').toLowerCase() === t.firstName.toLowerCase()));
+      if(!already){
+        arr.push({lastName:t.lastName, firstName:t.firstName, middleName:t.middleName||'',
+                  anum:t.anum||'', relationship:''});
+        if(typeof _ncRenderClients === 'function') _ncRenderClients('page');
+        clients++;
       }
     } else {
       const el = _ncdEl(t.id);
@@ -27030,9 +27152,12 @@ function ncdApplySuggestions(){
   _ncdRenderSuggestions();
   const bits = [];
   if(filled) bits.push(filled + ' field' + (filled>1?'s':''));
+  if(clients) bits.push(clients + ' client' + (clients>1?'s':''));
   if(events) bits.push(events + ' event' + (events>1?'s':''));
   if(typeof showToast === 'function'){
-    showToast(bits.length ? 'Filled ' + bits.join(' and ') + ' ✓' : 'Nothing left to fill');
+    showToast(bits.length ? 'Filled ' + (bits.length > 2
+      ? bits.slice(0,-1).join(', ') + ' and ' + bits[bits.length-1]
+      : bits.join(' and ')) + ' ✓' : 'Nothing left to fill');
   }
 }
 
