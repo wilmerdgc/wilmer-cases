@@ -590,6 +590,7 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .modal-backdrop.readonly-mode .form-row,
 .modal-backdrop.readonly-mode #so-attachment-panel,
 .modal-backdrop.readonly-mode #individual-callup-panel,
+.modal-backdrop.readonly-mode #individual-notice-panel,
 .modal-backdrop.readonly-mode #fc-subevents-panel,
 .modal-backdrop.readonly-mode #modal-custom-fields,
 .modal-backdrop.readonly-mode #modal-reminder-section,
@@ -606,6 +607,7 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
 .modal-backdrop.finish-only .form-row,
 .modal-backdrop.finish-only #so-attachment-panel,
 .modal-backdrop.finish-only #individual-callup-panel,
+.modal-backdrop.finish-only #individual-notice-panel,
 .modal-backdrop.finish-only #fc-subevents-panel,
 .modal-backdrop.finish-only #modal-custom-fields,
 .modal-backdrop.finish-only #modal-reminder-section,
@@ -3002,6 +3004,22 @@ window.addEventListener('load',()=>autoGrowAllNotes());
       </div>
       <div style="font-size:10px;color:#C4BAB0;">PDF, PNG, JPG accepted · Saved to Documents + Case Notes</div>
       <div id="so-existing-list" style="display:none;margin-top:10px;padding-top:8px;border-top:1px solid #F0D9BB;"></div>
+    </div>
+    <!-- INDIVIDUAL hearing notice — paste the photo of the notice, read it, keep it -->
+    <div id="individual-notice-panel" style="display:none;margin:-4px 0 10px;padding:10px 12px;background:#EBF1EB;border:1px solid #B4CCAD;border-radius:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6A8C6E;white-space:nowrap;">&#128247; Hearing Notice &mdash; paste the photo</span>
+        <span id="ihn-status" style="font-size:10px;color:#9E9186;"></span>
+      </div>
+      <div id="ihn-drop" onclick="document.getElementById('ihn-file-input').click()" style="border:1.5px dashed #B4CCAD;border-radius:8px;padding:13px 12px;text-align:center;cursor:pointer;background:#fff;transition:border-color .12s,background .12s;">
+        <div style="font-size:19px;line-height:1;margin-bottom:5px;">&#128444;</div>
+        <div style="font-size:12.5px;color:#5C5148;font-weight:600;">Paste the hearing notice with &#8984;/Ctrl+V</div>
+        <div style="font-size:11px;color:#9E9186;margin-top:3px;">or click to browse &middot; drag a photo or PDF here</div>
+        <div style="font-size:10px;color:#C4BAB0;margin-top:6px;line-height:1.5;">The hearing's date, time, format, court address, judge, A-number and client name are read off the notice on this device &mdash; nothing is uploaded &mdash; and offered below before anything is filled in. The photo itself is saved to the case's Documents.</div>
+      </div>
+      <input id="ihn-file-input" type="file" accept="image/*,application/pdf,.pdf" style="display:none" onchange="ihnFileChosen(this.files&&this.files[0]);this.value='';"/>
+      <div id="ihn-preview" style="display:none;margin-top:9px;"></div>
+      <div id="ihn-found"></div>
     </div>
     <!-- INDIVIDUAL call-up generator panel -->
     <div id="individual-callup-panel" style="display:none;margin:-4px 0 10px;padding:9px 12px;background:#EEF1F7;border:1px solid #CBD5E8;border-radius:8px;">
@@ -12135,6 +12153,8 @@ function onEventTypeChange(val){
       const pnl=document.getElementById('mp-panel');if(pnl)pnl.style.display='none';
     }
   }
+  const ihn=document.getElementById('individual-notice-panel');
+  if(ihn){ ihn.style.display=(val==='INDIVIDUAL')?'':'none'; if(val==='INDIVIDUAL') ihnWire(); else ihnClearNotice(); }
   const icp=document.getElementById('individual-callup-panel');
   if(icp){icp.style.display=(val==='INDIVIDUAL')?'':'none';if(val==='INDIVIDUAL'){const fcD=document.getElementById('fc-date').value;const ri=document.getElementById('icp-ref-input');if(ri){ri.value=fcD||'';}refreshIndividualCallupPanel(false);}}
   // If the chosen event type is a hearing, force-open the time range
@@ -12604,8 +12624,8 @@ function openCaseFromModal(){
   closeModal();
   goToCase(clid);
 }
-function openAdd(){editingId=null;pendingStatus=null;document.getElementById('modal-title').textContent='Add event';const ocb=document.getElementById('modal-open-case-btn');if(ocb)ocb.style.display='none';document.getElementById('modal-status-section').style.display='none';document.getElementById('modal-reminder-section').style.display='block';['fc-clid','fc-client','fc-anum','fc-date','fc-notes'].forEach(id=>document.getElementById(id).value='');const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=false;document.getElementById('time-range-panel').classList.remove('open');document.getElementById('fc-time-start').value='';document.getElementById('fc-time-end').value='';document.getElementById('fc-time-display').textContent='';pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetVirtualHearingDetails();const _icp0=document.getElementById('individual-callup-panel');if(_icp0)_icp0.style.display='none';resetFcSubevents();const _fcs0=document.getElementById('fc-subevents-panel');if(_fcs0){setupLinkedSubeventsPanel(DEFAULT_LINKED_SUBEVENTS);renderFcSubevents();_fcs0.style.display='';}populateModalDropdowns();resetDateCalc();setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _m0=document.getElementById('modal');_m0.classList.remove('readonly-mode');_m0.classList.remove('case-compact');const _csum0=document.getElementById('modal-case-summary');if(_csum0)_csum0.innerHTML='';_m0.style.display='flex';}
-function openEdit(id){const r=records.find(x=>x.id===id);if(!r)return;editingId=id;pendingStatus=null;document.getElementById('modal-title').textContent='Edit event';const _ocb=document.getElementById('modal-open-case-btn');if(_ocb){_ocb.style.display=(r.clid||r.client)?'inline':'none';}document.getElementById('modal-status-section').style.display='block';document.getElementById('modal-reminder-section').style.display='block';pendingReminders=[];if(r){records.forEach(rx=>{if(rx.id===id)return;const isLinked=rx._parentId===id||(!rx._parentId&&(rx.clid||rx.client)===(r.clid||r.client));if(isLinked&&rx.notes&&rx.notes.startsWith('⏰ REMINDER')&&rx.date&&r.date){const diff=Math.round((new Date(r.date.replace(/-/g,'/'))-new Date(rx.date.replace(/-/g,'/')))/(1000*60*60*24));if(diff>0&&!pendingReminders.includes(diff))pendingReminders.push(diff);}});}renderReminderChips();document.getElementById('fc-clid').value=r.clid||'';document.getElementById('fc-client').value=r.client||'';document.getElementById('fc-anum').value=r.anum||'';document.getElementById('fc-date').value=r.date||'';document.getElementById('fc-notes').value=r.notes||'';const hasTime=!!(r.timeStart||r.timeEnd);const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=hasTime;document.getElementById('fc-time-start').value=r.timeStart||'';document.getElementById('fc-time-end').value=r.timeEnd||'';if(hasTime)document.getElementById('time-range-panel').classList.add('open');else document.getElementById('time-range-panel').classList.remove('open');updateTimeDisplay();document.getElementById('fc-history-note').value='';document.getElementById('fc-reschedule-date').value='';document.getElementById('reschedule-panel').classList.remove('open');document.getElementById('reschedule-extras').style.display='none';if(document.getElementById('rs-time-toggle'))document.getElementById('rs-time-toggle').checked=false;document.getElementById('rs-time-range-panel').classList.remove('open');if(document.getElementById('rs-time-start'))document.getElementById('rs-time-start').value='';if(document.getElementById('rs-time-end'))document.getElementById('rs-time-end').value='';document.getElementById('rs-time-display').textContent='';rsReminders=[];renderRsReminderChips();const _pmChk0=document.getElementById('fc-proc-milestone');if(_pmChk0)_pmChk0.checked=false;const _pmRow0=document.getElementById('proc-milestone-row');if(_pmRow0)_pmRow0.style.display='none';const _pmdR0=document.getElementById('proc-milestone-date-row');if(_pmdR0)_pmdR0.style.display='none';const _pmdI0=document.getElementById('fc-proc-milestone-date');if(_pmdI0)_pmdI0.value='';['attended','completed','cancelled','rescheduled','deleted'].forEach(k=>{const el=document.getElementById('sbtn-'+k);if(el)el.classList.remove('sel');});if(r.attendedStatus){const ab=document.getElementById('sbtn-attended');if(ab)ab.classList.add('sel');}resetSoAttachmentPanel();resetFcSubevents();populateModalDropdowns();document.getElementById('fc-casetype').value=r.type||'';document.getElementById('fc-paralegal').value=r.atty||'';document.getElementById('fc-eventtype').value=r.event||'';onEventTypeChange(r.event||'');setHearingMode(r.hearingMode||'');setVirtualHearingDetails(r.hearingJudgeId||'',r.virtualLink||'');const sid=document.getElementById('so-issue-date');if(sid)sid.value=r.soIssueDate||'';document.getElementById('fc-assigned').value=r.assigned||'';customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);if(el)el.value=r[c.key]||'';});renderHistoryLog(r.history||[]);loadModalChecklistDocs(r);resetDateCalc(r.date||'');const _meModal=document.getElementById('modal');_meModal.classList.remove('case-compact');const _csumE=document.getElementById('modal-case-summary');if(_csumE)_csumE.innerHTML='';_meModal.style.display='flex';enterReadOnlyMode(r);requestAnimationFrame(()=>autoGrowAllNotes(document.getElementById('modal')));}
+function openAdd(){editingId=null;pendingStatus=null;document.getElementById('modal-title').textContent='Add event';const ocb=document.getElementById('modal-open-case-btn');if(ocb)ocb.style.display='none';document.getElementById('modal-status-section').style.display='none';document.getElementById('modal-reminder-section').style.display='block';['fc-clid','fc-client','fc-anum','fc-date','fc-notes'].forEach(id=>document.getElementById(id).value='');const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=false;document.getElementById('time-range-panel').classList.remove('open');document.getElementById('fc-time-start').value='';document.getElementById('fc-time-end').value='';document.getElementById('fc-time-display').textContent='';pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetHearingNoticePanel();resetVirtualHearingDetails();const _icp0=document.getElementById('individual-callup-panel');if(_icp0)_icp0.style.display='none';resetFcSubevents();const _fcs0=document.getElementById('fc-subevents-panel');if(_fcs0){setupLinkedSubeventsPanel(DEFAULT_LINKED_SUBEVENTS);renderFcSubevents();_fcs0.style.display='';}populateModalDropdowns();resetDateCalc();setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _m0=document.getElementById('modal');_m0.classList.remove('readonly-mode');_m0.classList.remove('case-compact');const _csum0=document.getElementById('modal-case-summary');if(_csum0)_csum0.innerHTML='';_m0.style.display='flex';}
+function openEdit(id){const r=records.find(x=>x.id===id);if(!r)return;editingId=id;pendingStatus=null;document.getElementById('modal-title').textContent='Edit event';const _ocb=document.getElementById('modal-open-case-btn');if(_ocb){_ocb.style.display=(r.clid||r.client)?'inline':'none';}document.getElementById('modal-status-section').style.display='block';document.getElementById('modal-reminder-section').style.display='block';pendingReminders=[];if(r){records.forEach(rx=>{if(rx.id===id)return;const isLinked=rx._parentId===id||(!rx._parentId&&(rx.clid||rx.client)===(r.clid||r.client));if(isLinked&&rx.notes&&rx.notes.startsWith('⏰ REMINDER')&&rx.date&&r.date){const diff=Math.round((new Date(r.date.replace(/-/g,'/'))-new Date(rx.date.replace(/-/g,'/')))/(1000*60*60*24));if(diff>0&&!pendingReminders.includes(diff))pendingReminders.push(diff);}});}renderReminderChips();document.getElementById('fc-clid').value=r.clid||'';document.getElementById('fc-client').value=r.client||'';document.getElementById('fc-anum').value=r.anum||'';document.getElementById('fc-date').value=r.date||'';document.getElementById('fc-notes').value=r.notes||'';const hasTime=!!(r.timeStart||r.timeEnd);const tt=document.getElementById('fc-time-toggle');if(tt)tt.checked=hasTime;document.getElementById('fc-time-start').value=r.timeStart||'';document.getElementById('fc-time-end').value=r.timeEnd||'';if(hasTime)document.getElementById('time-range-panel').classList.add('open');else document.getElementById('time-range-panel').classList.remove('open');updateTimeDisplay();document.getElementById('fc-history-note').value='';document.getElementById('fc-reschedule-date').value='';document.getElementById('reschedule-panel').classList.remove('open');document.getElementById('reschedule-extras').style.display='none';if(document.getElementById('rs-time-toggle'))document.getElementById('rs-time-toggle').checked=false;document.getElementById('rs-time-range-panel').classList.remove('open');if(document.getElementById('rs-time-start'))document.getElementById('rs-time-start').value='';if(document.getElementById('rs-time-end'))document.getElementById('rs-time-end').value='';document.getElementById('rs-time-display').textContent='';rsReminders=[];renderRsReminderChips();const _pmChk0=document.getElementById('fc-proc-milestone');if(_pmChk0)_pmChk0.checked=false;const _pmRow0=document.getElementById('proc-milestone-row');if(_pmRow0)_pmRow0.style.display='none';const _pmdR0=document.getElementById('proc-milestone-date-row');if(_pmdR0)_pmdR0.style.display='none';const _pmdI0=document.getElementById('fc-proc-milestone-date');if(_pmdI0)_pmdI0.value='';['attended','completed','cancelled','rescheduled','deleted'].forEach(k=>{const el=document.getElementById('sbtn-'+k);if(el)el.classList.remove('sel');});if(r.attendedStatus){const ab=document.getElementById('sbtn-attended');if(ab)ab.classList.add('sel');}resetSoAttachmentPanel();resetHearingNoticePanel();resetFcSubevents();populateModalDropdowns();document.getElementById('fc-casetype').value=r.type||'';document.getElementById('fc-paralegal').value=r.atty||'';document.getElementById('fc-eventtype').value=r.event||'';onEventTypeChange(r.event||'');loadHearingNoticeForRecord(r);setHearingMode(r.hearingMode||'');setVirtualHearingDetails(r.hearingJudgeId||'',r.virtualLink||'');const sid=document.getElementById('so-issue-date');if(sid)sid.value=r.soIssueDate||'';document.getElementById('fc-assigned').value=r.assigned||'';customColumns.forEach(c=>{const el=document.getElementById('fc-'+c.key);if(el)el.value=r[c.key]||'';});renderHistoryLog(r.history||[]);loadModalChecklistDocs(r);resetDateCalc(r.date||'');const _meModal=document.getElementById('modal');_meModal.classList.remove('case-compact');const _csumE=document.getElementById('modal-case-summary');if(_csumE)_csumE.innerHTML='';_meModal.style.display='flex';enterReadOnlyMode(r);requestAnimationFrame(()=>autoGrowAllNotes(document.getElementById('modal')));}
 // ── Read-only view / inline edit mode for event modal ──
 function enterEditMode(focusId){
   const m=document.getElementById('modal'); if(!m) return;
@@ -12713,6 +12733,14 @@ function _renderReadOnlyView(r){
     const _hj = r.hearingJudgeId ? (typeof judges!=='undefined'?judges:[]).find(x=>x.id===r.hearingJudgeId) : null;
     if(_hj) hearingRows += row('Judge', (_hj.role==='Referee'?'Ref. ':'')+(_hj.name||''), 'vh-judge');
     if(r.hearingMode==='virtual' && r.virtualLink) hearingRows += row('Webex link', r.virtualLink, 'vh-link');
+    // The notice photo pasted when the hearing was scheduled — opened from
+    // here rather than hunted down in the case's Documents tab.
+    if(typeof findHearingNoticeDoc==='function' && findHearingNoticeDoc(r)){
+      hearingRows += `<div class="ro-row"><div class="ro-label">Hearing notice</div>`
+        + `<div class="ro-value"><button type="button" class="ro-notice-btn" data-record="${_escHtml(r.id)}" `
+        + `style="font-size:11.5px;font-weight:600;padding:4px 12px;border:1px solid var(--sage);border-radius:14px;`
+        + `background:var(--sage-light);color:var(--sage);cursor:pointer;font-family:inherit;">📷 View the notice</button></div></div>`;
+    }
   }
   const grid = `<div class="ro-grid">`
     + row('Client ID', r.clid||'', 'fc-clid')
@@ -12742,6 +12770,9 @@ function _renderReadOnlyView(r){
     <button type="button" onclick="emailEventFollowUp('${String(r.id).replace(/'/g,"\\'")}')" ${_paraEmailRo?'':'disabled'} title="${_paraEmailRo?'Ask the paralegal for a status update on this event':'No email on file for this paralegal — add one in Settings'}" style="font-size:11px;font-weight:600;padding:6px 14px;border:1px solid var(--slate);border-radius:16px;background:var(--slate-light);color:var(--slate);cursor:${_paraEmailRo?'pointer':'not-allowed'};font-family:inherit;opacity:${_paraEmailRo?'1':'.45'};">✉ Follow up (paralegal)</button>
   </div>`;
   host.innerHTML = hero + grid + actions;
+  host.querySelectorAll('.ro-notice-btn').forEach(el=>{
+    el.addEventListener('click', e=>{ e.stopPropagation(); openHearingNoticeForRecord(el.getAttribute('data-record')); });
+  });
   host.querySelectorAll('.ro-edit-btn').forEach(el=>{
     el.addEventListener('click', e=>{ e.stopPropagation(); enterEditMode(el.getAttribute('data-focus')); });
   });
@@ -13130,7 +13161,7 @@ function applyDateCalc(){
     setTimeout(()=>res.style.color='#6A8C6E',800);
   }
 }
-function closeModal(){if(typeof _exitPreviewSplitMode==='function')_exitPreviewSplitMode();const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');_mm.classList.remove('case-compact');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetVirtualHearingDetails();resetFcSubevents();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _fcs1=document.getElementById('fc-subevents-panel');if(_fcs1)_fcs1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';_mm.classList.remove('finish-only');if(typeof _heldLockId!=='undefined'&&_heldLockId){_releaseLock(_heldLockId);}if(typeof _stopLockHeartbeat==='function')_stopLockHeartbeat();}
+function closeModal(){if(typeof _exitPreviewSplitMode==='function')_exitPreviewSplitMode();const _mm=document.getElementById('modal');_mm.style.display='none';_mm.classList.remove('readonly-mode');_mm.classList.remove('case-compact');const _rov=document.getElementById('modal-readonly-view');if(_rov)_rov.innerHTML='';editingId=null;pendingStatus=null;pendingReminders=[];renderReminderChips();clearModalChecklistDocs();resetSoAttachmentPanel();resetHearingNoticePanel();resetVirtualHearingDetails();resetFcSubevents();if(typeof acCloseAll==='function')acCloseAll();const na=document.getElementById('fc-history-note');if(na){na.style.borderColor='';na.placeholder='Optional note…';}const nl=document.getElementById('history-note-label');if(nl){nl.textContent='Add note to history';nl.style.color='';}setHearingMode('');const hms=document.getElementById('modal-hearing-mode-section');if(hms)hms.style.display='none';const _icp1=document.getElementById('individual-callup-panel');if(_icp1)_icp1.style.display='none';const _fcs1=document.getElementById('fc-subevents-panel');if(_fcs1)_fcs1.style.display='none';const _mps=document.getElementById('modal-master-prep-section');if(_mps)_mps.style.display='none';const _mpT=document.getElementById('mp-toggle');if(_mpT)_mpT.checked=false;const _mpP=document.getElementById('mp-panel');if(_mpP)_mpP.style.display='none';const _mpN=document.getElementById('mp-notes');if(_mpN)_mpN.value='';const _mpD=document.getElementById('mp-date');if(_mpD)_mpD.value='';_mm.classList.remove('finish-only');if(typeof _heldLockId!=='undefined'&&_heldLockId){_releaseLock(_heldLockId);}if(typeof _stopLockHeartbeat==='function')_stopLockHeartbeat();}
 function handleBackdropClick(e){if(e.target===document.getElementById('modal'))closeModal();}
 
 // ── saveEvent ──
@@ -13201,6 +13232,11 @@ window.saveEvent=function(){
   // workflow description so everyone knows what the deadline is for.
   // Creation only — an edit that clears the notes stays cleared.
   if(!editingId && !data.notes && _DEADLINE_DEFAULT_NOTES[data.event]) data.notes=_DEADLINE_DEFAULT_NOTES[data.event];
+  // The pasted hearing notice: the record keeps a marker, the photo itself
+  // goes to the case's Documents once the record has an id.
+  if(pendingHearingNotice && data.event==='INDIVIDUAL'){
+    data.hearingNotice={name:pendingHearingNotice.name,mimeType:pendingHearingNotice.mimeType,uploadedAt:pendingHearingNotice.uploadedAt};
+  }
   if(editingId){
     const idx=records.findIndex(r=>r.id===editingId);
     if(idx>-1){
@@ -13244,6 +13280,7 @@ window.saveEvent=function(){
     var _newRecordId=uid();records.push({id:_newRecordId,...data,history:[]});
     if(pendingReminders.length&&data.date){pendingReminders.forEach(days=>{const rd=addDateDays(data.date,-days);records.push({id:uid(),...data,event:'⏰ Reminder',date:rd,notes:'⏰ REMINDER: Task due by '+fmtDate(data.date)+(data.notes?' — '+data.notes:''),_parentId:_newRecordId,history:[]});});}
     if(pendingSoAttachment&&data.event==='SCHEDULING ORDER'){saveSoAttachmentToCase(data.clid||data.client,_newRecordId,data.date,data.notes);}
+    if(pendingHearingNotice&&data.event==='INDIVIDUAL'){saveHearingNoticeToCase(data.clid||data.client,_newRecordId,data.date);}
     // ── OFFICE TASK recurrence: stamp out N copies on a daily/weekly/monthly cadence ──
     if(data.event==='OFFICE TASK'){
       const recurMode=((document.getElementById('fc-recur-mode')||{}).value)||'none';
@@ -13269,6 +13306,7 @@ window.saveEvent=function(){
     }
   }
   if(editingId&&pendingSoAttachment&&data.event==='SCHEDULING ORDER'){saveSoAttachmentToCase(data.clid||data.client,editingId,data.date,data.notes);}
+  if(editingId&&pendingHearingNotice&&data.event==='INDIVIDUAL'){saveHearingNoticeToCase(data.clid||data.client,editingId,data.date);}
   // ── Linked sub-events: create the linked records the user added in the modal
   // (FC TASK/SERVICE for FC parents; TASK / PREP MASTER / MASTER / SCHEDULING
   // ORDER for any other new case). Only rows with a date are created. ──
@@ -27186,6 +27224,603 @@ function _ncdAttachToCase(caseId){
     caseMeta[caseId].caseNotesList.push({date:stamp, text:'📎 ' + n + ' intake document' + (n>1?'s':'') + ' saved from the New Case form'});
   }
   return n;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// INDIVIDUAL HEARING NOTICE — paste the photo, read the hearing off it
+// ════════════════════════════════════════════════════════════════════════
+// The court's Notice of Hearing arrives as a photo or a screenshot. When
+// INDIVIDUAL is the event type, the modal takes that image straight from the
+// clipboard (⌘/Ctrl+V), reads it with the same on-device OCR the New Case
+// intake uses, and offers the hearing's date, time, format, court address,
+// judge, A-number and client as suggestions — the form is only written to
+// when the user clicks "Fill the hearing". The photo is kept too: it is saved
+// into the case's Documents under "Hearing Notices" and offered back on the
+// event's View screen, so the notice always lives with the hearing.
+var pendingHearingNotice = null;  // {name,dataUrl,mimeType,uploadedAt,text}
+let _ihnFound = null;             // parsed values currently on screen
+let _ihnState = {};               // key → {checked,value,applied,occupied}
+let _ihnBusy = false, _ihnWired = false;
+const IHN_MAX_BYTES = 8 * 1024 * 1024;  // what we will read
+const IHN_STORE_PX  = 1600;             // the saved copy is downscaled to this
+const IHN_SECTION   = 'Hearing Notices';
+
+function _ihnEl(id){ return document.getElementById(id); }
+function _ihnStatus(msg){ const el=_ihnEl('ihn-status'); if(el) el.textContent = msg||''; }
+function _ihnAccepts(file){
+  return !!file && (/^image\//.test(file.type) || file.type === 'application/pdf'
+      || /\.(pdf|png|jpe?g|gif|bmp|webp|heic|heif|tiff?)$/i.test(file.name||''));
+}
+function _ihnPanelOpen(){
+  const m=_ihnEl('modal'), p=_ihnEl('individual-notice-panel');
+  return !!(m && m.style.display !== 'none' && p && p.style.display !== 'none');
+}
+// Inline oninput/onchange handlers carry a lot of the modal's behaviour
+// (call-up panel, date calculator, reminders) — fire the event rather than
+// duplicating any of it here.
+function _ihnFire(el, type){
+  if(!el) return;
+  try{ el.dispatchEvent(new Event(type, {bubbles:true})); }catch(e){}
+}
+
+// ── Reading the image ────────────────────────────────────────────────
+// Tesseract, loaded on demand by the New Case reader's own loader.
+async function _ihnOcrImage(file, setStatus){
+  const T = await _ncdTesseract();
+  const res = await T.recognize(file, 'eng', {
+    logger: m => {
+      if(!m || !m.status) return;
+      if(m.status === 'recognizing text') setStatus('Reading ' + Math.round((m.progress||0)*100) + '%');
+      else setStatus(String(m.status).replace(/^\w/, c=>c.toUpperCase()) + '…');
+    }
+  });
+  return (res && res.data && res.data.text) || '';
+}
+async function _ihnExtractText(file, setStatus){
+  if(file.type === 'application/pdf' || /\.pdf$/i.test(file.name||'')){
+    // _ncdPdfText reports progress by writing onto the record it is given.
+    const rec = {file, name:file.name, size:file.size, type:file.type, status:'working', msg:''};
+    const tick = setInterval(() => setStatus(rec.msg || 'Reading…'), 300);
+    try{ return await _ncdPdfText(rec); } finally { clearInterval(tick); }
+  }
+  return await _ihnOcrImage(file, setStatus);
+}
+// A phone photo is far bigger than the case store wants. Keep the readable
+// resolution, drop the rest.
+function _ihnShrink(dataUrl, mimeType){
+  return new Promise(resolve => {
+    if(!/^image\//.test(mimeType||'')) return resolve(dataUrl);
+    const img = new Image();
+    img.onload = () => {
+      const ratio = Math.min(IHN_STORE_PX / img.width, IHN_STORE_PX / img.height, 1);
+      if(ratio >= 1 && dataUrl.length < 500000) return resolve(dataUrl);
+      const w = Math.max(1, Math.round(img.width * ratio)), h = Math.max(1, Math.round(img.height * ratio));
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      let out = dataUrl;
+      try{ out = cv.toDataURL(mimeType === 'image/png' ? 'image/png' : 'image/jpeg', 0.85); }catch(e){}
+      cv.width = cv.height = 0;
+      resolve(out.length < dataUrl.length ? out : dataUrl);
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+// ── Parsing the notice ───────────────────────────────────────────────
+// Courts print "DIAZ-VILLANUEVA, ALBA MAGAIL"; the firm files people as
+// "Alba Magail DIAZ-VILLANUEVA".
+function _ihnClientName(raw){
+  const s = String(raw||'').replace(/[^A-Za-zÀ-ÿ',\-. ]/g,' ').replace(/\s+/g,' ').trim();
+  if(!s) return '';
+  const i = s.indexOf(',');
+  if(i > 0){
+    const last = s.slice(0,i).trim(), first = s.slice(i+1).trim();
+    if(last && first) return _ncdTitleName(first) + ' ' + last.toUpperCase();
+  }
+  const parts = _ncdSplitName(s);
+  if(!parts) return s;
+  return [_ncdTitleName(parts.firstName), parts.middleName ? _ncdTitleName(parts.middleName) : '',
+          parts.lastName.toUpperCase()].filter(Boolean).join(' ');
+}
+// "Court Address:" is either followed by the address on the same line or by
+// the street and the city/state/ZIP on the lines under it.
+function _ihnCourtAddress(lines){
+  for(let i=0;i<lines.length;i++){
+    const m = lines[i].match(/^\s*(?:court\s*address|hearing\s*location|address\s*of\s*(?:the\s*)?court)\s*[:\-]?\s*(.*)$/i);
+    if(!m) continue;
+    const parts = [];
+    if((m[1]||'').trim()) parts.push(m[1].trim());
+    for(let j=i+1; j<Math.min(i+4, lines.length) && parts.length<3; j++){
+      const nx = (lines[j]||'').trim();
+      if(!nx) break;
+      if(/^[A-Za-z][A-Za-z ]{2,24}:/.test(nx)) break;   // the next labelled field
+      parts.push(nx);
+    }
+    if(parts.length) return parts.join(', ');
+  }
+  return '';
+}
+// A judge's name, or nothing. Titles and punctuation come off; a run of
+// ordinary words picked up from a sentence ("… judge will consider …") is not
+// a name and is thrown away.
+const IHN_NOT_A_NAME = /\b(?:will|shall|may|must|has|have|is|are|was|were|the|this|your|case|court|hearing|decision|order|orders|assigned|presiding|before|at|on|in|of|to|for|and)\b/i;
+function _ihnJudgeName(raw){
+  const s = _ncdJudgeDisplay(raw);
+  if(!s || IHN_NOT_A_NAME.test(s)) return '';
+  const words = s.split(/\s+/).filter(Boolean);
+  if(words.length < 2 || words.length > 4) return '';
+  return s;
+}
+function _ihnParseNotice(raw){
+  const T = _ncdNorm(raw);
+  const lines = T.split('\n');
+  const U = T.toUpperCase();
+  const out = {date:'', time:'', mode:'', type:'', anum:'', client:'', clid:'', caseType:'',
+               courtAddress:'', judge:'', judgeId:'', judgeLabel:''};
+
+  out.type = /\bINDIVIDUAL\b|\bMERITS\b|\bM[EÉ]RITO/.test(U) ? 'INDIVIDUAL'
+           : (/\bMASTER\b|\bPRELIMINAR/.test(U) ? 'MASTER' : '');
+  out.mode = _ncdHearingMode(T);
+
+  // A notice carries at least two dates — the day it was issued, in the
+  // header, and the day of the hearing, below the "scheduled for" line. Start
+  // at the hearing sentence and take the first "Date:" under it.
+  let start = lines.findIndex(l => /scheduled|notice of[^\n]*hearing|hearing (?:is|has been|will)/i.test(l));
+  if(start < 0) start = 0;
+  for(let i=start;i<lines.length;i++){
+    const m = lines[i].match(/^\s*(?:hearing\s*)?(?:date|fecha)\b\s*[:\-]?\s*(.*)$/i);
+    if(!m) continue;
+    const d = _ncdDate(m[1]) || _ncdDate(lines[i+1]||'');
+    if(!d) continue;
+    out.date = d;
+    out.time = _ncdTime(lines.slice(i, Math.min(i+4, lines.length)).join(' '));
+    break;
+  }
+  if(!out.date){
+    // No "Date:" label — take the first date after the hearing sentence that
+    // is still ahead of us, which a hearing always is.
+    const today = (typeof toDateStr === 'function' && typeof TODAY !== 'undefined')
+      ? toDateStr(TODAY) : new Date().toISOString().slice(0,10);
+    for(let i=start;i<lines.length;i++){
+      const d = _ncdDate(lines[i]);
+      if(d && d > today){
+        out.date = d;
+        out.time = _ncdTime(lines.slice(i, Math.min(i+3, lines.length)).join(' '));
+        break;
+      }
+    }
+  }
+  if(!out.time){
+    const tl = lines.find(l => /^\s*(?:hearing\s*)?(?:time|hora)\b/i.test(l));
+    if(tl) out.time = _ncdTime(tl);
+  }
+
+  // A-number: "LEAD FILE: 243-058-675", "RE: 243-058-675 …", or plainly labelled.
+  let m = T.match(/\b(?:lead\s*file|file\s*(?:no\.?|number|#)?|a[\s\-]?number|a\s*#|n[uúü]mero\s*a|\bre)\s*[:#\-]?\s*A?[ \-]*((?:\d[ \-]*){8,9})(?!\d)/i)
+       || T.match(/\bA[ \-.:#]{0,3}((?:\d[ \-]*){8,9})(?!\d)/);
+  if(m) out.anum = _ncdFormatANum(m[1]);
+
+  // The respondent: the name that follows the file number on the "RE:" line.
+  let nameRaw = '';
+  const reLine = lines.find(l => /^\s*re\s*[:.]/i.test(l));
+  if(reLine){
+    nameRaw = reLine.replace(/^\s*re\s*[:.]\s*/i,'')
+                    .replace(/\bA?\d{2,3}[ \-]?\d{3}[ \-]?\d{3}\b/,'').trim();
+    if(!_ncdIsName(nameRaw)) nameRaw = '';
+  }
+  if(!nameRaw){
+    nameRaw = _ncdLabeled(T, ['in\\s*the\\s*matter\\s*of','name\\s*of\\s*respondent',"respondent'?s?\\s*name",'respondent'],
+                          v => _ncdIsName(v) && v.split(/\s+/).length >= 2);
+  }
+  if(nameRaw) out.client = _ihnClientName(nameRaw);
+
+  out.courtAddress = _ihnCourtAddress(lines);
+
+  out.judge = _ihnJudgeName(_ncdLabeled(T, ['immigration\\s*judge','presiding\\s*judge','judge\\s*name','judge','juez'],
+                            v => _ncdIsName(v) && !/^(?:name|address|court)$/i.test(v.trim())));
+  if(!out.judge){
+    // "… before Immigration Judge Hon. Krasinski, Carolyn" — the name trails
+    // the title mid-sentence instead of sitting in a labelled field.
+    for(const L of lines){
+      const jm = L.match(/\b(?:immigration\s+judge|presiding\s+judge|judge|juez|hon\.?)\s*[:.]?\s+(.+)$/i);
+      if(!jm) continue;
+      const cand = _ihnJudgeName(jm[1]);
+      if(cand){ out.judge = cand; break; }
+    }
+  }
+  if(out.judge){
+    const j = _ncdMatchJudge(out.judge, out.courtAddress);
+    if(j){ out.judgeId = j.id; out.judgeLabel = j.name + (j.venue ? ' · ' + j.venue : ''); }
+  }
+
+  // The A-number usually belongs to a case the firm already has — carry that
+  // case's ID, name and type over rather than making the user look them up.
+  if(out.anum && typeof records !== 'undefined' && Array.isArray(records)){
+    const digits = v => String(v||'').replace(/\D/g,'');
+    const want = digits(out.anum);
+    const hit = records.find(r => r && digits(r.anum) === want && (r.clid || r.client));
+    if(hit){
+      out.clid = hit.clid || '';
+      out.caseType = hit.type || '';
+      if(hit.client) out.client = hit.client;   // the spelling already on file wins
+    }
+  }
+  return out;
+}
+
+// ── Suggestions: parsed values → rows the user ticks ─────────────────
+// Each row knows how to write itself into the modal, so applying is just
+// walking the checked rows in order (format before judge, so the judge
+// dropdown is populated by the time it is set).
+function _ihnRows(f){
+  if(!f) return [];
+  const rows = [];
+  if(f.date) rows.push({key:'date', label:'Hearing date', value:fmtDate(f.date), targetId:'fc-date',
+    occupied: !!(_ihnEl('fc-date')||{}).value,
+    apply(){ const el=_ihnEl('fc-date'); if(!el) return false; el.value=f.date; _ihnFire(el,'input'); return true; }});
+  if(f.time) rows.push({key:'time', label:'Start time', value:_ncdTime12(f.time), targetId:'fc-time-start',
+    occupied: !!(_ihnEl('fc-time-start')||{}).value,
+    apply(){
+      const el=_ihnEl('fc-time-start'); if(!el) return false;
+      const tog=_ihnEl('fc-time-toggle'); if(tog && !tog.checked){ tog.checked=true; if(typeof toggleTimePanel==='function') toggleTimePanel(); }
+      const panel=_ihnEl('time-range-panel'); if(panel) panel.classList.add('open');
+      el.value=f.time;
+      if(typeof updateTimeDisplay==='function') updateTimeDisplay();
+      return true;
+    }});
+  if(f.mode) rows.push({key:'mode', label:'Hearing format',
+    value: f.mode==='virtual' ? '📡 Virtual' : '🏛 In Person', targetId:'hm-virtual',
+    occupied: (typeof getHearingMode==='function' && !!getHearingMode()),
+    apply(){ if(typeof setHearingMode!=='function') return false; setHearingMode(f.mode); return true; }});
+  if(f.judgeId) rows.push({key:'judge', label:'Judge', value:f.judgeLabel||f.judge, targetId:'vh-judge',
+    occupied: !!(_ihnEl('vh-judge')||{}).value,
+    apply(){
+      if(typeof populateVirtualJudgeDropdown==='function') populateVirtualJudgeDropdown();
+      const sel=_ihnEl('vh-judge'); if(!sel) return false;
+      sel.value=f.judgeId;
+      if(sel.value!==f.judgeId) return false;
+      if(typeof onVirtualJudgeChange==='function') onVirtualJudgeChange();
+      return true;
+    }});
+  else if(f.judge) rows.push({key:'judge-text', label:'Judge (not in the saved list)', value:f.judge,
+    targetId:'fc-notes', note:true,
+    apply(){ return _ihnAppendNote('Immigration Judge: ' + f.judge); }});
+  if(f.anum) rows.push({key:'anum', label:'A-number', value:f.anum, targetId:'fc-anum',
+    occupied: !!(_ihnEl('fc-anum')||{}).value,
+    apply(){ const el=_ihnEl('fc-anum'); if(!el) return false; el.value=f.anum; return true; }});
+  if(f.client) rows.push({key:'client', label:'Client', value:f.client, targetId:'fc-client',
+    occupied: !!(_ihnEl('fc-client')||{}).value,
+    apply(){ const el=_ihnEl('fc-client'); if(!el) return false; el.value=f.client; return true; }});
+  if(f.clid) rows.push({key:'clid', label:'Client ID', value:f.clid, targetId:'fc-clid',
+    occupied: !!(_ihnEl('fc-clid')||{}).value,
+    apply(){ const el=_ihnEl('fc-clid'); if(!el) return false; el.value=f.clid; return true; }});
+  if(f.caseType) rows.push({key:'casetype', label:'Case type', value:f.caseType, targetId:'fc-casetype',
+    occupied: !!(_ihnEl('fc-casetype')||{}).value,
+    apply(){
+      const el=_ihnEl('fc-casetype'); if(!el) return false;
+      if(!Array.from(el.options||[]).some(o => o.value===f.caseType)) return false;
+      el.value=f.caseType;
+      // The event-type list is filtered by case type — keep INDIVIDUAL selected.
+      if(typeof onCaseTypeChangeModal==='function') onCaseTypeChangeModal();
+      const ev=_ihnEl('fc-eventtype');
+      if(ev && ev.value!=='INDIVIDUAL'){
+        if(!Array.from(ev.options||[]).some(o => o.value==='INDIVIDUAL')){
+          const o=document.createElement('option'); o.value='INDIVIDUAL'; o.textContent='INDIVIDUAL'; ev.appendChild(o);
+        }
+        ev.value='INDIVIDUAL';
+      }
+      return true;
+    }});
+  if(f.courtAddress) rows.push({key:'court', label:'Court address', value:f.courtAddress,
+    targetId:'fc-notes', note:true,
+    apply(){ return _ihnAppendNote('Court: ' + f.courtAddress); }});
+  return rows;
+}
+function _ihnAppendNote(text){
+  const el=_ihnEl('fc-notes');
+  if(!el) return false;
+  const cur=String(el.value||'').trim();
+  if(cur.indexOf(text) > -1) return true;
+  el.value = cur ? cur + '\n' + text : text;
+  if(typeof autoGrowAllNotes==='function'){ try{ autoGrowAllNotes(_ihnEl('modal')); }catch(e){} }
+  return true;
+}
+
+// ── Rendering ────────────────────────────────────────────────────────
+function _ihnFlash(el){
+  if(!el) return;
+  const bg=el.style.background, bd=el.style.borderColor;
+  el.style.background='#EFF7F0'; el.style.borderColor='#6A8C6E';
+  setTimeout(()=>{ el.style.background=bg||''; el.style.borderColor=bd||''; }, 1500);
+}
+function _ihnRenderPreview(){
+  const host=_ihnEl('ihn-preview');
+  if(!host) return;
+  host.innerHTML='';
+  if(!pendingHearingNotice){ host.style.display='none'; return; }
+  host.style.display='';
+  const box=document.createElement('div');
+  box.style.cssText='display:flex;align-items:center;gap:10px;padding:8px 10px;background:#fff;border:1px solid #CFE0CD;border-radius:8px;';
+  if(/^image\//.test(pendingHearingNotice.mimeType||'')){
+    const img=document.createElement('img');
+    img.src=pendingHearingNotice.dataUrl;
+    img.alt='Hearing notice';
+    img.style.cssText='width:54px;height:54px;object-fit:cover;border-radius:6px;border:1px solid #E3DCD0;cursor:zoom-in;flex-shrink:0;';
+    img.onclick=()=>openDocViewer(pendingHearingNotice.dataUrl, pendingHearingNotice.mimeType, pendingHearingNotice.name);
+    box.appendChild(img);
+  } else {
+    const ic=document.createElement('span'); ic.textContent='📄'; ic.style.cssText='font-size:22px;flex-shrink:0;';
+    box.appendChild(ic);
+  }
+  const mid=document.createElement('div');
+  mid.style.cssText='flex:1;min-width:0;';
+  const nm=document.createElement('div');
+  nm.style.cssText='font-size:11.5px;font-weight:600;color:#2C2620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+  nm.textContent=pendingHearingNotice.name;
+  const sub=document.createElement('div');
+  sub.style.cssText='font-size:10px;color:#6A8C6E;margin-top:2px;';
+  sub.textContent='Saved to the case when you save this event';
+  mid.appendChild(nm); mid.appendChild(sub);
+  const view=document.createElement('button');
+  view.type='button'; view.textContent='View';
+  view.style.cssText='font-size:10.5px;padding:4px 10px;border:1px solid #CFE0CD;border-radius:6px;background:#F6FAF6;color:#6A8C6E;cursor:pointer;font-family:inherit;flex-shrink:0;';
+  view.onclick=()=>openDocViewer(pendingHearingNotice.dataUrl, pendingHearingNotice.mimeType, pendingHearingNotice.name);
+  const rm=document.createElement('button');
+  rm.type='button'; rm.textContent='✕'; rm.title='Remove this photo';
+  rm.style.cssText='font-size:11px;padding:4px 8px;border:1px solid #DDD5CA;border-radius:6px;background:#F7F3ED;color:#9E9186;cursor:pointer;flex-shrink:0;';
+  rm.onclick=()=>ihnClearNotice();
+  box.appendChild(mid); box.appendChild(view); box.appendChild(rm);
+  host.appendChild(box);
+}
+function _ihnRenderFound(){
+  const host=_ihnEl('ihn-found');
+  if(!host) return;
+  host.innerHTML='';
+  if(!_ihnFound) return;
+  const rows=_ihnRows(_ihnFound);
+  if(!rows.length){
+    const none=document.createElement('div');
+    none.style.cssText='margin-top:10px;font-size:11px;color:#9E9186;font-style:italic;';
+    none.textContent='Nothing recognizable on this notice — the photo is still saved with the case; fill the hearing in by hand.';
+    host.appendChild(none);
+    return;
+  }
+  rows.forEach(r => {
+    if(!_ihnState[r.key]) _ihnState[r.key]={checked:!r.occupied, applied:false};
+  });
+  const box=document.createElement('div');
+  box.style.cssText='margin-top:10px;border:1px solid #CFE0CD;background:#fff;border-radius:8px;padding:11px 12px;';
+  const head=document.createElement('div');
+  head.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6A8C6E;margin-bottom:8px;';
+  head.textContent='Read off the notice — ' + rows.length + ' value' + (rows.length>1?'s':'');
+  box.appendChild(head);
+  if(_ihnFound.type && _ihnFound.type!=='INDIVIDUAL'){
+    const warn=document.createElement('div');
+    warn.style.cssText='font-size:10.5px;color:#C9823A;background:#FAF0E6;border:1px solid #F0D9BB;border-radius:6px;padding:5px 8px;margin-bottom:8px;';
+    warn.textContent='⚠️ This notice reads as a ' + _ihnFound.type + ' hearing, not an INDIVIDUAL one — check the event type.';
+    box.appendChild(warn);
+  }
+  rows.forEach((r,i) => {
+    const st=_ihnState[r.key];
+    const line=document.createElement('label');
+    line.style.cssText='display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-top:'+(i?'1px solid #EDF3EC':'none')+';cursor:pointer;';
+    const cb=document.createElement('input');
+    cb.type='checkbox'; cb.className='ncd-cb'; cb.checked=!!st.checked; cb.disabled=!!st.applied;
+    cb.style.marginTop='2px';
+    cb.onchange=()=>{ st.checked=cb.checked; };
+    const col=document.createElement('div');
+    col.style.cssText='flex:1;min-width:0;';
+    const lbl=document.createElement('div');
+    lbl.style.cssText='font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9186;display:flex;gap:6px;align-items:center;flex-wrap:wrap;';
+    lbl.appendChild(document.createTextNode(r.label));
+    if(st.applied){
+      const chip=document.createElement('span');
+      chip.style.cssText='font-size:9px;color:#6A8C6E;background:#E6F0E7;border-radius:8px;padding:1px 6px;';
+      chip.textContent='✓ filled';
+      lbl.appendChild(chip);
+    } else if(r.occupied){
+      const chip=document.createElement('span');
+      chip.style.cssText='font-size:9px;color:#C9823A;background:#FAF0E6;border-radius:8px;padding:1px 6px;';
+      chip.textContent=r.note?'added to notes':'field not empty';
+      lbl.appendChild(chip);
+    }
+    const val=document.createElement('div');
+    val.style.cssText='font-size:12px;color:#2C2620;margin-top:2px;word-break:break-word;';
+    val.textContent=r.value;
+    col.appendChild(lbl); col.appendChild(val);
+    line.appendChild(cb); line.appendChild(col);
+    box.appendChild(line);
+  });
+  const actions=document.createElement('div');
+  actions.style.cssText='display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;';
+  const dismiss=document.createElement('button');
+  dismiss.type='button'; dismiss.textContent='Dismiss';
+  dismiss.style.cssText='font-size:11px;padding:5px 12px;border:1px solid #DDD5CA;border-radius:8px;background:#fff;color:#9E9186;cursor:pointer;font-family:inherit;';
+  dismiss.onclick=()=>{ _ihnFound=null; _ihnState={}; _ihnRenderFound(); };
+  const fill=document.createElement('button');
+  fill.type='button';
+  const n=rows.filter(r=>_ihnState[r.key].checked && !_ihnState[r.key].applied).length;
+  fill.textContent = n ? 'Fill the hearing ('+n+')' : 'Fill the hearing';
+  fill.disabled=!n;
+  fill.style.cssText='font-size:11.5px;font-weight:600;padding:6px 15px;border:none;border-radius:8px;background:'+(n?'#6A8C6E':'#DDD5CA')+';color:#fff;cursor:'+(n?'pointer':'default')+';font-family:inherit;';
+  fill.onclick=ihnApplyFound;
+  actions.appendChild(dismiss); actions.appendChild(fill);
+  box.appendChild(actions);
+  host.appendChild(box);
+}
+function ihnApplyFound(){
+  if(!_ihnFound) return;
+  let filled=0;
+  _ihnRows(_ihnFound).forEach(r => {
+    const st=_ihnState[r.key];
+    if(!st || !st.checked || st.applied) return;
+    let ok=false;
+    try{ ok=r.apply(); }catch(e){ ok=false; }
+    if(!ok) return;
+    st.applied=true; st.checked=false;
+    _ihnFlash(_ihnEl(r.targetId));
+    filled++;
+  });
+  _ihnRenderFound();
+  if(typeof showToast==='function'){
+    showToast(filled ? 'Filled ' + filled + ' hearing detail' + (filled>1?'s':'') + ' ✓' : 'Nothing left to fill');
+  }
+}
+
+// ── Intake ───────────────────────────────────────────────────────────
+async function ihnFileChosen(file){
+  if(!file) return;
+  if(_ihnBusy){ if(typeof showToast==='function') showToast('Still reading the last notice…'); return; }
+  if(!_ihnAccepts(file)){ if(typeof showToast==='function') showToast('Photos and PDFs only'); return; }
+  if(file.size > IHN_MAX_BYTES){ if(typeof showToast==='function') showToast('That file is too large (max 8 MB)'); return; }
+  _ihnBusy=true;
+  _ihnStatus('Reading…');
+  try{
+    const dataUrl = await new Promise((resolve,reject) => {
+      const fr=new FileReader();
+      fr.onload=e=>resolve((e.target&&e.target.result)||'');
+      fr.onerror=()=>reject(new Error('Could not read that file'));
+      fr.readAsDataURL(file);
+    });
+    const mimeType = file.type || (/\.pdf$/i.test(file.name||'') ? 'application/pdf' : 'image/png');
+    const stamp = (typeof todayStr==='function') ? todayStr() : new Date().toISOString().slice(0,10);
+    pendingHearingNotice = {
+      name: file.name || ('Hearing notice ' + stamp + (mimeType==='application/pdf' ? '.pdf' : '.png')),
+      dataUrl: await _ihnShrink(dataUrl, mimeType),
+      mimeType, uploadedAt: stamp, text: ''
+    };
+    _ihnRenderPreview();
+    let text='', readErr='';
+    try{ text = await _ihnExtractText(file, _ihnStatus); }
+    catch(e){
+      readErr = (e && e.message) || 'Could not read that notice';
+      if(typeof showToast==='function') showToast(readErr);
+    }
+    pendingHearingNotice.text = _ncdNorm(text);
+    if(!pendingHearingNotice.text){
+      // Either way the photo stays attached — only the auto-fill is lost.
+      _ihnStatus(readErr ? 'Not read — photo kept' : 'No readable text — photo kept');
+      _ihnFound=null; _ihnState={}; _ihnRenderFound();
+      return;
+    }
+    _ihnFound = _ihnParseNotice(pendingHearingNotice.text);
+    _ihnState = {};
+    _ihnStatus('Read ✓');
+    _ihnRenderFound();
+  }catch(e){
+    _ihnStatus('');
+    if(typeof showToast==='function') showToast((e && e.message) || 'Could not read that notice');
+  }finally{
+    _ihnBusy=false;
+  }
+}
+function ihnClearNotice(){
+  pendingHearingNotice=null; _ihnFound=null; _ihnState={};
+  _ihnStatus('');
+  _ihnRenderPreview(); _ihnRenderFound();
+}
+function resetHearingNoticePanel(){
+  ihnClearNotice();
+  const panel=_ihnEl('individual-notice-panel');
+  if(panel) panel.style.display='none';
+  const existing=_ihnEl('ihn-existing');
+  if(existing) existing.remove();
+  ihnWire();
+}
+// Drag & drop on the panel, and ⌘/Ctrl+V anywhere in the modal. Wired once;
+// both are inert unless the notice panel is on screen.
+function ihnWire(){
+  if(_ihnWired) return;
+  const drop=_ihnEl('ihn-drop');
+  if(!drop) return;
+  _ihnWired=true;
+  const on=()=>{ drop.style.borderColor='#6A8C6E'; drop.style.background='#F6FAF6'; };
+  const off=()=>{ drop.style.borderColor='#B4CCAD'; drop.style.background='#fff'; };
+  ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); on(); }));
+  ['dragleave','dragend'].forEach(ev => drop.addEventListener(ev, e=>{ e.preventDefault(); off(); }));
+  drop.addEventListener('drop', e=>{
+    e.preventDefault(); e.stopPropagation(); off();
+    const f=Array.from((e.dataTransfer&&e.dataTransfer.files)||[]).find(_ihnAccepts);
+    if(f) ihnFileChosen(f);
+  });
+  document.addEventListener('paste', e=>{
+    if(!_ihnPanelOpen()) return;
+    const cd=e.clipboardData;
+    if(!cd) return;
+    const f=Array.from(cd.files||[]).find(_ihnAccepts);
+    if(!f) return;
+    // A clipboard carrying real text belongs to whatever field has focus.
+    const tag=((e.target&&e.target.tagName)||'').toLowerCase();
+    const typing=(tag==='input'||tag==='textarea'||(e.target&&e.target.isContentEditable));
+    if(typing && String(cd.getData('text/plain')||'').trim()) return;
+    e.preventDefault();
+    ihnFileChosen(f);
+  });
+}
+
+// ── Keeping the photo with the case ──────────────────────────────────
+function saveHearingNoticeToCase(clid, recordId, eventDate){
+  if(!pendingHearingNotice || !clid || typeof caseMeta === 'undefined') return;
+  if(!caseMeta[clid]) caseMeta[clid]={};
+  if(!Array.isArray(caseMeta[clid].docSections)) caseMeta[clid].docSections=[];
+  let sec=caseMeta[clid].docSections.find(s => s.sectionName===IHN_SECTION);
+  if(!sec){ sec={sectionName:IHN_SECTION, docs:[]}; caseMeta[clid].docSections.unshift(sec); }
+  const label='Individual hearing notice'+(eventDate?' ('+fmtDate(eventDate)+')':'');
+  sec.docs.push({name:label, checked:false, fileData:pendingHearingNotice.dataUrl,
+                 mimeType:pendingHearingNotice.mimeType, uploadedAt:pendingHearingNotice.uploadedAt,
+                 _recordId:recordId});
+  if(!Array.isArray(caseMeta[clid].caseNotesList)) caseMeta[clid].caseNotesList=[];
+  caseMeta[clid].caseNotesList.push({date:pendingHearingNotice.uploadedAt,
+    text:'📷 '+label+' saved from the event form'});
+  caseMeta[clid]._updatedAt=Date.now();
+  pendingHearingNotice=null;
+}
+// The saved photo for one event, wherever it ended up in the case's documents.
+function findHearingNoticeDoc(r){
+  if(!r || typeof caseMeta === 'undefined') return null;
+  const clid=r.clid||r.client;
+  const secs=((caseMeta[clid]||{}).docSections)||[];
+  for(const sec of secs){
+    const hit=(sec.docs||[]).find(d => d && d.fileData && d._recordId===r.id);
+    if(hit) return hit;
+  }
+  return null;
+}
+function openHearingNoticeForRecord(recordId){
+  const r=(typeof records!=='undefined'?records:[]).find(x => x && x.id===recordId);
+  const doc=findHearingNoticeDoc(r);
+  if(!doc){ if(typeof showToast==='function') showToast('The notice photo is not on this device'); return; }
+  openDocViewer(doc.fileData, doc.mimeType||'image/png', doc.name||'Hearing notice', r.clid||r.client||null);
+}
+// Editing an INDIVIDUAL hearing that already has its notice — show it rather
+// than making the user hunt for it in the Documents tab.
+function loadHearingNoticeForRecord(r){
+  const old=_ihnEl('ihn-existing');
+  if(old) old.remove();
+  const panel=_ihnEl('individual-notice-panel');
+  if(!panel || panel.style.display==='none') return;
+  const doc=findHearingNoticeDoc(r);
+  if(!doc) return;
+  const box=document.createElement('div');
+  box.id='ihn-existing';
+  box.style.cssText='display:flex;align-items:center;gap:9px;margin-top:9px;padding:7px 10px;background:#fff;border:1px solid #CFE0CD;border-radius:8px;';
+  if(/^image\//.test(doc.mimeType||'')){
+    const img=document.createElement('img');
+    img.src=doc.fileData; img.alt='Hearing notice';
+    img.style.cssText='width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #E3DCD0;flex-shrink:0;';
+    box.appendChild(img);
+  }
+  const mid=document.createElement('div');
+  mid.style.cssText='flex:1;min-width:0;font-size:11.5px;color:#2C2620;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+  mid.textContent='On file: '+(doc.name||'Hearing notice');
+  const view=document.createElement('button');
+  view.type='button'; view.textContent='View';
+  view.style.cssText='font-size:10.5px;padding:4px 10px;border:1px solid #CFE0CD;border-radius:6px;background:#F6FAF6;color:#6A8C6E;cursor:pointer;font-family:inherit;flex-shrink:0;';
+  view.onclick=()=>openDocViewer(doc.fileData, doc.mimeType||'image/png', doc.name||'Hearing notice', r.clid||r.client||null);
+  box.appendChild(mid); box.appendChild(view);
+  panel.appendChild(box);
 }
 
 // ── New Case Modal ──
