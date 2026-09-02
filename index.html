@@ -211,6 +211,20 @@ button.btn-sm { font-size: 11px; padding: 4px 11px; }
 /* Hidden SO view within dashboard */
 #view-so[style*="none"] { contain: strict; }
 
+/* The embedded I-589 filler goes full screen by having its iframe lifted to
+   position:fixed over the whole viewport. `contain: layout` above makes the
+   pane a containing block for fixed descendants, which pinned that "full
+   screen" frame inside the pane instead of the viewport (it showed up inset,
+   with the right-hand PDF clipped). Drop containment while the form is up. */
+html.i589-fullscreen #pane-dashboard,
+html.i589-fullscreen #pane-cases,
+html.i589-fullscreen #pane-workflows,
+html.i589-fullscreen #pane-settings,
+html.i589-fullscreen #pane-backup,
+html.i589-fullscreen #pane-inbox,
+html.i589-fullscreen #pane-tools,
+html.i589-fullscreen #view-so { contain: none !important; }
+
 /* ── App container ─────────────────────────────── */
 #app {
   max-width: 1220px;
@@ -16417,7 +16431,8 @@ function _mhpPickCase(clid){
 // I-589 PDF (pdf-lib runs inside the iframe — nothing to do on this side).
 // ══════════════════════════════════════════════════
 const I589_TOOL_URL='tools/i589-filler.html';
-let _i589Active=null;        // { frame, handler, clid }
+let _i589Active=null;        // iframe bridge: { frame, win(), handler, clid, host, activeVer }
+let _i589Pop=null;           // ⧉ separate-window bridge: { win, handler, clid, host, activeVer, timer }
 let _i589SaveTimers={};      // per-clid debounce timers
 
 function _i589Teardown(){
@@ -16431,20 +16446,70 @@ function _i589Teardown(){
 // Full screen: an iframe can't grow past its own box, so the tool's ⛶ button
 // asks us to lift its frame over the whole viewport. The app stays mounted
 // underneath — leaving puts the frame back exactly as it was.
+//
+// The lift only works if nothing between the frame and <body> is a
+// containing block for position:fixed. The panes carry `contain: layout`,
+// which made them exactly that — so html.i589-fullscreen (see the stylesheet)
+// drops containment while the form is up. Anything else that could form one
+// (a transform, a filter, will-change…) is neutralised here, and if the frame
+// still isn't sitting on the viewport we tell the tool so it can fall back to
+// the browser's own Fullscreen API.
+const _I589_FS_RESET={contain:'initial',transform:'initial',filter:'initial','backdrop-filter':'initial',perspective:'initial','will-change':'initial','content-visibility':'visible'};
 let _i589FsPrevCss=null;
+let _i589FsPatched=[];       // [{el, saved:{prop:[value,priority]}}]
+function _i589FsPatchAncestors(f){
+  _i589FsUnpatchAncestors();
+  for(let el=f.parentElement; el&&el!==document.body&&el!==document.documentElement; el=el.parentElement){
+    let cs; try{ cs=getComputedStyle(el); }catch(e){ continue; }
+    const saved={};
+    Object.keys(_I589_FS_RESET).forEach(prop=>{
+      const v=(cs.getPropertyValue(prop)||'').trim();
+      if(!v||v==='none'||v==='auto'||v==='normal'||v==='visible') return;
+      saved[prop]=[el.style.getPropertyValue(prop),el.style.getPropertyPriority(prop)];
+    });
+    if(!Object.keys(saved).length) continue;
+    _i589FsPatched.push({el,saved});
+    // NB: never write the literal "none" here — a couple of pane rules key off
+    // [style*="none"] to detect display:none and would hide the pane.
+    Object.keys(saved).forEach(prop=>el.style.setProperty(prop,_I589_FS_RESET[prop],'important'));
+  }
+}
+function _i589FsUnpatchAncestors(){
+  _i589FsPatched.forEach(({el,saved})=>{
+    Object.keys(saved).forEach(prop=>{
+      const [v,pri]=saved[prop];
+      if(v) el.style.setProperty(prop,v,pri); else el.style.removeProperty(prop);
+    });
+  });
+  _i589FsPatched=[];
+}
 function _i589SetFullscreen(on){
   const f=_i589Active&&_i589Active.frame;
   if(!f) return;
+  let ok=true;
   if(on){
     if(_i589FsPrevCss===null) _i589FsPrevCss=f.style.cssText;
+    document.documentElement.classList.add('i589-fullscreen');
+    _i589FsPatchAncestors(f);
     f.style.cssText='position:fixed;inset:0;width:100vw;height:100vh;max-width:none;max-height:none;min-height:0;margin:0;border:0;border-radius:0;z-index:99999;background:#f7f4ef;display:block;';
     document.body.style.overflow='hidden';
+    // Did it actually land on the viewport? (1px of slack for zoom rounding.)
+    try{
+      const r=f.getBoundingClientRect();
+      ok=Math.abs(r.left)<=1&&Math.abs(r.top)<=1&&r.width>=window.innerWidth-1&&r.height>=window.innerHeight-1;
+    }catch(e){ ok=false; }
+    if(!ok){ _i589ClearFullscreen(f); }
   } else {
-    f.style.cssText=_i589FsPrevCss||'';
-    _i589FsPrevCss=null;
-    document.body.style.overflow='';
+    _i589ClearFullscreen(f);
   }
-  try{ f.contentWindow.postMessage({type:'i589-fullscreen-state',on:!!on},'*'); }catch(e){}
+  try{ f.contentWindow.postMessage({type:'i589-fullscreen-state',on:!!on&&ok,ok:ok},'*'); }catch(e){}
+}
+function _i589ClearFullscreen(f){
+  f.style.cssText=_i589FsPrevCss||'';
+  _i589FsPrevCss=null;
+  _i589FsUnpatchAncestors();
+  document.documentElement.classList.remove('i589-fullscreen');
+  document.body.style.overflow='';
 }
 // Esc from the app side too, in case focus is outside the frame.
 document.addEventListener('keydown',e=>{
@@ -16484,11 +16549,11 @@ function _i589BuildPrefill(clid){
 // text-only (field values + font prefs), so it rides the caseMeta shard sync
 // without any stripping. Edits land on whichever version is open in the tool:
 // the main working copy (caseMeta.i589) or a saved version (i589Versions[]).
-function _i589SaveState(clid,state){
+function _i589SaveState(clid,state,br){
   if(!clid||!state) return;
   // Route by the version open at EDIT time, not when the debounce fires —
   // otherwise switching versions could land pending edits in the wrong one.
-  const av=(_i589Active&&_i589Active.clid===clid)?_i589Active.activeVer:null;
+  const av=br?br.activeVer:null;
   clearTimeout(_i589SaveTimers[clid]);
   _i589SaveTimers[clid]=setTimeout(()=>{
     let s; try{ s=JSON.parse(JSON.stringify(state)); }catch(e){ return; }
@@ -16511,12 +16576,10 @@ function _i589VersionsOf(clid){
   if(!Array.isArray(caseMeta[clid].i589Versions)) caseMeta[clid].i589Versions=[];
   return caseMeta[clid].i589Versions;
 }
-function _i589PostVersions(clid){
-  if(!_i589Active||_i589Active.clid!==clid||!_i589Active.frame) return;
-  const list=_i589VersionsOf(clid).map(v=>({id:v.id,name:v.name,savedAt:v.savedAt}));
-  try{
-    _i589Active.frame.contentWindow.postMessage({type:'i589-versions',versions:list,activeId:_i589Active.activeVer||null},'*');
-  }catch(e){}
+function _i589PostVersions(br){
+  if(!br) return;
+  const list=_i589VersionsOf(br.clid).map(v=>({id:v.id,name:v.name,savedAt:v.savedAt}));
+  br.post({type:'i589-versions',versions:list,activeId:br.activeVer||null});
 }
 function _i589PersistVersions(){
   try{ if(typeof markUnsaved==='function') markUnsaved(); }catch(e){}
@@ -16538,43 +16601,42 @@ function _i589SaveTemplate(tpl){
   },400);
 }
 
-// Build the iframe for a case and run the ready/load/state handshake.
-function _openI589(clid,hostEl,opts){
+// One bridge, two hosts: the in-app iframe and the ⧉ separate window. Both
+// speak the same ready/load/state handshake, so everything below works off a
+// `win()` accessor instead of a fixed frame.
+function _i589Bridge(clid,win,opts){
   opts=opts||{};
-  _i589Teardown();
   const saved=(caseMeta[clid]||{}).i589||null;
   const prefill=(saved&&saved.vals&&Object.keys(saved.vals).length)?null:_i589BuildPrefill(clid);
   const _cn=records.find(r=>(r.clid||r.client)===clid&&r.client);
   const clientName=(_cn&&_cn.client)||clid;
-  hostEl.innerHTML='';
-  const frame=document.createElement('iframe');
-  frame.src=I589_TOOL_URL;
-  frame.title='I-589 Filler';
-  frame.allow='fullscreen';
-  frame.allowFullscreen=true;
-  frame.style.cssText='width:100%;height:'+(opts.height||'calc(100vh - 190px)')+';min-height:520px;border:1px solid var(--border);border-radius:10px;background:#f7f4ef;display:block;';
-  function handler(e){
-    if(e.source!==frame.contentWindow) return;
+  const br={clid,win,frame:opts.frame||null,host:opts.host||null,popout:!!opts.popout,activeVer:opts.activeVer||null,handler:null,timer:null};
+  br.post=function(m){ const w=br.win(); if(!w) return; try{ w.postMessage(m,'*'); }catch(e){} };
+  br.handler=function(e){
+    if(e.source!==br.win()) return;
     const d=e.data||{};
     if(d.type==='i589-ready'){
-      try{ frame.contentWindow.postMessage({type:'i589-load',clid:clid,state:saved,prefill:prefill,clientName:clientName,template:(i589Template&&i589Template.data)||null},'*'); }catch(err){}
-      _i589PostVersions(clid);
+      br.post({type:'i589-load',clid:clid,state:(caseMeta[clid]||{}).i589||saved,prefill:prefill,clientName:clientName,template:(i589Template&&i589Template.data)||null});
+      _i589PostVersions(br);
     } else if(d.type==='i589-state'){
-      _i589SaveState(clid,d.state);
+      _i589SaveState(clid,d.state,br);
     } else if(d.type==='i589-template'){
       _i589SaveTemplate(d.template);
     } else if(d.type==='i589-fullscreen'){
-      _i589SetFullscreen(!!d.on);
+      // Only the iframe needs lifting — a popout already owns its window.
+      if(!br.popout&&_i589Active===br) _i589SetFullscreen(!!d.on);
+    } else if(d.type==='i589-popout'){
+      if(!br.popout) _i589OpenPopout();
     } else if(d.type==='i589-save-version'){
       let s; try{ s=JSON.parse(JSON.stringify(d.state||{})); }catch(err){ s=null; }
       if(s){
         const list=_i589VersionsOf(clid);
-        if(list.length>=10){ try{ frame.contentWindow.postMessage({type:'i589-version-error',msg:'This case already has 10 saved versions — delete one first.'},'*'); }catch(err){} return; }
+        if(list.length>=10){ br.post({type:'i589-version-error',msg:'This case already has 10 saved versions — delete one first.'}); return; }
         const v={id:'v'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:String(d.name||'Version '+(list.length+1)).slice(0,60),savedAt:Date.now(),state:s};
         list.push(v);
-        _i589Active.activeVer=v.id; // keep editing what was just saved
+        br.activeVer=v.id; // keep editing what was just saved
         _i589PersistVersions();
-        _i589PostVersions(clid);
+        _i589PostVersions(br);
       }
     } else if(d.type==='i589-open-version'){
       const vid=d.id||null;
@@ -16583,36 +16645,145 @@ function _openI589(clid,hostEl,opts){
         const v=_i589VersionsOf(clid).find(x=>x.id===vid);
         if(!v) return;
         st=v.state||null;
-        _i589Active.activeVer=vid;
+        br.activeVer=vid;
       } else {
         st=(caseMeta[clid]||{}).i589||null;
-        _i589Active.activeVer=null;
+        br.activeVer=null;
       }
-      try{ frame.contentWindow.postMessage({type:'i589-load-version',id:vid,state:st},'*'); }catch(err){}
-      _i589PostVersions(clid);
+      br.post({type:'i589-load-version',id:vid,state:st});
+      _i589PostVersions(br);
     } else if(d.type==='i589-rename-version'){
       const v=_i589VersionsOf(clid).find(x=>x.id===d.id);
-      if(v&&d.name){ v.name=String(d.name).slice(0,60); _i589PersistVersions(); _i589PostVersions(clid); }
+      if(v&&d.name){ v.name=String(d.name).slice(0,60); _i589PersistVersions(); _i589PostVersions(br); }
     } else if(d.type==='i589-delete-version'){
       const list=_i589VersionsOf(clid);
       const i=list.findIndex(x=>x.id===d.id);
       if(i!==-1){
-        const wasOpen=(_i589Active.activeVer===d.id);
+        const wasOpen=(br.activeVer===d.id);
         list.splice(i,1);
         if(wasOpen){
-          _i589Active.activeVer=null;
+          br.activeVer=null;
           // the deleted version was on screen — switch the form back to the main draft
-          try{ frame.contentWindow.postMessage({type:'i589-load-version',id:null,state:(caseMeta[clid]||{}).i589||null},'*'); }catch(err){}
+          br.post({type:'i589-load-version',id:null,state:(caseMeta[clid]||{}).i589||null});
         }
         _i589PersistVersions();
-        _i589PostVersions(clid);
+        _i589PostVersions(br);
       }
     }
-  }
-  window.addEventListener('message',handler);
-  _i589Active={frame,handler,clid,activeVer:null};
+  };
+  window.addEventListener('message',br.handler);
+  return br;
+}
+
+// Build the iframe for a case and run the ready/load/state handshake. When
+// the case is already open in its own ⧉ window, show a card pointing there
+// instead of a second, silently-diverging copy of the same form.
+function _openI589(clid,hostEl,opts){
+  opts=opts||{};
+  _i589Teardown();
+  if(_i589PopoutOpen(clid)){ _i589RenderPopoutCard(clid,hostEl,opts); return null; }
+  hostEl.innerHTML='';
+  hostEl.appendChild(_i589OpenInNewWindowBar(clid));
+  const frame=document.createElement('iframe');
+  frame.src=I589_TOOL_URL;
+  frame.title='I-589 Filler';
+  frame.allow='fullscreen';
+  frame.allowFullscreen=true;
+  frame.style.cssText='width:100%;height:'+(opts.height||'calc(100vh - 190px)')+';min-height:520px;border:1px solid var(--border);border-radius:10px;background:#f7f4ef;display:block;';
+  _i589Active=_i589Bridge(clid,()=>frame.contentWindow,{frame,host:hostEl,hostOpts:opts});
+  _i589Active.hostOpts=opts;
   hostEl.appendChild(frame);
   return frame;
+}
+
+// ── ⧉ Open in a new window ────────────────────────────────────────────────
+// The form gets a real window of its own — its own tab strip, its own screen
+// on a second monitor — while the app keeps being the thing that stores the
+// answers: the popout talks back over window.opener with the same bridge, so
+// every keystroke still lands on caseMeta[clid].i589. The app is free to
+// navigate anywhere in the meantime; the bridge lives on until the window is
+// closed, and then the in-app frame comes back with the latest draft.
+function _i589PopoutOpen(clid){
+  if(!_i589Pop) return false;
+  let closed=true; try{ closed=!_i589Pop.win()||_i589Pop.win().closed; }catch(e){ closed=true; }
+  if(closed){ _i589ClosePopout(); return false; }
+  return clid==null||_i589Pop.clid===clid;
+}
+function _i589ClosePopout(){
+  if(!_i589Pop) return;
+  const p=_i589Pop;
+  _i589Pop=null;
+  clearInterval(p.timer);
+  try{ window.removeEventListener('message',p.handler); }catch(e){}
+  // Put the form back where it was in the app, with whatever the window saved
+  // — but only if that spot is actually on screen. Out of sight it stays
+  // empty and gets rebuilt the next time the tab is opened.
+  if(!p.host||!document.body.contains(p.host)) return;
+  if(p.host.getClientRects().length) _openI589(p.clid,p.host,p.hostOpts||{});
+  else p.host.innerHTML='';
+}
+function _i589OpenPopout(clid,hostEl,hostOpts){
+  const a=_i589Active;
+  clid=clid||(a&&a.clid);
+  if(!clid) return;
+  if(_i589PopoutOpen(clid)){ try{ _i589Pop.win().focus(); }catch(e){} return; }
+  if(_i589Pop) _i589ClosePopout();
+  hostEl=hostEl||(a&&a.host)||null;
+  hostOpts=hostOpts||(a&&a.hostOpts)||{};
+  const w=Math.max(1100,Math.min(1700,(screen.availWidth||1440)-60));
+  const h=Math.max(700,(screen.availHeight||900)-60);
+  const feat='width='+w+',height='+h+',left='+Math.max(0,Math.round(((screen.availWidth||w)-w)/2))+',top=30,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes';
+  const url=I589_TOOL_URL+'?popout=1&clid='+encodeURIComponent(clid);
+  let win=null;
+  try{ win=window.open(url,'i589_'+String(clid).replace(/[^A-Za-z0-9_]/g,'_'),feat); }catch(e){}
+  if(!win){
+    alert('Your browser blocked the new window.\n\nAllow pop-ups for this site and click “⧉ Open in a new window” again.');
+    return;
+  }
+  // Hand the case over: tear the in-app frame down so only one copy is live.
+  if(a&&a.clid===clid) _i589Teardown();
+  _i589Pop=_i589Bridge(clid,()=>win,{popout:true,host:hostEl,activeVer:a&&a.clid===clid?a.activeVer:null});
+  _i589Pop.hostOpts=hostOpts;
+  _i589Pop.timer=setInterval(()=>{ let c=true; try{ c=win.closed; }catch(e){} if(c) _i589ClosePopout(); },800);
+  try{ win.focus(); }catch(e){}
+  if(hostEl&&document.body.contains(hostEl)) _i589RenderPopoutCard(clid,hostEl,hostOpts);
+}
+// The app-side button, so the new window can be opened even when the frame
+// hasn't loaded (and without depending on a click inside the iframe).
+function _i589OpenInNewWindowBar(clid){
+  const bar=document.createElement('div');
+  bar.style.cssText='display:flex;justify-content:flex-end;margin-bottom:6px;';
+  const b=document.createElement('button');
+  b.type='button';
+  b.textContent='⧉ Open in a new window';
+  b.title='Open just this I-589 in its own window — it keeps saving to the case';
+  b.style.cssText='font-size:11px;padding:4px 11px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;';
+  b.onclick=()=>_i589OpenPopout(clid);
+  bar.appendChild(b);
+  return bar;
+}
+function _i589RenderPopoutCard(clid,hostEl,hostOpts){
+  if(!hostEl) return;
+  if(_i589Pop) _i589Pop.host=hostEl, _i589Pop.hostOpts=hostOpts||_i589Pop.hostOpts||{};
+  hostEl.innerHTML='';
+  const card=document.createElement('div');
+  card.style.cssText='border:1px solid var(--border);border-radius:10px;background:#fff;padding:26px 24px;text-align:center;color:var(--ink-muted);font-size:13px;';
+  card.innerHTML='<div style="font-size:26px;line-height:1;margin-bottom:10px;">⧉</div>'
+    +'<div style="font-family:\'Lora\',Georgia,serif;font-size:15px;color:var(--ink);margin-bottom:6px;">This I-589 is open in its own window</div>'
+    +'<div style="margin-bottom:16px;">Everything typed there is still saved to this case. Close that window to bring the form back here.</div>';
+  const row=document.createElement('div');
+  row.style.cssText='display:flex;gap:8px;justify-content:center;';
+  const focus=document.createElement('button');
+  focus.type='button'; focus.textContent='Go to that window';
+  focus.style.cssText='font-size:12px;padding:6px 14px;border:1px solid var(--ink);border-radius:20px;background:var(--ink);color:var(--cream);cursor:pointer;font-family:inherit;';
+  focus.onclick=()=>{ try{ _i589Pop&&_i589Pop.win().focus(); }catch(e){} };
+  const back=document.createElement('button');
+  back.type='button'; back.textContent='Bring it back here';
+  back.style.cssText='font-size:12px;padding:6px 14px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;';
+  back.onclick=()=>{ try{ _i589Pop&&_i589Pop.win().close(); }catch(e){} _i589ClosePopout(); };
+  row.appendChild(focus); row.appendChild(back);
+  card.appendChild(row);
+  hostEl.appendChild(card);
 }
 
 // Case-detail sub-tab renderer.

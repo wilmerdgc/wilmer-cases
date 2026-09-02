@@ -4077,14 +4077,43 @@ else{ _initFillOnPdf(); }
      sends either the case's previously-saved form state or a prefill built
      from case data, and the tool posts its field values back on every change
      so the parent stores them on caseMeta[clid].i589 (which syncs to
-     Firestore with the rest of the case). Standalone use (opening this file
-     directly) is unaffected: window.parent === window, so nothing below
-     fires a cross-frame message.
+     Firestore with the rest of the case). The app can also hand the form its
+     own window ("⧉ New window"); the same handshake then runs over
+     window.opener, so the answers still land on the case. Standalone use
+     (opening this file directly) is unaffected: there is no host window, so
+     nothing below fires a cross-frame message.
      ═══════════════════════════════════════════════════════════════════════ -->
 <script>
+/* ── Where the host app lives ──────────────────────────────────────────────
+   The tool talks to the case tracker over postMessage, and it can be hosted
+   two ways: in an iframe inside the app (window.parent), or in its own
+   window opened by the app with "⧉ New window" (window.opener, flagged with
+   ?popout=1 in the URL so an unrelated opener is never mistaken for the
+   app). Opened directly with no host, everything below stays dormant and
+   the tool behaves exactly as it always has.
+   ──────────────────────────────────────────────────────────────────────── */
+window.I589LINK=(function(){
+  var inFrame=!!(window.parent&&window.parent!==window);
+  var popout=false;
+  try{ popout=/[?&]popout=1(&|$)/.test(location.search)&&!!window.opener&&!window.opener.closed; }catch(e){}
+  function host(){
+    if(inFrame) return window.parent;
+    if(popout){ try{ if(window.opener&&!window.opener.closed) return window.opener; }catch(e){} }
+    return null;
+  }
+  return {
+    inFrame:inFrame,
+    popout:popout,
+    hosted:inFrame||popout,
+    host:host,
+    post:function(msg){ var h=host(); if(!h) return false; try{ h.postMessage(msg,'*'); return true; }catch(e){ return false; } }
+  };
+})();
+
 (function(){
-  var EMBEDDED=(window.parent && window.parent!==window);
-  if(!EMBEDDED) return; // opened standalone — leave the tool exactly as-is
+  var LINK=window.I589LINK;
+  if(!LINK.hosted) return; // opened standalone — leave the tool exactly as-is
+  var _post=LINK.post;
 
   var _clid=null, _saveTimer=null, _loading=false;
 
@@ -4139,7 +4168,7 @@ else{ _initFillOnPdf(); }
     if(_loading||!_clid) return;
     clearTimeout(_saveTimer);
     _saveTimer=setTimeout(function(){
-      try{ window.parent.postMessage({type:'i589-state', clid:_clid, state:i589GetState()},'*'); }catch(e){}
+      _post({type:'i589-state', clid:_clid, state:i589GetState()});
     },600);
   }
   // Every field handler funnels through updateProg(); Clear-all and the XLSX
@@ -4160,7 +4189,7 @@ else{ _initFillOnPdf(); }
       var j; try{ j=JSON.stringify(t); }catch(e){ return; }
       if(j===_lastTplJson) return;
       _lastTplJson=j;
-      try{ window.parent.postMessage({type:'i589-template', template:t},'*'); }catch(e){}
+      _post({type:'i589-template', template:t});
     },800);
   };
 
@@ -4170,7 +4199,7 @@ else{ _initFillOnPdf(); }
   function _verFlushState(){
     clearTimeout(_saveTimer); _saveTimer=null;
     if(!_clid) return;
-    try{ window.parent.postMessage({type:'i589-state', clid:_clid, state:i589GetState()},'*'); }catch(e){}
+    _post({type:'i589-state', clid:_clid, state:i589GetState()});
   }
   function _verBtn(){ return document.getElementById('i589-ver-btn'); }
   function _verLabel(){
@@ -4234,7 +4263,7 @@ else{ _initFillOnPdf(); }
       if(nm===null) return;
       _verCloseMenu();
       _verFlushState(); // whatever is on screen lands on the open copy first
-      try{ window.parent.postMessage({type:'i589-save-version', clid:_clid, name:nm||('Version '+(_versions.length+1)), state:i589GetState()},'*'); }catch(err){}
+      _post({type:'i589-save-version', clid:_clid, name:nm||('Version '+(_versions.length+1)), state:i589GetState()});
       return;
     }
     var ren=t.getAttribute('data-ren');
@@ -4242,7 +4271,7 @@ else{ _initFillOnPdf(); }
       e.stopPropagation();
       var rv=null; for(var i=0;i<_versions.length;i++){ if(_versions[i].id===ren) rv=_versions[i]; }
       var nn=prompt('New name:',rv?rv.name:'');
-      if(nn){ try{ window.parent.postMessage({type:'i589-rename-version', clid:_clid, id:ren, name:nn},'*'); }catch(err){} }
+      if(nn){ _post({type:'i589-rename-version', clid:_clid, id:ren, name:nn}); }
       return;
     }
     var del=t.getAttribute('data-del');
@@ -4250,7 +4279,7 @@ else{ _initFillOnPdf(); }
       e.stopPropagation();
       var dv=null; for(var j=0;j<_versions.length;j++){ if(_versions[j].id===del) dv=_versions[j]; }
       if(confirm('Delete version "'+(dv?dv.name:'')+'"? This cannot be undone.')){
-        try{ window.parent.postMessage({type:'i589-delete-version', clid:_clid, id:del},'*'); }catch(err){}
+        _post({type:'i589-delete-version', clid:_clid, id:del});
       }
       return;
     }
@@ -4260,7 +4289,7 @@ else{ _initFillOnPdf(); }
       _verCloseMenu();
       if(oid===_activeVerId) return;
       _verFlushState(); // pending edits land on the version they were made in
-      try{ window.parent.postMessage({type:'i589-open-version', clid:_clid, id:oid},'*'); }catch(err){}
+      _post({type:'i589-open-version', clid:_clid, id:oid});
     }
   }
 
@@ -4297,18 +4326,22 @@ else{ _initFillOnPdf(); }
       alert(d.msg||'Version error');
     }
   });
-  function _announce(){ try{ window.parent.postMessage({type:'i589-ready'},'*'); }catch(e){} }
+  function _announce(){ _post({type:'i589-ready'}); }
   if(document.readyState==='complete'){ _announce(); }
   else{ window.addEventListener('load',_announce); }
 })();
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════
-     FULL SCREEN + COMMENTS
-     · Full screen: the ⛶ button in the header. Standalone this uses the
-       browser's Fullscreen API; embedded in the case tracker it asks the
-       parent to lift the iframe over the whole viewport (an iframe can't
-       grow past its own box on its own). Esc leaves either way.
+     FULL SCREEN + NEW WINDOW + COMMENTS
+     · Full screen: the ⛶ button in the header. In its own window (standalone
+       or popped out) this uses the browser's Fullscreen API; embedded in the
+       case tracker it asks the app to lift the iframe over the whole viewport
+       (an iframe can't grow past its own box on its own), and falls back to
+       the Fullscreen API if the app reports the lift fell short. Esc leaves
+       either way.
+     · New window: the ⧉ button, shown only inside the app. It asks the app to
+       reopen this form in a window of its own, still bridged to the case.
      · Comments: a 💬 note on any field — a question for the client, where an
        answer came from, a reminder — plus one general note for the filing.
        Notes ride the same save path as the answers (updateProg → the bridge),
@@ -4317,7 +4350,9 @@ else{ _initFillOnPdf(); }
      ═══════════════════════════════════════════════════════════════════════ -->
 <script>
 (function(){
-  var EMBEDDED=(window.parent&&window.parent!==window);
+  var LINK=window.I589LINK||{inFrame:false,popout:false,hosted:false,host:function(){return null;},post:function(){return false;}};
+  var EMBEDDED=LINK.hosted;   // notes ride the app's save path instead of localStorage
+  var IN_FRAME=LINK.inFrame;  // only an iframe needs the app to lift it — a popout owns its window
   var LS_KEY='i589_comments_standalone';
   var GENERAL='__general';
 
@@ -4543,38 +4578,67 @@ else{ _initFillOnPdf(); }
   };
 
   // ── full screen ───────────────────────────────────────────────────────────
-  var _fsOn=false;
+  // Own window (standalone or a ⧉ popout): the browser's Fullscreen API.
+  // Inside the app's iframe: ask the app to lift this frame over the whole
+  // viewport. The app measures the lift and answers with ok:false when it
+  // could not reach the viewport, and we fall back to the Fullscreen API —
+  // that request still counts as user-initiated this soon after the click.
+  var _fsOn=false, _fsNative=false;
   function fsSyncBtn(){
     var b=document.getElementById('fs-btn'); if(!b) return;
     b.textContent=_fsOn?'⛶ Exit full screen':'⛶ Full screen';
     b.title=_fsOn?'Back to the normal layout (Esc)':'Fill this form using the whole screen';
     b.classList.toggle('active',_fsOn);
   }
+  function fsNative(on){
+    try{
+      if(on){
+        if(!document.fullscreenElement&&document.documentElement.requestFullscreen){
+          var r=document.documentElement.requestFullscreen();
+          if(r&&r.catch) r.catch(function(){ _fsNative=false; _fsOn=!!document.fullscreenElement; fsSyncBtn(); });
+          _fsNative=true;
+          return true;
+        }
+      } else if(document.fullscreenElement&&document.exitFullscreen){
+        document.exitFullscreen();
+        _fsNative=false;
+        return true;
+      }
+    }catch(e){}
+    return false;
+  }
   function fsSet(on){
     on=!!on;
-    if(EMBEDDED){
-      // Inside the case tracker: the parent lifts this frame over the app.
+    if(IN_FRAME&&!_fsNative){
+      // Inside the case tracker: the app lifts this frame over the app.
       _fsOn=on;
-      try{ window.parent.postMessage({type:'i589-fullscreen',on:on},'*'); }catch(e){}
+      LINK.post({type:'i589-fullscreen',on:on});
     } else {
-      try{
-        if(on&&document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
-        else if(!on&&document.fullscreenElement&&document.exitFullscreen) document.exitFullscreen();
-      }catch(e){}
-      _fsOn=!!document.fullscreenElement;
+      fsNative(on);
+      _fsOn=on?(_fsNative||!!document.fullscreenElement):false;
     }
     fsSyncBtn();
   }
   function fsToggle(){ fsSet(!_fsOn); }
   document.addEventListener('fullscreenchange',function(){
-    if(EMBEDDED) return;
-    _fsOn=!!document.fullscreenElement;
+    if(IN_FRAME&&!_fsNative) return;
+    _fsNative=!!document.fullscreenElement;
+    _fsOn=_fsNative;
     fsSyncBtn();
   });
-  // The parent tells us when it dropped out of full screen on its own.
+  // The app tells us when it dropped out of full screen on its own, and
+  // whether its lift actually covered the viewport.
   window.addEventListener('message',function(e){
     var d=e.data||{};
-    if(d.type==='i589-fullscreen-state'){ _fsOn=!!d.on; fsSyncBtn(); }
+    if(d.type!=='i589-fullscreen-state') return;
+    if(d.on&&d.ok===false){
+      // The lift stayed boxed inside the app's layout — go native instead.
+      LINK.post({type:'i589-fullscreen',on:false});
+      _fsOn=fsNative(true);
+      fsSyncBtn();
+      return;
+    }
+    _fsOn=!!d.on; fsSyncBtn();
   });
 
   // Esc closes the comments panel first, then leaves full screen.
@@ -4598,11 +4662,25 @@ else{ _initFillOnPdf(); }
       cb.id='cm-open-btn'; cb.type='button'; cb.className='btn btn-outline';
       cb.title='Notes and comments on this form';
       cb.onclick=cmOpenPanel;
+      // Only the in-app iframe can be popped out — a popout is already its
+      // own window, and standalone there is no case to carry over.
+      var nw=null;
+      if(IN_FRAME){
+        nw=document.createElement('button');
+        nw.id='nw-btn'; nw.type='button'; nw.className='btn btn-outline';
+        nw.textContent='⧉ New window';
+        nw.title='Open just this I-589 in its own window — it keeps saving to the case';
+        nw.onclick=function(){
+          if(_fsOn) fsSet(false);
+          LINK.post({type:'i589-popout'});
+        };
+      }
       if(anchor&&anchor.parentNode){
         anchor.parentNode.insertBefore(cb,anchor.nextSibling);
         anchor.parentNode.insertBefore(fs,cb.nextSibling);
+        if(nw) anchor.parentNode.insertBefore(nw,fs.nextSibling);
       } else if(bar){
-        bar.appendChild(cb); bar.appendChild(fs);
+        bar.appendChild(cb); bar.appendChild(fs); if(nw) bar.appendChild(nw);
       }
     }
     var rebuild=false;
