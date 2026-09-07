@@ -2014,6 +2014,104 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
   flex-shrink: 0;
 }
 
+
+/* ── Budget (private, owner-only) ───────────────── */
+/* Chart hues are validated for colour-vision deficiency against the cream
+   surface — deeper steps of the app's own slate and amber. Don't retune them
+   by eye: the pair has to stay apart for protan/deutan readers too. */
+#pane-budget {
+  --bg-income:  #35639F;
+  --bg-spend:   #BB6A22;
+  --bg-good:    #4F7A57;
+  --bg-warn:    #BB6A22;
+  --bg-over:    #A8443F;
+}
+.bg-wrap { max-width: 1080px; margin: 0 auto; padding: 22px 20px 48px; }
+.bg-card {
+  background: #fff; border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+  padding: 18px 20px; margin-bottom: 16px;
+}
+.bg-card-title {
+  font-family: var(--font-display); font-size: 15px; font-weight: 600;
+  color: var(--ink); margin-bottom: 2px;
+}
+.bg-card-sub { font-size: 11px; color: var(--ink-muted); margin-bottom: 14px; }
+/* KPI row — the month's headline numbers. "Left" is the hero figure. */
+.bg-kpis { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 14px; }
+.bg-kpi { padding: 14px 16px; border-radius: var(--radius-sm); background: var(--cream); }
+.bg-kpi-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-muted); margin-bottom: 6px;
+}
+.bg-hero { font-size: 48px; line-height: 1.05; font-weight: 600; color: var(--ink); }
+.bg-kpi-value { font-size: 22px; font-weight: 600; color: var(--ink); }
+.bg-kpi-note { font-size: 11px; color: var(--ink-muted); margin-top: 4px; }
+/* Meters — spend against a category's monthly limit. The unfilled track is a
+   light step of the fill's own ramp so the state reads across the whole bar. */
+.bg-meter-row { padding: 11px 0; border-bottom: 1px solid var(--cream-dark); }
+.bg-meter-row:last-child { border-bottom: none; }
+.bg-meter-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 12px; margin-bottom: 6px;
+}
+.bg-meter-name { font-size: 12px; font-weight: 600; color: var(--ink); }
+.bg-meter-fig { font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.bg-track { height: 8px; border-radius: 4px; overflow: hidden; }
+.bg-fill { height: 100%; border-radius: 4px; transition: width .18s ease; }
+.bg-meter-state { font-size: 10px; font-weight: 700; letter-spacing: .03em; }
+/* Trend columns — six months of income vs spending, two validated hues. */
+.bg-trend { display: flex; align-items: flex-end; gap: 14px; height: 150px; padding-top: 6px; }
+/* Top reference line, so column heights can be read as amounts rather than
+   guessed at. The columns still carry exact figures on hover. */
+.bg-trend-scale {
+  position: absolute; left: 0; right: 0; top: 6px; z-index: 0;
+  border-top: 1px dashed var(--cream-dark); pointer-events: none;
+}
+.bg-trend-scale span {
+  position: absolute; top: -8px; left: 0; background: #fff; padding-right: 6px;
+  font-size: 10px; color: var(--ink-muted); font-variant-numeric: tabular-nums;
+}
+.bg-trend-month { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; }
+.bg-trend-bars { flex: 1; display: flex; align-items: flex-end; justify-content: center; gap: 2px; width: 100%; }
+/* Bars sit above the reference line so it never cuts across their tops. */
+.bg-bar { width: 26px; border-radius: 4px 4px 0 0; min-height: 2px; cursor: default; position: relative; z-index: 1; }
+.bg-bar:hover { outline: 2px solid var(--cream); outline-offset: -2px; }
+.bg-trend-label { font-size: 10px; color: var(--ink-muted); white-space: nowrap; }
+.bg-legend { display: flex; gap: 16px; align-items: center; font-size: 11px; color: var(--ink-soft); }
+.bg-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 5px; vertical-align: -1px; }
+/* Ledger */
+.bg-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.bg-table th {
+  text-align: left; font-size: 10px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ink-muted);
+  padding: 6px 8px; border-bottom: 1px solid var(--border);
+}
+.bg-table td { padding: 7px 8px; border-bottom: 1px solid var(--cream-dark); color: var(--ink-soft); }
+.bg-table tr:hover td { background: var(--cream); }
+.bg-amt { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.bg-del {
+  border: none; background: transparent; color: var(--ink-faint);
+  cursor: pointer; font-size: 14px; padding: 0 4px; line-height: 1;
+}
+.bg-del:hover { color: var(--rose); }
+.bg-input {
+  font-size: 12px; padding: 7px 9px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-family: inherit; background: #fff; width: 100%;
+}
+.bg-btn {
+  font-size: 12px; font-weight: 600; padding: 7px 16px; border: none;
+  border-radius: var(--radius-sm); background: var(--ink); color: var(--cream);
+  cursor: pointer; font-family: inherit; white-space: nowrap;
+}
+.bg-btn:hover { background: var(--sage); }
+.bg-btn-quiet {
+  font-size: 11px; font-weight: 600; padding: 6px 13px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: transparent; color: var(--ink-muted); cursor: pointer; font-family: inherit;
+}
+.bg-btn-quiet:hover { background: var(--cream); color: var(--ink); }
+.bg-empty { text-align: center; padding: 28px; color: var(--ink-muted); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -2126,6 +2224,10 @@ window.addEventListener('load',()=>autoGrowAllNotes());
         <button id="tab-settings" onclick="switchTab('settings')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h5M13 7h7M4 17h7M15 17h5"/><circle cx="11" cy="7" r="2"/><circle cx="13" cy="17" r="2"/></svg>Settings</button>
         <button id="tab-inbox" onclick="switchTab('inbox')"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7.5 7.3 5.2a2 2 0 0 0 2.4 0l7.3-5.2"/></svg>Inbox</button><button id="tab-inbox-popout" onclick="openInboxWindow(event)" title="Open Inbox in a new window" style="padding:8px 6px 8px 0;color:#C4BAB0;margin-left:-12px;"><svg viewBox="0 0 24 24" aria-hidden="true" style="width:12px;height:12px;"><path d="M14 4h6v6M20 4l-8.5 8.5M18 14v4.5A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/></svg></button>
         <button id="tab-tools" onclick="switchTab('tools')"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4" width="15" height="17" rx="2.5"/><path d="M9 4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V6H9zM9 12h6M9 16h4"/></svg>Tools &amp; Forms</button>
+        <!-- Budget: private to the owner. Starts hidden and is only ever
+             revealed by _budgetApplyAccess() once the sign-in gate has
+             confirmed the account (see BUDGET_OWNER_EMAIL). -->
+        <button id="tab-budget" onclick="switchTab('budget')" style="display:none;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5h18v12a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5z"/><path d="M3 7.5 5.6 3.8A1.5 1.5 0 0 1 6.8 3h10.4a1.5 1.5 0 0 1 1.2.8L21 7.5M12 11.5v6M9.5 13.5h5M9.5 16h5"/></svg>Budget</button>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
@@ -2861,6 +2963,108 @@ window.addEventListener('load',()=>autoGrowAllNotes());
 <!-- TOOLS & FORMS -->
 <div id="pane-tools" style="display:none">
   <div id="tools-content" style="padding:24px 20px;max-width:900px;margin:0 auto;"></div>
+</div>
+
+<!-- BUDGET — personal finances, owner-only. Rendered by renderBudget(); the
+     data never leaves this browser (see the storage note in the JS below). -->
+<div id="pane-budget" style="display:none">
+  <div class="bg-wrap">
+
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap;">
+      <div>
+        <div style="font-family:var(--font-display);font-size:20px;font-weight:600;color:var(--ink);">Budget</div>
+        <div style="font-size:11px;color:var(--ink-muted);margin-top:2px;">
+          Private to you — kept on this device only, never synced to the office database or the backups.
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="bg-btn-quiet" onclick="budgetExport()" title="Download a JSON copy of your budget data">↓ Export budget</button>
+        <button class="bg-btn-quiet" onclick="document.getElementById('bg-import-file').click()" title="Restore from a previously exported file">↑ Import budget</button>
+        <input id="bg-import-file" type="file" accept="application/json,.json" style="display:none" onchange="budgetImport(this)"/>
+      </div>
+    </div>
+
+    <!-- Month navigator + the month's headline numbers -->
+    <div class="bg-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;">
+        <button class="bg-btn-quiet" onclick="budgetShiftMonth(-1)" aria-label="Previous month">‹</button>
+        <div id="bg-month-label" style="font-family:var(--font-display);font-size:16px;font-weight:600;color:var(--ink);"></div>
+        <button class="bg-btn-quiet" onclick="budgetShiftMonth(1)" aria-label="Next month">›</button>
+      </div>
+      <div class="bg-kpis" id="bg-kpis"></div>
+    </div>
+
+    <!-- Add an entry -->
+    <div class="bg-card">
+      <div class="bg-card-title">Add an entry</div>
+      <div class="bg-card-sub">Money in or out. Categories are whatever you type — they build up as you use them.</div>
+      <div style="display:grid;grid-template-columns:132px 116px 1fr 118px 1.4fr auto;gap:8px;align-items:end;">
+        <div>
+          <label class="bg-kpi-label" for="bg-in-date">Date</label>
+          <input id="bg-in-date" class="bg-input" type="date"/>
+        </div>
+        <div>
+          <label class="bg-kpi-label" for="bg-in-kind">Type</label>
+          <select id="bg-in-kind" class="bg-input" onchange="budgetRefreshCategoryList()">
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
+        </div>
+        <div>
+          <label class="bg-kpi-label" for="bg-in-cat">Category</label>
+          <input id="bg-in-cat" class="bg-input" type="text" list="bg-cat-options" placeholder="Groceries"/>
+          <datalist id="bg-cat-options"></datalist>
+        </div>
+        <div>
+          <label class="bg-kpi-label" for="bg-in-amt">Amount</label>
+          <input id="bg-in-amt" class="bg-input" type="number" step="0.01" min="0" placeholder="0.00"/>
+        </div>
+        <div>
+          <label class="bg-kpi-label" for="bg-in-note">Note (optional)</label>
+          <input id="bg-in-note" class="bg-input" type="text" placeholder="What was it for?"/>
+        </div>
+        <button class="bg-btn" onclick="budgetAddEntry()">Add</button>
+      </div>
+    </div>
+
+    <!-- Monthly limits per category -->
+    <div class="bg-card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+        <div>
+          <div class="bg-card-title">Monthly limits</div>
+          <div class="bg-card-sub">What you've spent against what you meant to spend.</div>
+        </div>
+        <button class="bg-btn-quiet" onclick="budgetOpenLimits()">Set limits</button>
+      </div>
+      <div id="bg-meters"></div>
+    </div>
+
+    <!-- Six-month trend -->
+    <div class="bg-card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px;">
+        <div>
+          <div class="bg-card-title">Last six months</div>
+          <div class="bg-card-sub">Income against spending. Hover a column for the exact figures.</div>
+        </div>
+        <div class="bg-legend">
+          <span><span class="bg-swatch" style="background:var(--bg-income)"></span>Income</span>
+          <span><span class="bg-swatch" style="background:var(--bg-spend)"></span>Spending</span>
+        </div>
+      </div>
+      <div style="position:relative;">
+        <div id="bg-trend-scale" class="bg-trend-scale"></div>
+        <div class="bg-trend" id="bg-trend"></div>
+      </div>
+    </div>
+
+    <!-- The month's ledger -->
+    <div class="bg-card">
+      <div class="bg-card-title">This month's entries</div>
+      <div class="bg-card-sub" id="bg-ledger-sub"></div>
+      <div id="bg-ledger"></div>
+    </div>
+
+  </div>
 </div>
 
 <!-- WORKFLOWS -->
@@ -3968,6 +4172,9 @@ function switchTab(t){
     showToast('This view only has Tools & Forms');
     return;
   }
+  // Budget is private to the owner — refuse the tab for anyone else, even
+  // if the call came from a stale handler or the console.
+  if(t==='budget' && !_budgetIsOwner()){ showToast('Not available on this account'); return; }
   currentTab=t;
   document.getElementById('pane-dashboard').style.display=t==='dashboard'?'':'none';
   document.getElementById('pane-cases').style.display=t==='cases'?'':'none';
@@ -3976,12 +4183,15 @@ function switchTab(t){
   document.getElementById('pane-backup').style.display=t==='backup'?'':'none';
   document.getElementById('pane-inbox').style.display=t==='inbox'?'':'none';
   document.getElementById('pane-tools').style.display=t==='tools'?'':'none';
+  document.getElementById('pane-budget').style.display=t==='budget'?'':'none';
   document.getElementById('tab-dashboard').classList.toggle('active',t==='dashboard');
   document.getElementById('tab-cases').classList.toggle('active',t==='cases');
   document.getElementById('tab-workflows').classList.toggle('active',t==='workflows');
   document.getElementById('tab-settings').classList.toggle('active',t==='settings');
   document.getElementById('tab-inbox').classList.toggle('active',t==='inbox');
   document.getElementById('tab-tools').classList.toggle('active',t==='tools');
+  const bgTab=document.getElementById('tab-budget');
+  if(bgTab) bgTab.classList.toggle('active',t==='budget');
   const bkBtn=document.getElementById('tab-backup');
   if(bkBtn){bkBtn.style.background=t==='backup'?'#2C2620':'transparent';bkBtn.style.color=t==='backup'?'#F7F3ED':'#9E9186';bkBtn.style.borderColor=t==='backup'?'#2C2620':'#DDD5CA';}
   if(t==='settings'){snapshotSettings();renderSettings();}
@@ -3990,6 +4200,7 @@ function switchTab(t){
   else if(t==='backup'){renderBackupPage();}
   else if(t==='inbox'){ gmailInit(); if(!_gmailAccessToken) gmailRenderSignIn(); }
   else if(t==='tools'){ renderToolsPage(); }
+  else if(t==='budget'){ renderBudget(); }
   else{renderAll();}
 }
 
@@ -29626,6 +29837,433 @@ if(location.hash==='#inbox'){ try{ document.body.classList.add('inbox-only'); sw
 // view — Katya's main page. Only the Tools & Forms pane is reachable.
 if(location.hash==='#tools'){ try{ enterToolsOnlyView(false); }catch(e){} }
 
+
+// ══════════════════════════════════════════════════
+// BUDGET — personal finances, owner-only.
+//
+// PRIVACY, and the limits of it. This data is deliberately kept OUT of
+// everything the rest of the app shares:
+//   • It lives under its own localStorage key (BUDGET_KEY) and is never
+//     added to the payload saveAllData()/_pushCloud() send to Firestore,
+//     so it never reaches the office database.
+//   • Because it never reaches Firestore, the nightly workflow that dumps
+//     the database into backups/*.json can't pick it up either — personal
+//     figures never get committed to the repo.
+//   • The tab is hidden unless the sign-in gate resolved BUDGET_OWNER_EMAIL,
+//     so a 'tools' (Katya) or 'client' session has no way into the view.
+//
+// What that does NOT do: localStorage belongs to the browser profile, not
+// to the Google account. Anyone using this browser profile — or opening
+// devtools on it — can read the data whichever account is signed in. It is
+// private FROM other users of the app, not from someone at this keyboard.
+// Use Export to keep a copy somewhere you control; clearing site data or
+// switching machines otherwise loses it, since it is never in the cloud.
+// ══════════════════════════════════════════════════
+const BUDGET_OWNER_EMAIL = 'wilmerdgcolina@gmail.com';
+const BUDGET_KEY = 'wilmer_budget_v1';
+
+let _budgetData = { v:1, entries:[], limits:{} };
+let _budgetMonth = '';          // 'YYYY-MM' currently on screen
+let _budgetLimitsEditing = false;
+let _budgetLoaded = false;
+
+// Only the owner's own gate session gets the tab. window._gateEmail is
+// stamped by _gateResolve(); the role check keeps a 'tools'/'client'
+// session out even if the address were ever added to APP_ACCESS twice.
+function _budgetIsOwner(){
+  // switchTab() calls this on every tab change, and it is reachable before
+  // this block finishes executing (an earlier statement throwing — a blocked
+  // firebase CDN, say — leaves the consts above in the temporal dead zone).
+  // Fail closed rather than let a ReferenceError escape and take the whole
+  // tab bar down with it.
+  try{
+    return String(window._gateEmail||'').toLowerCase() === BUDGET_OWNER_EMAIL
+        && window._gateRole === 'full';
+  }catch(e){ return false; }
+}
+// Show or hide the tab to match who is signed in. Called by the gate on
+// every auth state change, so a sign-out takes the tab away again.
+function _budgetApplyAccess(){
+  const tab = document.getElementById('tab-budget');
+  const owner = _budgetIsOwner();
+  if(tab) tab.style.display = owner ? '' : 'none';
+  if(!owner && currentTab === 'budget'){
+    try{ switchTab('dashboard'); }catch(e){}
+  }
+}
+
+function _budgetMonthKey(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+function _budgetMonthLabel(key){
+  const [y,m] = key.split('-').map(Number);
+  return new Date(y, m-1, 1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+}
+// Cents wherever they exist, except in the headline figures: a 48px hero
+// reading "$4,024.61" is harder to take in at a glance than "$4,025", and
+// the exact figure is one glance away in the ledger below. Pass {whole:true}
+// for a display number, {cents:true} to force them.
+function _bgMoney(n, opts){
+  const v = Number(n)||0;
+  const cents = (opts&&opts.whole) ? false
+              : (!!(opts&&opts.cents) || Math.round(v*100)%100 !== 0);
+  return v.toLocaleString('en-US',{
+    style:'currency', currency:'USD',
+    minimumFractionDigits: cents?2:0, maximumFractionDigits: cents?2:0
+  });
+}
+
+function budgetLoad(){
+  if(_budgetLoaded) return;
+  try{
+    const raw = localStorage.getItem(BUDGET_KEY);
+    if(raw){
+      const p = JSON.parse(raw);
+      if(p && Array.isArray(p.entries)){
+        _budgetData = { v:1, entries:p.entries, limits:(p.limits&&typeof p.limits==='object')?p.limits:{} };
+      }
+    }
+  }catch(e){ console.warn('[budget] could not read saved data', e); }
+  _budgetLoaded = true;
+}
+function budgetSave(){
+  try{
+    _budgetData.updatedAt = Date.now();
+    localStorage.setItem(BUDGET_KEY, JSON.stringify(_budgetData));
+  }catch(e){
+    console.error('[budget] save failed', e);
+    showToast('Could not save — this browser may be out of storage');
+  }
+}
+
+// Entries of the month on screen, newest first.
+function _budgetEntriesFor(monthKey){
+  return _budgetData.entries
+    .filter(e => e && typeof e.date === 'string' && e.date.slice(0,7) === monthKey)
+    .sort((a,b) => (b.date||'').localeCompare(a.date||'') || (b.id||'').localeCompare(a.id||''));
+}
+function _budgetTotals(monthKey){
+  let income = 0, spend = 0;
+  _budgetEntriesFor(monthKey).forEach(e => {
+    const amt = Number(e.amount)||0;
+    if(e.kind === 'income') income += amt; else spend += amt;
+  });
+  return { income, spend, left: income - spend };
+}
+// Every category name seen so far, for the type currently selected.
+function _budgetCategories(kind){
+  const seen = [];
+  _budgetData.entries.forEach(e => {
+    if(kind && e.kind !== kind) return;
+    const c = (e.category||'').trim();
+    if(c && seen.indexOf(c) < 0) seen.push(c);
+  });
+  Object.keys(_budgetData.limits||{}).forEach(c => { if(seen.indexOf(c) < 0 && (!kind || kind==='expense')) seen.push(c); });
+  return seen.sort((a,b) => a.localeCompare(b));
+}
+
+function budgetShiftMonth(delta){
+  const [y,m] = _budgetMonth.split('-').map(Number);
+  _budgetMonth = _budgetMonthKey(new Date(y, m-1+delta, 1));
+  renderBudget();
+}
+
+function budgetAddEntry(){
+  const dateEl = document.getElementById('bg-in-date');
+  const kindEl = document.getElementById('bg-in-kind');
+  const catEl  = document.getElementById('bg-in-cat');
+  const amtEl  = document.getElementById('bg-in-amt');
+  const noteEl = document.getElementById('bg-in-note');
+  const date = (dateEl.value||'').trim();
+  const amount = Math.round((Number(amtEl.value)||0) * 100) / 100;
+  if(!date){ showToast('Pick a date'); dateEl.focus(); return; }
+  if(!(amount > 0)){ showToast('Enter an amount greater than zero'); amtEl.focus(); return; }
+  const category = (catEl.value||'').trim() || 'Uncategorized';
+  _budgetData.entries.push({
+    id: 'b'+Date.now()+Math.random().toString(36).slice(2,6),
+    date, kind: kindEl.value === 'income' ? 'income' : 'expense',
+    category, amount, note: (noteEl.value||'').trim()
+  });
+  budgetSave();
+  // Jump to the month the entry belongs to, so it's visible straight away.
+  _budgetMonth = date.slice(0,7);
+  amtEl.value = ''; noteEl.value = '';
+  renderBudget();
+  showToast('Added '+_bgMoney(amount)+' — '+category);
+}
+
+function budgetDeleteEntry(id){
+  const i = _budgetData.entries.findIndex(e => e.id === id);
+  if(i < 0) return;
+  const e = _budgetData.entries[i];
+  if(!confirm('Delete this entry?\n\n'+e.date+' · '+e.category+' · '+_bgMoney(e.amount))) return;
+  _budgetData.entries.splice(i,1);
+  budgetSave();
+  renderBudget();
+}
+
+function budgetOpenLimits(){
+  _budgetLimitsEditing = !_budgetLimitsEditing;
+  renderBudget();
+}
+function budgetSetLimit(cat, value){
+  const n = Math.round((Number(value)||0) * 100) / 100;
+  if(n > 0) _budgetData.limits[cat] = n;
+  else delete _budgetData.limits[cat];
+  budgetSave();
+}
+function budgetAddLimitCategory(){
+  const el = document.getElementById('bg-new-limit-cat');
+  const name = (el.value||'').trim();
+  if(!name){ el.focus(); return; }
+  if(!_budgetData.limits[name]) _budgetData.limits[name] = 0;
+  budgetSave();
+  el.value = '';
+  renderBudget();
+}
+
+function budgetExport(){
+  const blob = new Blob([JSON.stringify(_budgetData, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'budget-'+_budgetMonthKey(new Date())+'.json';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  showToast('Budget exported');
+}
+function budgetImport(input){
+  const file = input && input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let p = null;
+    try{ p = JSON.parse(String(reader.result||'')); }
+    catch(e){ showToast('That file isn\'t valid JSON'); input.value=''; return; }
+    if(!p || !Array.isArray(p.entries)){ showToast('That file isn\'t a budget export'); input.value=''; return; }
+    if(!confirm('Replace the budget on this device with '+p.entries.length+' entries from this file?\n\nExport first if you want to keep what\'s here.')){
+      input.value=''; return;
+    }
+    _budgetData = { v:1, entries:p.entries, limits:(p.limits&&typeof p.limits==='object')?p.limits:{} };
+    budgetSave();
+    renderBudget();
+    showToast('Imported '+p.entries.length+' entries');
+    input.value='';
+  };
+  reader.readAsText(file);
+}
+
+function budgetRefreshCategoryList(){
+  const kind = (document.getElementById('bg-in-kind')||{}).value || 'expense';
+  const dl = document.getElementById('bg-cat-options');
+  if(!dl) return;
+  dl.innerHTML = _budgetCategories(kind).map(c => '<option value="'+escHtml(c)+'"></option>').join('');
+}
+
+// ── Rendering ──
+function renderBudget(){
+  if(!_budgetIsOwner()) return;
+  budgetLoad();
+  if(!_budgetMonth) _budgetMonth = _budgetMonthKey(new Date());
+  const dateEl = document.getElementById('bg-in-date');
+  if(dateEl && !dateEl.value){
+    const n = new Date();
+    dateEl.value = n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');
+  }
+  const lbl = document.getElementById('bg-month-label');
+  if(lbl) lbl.textContent = _budgetMonthLabel(_budgetMonth);
+  budgetRefreshCategoryList();
+  _budgetRenderKpis();
+  _budgetRenderMeters();
+  _budgetRenderTrend();
+  _budgetRenderLedger();
+}
+
+// KPI row. "Left" is the one hero figure on the view; income and spending
+// are the supporting tiles.
+function _budgetRenderKpis(){
+  const el = document.getElementById('bg-kpis');
+  if(!el) return;
+  const t = _budgetTotals(_budgetMonth);
+  const overspent = t.left < 0;
+  el.innerHTML =
+    '<div class="bg-kpi">'
+      + '<div class="bg-kpi-label">'+(overspent?'Over budget':'Left this month')+'</div>'
+      + '<div class="bg-hero" style="'+(overspent?'color:var(--bg-over);':'')+'">'+_bgMoney(Math.abs(t.left),{whole:true})+'</div>'
+      + '<div class="bg-kpi-note">'+(overspent
+          ? 'Spending is ahead of income this month.'
+          : (t.income ? Math.round((t.left/t.income)*100)+'% of what came in' : 'No income recorded yet'))+'</div>'
+    + '</div>'
+    + '<div class="bg-kpi">'
+      + '<div class="bg-kpi-label">Money in</div>'
+      + '<div class="bg-kpi-value">'+_bgMoney(t.income,{whole:true})+'</div>'
+    + '</div>'
+    + '<div class="bg-kpi">'
+      + '<div class="bg-kpi-label">Money out</div>'
+      + '<div class="bg-kpi-value">'+_bgMoney(t.spend,{whole:true})+'</div>'
+    + '</div>';
+}
+
+// Meters: spend against each category's monthly limit. Fill carries the
+// state; the track is a light step of the same hue. Categories without a
+// limit are still listed, sized against the biggest spender, so nothing
+// you spent on quietly disappears from the view.
+function _budgetRenderMeters(){
+  const el = document.getElementById('bg-meters');
+  if(!el) return;
+  const spendByCat = {};
+  _budgetEntriesFor(_budgetMonth).forEach(e => {
+    if(e.kind === 'income') return;
+    const c = (e.category||'Uncategorized').trim();
+    spendByCat[c] = (spendByCat[c]||0) + (Number(e.amount)||0);
+  });
+  const cats = Object.keys(spendByCat);
+  Object.keys(_budgetData.limits||{}).forEach(c => { if(cats.indexOf(c) < 0) cats.push(c); });
+
+  if(_budgetLimitsEditing){
+    el.innerHTML =
+      '<div style="font-size:11px;color:var(--ink-muted);margin:2px 0 10px;">A limit of 0 removes it. These carry across every month.</div>'
+      + (cats.sort((a,b)=>a.localeCompare(b)).map(c =>
+          '<div class="bg-meter-row" style="display:flex;align-items:center;gap:12px;">'
+          + '<div class="bg-meter-name" style="flex:1;">'+escHtml(c)+'</div>'
+          + '<input class="bg-input" style="width:120px;" type="number" min="0" step="1" value="'+(_budgetData.limits[c]||'')+'" '
+            + 'placeholder="No limit" onchange="budgetSetLimit(\''+c.replace(/'/g,"\\'")+'\', this.value)"/>'
+          + '</div>').join(''))
+      + '<div style="display:flex;gap:8px;align-items:center;margin-top:14px;">'
+        + '<input id="bg-new-limit-cat" class="bg-input" style="max-width:220px;" type="text" placeholder="New category"/>'
+        + '<button class="bg-btn-quiet" onclick="budgetAddLimitCategory()">Add category</button>'
+        + '<button class="bg-btn" style="margin-left:auto;" onclick="budgetOpenLimits()">Done</button>'
+      + '</div>';
+    return;
+  }
+
+  if(!cats.length){
+    el.innerHTML = '<div class="bg-empty">No spending recorded this month.</div>';
+    return;
+  }
+  const maxSpend = Math.max.apply(null, cats.map(c => spendByCat[c]||0).concat([1]));
+  el.innerHTML = cats
+    .sort((a,b) => (spendByCat[b]||0) - (spendByCat[a]||0) || a.localeCompare(b))
+    .map(c => {
+      const spent = spendByCat[c] || 0;
+      const limit = Number(_budgetData.limits[c]) || 0;
+      let pct, fill, track, state = '', fig;
+      if(limit > 0){
+        const ratio = spent / limit;
+        pct = Math.min(100, ratio*100);
+        if(ratio > 1){
+          fill='var(--bg-over)';  track='#F2DEDC';
+          state = '<span class="bg-meter-state" style="color:var(--bg-over);">▲ OVER by '+_bgMoney(spent-limit)+'</span>';
+        } else if(ratio === 1){
+          fill='var(--bg-warn)';  track='#F6E7D6';
+          state = '<span class="bg-meter-state" style="color:var(--bg-warn);">● AT THE LIMIT</span>';
+        } else if(ratio >= 0.8){
+          fill='var(--bg-warn)';  track='#F6E7D6';
+          state = '<span class="bg-meter-state" style="color:var(--bg-warn);">● CLOSE — '+_bgMoney(limit-spent)+' left</span>';
+        } else {
+          fill='var(--bg-good)';  track='#E2EBE3';
+          state = '<span class="bg-meter-state" style="color:var(--bg-good);">✓ '+_bgMoney(limit-spent)+' left</span>';
+        }
+        fig = _bgMoney(spent)+' of '+_bgMoney(limit);
+      } else {
+        // No limit set — show magnitude against the month's biggest category.
+        pct = (spent/maxSpend)*100;
+        fill='#8D9BB5'; track='#E7E9EF';
+        fig = _bgMoney(spent);
+        state = '<span class="bg-meter-state" style="color:var(--ink-muted);">no limit set</span>';
+      }
+      return '<div class="bg-meter-row">'
+        + '<div class="bg-meter-head">'
+          + '<span class="bg-meter-name">'+escHtml(c)+'</span>'
+          + '<span class="bg-meter-fig">'+fig+' &nbsp;'+state+'</span>'
+        + '</div>'
+        + '<div class="bg-track" style="background:'+track+';"><div class="bg-fill" style="width:'+pct.toFixed(1)+'%;background:'+fill+';"></div></div>'
+      + '</div>';
+    }).join('');
+}
+
+// Six months of income vs spending. Two hues, both validated against the
+// cream surface for colour-vision deficiency; legend above, values on hover.
+function _budgetRenderTrend(){
+  const el = document.getElementById('bg-trend');
+  if(!el) return;
+  const [y,m] = _budgetMonth.split('-').map(Number);
+  const months = [];
+  for(let i=5; i>=0; i--){
+    const d = new Date(y, m-1-i, 1);
+    const key = _budgetMonthKey(d);
+    const t = _budgetTotals(key);
+    months.push({ key, short: d.toLocaleDateString('en-US',{month:'short'}), income:t.income, spend:t.spend });
+  }
+  const max = Math.max.apply(null, months.map(x => Math.max(x.income, x.spend)).concat([1]));
+  const h = (v) => Math.max(2, (v/max)*100);
+  const scale = document.getElementById('bg-trend-scale');
+  if(scale) scale.innerHTML = max > 1 ? '<span>'+_bgMoney(max,{whole:true})+'</span>' : '';
+  el.innerHTML = months.map(x =>
+    '<div class="bg-trend-month">'
+      + '<div class="bg-trend-bars">'
+        + '<div class="bg-bar" style="height:'+h(x.income).toFixed(1)+'%;background:var(--bg-income);" '
+          + 'data-tip="'+escHtml(_budgetMonthLabel(x.key))+' — in '+_bgMoney(x.income)+'"></div>'
+        + '<div class="bg-bar" style="height:'+h(x.spend).toFixed(1)+'%;background:var(--bg-spend);" '
+          + 'data-tip="'+escHtml(_budgetMonthLabel(x.key))+' — out '+_bgMoney(x.spend)+'"></div>'
+      + '</div>'
+      + '<div class="bg-trend-label"'+(x.key===_budgetMonth?' style="color:var(--ink);font-weight:700;"':'')+'>'+x.short+'</div>'
+    + '</div>').join('');
+  _budgetBindTips(el);
+}
+
+// Small hover tooltip for the trend columns — a bar chart should say what
+// it's worth without making you count gridlines.
+function _budgetBindTips(root){
+  let tip = document.getElementById('bg-tip');
+  if(!tip){
+    tip = document.createElement('div');
+    tip.id = 'bg-tip';
+    tip.style.cssText = 'position:fixed;z-index:9999;display:none;pointer-events:none;background:var(--ink);color:var(--cream);'
+      + 'font-size:11px;font-family:var(--font-body);padding:5px 9px;border-radius:var(--radius-sm);box-shadow:var(--shadow-md);white-space:nowrap;';
+    document.body.appendChild(tip);
+  }
+  root.querySelectorAll('.bg-bar').forEach(bar => {
+    bar.addEventListener('mouseenter', () => {
+      tip.textContent = bar.getAttribute('data-tip')||'';
+      tip.style.display = 'block';
+    });
+    bar.addEventListener('mousemove', (ev) => {
+      tip.style.left = (ev.clientX + 12) + 'px';
+      tip.style.top  = (ev.clientY - 30) + 'px';
+    });
+    bar.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+  });
+}
+
+function _budgetRenderLedger(){
+  const el = document.getElementById('bg-ledger');
+  const sub = document.getElementById('bg-ledger-sub');
+  if(!el) return;
+  const rows = _budgetEntriesFor(_budgetMonth);
+  if(sub) sub.textContent = rows.length ? (rows.length + (rows.length===1?' entry':' entries') + ' in ' + _budgetMonthLabel(_budgetMonth)) : '';
+  if(!rows.length){
+    el.innerHTML = '<div class="bg-empty">Nothing recorded for '+_budgetMonthLabel(_budgetMonth)+' yet.</div>';
+    return;
+  }
+  el.innerHTML = '<table class="bg-table"><thead><tr>'
+    + '<th style="width:92px;">Date</th><th style="width:150px;">Category</th><th>Note</th>'
+    + '<th class="bg-amt" style="width:110px;">Amount</th><th style="width:32px;"></th>'
+    + '</tr></thead><tbody>'
+    + rows.map(e => {
+        const income = e.kind === 'income';
+        const dot = '<span class="bg-swatch" style="background:'+(income?'var(--bg-income)':'var(--bg-spend)')+'"></span>';
+        const [yy,mm,dd] = String(e.date).split('-');
+        return '<tr>'
+          + '<td style="font-variant-numeric:tabular-nums;">'+mm+'/'+dd+'/'+yy+'</td>'
+          + '<td>'+dot+escHtml(e.category||'')+'</td>'
+          + '<td style="color:var(--ink-muted);">'+escHtml(e.note||'')+'</td>'
+          + '<td class="bg-amt">'+(income?'+':'−')+' '+_bgMoney(e.amount,{cents:true})+'</td>'
+          + '<td><button class="bg-del" title="Delete entry" onclick="budgetDeleteEntry(\''+e.id+'\')">×</button></td>'
+        + '</tr>';
+      }).join('')
+    + '</tbody></table>';
+}
+
 // ══════════════════════════════════════════════════
 // SIGN-IN GATE — who can open the app, and which view they get.
 //   'full'   → the whole tracker
@@ -29671,11 +30309,14 @@ function _gateResolve(u){
   const signin=document.getElementById('gate-signin-btn');
   const msg=document.getElementById('gate-msg');
   const email=String(u.email||'').toLowerCase();
+  window._gateEmail=email;
   const role=APP_ACCESS[email];
   if(role){
     clearInterval(_gateWaitTimer);_gateWaitTimer=null;
     window._gateRole=role;
     _gateHide();
+    // The Budget tab only exists for the owner (see BUDGET_OWNER_EMAIL).
+    try{ _budgetApplyAccess(); }catch(e){}
     if(role==='tools'){ try{ enterToolsOnlyView(false); }catch(e){} }
     return true;
   }
@@ -29686,6 +30327,7 @@ function _gateResolve(u){
     clearInterval(_gateWaitTimer);_gateWaitTimer=null;
     window._gateRole='client';
     _gateHide();
+    try{ _budgetApplyAccess(); }catch(e){}
     try{ enterClientOnlyView(cases,u.email||''); }
     catch(e){ console.warn('[client-portal] failed to open', e); }
     return true;
@@ -29712,6 +30354,8 @@ _gateAuth.onAuthStateChanged(u=>{
   const msg=document.getElementById('gate-msg');
   if(!u){
     window._gateRole=null;
+    window._gateEmail='';
+    try{ _budgetApplyAccess(); }catch(e){}
     // A client session runs with every write path switched off. Rather
     // than try to unwind that in place (and risk a later staff sign-in
     // silently not saving), reload into a clean page.
