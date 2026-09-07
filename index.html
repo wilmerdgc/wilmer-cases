@@ -5797,6 +5797,8 @@ async function gmailGetProfile(){
         _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync();
       }
     }catch(e){}
+    // Pull direction: only runs if the user turned the import on.
+    try{ _scheduleCalendarImport&&_scheduleCalendarImport(true); }catch(e){}
   }, 250);
 }
 
@@ -5869,6 +5871,9 @@ function _localTz(){
 function _isSyncableRecord(r){
   if(!r || !r.date) return false;
   if(r.deletedStatus || r.finishedStatus) return false;
+  // Came FROM Google Calendar (see calendarImportFromGoogle) — pushing it
+  // back would duplicate the event and overwrite its title with ours.
+  if(r._gcalImportId) return false;
   if(r.notes && r.notes.startsWith('⏰ REMINDER')) return false; // child reminder rows
   return true;
 }
@@ -6118,6 +6123,247 @@ async function calendarSyncAll(){
   } else {
     showToast('📅 Calendar sync: '+(parts.join(', ')||'nothing changed'));
   }
+}
+
+// ── Google Calendar → app events (inbound import) ─────────────
+// Everything above pushes app records OUT to Google Calendar. This pulls
+// the other way: events already sitting on the Google Calendar come IN as
+// standalone PERSONAL TASK records, so whatever is on the personal calendar
+// shows up on the Today / Week / Month views next to the case events.
+// Read access comes free with the calendar.events scope the push side
+// already asks for, so there's no second consent screen.
+//
+// Four rules keep the two directions from fighting each other:
+//   1. Events this app pushed are skipped (matched on _gcalEventId, on the
+//      "Synced from Wilmer Cases" footer, or on the source title), so a case
+//      event never comes back in as a duplicate task.
+//   2. Imported records carry _gcalImportId and are excluded from the
+//      outbound sync (see _isSyncableRecord), so they're never pushed back.
+//   3. The Google event id is the key, so re-running the import updates the
+//      records it created before instead of piling up new ones.
+//   4. A record finished or deleted in the app stays that way — the import
+//      never resurrects it.
+
+// Window the import looks at, in days either side of today.
+const CAL_IMPORT_DAYS_BACK  = 30;
+const CAL_IMPORT_DAYS_AHEAD = 180;
+// Footer _buildCalendarEventPayload() stamps on every event we push.
+const CAL_SYNC_FOOTER = '— Synced from Wilmer Cases';
+// Event type imported events land as. Task-kind (matches /\bTASK\b/), so the
+// calendar cards lead with the event title instead of a type label.
+const CAL_IMPORT_EVENT_TYPE = 'PERSONAL TASK';
+
+function _calIsoOffsetDays(days){
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString();
+}
+// Calendar text is written by whoever created the event — including people
+// who invite you — and the week/day cards render notes as HTML. Strip tags
+// and collapse whitespace before any of it becomes a record.
+function _calPlainText(s, max){
+  const out = String(s == null ? '' : s)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/[<>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return (max && out.length > max) ? out.slice(0, max - 1) + '…' : out;
+}
+// 'YYYY-MM-DD' + 'HH:MM' out of a Calendar start/end block. All-day events
+// carry {date}; timed ones carry {dateTime}, read in local time so the day
+// matches what the Google Calendar UI shows.
+function _calWhen(block){
+  if(!block) return { date:'', time:'' };
+  if(block.date) return { date: block.date, time:'' };
+  if(!block.dateTime) return { date:'', time:'' };
+  const dt = new Date(block.dateTime);
+  if(isNaN(dt.getTime())) return { date:'', time:'' };
+  return {
+    date: dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'),
+    time: String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0')
+  };
+}
+// True for an event that originated in this app, so the import leaves it be.
+function _calIsOwnPush(ev, pushedIds){
+  if(!ev) return false;
+  if(ev.id && pushedIds.has(ev.id)) return true;
+  if(ev.recurringEventId && pushedIds.has(ev.recurringEventId)) return true;
+  if(ev.description && ev.description.indexOf(CAL_SYNC_FOOTER) >= 0) return true;
+  if(ev.source && ev.source.title === 'Wilmer Cases') return true;
+  return false;
+}
+// Invitations you turned down shouldn't clutter the calendar views.
+function _calSelfDeclined(ev){
+  const me = (ev.attendees || []).filter(a => a && a.self)[0];
+  return !!(me && me.responseStatus === 'declined');
+}
+// Note text an imported event shows on the cards: title, plus location and a
+// trimmed description when the event carries them.
+function _calImportNotes(ev){
+  const parts = [_calPlainText(ev.summary, 120) || '(no title)'];
+  const loc = _calPlainText(ev.location, 80);
+  if(loc) parts.push('@ ' + loc);
+  const desc = _calPlainText(ev.description, 160);
+  if(desc) parts.push('— ' + desc);
+  return parts.join(' ');
+}
+
+// Reads the whole import window, one page at a time until Calendar stops
+// handing back a page token.
+async function _calFetchImportWindow(){
+  const params = new URLSearchParams({
+    singleEvents: 'true',        // expand recurring events into instances
+    orderBy: 'startTime',
+    showDeleted: 'true',         // so cancellations can be mirrored
+    maxResults: '250',
+    timeMin: _calIsoOffsetDays(-CAL_IMPORT_DAYS_BACK),
+    timeMax: _calIsoOffsetDays(CAL_IMPORT_DAYS_AHEAD)
+  });
+  const out = [];
+  let pageToken = '';
+  for(let page = 0; page < 20; page++){   // hard stop — 20 × 250 is plenty
+    if(pageToken) params.set('pageToken', pageToken); else params.delete('pageToken');
+    const res = await calendarApi(_calTargetPath() + '?' + params.toString());
+    if(!res || res._error) return { error: (res && res._error) || 'network', events: out };
+    out.push(...(res.items || []));
+    pageToken = res.nextPageToken || '';
+    if(!pageToken) break;
+  }
+  return { error: null, events: out };
+}
+
+let _calImportRunning = false;
+// Pulls the Google Calendar into the app. Safe to run as often as you like —
+// it's keyed on the Google event id, so nothing duplicates.
+async function calendarImportFromGoogle(opts){
+  const quiet = !!(opts && opts.quiet);
+  if(_calImportRunning){ if(!quiet) showToast('Import already running…'); return; }
+  if(!_gmailAccessToken){ if(!quiet){ showToast('Sign in with Google first'); gmailSignIn(); } return; }
+  if(!_gmailHasCalendarScope()){
+    if(!quiet){
+      showToast('📅 Calendar scope not granted — re-authorize to import');
+      _showCalendarReauthPrompt('Import requested without calendar scope');
+    }
+    return;
+  }
+  _calImportRunning = true;
+  if(!quiet) showToast('📅 Reading Google Calendar…');
+  try{
+    const { error, events } = await _calFetchImportWindow();
+    if(error){ if(!quiet) showToast('📅 Calendar import failed — see console'); return; }
+    // Ids of events this app pushed, so its own case events are skipped.
+    const pushedIds = new Set(records.map(r => r._gcalEventId).filter(Boolean));
+    // Records a previous import created, keyed by their Google event id.
+    const byImportId = {};
+    records.forEach(r => { if(r._gcalImportId) byImportId[r._gcalImportId] = r; });
+
+    let added = 0, updated = 0, removed = 0;
+    events.forEach(ev => {
+      if(!ev || !ev.id) return;
+      const existing = byImportId[ev.id];
+      // Cancelled on the Google side → mirror it as the app's own soft
+      // delete rather than dropping the row, so the change is reversible.
+      if(ev.status === 'cancelled'){
+        if(existing && !existing.deletedStatus){
+          existing.deletedStatus = 'deleted';
+          existing.deletedDate = todayStr();
+          removed++;
+        }
+        return;
+      }
+      if(_calIsOwnPush(ev, pushedIds)) return;
+      if(_calSelfDeclined(ev)) return;
+      const start = _calWhen(ev.start);
+      if(!start.date) return;                 // undated → nothing to place
+      const end = _calWhen(ev.end);
+      const notes = _calImportNotes(ev);
+      const timeStart = start.time;
+      // An end time only makes sense on the same day; a multi-day block keeps
+      // just the start so the card doesn't advertise a bogus end.
+      const timeEnd = (start.time && end.date === start.date) ? end.time : '';
+      if(existing){
+        // Anything finished or deleted in the app stays that way.
+        if(existing.deletedStatus || existing.finishedStatus) return;
+        if(existing.date === start.date && existing.timeStart === timeStart
+           && existing.timeEnd === timeEnd && existing.notes === notes) return;
+        existing.date = start.date;
+        existing.timeStart = timeStart;
+        existing.timeEnd = timeEnd;
+        existing.notes = notes;
+        existing._gcalImportedAt = Date.now();
+        updated++;
+      } else {
+        records.push({
+          id: uid(), clid:'', client:'Personal', type:'PERSONAL', anum:'', atty:'', assigned:'',
+          event: CAL_IMPORT_EVENT_TYPE, date: start.date, timeStart, timeEnd,
+          hearingMode:'', notes, checklist:[], docs:[], history:[],
+          _gcalImportId: ev.id, _gcalImportedAt: Date.now()
+        });
+        added++;
+      }
+    });
+    if(added || updated || removed){
+      try{ markUnsaved(); }catch(e){}
+      try{ renderAll(); }catch(e){}
+    }
+    // A background run stays silent unless something actually appeared or
+    // disappeared — a bare "nothing new" every 15 minutes is just noise.
+    if(!quiet || added || removed){
+      const parts = [];
+      if(added)   parts.push(added+' added');
+      if(updated) parts.push(updated+' updated');
+      if(removed) parts.push(removed+' removed');
+      showToast('📅 Calendar import: ' + (parts.join(', ') || 'nothing new'));
+    }
+  }catch(e){
+    console.error('Calendar import failed', e);
+    if(!quiet) showToast('📅 Calendar import failed — see console');
+  }finally{
+    _calImportRunning = false;
+  }
+}
+
+// Per-device opt-in, off by default — the push direction is the one that has
+// always run automatically, so pulling only starts when it's asked for.
+// Turning it on imports right away, then quietly every few minutes.
+const CAL_IMPORT_ENABLED_KEY  = 'wilmer_calendar_import_enabled';
+const CAL_IMPORT_INTERVAL_MIN = 15;
+let _calImportTimer = null;
+function _calImportEnabled(){
+  try{ return localStorage.getItem(CAL_IMPORT_ENABLED_KEY) === '1'; }catch(e){ return false; }
+}
+function _setCalImportEnabled(on){
+  try{
+    if(on) localStorage.setItem(CAL_IMPORT_ENABLED_KEY, '1');
+    else   localStorage.removeItem(CAL_IMPORT_ENABLED_KEY);
+  }catch(e){}
+  if(on){
+    showToast('📅 Calendar import ON — checking every '+CAL_IMPORT_INTERVAL_MIN+' min');
+    _scheduleCalendarImport(true);
+  } else {
+    clearInterval(_calImportTimer);
+    _calImportTimer = null;
+    showToast('📅 Calendar import OFF');
+  }
+}
+function _scheduleCalendarImport(runNow){
+  if(!_calImportEnabled() || !_gmailAccessToken) return;
+  if(runNow) calendarImportFromGoogle({quiet:true});
+  if(_calImportTimer) return;
+  _calImportTimer = setInterval(() => {
+    if(!_calImportEnabled() || !_gmailAccessToken) return;
+    calendarImportFromGoogle({quiet:true});
+  }, CAL_IMPORT_INTERVAL_MIN * 60 * 1000);
+}
+// Toggle handler for the Account dropdown row.
+function gmailToggleCalImport(){
+  const next = !_calImportEnabled();
+  _setCalImportEnabled(next);
+  const labelEl = document.getElementById('gmail-cal-import-label');
+  if(labelEl) labelEl.textContent = next ? 'Import ON' : 'Import OFF';
+  const dotEl = document.getElementById('gmail-cal-import-dot');
+  if(dotEl) dotEl.style.background = next ? 'var(--sage)' : 'var(--ink-faint)';
 }
 
 // Which Gmail mailbox is currently shown in the list. 'inbox' or 'sent'.
@@ -6916,6 +7162,11 @@ function gmailRenderConnected(){
               <span>📅 Calendar <span id="gmail-cal-autosync-label" style="color:var(--ink-muted);font-weight:500;">${_calAutoSyncEnabled() ? 'Auto-sync ON' : 'Auto-sync OFF'}</span></span>
             </div>
             <div onclick="event.stopPropagation();calendarSyncAll();this.parentElement.style.display='none'" style="padding:8px 14px;font-size:11px;cursor:pointer;color:var(--ink-muted);" onmouseenter="this.style.background='var(--cream)'" onmouseleave="this.style.background=''" title="Push every event right now, regardless of the auto-sync setting">↻ Sync calendar now</div>
+            <div onclick="event.stopPropagation();gmailToggleCalImport();" style="padding:8px 14px;font-size:12px;cursor:pointer;color:var(--ink);display:flex;align-items:center;gap:8px;border-top:1px solid var(--cream-dark);" onmouseenter="this.style.background='var(--cream)'" onmouseleave="this.style.background=''" title="Pull events from the Google Calendar into the app as personal tasks, every 15 minutes">
+              <span id="gmail-cal-import-dot" style="width:8px;height:8px;border-radius:50%;background:${_calImportEnabled() ? 'var(--sage)' : 'var(--ink-faint)'};flex-shrink:0;"></span>
+              <span>⬇ Google Calendar <span id="gmail-cal-import-label" style="color:var(--ink-muted);font-weight:500;">${_calImportEnabled() ? 'Import ON' : 'Import OFF'}</span></span>
+            </div>
+            <div onclick="event.stopPropagation();calendarImportFromGoogle();this.parentElement.style.display='none'" style="padding:8px 14px;font-size:11px;cursor:pointer;color:var(--ink-muted);" onmouseenter="this.style.background='var(--cream)'" onmouseleave="this.style.background=''" title="Read the Google Calendar right now and bring in anything new">⬇ Import calendar now</div>
             <div onclick="gmailSignOut();this.parentElement.style.display='none'" style="padding:8px 14px;font-size:12px;cursor:pointer;color:var(--rose);border-top:1px solid var(--cream-dark);" onmouseenter="this.style.background='var(--rose-light)'" onmouseleave="this.style.background=''">Disconnect</div>
           </div>
         </div>
