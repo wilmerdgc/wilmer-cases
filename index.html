@@ -2656,6 +2656,14 @@ window.addEventListener('load',()=>autoGrowAllNotes());
   </div>
   <div class="settings-section"><div class="settings-section-title">Venues</div><div class="tag-list" id="venue-tags"></div><div class="tag-add-row"><input id="new-venue" type="text" placeholder="Add venue..."/><button onclick="addVenue()">Add</button></div></div>
   <div class="settings-section"><div class="settings-section-title">Billing concepts</div><div style="font-size:11px;color:#8A7E72;margin-bottom:8px;">What a payment is for — the Concept column in a case's Payments ledger. Anything new typed there is added to this list automatically. Click a concept to rename it.</div><div class="tag-list" id="billingconcept-tags"></div><div class="tag-add-row"><input id="new-billingconcept" type="text" placeholder="Add concept..."/><button onclick="addBillingConcept()">Add</button></div></div>
+  <div class="settings-section">
+    <div class="settings-section-title">Client names</div>
+    <div style="font-size:11px;color:#8A7E72;margin-bottom:10px;line-height:1.55;max-width:640px;">First and middle names are saved with a capital first letter and the rest lowercase; family names are saved in capitals. Cases where the split itself is wrong — the whole name typed into the first-name box, a family name in the middle-name box, a name shown with words the fields do not have — need a person to say which word is which, so they are listed here.</div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <button onclick="openNameCleanup()" style="display:flex;align-items:center;gap:7px;padding:9px 16px;border:1px solid #DDD5CA;border-radius:8px;background:#fff;color:#2C2620;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;transition:all .14s;" onmouseenter="this.style.background='#F7F3ED';this.style.borderColor='#C4BAB0'" onmouseleave="this.style.background='#fff';this.style.borderColor='#DDD5CA'"><span style="font-size:15px;">🔤</span><span>Review client names</span></button>
+      <span id="name-cleanup-count" style="font-size:11px;color:#9E9186;"></span>
+    </div>
+  </div>
   <div class="settings-section"><div class="settings-section-title">All records</div><div style="overflow-x:auto"><table class="settings-table"><thead><tr id="settings-thead"></tr></thead><tbody id="settings-tbody"></tbody></table></div><div style="margin-top:14px"><button class="btn-primary btn-sm" onclick="openAdd()">+ Add event</button></div></div>
 
   <!-- Firm / Attorney Info for G-28 & forms -->
@@ -7585,7 +7593,7 @@ function migrateDocLists(){Object.keys(caseTypeDocLists).forEach(ct=>{const arr=
 function addCaseType(){const inp=document.getElementById('new-casetype');const val=inp.value.trim();if(!val){alert('Case type name required.');return;}if(caseTypes.includes(val)){alert('Case type already exists.');return;}caseTypes.push(val);inp.value='';renderCaseTypesSection();updateSettingsSaveBar();dirtyFilterOpts();}
 
 // ── Settings rendering ──
-function renderSettings(){renderColVis();renderParalegalTags();renderAttorneyTags();renderCalendarStaffTags();renderEventTypeTags();renderTags('casetype',caseTypes);renderVenueTags();renderBillingConceptTags();renderSettingsTable();renderFirmInfoFields();}
+function renderSettings(){renderColVis();renderParalegalTags();renderAttorneyTags();renderCalendarStaffTags();renderEventTypeTags();renderTags('casetype',caseTypes);renderVenueTags();renderBillingConceptTags();renderSettingsTable();renderFirmInfoFields();try{renderNameCleanupCount();}catch(e){}}
 function renderFirmInfoFields(){
   const fields=['lastName','firstName','middleName','firmName','barNumber','licensingAuthority','street','apt','city','state','zip','phone','mobile','email','fax'];
   fields.forEach(k=>{const el=document.getElementById('fi-'+k);if(el)el.value=firmInfo[k]||'';});
@@ -15124,6 +15132,214 @@ function _normalizeStoredNames(){
   }
   return changed;
 }
+
+// ── Client name review ──────────────────────────────────────────────
+// _normalizeStoredNames() only fixes casing. It deliberately leaves alone
+// the cases where the name FIELDS themselves are wrong: the whole name
+// typed into the first-name box with nothing in family name, a family
+// name sitting in the middle-name box, a name shown on the case with
+// words the fields never had. Those need a person to say which word is
+// which, so they are collected here and reviewed in one pass
+// (Settings → Client names).
+
+// Words already in CAPS are family names — that is this app's own
+// convention for the family-name field, and it also catches names typed
+// family-name-first ("CASTILLO MONTALEZA Luis John").
+// An initial ("S.", "J") is not a family name, so require two letters.
+function _ncIsFamilyWord(w){
+  const letters=String(w).replace(/\P{L}/gu,'');
+  return letters.length>1 && w===w.toUpperCase();
+}
+function _ncWords(s){ return _singleName(s).split(' ').filter(Boolean); }
+function _ncKey(s){ return _ncWords(s).map(w=>w.toLowerCase()).join(' '); }
+
+// Best guess at how one written-out name splits into first / middle /
+// family. Only ever a starting point — every row is editable.
+function _proposeNameSplit(src){
+  const words=_ncWords(src);
+  if(!words.length) return {first:'',middle:'',last:''};
+  const caps=words.filter(_ncIsFamilyWord), given=words.filter(w=>!_ncIsFamilyWord(w));
+  if(caps.length && given.length){
+    return {first:_properName(given[0]),middle:_properName(given.slice(1).join(' ')),last:caps.join(' ').toUpperCase()};
+  }
+  // Nothing but family names — the given name was never recorded anywhere.
+  if(caps.length && !given.length) return {first:'',middle:'',last:caps.join(' ').toUpperCase()};
+  if(words.length===1) return {first:_properName(words[0]),middle:'',last:''};
+  if(words.length===2) return {first:_properName(words[0]),middle:'',last:words[1].toUpperCase()};
+  if(words.length===3) return {first:_properName(words[0]),middle:_properName(words[1]),last:words[2].toUpperCase()};
+  // Four words or more: two given names, everything after them is family.
+  return {first:_properName(words[0]),middle:_properName(words[1]),last:words.slice(2).join(' ').toUpperCase()};
+}
+
+// Every case whose name fields need a human decision, newest data first.
+function _ncFlaggedCases(){
+  if(typeof caseMeta!=='object'||!caseMeta) return [];
+  const out=[];
+  Object.keys(caseMeta).forEach(clid=>{
+    if(clid==='Personal'||clid==='Office') return;   // standalone task buckets
+    const m=caseMeta[clid];
+    if(!m||typeof m!=='object') return;
+    const first=(m.clientFirstName||'').trim(), middle=(m.clientMiddleName||'').trim(), last=(m.clientLastName||'').trim();
+    if(!first&&!middle&&!last) return;               // nothing structured to check
+    const built=[first,middle,last].filter(Boolean).join(' ');
+    const builtWords=new Set(_ncWords(built).map(w=>w.toLowerCase()));
+    // The names this case is shown under. A rider on the same case has a
+    // name of its own — it shares no word with the lead, so it is left out
+    // and never touched when the fix is applied.
+    const variants=[];
+    (typeof records!=='undefined'?records:[]).forEach(r=>{
+      if(!r||r.clid!==clid||!r.client) return;
+      const ws=_ncWords(r.client).map(w=>w.toLowerCase());
+      if(!ws.some(w=>builtWords.has(w))) return;
+      if(!variants.some(v=>v===r.client)) variants.push(r.client);
+    });
+    let reason='';
+    if(!last) reason='Family name not separated out';
+    else if(!first) reason='No first name';
+    else if(variants.some(v=>_ncKey(v)!==_ncKey(built))) reason='Name shown does not match the fields';
+    if(!reason) return;
+    // Propose from whichever version of the name carries the most words —
+    // that is the one least likely to be missing part of the client's name.
+    // Between two of the same length, prefer the one that still has words
+    // in capitals: those say which part is the family name, and re-casing
+    // the fields has already erased that hint from them.
+    const _score=v=>_ncWords(v).length*2+(_ncWords(v).some(_ncIsFamilyWord)?1:0);
+    let source=built;
+    variants.forEach(v=>{ if(_score(v)>_score(source)) source=v; });
+    out.push({clid, first, middle, last, built, variants, source, reason, proposal:_proposeNameSplit(source)});
+  });
+  return out.sort((a,b)=>(a.source||'').localeCompare(b.source||''));
+}
+
+// Write one reviewed name back: the fields, plus the display name on the
+// records this case shows under (riders keep their own names).
+function _ncApply(clid,f,m,l,targets){
+  const first=_properName(f), middle=_properName(m), last=_singleName(l).toUpperCase();
+  if(!first||!last) return false;
+  if(!caseMeta[clid])caseMeta[clid]={};
+  caseMeta[clid].clientFirstName=first;
+  caseMeta[clid].clientMiddleName=middle;
+  caseMeta[clid].clientLastName=last;
+  const built=[first,middle,last].filter(Boolean).join(' ');
+  const set=new Set(targets||[]);
+  (typeof records!=='undefined'?records:[]).forEach(r=>{
+    if(r&&r.clid===clid&&(set.has(r.client)||!r.client)) r.client=built;
+  });
+  try{ _invalidateCasesCache(); }catch(e){}
+  markUnsaved();
+  return true;
+}
+
+function renderNameCleanupCount(){
+  const el=document.getElementById('name-cleanup-count');
+  if(!el)return;
+  let n=0; try{ n=_ncFlaggedCases().length; }catch(e){}
+  el.textContent=n?(n+' case'+(n===1?'':'s')+' to review'):'All names look consistent ✓';
+  el.style.color=n?'#C9823A':'#6A8C6E';
+}
+
+function openNameCleanup(){
+  const rows=_ncFlaggedCases();
+  const ov=document.createElement('div');
+  ov.id='name-cleanup-overlay';
+  ov.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(44,38,32,.45);display:flex;align-items:center;justify-content:center;padding:24px;';
+  const card=document.createElement('div');
+  card.style.cssText='background:var(--cream,#F7F3ED);border-radius:14px;max-width:900px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(44,38,32,.28);overflow:hidden;';
+  const head=document.createElement('div');
+  head.style.cssText='padding:18px 22px 14px;border-bottom:1px solid #E4DCD0;background:#fff;';
+  head.innerHTML='<div style="font-family:\'Lora\',Georgia,serif;font-size:18px;font-weight:600;color:#2C2620;">Review client names</div>'
+    +'<div style="font-size:12px;color:#8A7E72;margin-top:4px;line-height:1.5;">These cases have the name split in a way the app cannot resolve on its own — the whole name in one box, a family name in the wrong box, or a name shown with words the fields do not have. The suggestion is a guess; correct it before applying. First and middle names save with a capital first letter, family names in capitals.</div>';
+  const body=document.createElement('div');
+  body.style.cssText='padding:14px 22px;overflow-y:auto;flex:1;';
+  const foot=document.createElement('div');
+  foot.style.cssText='padding:12px 22px;border-top:1px solid #E4DCD0;background:#fff;display:flex;gap:10px;align-items:center;';
+  const status=document.createElement('span');
+  status.style.cssText='font-size:12px;color:#8A7E72;flex:1;';
+  status.textContent=rows.length?(rows.length+' case'+(rows.length===1?'':'s')+' to review'):'Nothing to review — every name lines up.';
+  const applyAll=document.createElement('button');
+  applyAll.textContent='Apply all shown';
+  applyAll.style.cssText='font-size:12px;font-weight:600;padding:7px 16px;border:1px solid #2C2620;border-radius:20px;background:#2C2620;color:#F7F3ED;cursor:pointer;font-family:inherit;';
+  const close=document.createElement('button');
+  close.textContent='Close';
+  close.style.cssText='font-size:12px;padding:7px 16px;border:1px solid #DDD5CA;border-radius:20px;background:#fff;color:#5C5148;cursor:pointer;font-family:inherit;';
+  close.onclick=()=>{ ov.remove(); renderNameCleanupCount(); try{ renderAll(); }catch(e){} };
+  ov.onclick=(e)=>{ if(e.target===ov) close.onclick(); };
+
+  let done=0;
+  const applyRow=(row,wrap,quiet)=>{
+    const f=wrap._f.value, m=wrap._m.value, l=wrap._l.value;
+    if(!_properName(f)||!_singleName(l)){
+      wrap._f.style.borderColor=_properName(f)?'#DDD5CA':'#B85C5C';
+      wrap._l.style.borderColor=_singleName(l)?'#DDD5CA':'#B85C5C';
+      if(!quiet) showToast('A first name and a family name are both needed');
+      return false;
+    }
+    if(!_ncApply(row.clid,f,m,l,row.variants)) return false;
+    done++;
+    wrap.style.opacity='.55';
+    wrap._btn.textContent='Saved ✓';
+    wrap._btn.disabled=true;
+    wrap._f.disabled=wrap._m.disabled=wrap._l.disabled=true;
+    status.textContent=done+' of '+rows.length+' saved';
+    return true;
+  };
+
+  rows.forEach(row=>{
+    const wrap=document.createElement('div');
+    wrap.style.cssText='background:#fff;border:1px solid #E4DCD0;border-radius:10px;padding:12px 14px;margin-bottom:10px;';
+    const shown=row.variants.length?row.variants.join(' · '):'—';
+    const head2=document.createElement('div');
+    head2.style.cssText='display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:9px;';
+    head2.innerHTML='<span style="font-weight:600;font-size:13px;color:#2C2620;">'+escHtml(shown)+'</span>'
+      +'<span style="font-size:11px;color:#C9823A;background:#FBF4E9;border:1px solid #E8D6B8;border-radius:10px;padding:1px 8px;">'+escHtml(row.reason)+'</span>'
+      +'<span style="flex:1"></span>'
+      +'<span style="font-size:11px;color:#C4BAB0;">ID '+escHtml(row.clid)+'</span>';
+    const now=document.createElement('div');
+    now.style.cssText='font-size:11px;color:#9E9186;margin-bottom:9px;';
+    now.textContent='Now — first: '+(row.first||'—')+' · middle: '+(row.middle||'—')+' · family: '+(row.last||'—');
+    const grid=document.createElement('div');
+    grid.style.cssText='display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;';
+    const mk=(label,val,ph)=>{
+      const d=document.createElement('div');
+      const lb=document.createElement('label');
+      lb.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#C4BAB0;display:block;margin-bottom:3px;';
+      lb.textContent=label;
+      const i=document.createElement('input');
+      i.type='text'; i.value=val||''; i.placeholder=ph||'';
+      i.style.cssText='width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid #DDD5CA;border-radius:6px;font-family:inherit;outline:none;';
+      d.appendChild(lb); d.appendChild(i);
+      return {d,i};
+    };
+    const f=mk('First name',row.proposal.first,'First');
+    const m=mk('Middle',row.proposal.middle,'Middle (optional)');
+    const l=mk('Family name',row.proposal.last,'FAMILY NAME');
+    f.i.onblur=()=>{ f.i.value=_properName(f.i.value); };
+    m.i.onblur=()=>{ m.i.value=_properName(m.i.value); };
+    l.i.oninput=()=>{ const u=l.i.value.toUpperCase(); if(l.i.value!==u) l.i.value=u; };
+    const btn=document.createElement('button');
+    btn.textContent='Save';
+    btn.style.cssText='font-size:12px;font-weight:600;padding:7px 16px;border:1px solid #B4CCAD;border-radius:8px;background:#EBF1EB;color:#4A6B4E;cursor:pointer;font-family:inherit;';
+    grid.appendChild(f.d); grid.appendChild(m.d); grid.appendChild(l.d); grid.appendChild(btn);
+    wrap.appendChild(head2); wrap.appendChild(now); wrap.appendChild(grid);
+    wrap._f=f.i; wrap._m=m.i; wrap._l=l.i; wrap._btn=btn;
+    btn.onclick=()=>applyRow(row,wrap,false);
+    body.appendChild(wrap);
+  });
+  if(!rows.length){
+    body.innerHTML='<div style="text-align:center;padding:3rem;color:#9E9186;font-size:13px;">Every case name lines up with its name fields.</div>';
+    applyAll.style.display='none';
+  }
+  applyAll.onclick=()=>{
+    let n=0;
+    rows.forEach((row,i)=>{ const wrap=body.children[i]; if(wrap&&!wrap._btn.disabled&&applyRow(row,wrap,true)) n++; });
+    showToast(n?(n+' name'+(n===1?'':'s')+' saved'):'Nothing applied — check the rows marked in red');
+  };
+  foot.appendChild(status); foot.appendChild(applyAll); foot.appendChild(close);
+  card.appendChild(head); card.appendChild(body); card.appendChild(foot);
+  ov.appendChild(card);
+  document.body.appendChild(ov);
+}
+
 // A case is "closed" when the user clicked Delete case in Case Information.
 // Closed cases disappear from every list except the All Events view (where
 // their records are shown with a 'Case Closed' badge).
