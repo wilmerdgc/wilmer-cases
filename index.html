@@ -2425,6 +2425,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
   <div class="cases-sub-nav" id="cases-sub-nav">
     <button class="cases-sub-btn active" id="cstab-general" onclick="switchCasesSubtab('general')">General</button>
     <button class="cases-sub-btn" id="cstab-sij" onclick="switchCasesSubtab('sij')">SIJ</button>
+    <button class="cases-sub-btn" id="cstab-personal" onclick="switchCasesSubtab('personal')">Personal</button>
   </div>
 
   <!-- General subtab -->
@@ -2437,6 +2438,18 @@ window.addEventListener('load',()=>autoGrowAllNotes());
   <div id="cases-subtab-sij" style="display:none">
     <div id="sij-board" class="sij-board"></div>
   </div>
+
+  <!-- Personal subtab — cases whose category is Personal (not Office) -->
+  <div id="cases-subtab-personal" style="display:none">
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+      <div style="font-family:'Lora',Georgia,serif;font-size:16px;font-weight:600;color:#2C2620;">Personal Cases</div>
+      <div style="font-size:12px;color:#9E9186;">Cases marked Personal in case information &mdash; office cases live under General</div>
+      <span style="flex:1"></span>
+      <span id="personal-cases-count" style="font-size:11px;color:#9E9186;white-space:nowrap;"></span>
+    </div>
+    <div id="personal-cases-list"></div>
+    <div id="personal-cases-empty" style="display:none;text-align:center;padding:4rem;color:#9E9186;font-size:13px">No personal cases yet. Set a case to Personal in its case information to see it here.</div>
+  </div><!-- /cases-subtab-personal -->
 
   <!-- Detail view (shared by General + SIJ subtabs) -->
   <div id="cases-detail-view" style="display:none">
@@ -3667,7 +3680,10 @@ function _makeDashedLine(){
 }
 function debounce(fn,ms){let t;return function(...a){clearTimeout(t);t=setTimeout(()=>fn.apply(this,a),ms);};}
 const _debouncedRenderAll=debounce(()=>renderAll(),200);
-const _debouncedRenderCases=debounce(()=>{renderCasesTypeStats();renderCases();},200);
+const _debouncedRenderCases=debounce(()=>{
+  if(_activeCasesSubtab==='personal'){ renderPersonalCases(); return; }
+  renderCasesTypeStats();renderCases();
+},200);
 // ── Reminder icon (single-color grey bell) ────────
 function _reminderIconSvg(size){
   const s = size||14;
@@ -3953,7 +3969,7 @@ function switchTab(t){
   if(bkBtn){bkBtn.style.background=t==='backup'?'#2C2620':'transparent';bkBtn.style.color=t==='backup'?'#F7F3ED':'#9E9186';bkBtn.style.borderColor=t==='backup'?'#2C2620':'#DDD5CA';}
   if(t==='settings'){snapshotSettings();renderSettings();}
   else if(t==='workflows'){renderCaseTypesSection();}
-  else if(t==='cases'){renderCasesTypeStats();renderCases();}
+  else if(t==='cases'){ if(_activeCasesSubtab==='personal'){renderPersonalCases();} else if(_activeCasesSubtab==='sij'){renderSIJTable();} else {renderCasesTypeStats();renderCases();} }
   else if(t==='backup'){renderBackupPage();}
   else if(t==='inbox'){ gmailInit(); if(!_gmailAccessToken) gmailRenderSignIn(); }
   else if(t==='tools'){ renderToolsPage(); }
@@ -9365,6 +9381,17 @@ function caseCategoryOf(r){
     const clid=r.clid||r.client;
     if(clid&&typeof caseMeta!=='undefined'&&caseMeta[clid]&&caseMeta[clid].caseCategory) return caseMeta[clid].caseCategory;
   }
+  return 'Office';
+}
+
+// Same idea at the case level (a case as built by getCases): the explicit
+// category on the case wins, otherwise a standalone PERSONAL/OFFICE task
+// record decides. No category means Office.
+function caseCategoryOfCase(c){
+  if(!c) return 'Office';
+  const clid=c.clid||c.client;
+  if(clid&&typeof caseMeta!=='undefined'&&caseMeta[clid]&&caseMeta[clid].caseCategory) return caseMeta[clid].caseCategory;
+  if(c.records&&c.records.some(r=>r.event==='PERSONAL TASK'||r.client==='Personal')) return 'Personal';
   return 'Office';
 }
 
@@ -15066,13 +15093,18 @@ function _rebuildCaseFilterDropdowns(){
   [...new Set(records.map(r=>r.atty).filter(Boolean))].sort().forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;af.appendChild(o);});
   af.value=ca;
 }
-function renderCases(){
+// Renders the case cards. Called with no options it fills the General
+// subtab; the Personal subtab passes its own target elements plus a
+// category filter so it shows only Personal cases.
+function renderCases(opts){
+  opts=opts||{};
   _rebuildCaseFilterDropdowns();
   const tf=document.getElementById('cases-filter-type');
   const af=document.getElementById('cases-filter-atty');
   const q=(document.getElementById('cases-search').value||'').toLowerCase();
   const ft=tf.value,fa=af.value;
   let cases=getCases();
+  if(opts.category) cases=cases.filter(c=>caseCategoryOfCase(c)===opts.category);
   // Helper: get all respondents for a case
   function _caseRespondents(c){
     const meta=caseMeta[c.clid||c.client];
@@ -15083,10 +15115,15 @@ function renderCases(){
   if(fa)cases=cases.filter(c=>c.atty===fa);
   // closed cases sink to the bottom of the results (stable — alphabetical within each group)
   cases=cases.slice().sort((a,b)=>(a.closed?1:0)-(b.closed?1:0));
-  const list=document.getElementById('cases-list');
-  const empty=document.getElementById('cases-empty');
+  const list=document.getElementById(opts.listId||'cases-list');
+  const empty=document.getElementById(opts.emptyId||'cases-empty');
+  const countEl=opts.countId?document.getElementById(opts.countId):null;
   const frag=document.createDocumentFragment();
   list.innerHTML='';
+  if(countEl){
+    const openN=cases.filter(c=>!c.closed).length;
+    countEl.textContent=cases.length?cases.length+' case'+(cases.length===1?'':'s')+' · '+openN+' active':'';
+  }
   if(!cases.length){empty.style.display='block';return;}
   empty.style.display='none';
   cases.forEach(c=>{
@@ -15113,6 +15150,9 @@ function renderCases(){
   });
   list.appendChild(frag);
 }
+function renderPersonalCases(){
+  renderCases({category:'Personal',listId:'personal-cases-list',emptyId:'personal-cases-empty',countId:'personal-cases-count'});
+}
 function closeCaseDetail(){
   // Release any held case-edit lock — covers the Back button, tab
   // switches, deleting the case, and search-driven closes, none of which
@@ -15125,8 +15165,10 @@ function closeCaseDetail(){
   const activeTab=_activeCasesSubtab||'general';
   document.getElementById('cases-subtab-general').style.display=activeTab==='general'?'':'none';
   document.getElementById('cases-subtab-sij').style.display=activeTab==='sij'?'':'none';
+  document.getElementById('cases-subtab-personal').style.display=activeTab==='personal'?'':'none';
   document.getElementById('cases-sub-nav').style.display='';
   if(activeTab==='general')document.getElementById('cases-list-view').style.display='';
+  if(activeTab==='personal')renderPersonalCases();
 }
 
 let _activeCasesSubtab = 'general';
@@ -15135,15 +15177,18 @@ function switchCasesSubtab(tab){
   _activeCasesSubtab=tab;
   document.getElementById('cstab-general').classList.toggle('active',tab==='general');
   document.getElementById('cstab-sij').classList.toggle('active',tab==='sij');
+  document.getElementById('cstab-personal').classList.toggle('active',tab==='personal');
   document.getElementById('cases-subtab-general').style.display=tab==='general'?'':'none';
   document.getElementById('cases-subtab-sij').style.display=tab==='sij'?'':'none';
-  // Make sure filter bar inputs are relevant
-  const filterVis = tab==='general';
+  document.getElementById('cases-subtab-personal').style.display=tab==='personal'?'':'none';
+  // Make sure filter bar inputs are relevant — the SIJ board has its own search
+  const filterVis = tab!=='sij';
   document.getElementById('cases-filter-type').style.display=filterVis?'':'none';
   document.getElementById('cases-filter-atty').style.display=filterVis?'':'none';
   document.getElementById('cases-search').style.display=filterVis?'':'none';
   if(tab==='general'){ renderCasesTypeStats(); renderCases(); }
   else if(tab==='sij'){ renderSIJTable(); }
+  else if(tab==='personal'){ renderPersonalCases(); }
 }
 
 function renderCasesTypeStats(){
@@ -22006,6 +22051,7 @@ function openCaseDetail(clid){
   document.getElementById('cases-add-view').style.display='none';
   document.getElementById('cases-subtab-general').style.display='none';
   document.getElementById('cases-subtab-sij').style.display='none';
+  document.getElementById('cases-subtab-personal').style.display='none';
   document.getElementById('cases-sub-nav').style.display='none';
   document.getElementById('cases-detail-view').style.display='';
   _mhpTeardown();
@@ -27195,6 +27241,7 @@ function openAddCasePage(){
   document.getElementById('cases-detail-view').style.display='none';
   document.getElementById('cases-subtab-general').style.display='none';
   document.getElementById('cases-subtab-sij').style.display='none';
+  document.getElementById('cases-subtab-personal').style.display='none';
   document.getElementById('cases-sub-nav').style.display='none';
   document.getElementById('cases-add-view').style.display='';
 
@@ -27266,7 +27313,9 @@ function closeAddCasePage(){
   const activeTab=_activeCasesSubtab||'general';
   document.getElementById('cases-subtab-general').style.display=activeTab==='general'?'':'none';
   document.getElementById('cases-subtab-sij').style.display=activeTab==='sij'?'':'none';
+  document.getElementById('cases-subtab-personal').style.display=activeTab==='personal'?'':'none';
   if(activeTab==='general')document.getElementById('cases-list-view').style.display='';
+  if(activeTab==='personal')renderPersonalCases();
 }
 
 function saveAddCasePage(){
@@ -29564,9 +29613,10 @@ if(csEl) csEl.addEventListener('input',function(){
   // user can navigate to whichever case they typed, regardless of what's open.
   const detailView=document.getElementById('cases-detail-view');
   if(detailView && detailView.style.display!=='none'){
-    _activeCasesSubtab='general';
+    const back=_activeCasesSubtab==='personal'?'personal':'general';
+    _activeCasesSubtab=back;
     closeCaseDetail();
-    switchCasesSubtab('general');
+    switchCasesSubtab(back);
   }
   _debouncedRenderCases();
 });
