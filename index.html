@@ -2519,12 +2519,12 @@ window.addEventListener('load',()=>autoGrowAllNotes());
           </div>
           <div>
             <label class="nc-label">Given Name (First Name) <span style="color:#B85C5C">*</span></label>
-            <input id="ncp-firstName" type="text" placeholder="First name…" class="nc-input" oninput="this.style.borderColor='#DDD5CA'"/>
+            <input id="ncp-firstName" type="text" onblur="this.value=_properName(this.value)" placeholder="First name…" class="nc-input" oninput="this.style.borderColor='#DDD5CA'"/>
           </div>
         </div>
         <div style="margin-bottom:13px;">
           <label class="nc-label">Middle Name</label>
-          <input id="ncp-middleName" type="text" placeholder="Middle name (optional)…" class="nc-input"/>
+          <input id="ncp-middleName" type="text" onblur="this.value=_properName(this.value)" placeholder="Middle name (optional)…" class="nc-input"/>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px;">
           <div>
@@ -14646,7 +14646,7 @@ _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();// Auto-push events to Google Calendar when signed in as the target email
 try{ _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync(); }catch(e){}
 }catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypesUpdatedAt)eventTypesUpdatedAt=p.eventTypesUpdatedAt;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);caseTypes=_withRecordCaseTypes(p.caseTypes);if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.calendarStaff&&Array.isArray(p.calendarStaff)&&p.calendarStaff.length)calendarStaff=p.calendarStaff;if(p.calendarStaffEmails)Object.assign(calendarStaffEmails,p.calendarStaffEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.billingConcepts&&Array.isArray(p.billingConcepts)&&p.billingConcepts.length)billingConcepts=p.billingConcepts;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}if(p.recordTombstones&&typeof p.recordTombstones==='object'){recordTombstones=_pruneTombstones(p.recordTombstones);}if(p.i589Template&&typeof p.i589Template==='object')i589Template=p.i589Template;return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypesUpdatedAt)eventTypesUpdatedAt=p.eventTypesUpdatedAt;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);caseTypes=_withRecordCaseTypes(p.caseTypes);if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.calendarStaff&&Array.isArray(p.calendarStaff)&&p.calendarStaff.length)calendarStaff=p.calendarStaff;if(p.calendarStaffEmails)Object.assign(calendarStaffEmails,p.calendarStaffEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.billingConcepts&&Array.isArray(p.billingConcepts)&&p.billingConcepts.length)billingConcepts=p.billingConcepts;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}if(p.recordTombstones&&typeof p.recordTombstones==='object'){recordTombstones=_pruneTombstones(p.recordTombstones);}if(p.i589Template&&typeof p.i589Template==='object')i589Template=p.i589Template;try{_normalizeStoredNames();}catch(e){}return true;}catch(e){return false;}}
 // One pending-render flag, used by both the debounced timer and the global
 // focusout listener: if the user is mid-edit when the timer fires, we set
 // the flag and re-try after they blur, so we never yank focus mid-type.
@@ -15063,6 +15063,67 @@ function goToCase(clid){switchTab('cases');setTimeout(()=>openCaseDetail(clid),3
 // (e.g. "De La Cruz", "Maria Jose") — this only trims the ends and
 // collapses runs of whitespace down to single spaces.
 function _singleName(s){ return s?String(s).trim().replace(/\s+/g,' '):''; }
+// First and middle names are always stored with the first letter of each
+// name uppercase and the rest lowercase — 'JUAN', 'juan' and 'jUaN' all
+// come out 'Juan'. Applies after a hyphen or apostrophe too, so
+// 'JEAN-PIERRE' -> 'Jean-Pierre' and "O'BRIEN" -> "O'Brien".
+// (Last names keep their own rule: fully uppercase.)
+function _properName(s){
+  const v=_singleName(s);
+  if(!v) return '';
+  return v.toLowerCase().replace(/(^|[\s\-'\u2019])(\p{L})/gu,(m,sep,ch)=>sep+ch.toUpperCase());
+}
+// One-time (idempotent) cleanup of names already stored: every case and
+// rider that carries structured name fields gets its first and middle
+// names proper-cased, and its display name rebuilt from the parts (last
+// name stays uppercase). Cases whose name is a single free-text string —
+// no structured fields — are left alone: there is no way to tell which
+// words are the first name and which are the family name.
+// Runs on every load/sync; once the data is clean it changes nothing.
+function _normalizeStoredNames(){
+  if(typeof caseMeta!=='object'||!caseMeta) return 0;
+  let changed=0;
+  Object.keys(caseMeta).forEach(key=>{
+    const m=caseMeta[key];
+    if(!m||typeof m!=='object') return;
+    const f=_properName(m.clientFirstName||'');
+    const mid=_properName(m.clientMiddleName||'');
+    if((m.clientFirstName||'')!==f){ m.clientFirstName=f; changed++; }
+    if((m.clientMiddleName||'')!==mid){ m.clientMiddleName=mid; changed++; }
+    // Re-case the case's display name — only on records that carry this
+    // clid (a record with no clid is keyed by its client name), and only
+    // when the rebuilt name is the SAME name in different case. Some
+    // stored display names hold words the structured fields don't (a
+    // second family name, a middle name never split out); rewriting those
+    // would drop part of a client's name, which is not what this cleanup
+    // is for. Those are left for the case-information editor.
+    if(f&&m.clientLastName){
+      const built=[f,mid,m.clientLastName].filter(Boolean).join(' ');
+      const norm=x=>_singleName(x).toLowerCase();
+      (typeof records!=='undefined'?records:[]).forEach(r=>{
+        if(r&&r.clid&&r.clid===key&&r.client!==built&&norm(r.client)===norm(built)){ r.client=built; changed++; }
+      });
+    }
+    if(Array.isArray(m.respondents)){
+      m.respondents.forEach(rr=>{
+        if(!rr||typeof rr!=='object') return;
+        const rf=_properName(rr.firstName||'');
+        const rm=_properName(rr.middleName||'');
+        if((rr.firstName||'')!==rf){ rr.firstName=rf; changed++; }
+        if((rr.middleName||'')!==rm){ rr.middleName=rm; changed++; }
+        if(rf&&rr.lastName){
+          const rbuilt=[rf,rm,rr.lastName].filter(Boolean).join(' ');
+          if(rr.name!==rbuilt&&_singleName(rr.name).toLowerCase()===_singleName(rbuilt).toLowerCase()){ rr.name=rbuilt; changed++; }
+        }
+      });
+    }
+  });
+  if(changed){
+    try{ _invalidateCasesCache(); }catch(e){}
+    if(!window._clientReadOnly){ try{ markUnsaved(); }catch(e){} }
+  }
+  return changed;
+}
 // A case is "closed" when the user clicked Delete case in Case Information.
 // Closed cases disappear from every list except the All Events view (where
 // their records are shown with a 'Case Closed' badge).
@@ -22707,8 +22768,8 @@ function openCaseDetail(clid){
     if(!caseMeta[clid])caseMeta[clid]={};
     let _nameTrimmed=false;
     if(infoBody._clLastInput){const raw=infoBody._clLastInput.value.trim();let v=_singleName(raw).toUpperCase();if(raw!==v){_nameTrimmed=true;infoBody._clLastInput.value=v;}caseMeta[clid].clientLastName=v;}
-    if(infoBody._clFirstInput){const raw=infoBody._clFirstInput.value.trim();const v=_singleName(raw);if(raw!==v){_nameTrimmed=true;infoBody._clFirstInput.value=v;}caseMeta[clid].clientFirstName=v;}
-    if(infoBody._clMiddleInput){const raw=infoBody._clMiddleInput.value.trim();const v=_singleName(raw);if(raw!==v){_nameTrimmed=true;infoBody._clMiddleInput.value=v;}caseMeta[clid].clientMiddleName=v;}
+    if(infoBody._clFirstInput){const raw=infoBody._clFirstInput.value.trim();const v=_properName(raw);if(raw!==v){_nameTrimmed=true;infoBody._clFirstInput.value=v;}caseMeta[clid].clientFirstName=v;}
+    if(infoBody._clMiddleInput){const raw=infoBody._clMiddleInput.value.trim();const v=_properName(raw);if(raw!==v){_nameTrimmed=true;infoBody._clMiddleInput.value=v;}caseMeta[clid].clientMiddleName=v;}
     if(_nameTrimmed) showToast('Name fields cleaned up');
     // Rebuild display name from structured fields and sync to all records
     const _builtName=[caseMeta[clid].clientFirstName,caseMeta[clid].clientMiddleName,caseMeta[clid].clientLastName].filter(Boolean).join(' ');
@@ -22733,8 +22794,10 @@ function openCaseDetail(clid){
       if(cl._lastInput && cl.idx>=0 && caseMeta[clid].respondents[cl.idx]){
         const rr=caseMeta[clid].respondents[cl.idx];
         rr.lastName=_singleName(cl._lastInput.value).toUpperCase();
-        rr.firstName=_singleName(cl._firstInput?cl._firstInput.value:'');
-        rr.middleName=_singleName(cl._middleInput?cl._middleInput.value:'');
+        rr.firstName=_properName(cl._firstInput?cl._firstInput.value:'');
+        rr.middleName=_properName(cl._middleInput?cl._middleInput.value:'');
+        if(cl._firstInput) cl._firstInput.value=rr.firstName;
+        if(cl._middleInput) cl._middleInput.value=rr.middleName;
         rr.name=[rr.firstName,rr.middleName,rr.lastName].filter(Boolean).join(' ');
       }
       if(cl._cobInput && cl.idx>=0 && caseMeta[clid].respondents[cl.idx]){
@@ -26182,8 +26245,8 @@ function _ncCollectClients(key){
   const out=[];
   (_ncExtras[key].clients||[]).forEach(c=>{
     const ln=_singleName((c.lastName||'').trim()).toUpperCase();
-    const fn=_singleName((c.firstName||'').trim());
-    const mn=_singleName((c.middleName||'').trim());
+    const fn=_properName((c.firstName||'').trim());
+    const mn=_properName((c.middleName||'').trim());
     if(!ln||!fn)return; // need at least last + first to be a real client
     out.push({name:[fn,mn,ln].filter(Boolean).join(' '),lastName:ln,firstName:fn,middleName:mn,anum:(c.anum||'').trim(),relationship:c.relationship||'',isLead:false});
   });
@@ -27323,8 +27386,8 @@ function saveAddCasePage(){
   const _rawFirst=document.getElementById('ncp-firstName').value.trim();
   const _rawMid=(document.getElementById('ncp-middleName')||{value:''}).value.trim();
   const lastName=_singleName(_rawLast).toUpperCase();
-  const firstName=_singleName(_rawFirst);
-  const middleName=_singleName(_rawMid);
+  const firstName=_properName(_rawFirst);
+  const middleName=_properName(_rawMid);
   const _nameTrimmed=(_rawLast!==lastName)||(_rawFirst!==firstName)||(_rawMid!==middleName);
   // Reflect the cleaned value in the inputs so the user sees what was kept.
   if(_nameTrimmed){
@@ -27446,8 +27509,8 @@ function saveNewCase(){
   const _rawFirst = document.getElementById('nc-firstName').value.trim();
   const _rawMid = (document.getElementById('nc-middleName')||{value:''}).value.trim();
   const lastName = _singleName(_rawLast).toUpperCase();
-  const firstName = _singleName(_rawFirst);
-  const middleName = _singleName(_rawMid);
+  const firstName = _properName(_rawFirst);
+  const middleName = _properName(_rawMid);
   const _nameTrimmed = (_rawLast!==lastName)||(_rawFirst!==firstName)||(_rawMid!==middleName);
   if(_nameTrimmed){
     document.getElementById('nc-lastName').value = lastName;
@@ -27596,6 +27659,9 @@ function applyPayload(p){
   // relative to this freshly-applied state (otherwise every record
   // would look "dirty" and we'd bump every _updatedAt every save).
   try{ if(typeof _refreshSavedHashes==='function') _refreshSavedHashes(); }catch(e){}
+  // After the hash re-seed, so any name the cleanup rewrites counts as a
+  // real edit and syncs out to the other devices.
+  try{ _normalizeStoredNames(); }catch(e){}
 }
 // ══════════════════════════════════════════════════
 // CLOUD SYNC — localStorage is always source of truth
@@ -29234,6 +29300,7 @@ db.collection('wilmer').onSnapshot(
       if(d.caseMeta){ _mergeCaseMetaInto(caseMeta, d.caseMeta); touched=true; }
     });
     if(touched){
+      try{ _normalizeStoredNames(); }catch(e){}
       try{
         const _now=Date.now();
         const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
@@ -29764,12 +29831,12 @@ function saveNewTask(){
       </div>
       <div>
         <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Given Name (First) <span style="color:#B85C5C">*</span></label>
-        <input id="nc-firstName" type="text" placeholder="First name…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="this.style.borderColor='#DDD5CA'"/>
+        <input id="nc-firstName" type="text" onblur="this.value=_properName(this.value)" placeholder="First name…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;" oninput="this.style.borderColor='#DDD5CA'"/>
       </div>
     </div>
     <div style="margin-bottom:14px;">
       <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Middle Name</label>
-      <input id="nc-middleName" type="text" placeholder="Middle name (optional)…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
+      <input id="nc-middleName" type="text" onblur="this.value=_properName(this.value)" placeholder="Middle name (optional)…" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
     </div>
 
     <!-- Two columns: Client ID + A-number -->
