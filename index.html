@@ -2132,6 +2132,11 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
   color: var(--ink-soft); font-family: inherit;
 }
 .bg-alt:hover { border-color: var(--sage); color: var(--ink); }
+.bg-recur {
+  font-size: 10px; font-weight: 700; letter-spacing: .02em; white-space: nowrap;
+  color: var(--slate); background: var(--slate-light);
+  padding: 1px 6px; border-radius: 10px; margin-left: 4px;
+}
 .bg-edit:hover { color: var(--sage); }
 .bg-editing td { background: var(--sage-light); }
 .bg-editing .bg-kpi-label { margin-bottom: 3px; }
@@ -3034,7 +3039,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
     <div class="bg-card">
       <div class="bg-card-title">Add an entry</div>
       <div class="bg-card-sub">Money in or out. Categories are whatever you type — they build up as you use them.</div>
-      <div style="display:grid;grid-template-columns:132px 116px 1fr 118px 1.4fr auto;gap:8px;align-items:end;">
+      <div style="display:grid;grid-template-columns:124px 104px 1fr 106px 1.25fr 112px auto;gap:8px;align-items:end;">
         <div>
           <label class="bg-kpi-label" for="bg-in-date">Date</label>
           <input id="bg-in-date" class="bg-input" type="date"/>
@@ -3058,6 +3063,16 @@ window.addEventListener('load',()=>autoGrowAllNotes());
         <div>
           <label class="bg-kpi-label" for="bg-in-note">Note (optional)</label>
           <input id="bg-in-note" class="bg-input" type="text" placeholder="What was it for?"/>
+        </div>
+        <div>
+          <label class="bg-kpi-label" for="bg-in-cycle" title="Tag this as a subscription or standing charge">Repeats</label>
+          <select id="bg-in-cycle" class="bg-input">
+            <option value="">One-off</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="yearly">Yearly</option>
+          </select>
         </div>
         <button class="bg-btn" onclick="budgetAddEntry()">Add</button>
       </div>
@@ -30038,12 +30053,25 @@ function budgetAddEntry(){
     if(_bgPending.merchant) rec.merchant = _bgPending.merchant;
     if(_bgPending.recurrence) rec.sub = _bgPending.recurrence;
   }
+  // A receipt's suggestions belong to the entry they were read for. If the
+  // note has moved on, the suggested Repeats value is stale too — unless it
+  // was deliberately changed since, in which case it is a choice, not a
+  // leftover.
+  const cycEl = document.getElementById('bg-in-cycle');
+  let cyc = cycEl ? String(cycEl.value||'') : '';
+  if(_bgPending && _bgPending.note !== note && cyc && cyc === _bgPending.cycle){
+    cyc = '';
+    if(cycEl) cycEl.value = '';
+  }
   _bgPending = null;
+  const stamp = _bgSubFor(cyc, rec.sub, date);
+  if(stamp) rec.sub = stamp; else delete rec.sub;
   _budgetData.entries.push(rec);
   budgetSave();
   // Jump to the month the entry belongs to, so it's visible straight away.
   _budgetMonth = date.slice(0,7);
   amtEl.value = ''; noteEl.value = '';
+  if(cycEl) cycEl.value = '';
   renderBudget();
   showToast('Added '+_bgMoney(amount)+' — '+category);
 }
@@ -30295,6 +30323,26 @@ function _budgetBindTips(root){
   });
 }
 
+// A charge can be tagged as recurring by hand, not only by a receipt that
+// says so — a card statement or a standing transfer never spells it out.
+const _BG_CYCLE_LABELS = [['','One-off'],['weekly','Weekly'],['monthly','Monthly'],['quarterly','Quarterly'],['yearly','Yearly']];
+function _bgCycleSelect(id, current){
+  return '<select id="'+id+'" class="bg-input">'
+    + _BG_CYCLE_LABELS.map(o => '<option value="'+o[0]+'"'+(o[0]===(current||'')?' selected':'')+'>'+o[1]+'</option>').join('')
+    + '</select>';
+}
+// The recurrence stamp for an entry, keeping a renewal date a receipt gave us
+// only while it still refers to the same cycle and hasn't already passed.
+function _bgSubFor(cycle, existing, entryDate){
+  if(!cycle) return null;
+  const sameAsBefore = !!(existing && existing.cycle === cycle);
+  return {
+    cycle,
+    next: (sameAsBefore && existing.next && existing.next > (entryDate||'')) ? existing.next : '',
+    source: sameAsBefore ? (existing.source || 'receipt') : 'manual'
+  };
+}
+
 // ── Editing an entry ──
 // One row at a time turns into the same grid the Add row uses, so the
 // controls sit where they already do. Nothing is written until Save.
@@ -30323,9 +30371,11 @@ function budgetSaveEntry(id){
   e.category = String(val('cat')||'').trim() || 'Uncategorized';
   e.amount = amount;
   e.note = String(val('note')||'').trim();
-  // merchant / sub are metadata a receipt gave us, not fields on the form —
-  // leave them alone so an edit doesn't silently change what the
-  // subscriptions card groups this under.
+  // Repeats IS a field on the form now, so it is applied. merchant stays put
+  // either way, so an edit never changes what the subscriptions card groups
+  // this under.
+  const cyc = _bgSubFor(String(val('cycle')||''), e.sub, e.date);
+  if(cyc) e.sub = cyc; else delete e.sub;
   budgetSave();
   _budgetEditingId = null;
   // Follow the entry if the new date moved it to another month, otherwise it
@@ -30344,7 +30394,7 @@ function _budgetEditRowHtml(e){
   const k = (part) => 'bge-'+part+'-'+e.id;
   const key = ' onkeydown="_budgetEditKey(event,\''+e.id+'\')"';
   return '<tr class="bg-editing"><td colspan="5" style="padding:12px 8px;">'
-    + '<div style="display:grid;grid-template-columns:132px 116px 1fr 118px 1.4fr auto auto;gap:8px;align-items:end;">'
+    + '<div style="display:grid;grid-template-columns:124px 104px 1fr 106px 1.25fr 112px auto auto;gap:8px;align-items:end;">'
     + '<div><label class="bg-kpi-label" for="'+k('date')+'">Date</label>'
       + '<input id="'+k('date')+'" class="bg-input" type="date" value="'+escHtml(e.date||'')+'"'+key+'/></div>'
     + '<div><label class="bg-kpi-label" for="'+k('kind')+'">Type</label>'
@@ -30358,14 +30408,14 @@ function _budgetEditRowHtml(e){
       + '<input id="'+k('amt')+'" class="bg-input" type="number" step="0.01" min="0" value="'+Number(e.amount||0).toFixed(2)+'"'+key+'/></div>'
     + '<div><label class="bg-kpi-label" for="'+k('note')+'">Note</label>'
       + '<input id="'+k('note')+'" class="bg-input" type="text" value="'+escHtml(e.note||'')+'"'+key+'/></div>'
+    + '<div><label class="bg-kpi-label" for="'+k('cycle')+'">Repeats</label>'
+      + _bgCycleSelect(k('cycle'), e.sub && e.sub.cycle) + '</div>'
     + '<button class="bg-btn" onclick="budgetSaveEntry(\''+e.id+'\')">Save</button>'
     + '<button class="bg-btn-quiet" onclick="budgetCancelEdit()">Cancel</button>'
     + '</div>'
-    + (e.merchant || e.sub
-        ? '<div style="font-size:11px;color:var(--ink-muted);margin-top:8px;">Read from a receipt'
-          + (e.merchant ? ' — '+escHtml(e.merchant) : '')
-          + (e.sub && e.sub.cycle ? ', '+escHtml(e.sub.cycle)+' recurring' : '')
-          + '. That stays attached to this entry when you save.</div>'
+    + (e.merchant
+        ? '<div style="font-size:11px;color:var(--ink-muted);margin-top:8px;">Read from a receipt — '
+          + escHtml(e.merchant) + '. That stays attached when you save, so this keeps grouping with its other charges.</div>'
         : '')
     + '</td></tr>';
 }
@@ -30392,7 +30442,11 @@ function _budgetRenderLedger(){
         return '<tr ondblclick="budgetEditEntry(\''+e.id+'\')" title="Double-click to edit">'
           + '<td style="font-variant-numeric:tabular-nums;">'+mm+'/'+dd+'/'+yy+'</td>'
           + '<td>'+dot+escHtml(e.category||'')+'</td>'
-          + '<td style="color:var(--ink-muted);">'+escHtml(e.note||'')+'</td>'
+          + '<td style="color:var(--ink-muted);">'+escHtml(e.note||'')
+            + (e.sub && e.sub.cycle
+                ? ' <span class="bg-recur" title="Tagged as a recurring charge">repeats '+escHtml(e.sub.cycle)+'</span>'
+                : '')
+          + '</td>'
           + '<td class="bg-amt">'+(income?'+':'−')+' '+_bgMoney(e.amount,{cents:true})+'</td>'
           + '<td style="white-space:nowrap;">'
             + '<button class="bg-del bg-edit" title="Edit entry" onclick="budgetEditEntry(\''+e.id+'\')">✎</button>'
@@ -30674,6 +30728,7 @@ function _budgetApplyParsed(p){
   set('bg-in-amt', p.amount.toFixed(2));
   set('bg-in-cat', p.category || '');
   set('bg-in-note', p.note || p.merchant || '');
+  set('bg-in-cycle', (p.recurrence && p.recurrence.cycle) || '');
   budgetRefreshCategoryList();
 
   const alts = (p.alternatives||[]).length
@@ -30683,7 +30738,9 @@ function _budgetApplyParsed(p){
     : '';
   // Held for budgetAddEntry(), which only sees the form fields. Keyed on the
   // note so a manually typed entry can't accidentally inherit it.
-  _bgPending = { note: (p.note||p.merchant||''), merchant: p.merchant||'', recurrence: p.recurrence||null };
+  _bgPending = { note: (p.note||p.merchant||''), merchant: p.merchant||'',
+                 recurrence: p.recurrence||null,
+                 cycle: (p.recurrence && p.recurrence.cycle) || '' };
 
   const box = document.getElementById('bg-read');
   if(box){
@@ -30751,6 +30808,16 @@ function _budgetWireCapture(){
   const zone = document.getElementById('bg-drop');
   if(!zone) return;
   document.addEventListener('paste', _budgetOnPaste);
+  // Editing the note away from what the receipt filled breaks the link to it,
+  // so drop the suggestion there and then rather than at Add — the Repeats
+  // box should never claim something the entry won't get.
+  const noteEl = document.getElementById('bg-in-note');
+  if(noteEl) noteEl.addEventListener('input', () => {
+    if(!_bgPending || _bgPending.note === noteEl.value) return;
+    const cycEl = document.getElementById('bg-in-cycle');
+    if(cycEl && cycEl.value && cycEl.value === _bgPending.cycle) cycEl.value = '';
+    _bgPending = null;
+  });
   zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('bg-drop-over'); });
   zone.addEventListener('dragleave', () => zone.classList.remove('bg-drop-over'));
   zone.addEventListener('drop', _budgetOnDrop);
@@ -30923,6 +30990,7 @@ function _budgetFindSubscriptions(){
       count: g.length, first: g[0].date, last: latest.date, next,
       category: latest.category || '',
       fromReceipt: !!said,
+      source: said ? (said.sub.source || 'receipt') : '',
       priceUp: (prev !== null && amount > prev * 1.001) ? amount - prev : 0,
       status: stale ? 'stale' : (dueSoon ? 'due' : 'active')
     });
@@ -30985,12 +31053,13 @@ function _budgetRenderSubs(){
         const up = s.priceUp
           ? '<span class="bg-meter-state" style="color:var(--bg-over);"> · ▲ up '+_bgMoney(s.priceUp,{cents:true})+'</span>'
           : '';
-        const src = s.fromReceipt ? ' title="The receipt said this renews"' : ' title="Spotted from '+s.count+' repeat charges"';
+        const how = s.source === 'manual' ? 'tagged by you' : (s.source === 'receipt' ? 'from receipt' : '');
+        const src = how ? ' title="Marked recurring — '+how+'"' : ' title="Spotted from '+s.count+' repeat charges"';
         return '<tr'+src+'>'
           + '<td style="color:var(--ink);font-weight:600;">'+escHtml(s.name)+chip+up
             + '<div style="font-weight:400;color:var(--ink-muted);font-size:11px;">'
               + escHtml(s.category||'—') + ' · ' + s.count + (s.count===1?' charge':' charges')
-              + (s.fromReceipt ? ' · from receipt' : '') + '</div></td>'
+              + (how ? ' · '+how : '') + '</div></td>'
           + '<td style="color:var(--ink-muted);">'+s.cycle+'</td>'
           + '<td style="font-variant-numeric:tabular-nums;">'+_bgShortDate(s.last)+'</td>'
           + '<td style="font-variant-numeric:tabular-nums;'+(s.status==='stale'?'color:var(--ink-faint);':'')+'">'
