@@ -3072,6 +3072,14 @@ window.addEventListener('load',()=>autoGrowAllNotes());
       <div id="bg-meters"></div>
     </div>
 
+    <!-- Recurring charges -->
+    <div class="bg-card">
+      <div class="bg-card-title">Subscriptions &amp; recurring charges</div>
+      <div class="bg-card-sub">Found from repeat charges, and from receipts that say they renew. The × stops one being listed.</div>
+      <div id="bg-subs-summary" style="font-size:12px;color:var(--ink-muted);margin-bottom:12px;"></div>
+      <div id="bg-subs"></div>
+    </div>
+
     <!-- Six-month trend -->
     <div class="bg-card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px;">
@@ -29953,7 +29961,9 @@ function budgetLoad(){
     if(raw){
       const p = JSON.parse(raw);
       if(p && Array.isArray(p.entries)){
-        _budgetData = { v:1, entries:p.entries, limits:(p.limits&&typeof p.limits==='object')?p.limits:{} };
+        _budgetData = { v:1, entries:p.entries,
+          limits:(p.limits&&typeof p.limits==='object')?p.limits:{},
+          ignored:Array.isArray(p.ignored)?p.ignored:[] };
       }
     }
   }catch(e){ console.warn('[budget] could not read saved data', e); }
@@ -30012,11 +30022,20 @@ function budgetAddEntry(){
   if(!date){ showToast('Pick a date'); dateEl.focus(); return; }
   if(!(amount > 0)){ showToast('Enter an amount greater than zero'); amtEl.focus(); return; }
   const category = (catEl.value||'').trim() || 'Uncategorized';
-  _budgetData.entries.push({
+  const note = (noteEl.value||'').trim();
+  const rec = {
     id: 'b'+Date.now()+Math.random().toString(36).slice(2,6),
     date, kind: kindEl.value === 'income' ? 'income' : 'expense',
-    category, amount, note: (noteEl.value||'').trim()
-  });
+    category, amount, note
+  };
+  // Carry the merchant and any "this renews" wording from a pasted receipt,
+  // but only onto the entry it was actually read for.
+  if(_bgPending && _bgPending.note === note){
+    if(_bgPending.merchant) rec.merchant = _bgPending.merchant;
+    if(_bgPending.recurrence) rec.sub = _bgPending.recurrence;
+  }
+  _bgPending = null;
+  _budgetData.entries.push(rec);
   budgetSave();
   // Jump to the month the entry belongs to, so it's visible straight away.
   _budgetMonth = date.slice(0,7);
@@ -30076,7 +30095,9 @@ function budgetImport(input){
     if(!confirm('Replace the budget on this device with '+p.entries.length+' entries from this file?\n\nExport first if you want to keep what\'s here.')){
       input.value=''; return;
     }
-    _budgetData = { v:1, entries:p.entries, limits:(p.limits&&typeof p.limits==='object')?p.limits:{} };
+    _budgetData = { v:1, entries:p.entries,
+      limits:(p.limits&&typeof p.limits==='object')?p.limits:{},
+      ignored:Array.isArray(p.ignored)?p.ignored:[] };
     budgetSave();
     renderBudget();
     showToast('Imported '+p.entries.length+' entries');
@@ -30108,6 +30129,7 @@ function renderBudget(){
   _budgetWireCapture();
   _budgetRenderKpis();
   _budgetRenderMeters();
+  _budgetRenderSubs();
   _budgetRenderTrend();
   _budgetRenderLedger();
 }
@@ -30465,6 +30487,9 @@ function _budgetParseReceipt(text){
   const income = _BG_INCOME_RE.test(clean.toLowerCase());
   return {
     ok: true,
+    // Set when the receipt says it repeats — the renewal date is kept here
+    // as the NEXT charge, never as this entry's date.
+    recurrence: _bgFindRecurrence(clean),
     amount: amount.value,
     amountLine: amount.line,
     amountSure: amount.sure,
@@ -30478,6 +30503,7 @@ function _budgetParseReceipt(text){
 }
 
 // ── Capture: clipboard, drag-drop, file picker ──
+let _bgPending = null;      // merchant/recurrence from the last receipt read
 let _bgOcrLoading = null;
 let _bgBusy = false;
 
@@ -30572,6 +30598,10 @@ function _budgetApplyParsed(p){
       + p.alternatives.map(a => '<button class="bg-alt" onclick="document.getElementById(\'bg-in-amt\').value=\''+a.toFixed(2)+'\'">'+_bgMoney(a,{cents:true})+'</button>').join(' ')
       + '</div>'
     : '';
+  // Held for budgetAddEntry(), which only sees the form fields. Keyed on the
+  // note so a manually typed entry can't accidentally inherit it.
+  _bgPending = { note: (p.note||p.merchant||''), merchant: p.merchant||'', recurrence: p.recurrence||null };
+
   const box = document.getElementById('bg-read');
   if(box){
     box.style.display = '';
@@ -30642,6 +30672,258 @@ function _budgetWireCapture(){
   zone.addEventListener('dragleave', () => zone.classList.remove('bg-drop-over'));
   zone.addEventListener('drop', _budgetOnDrop);
   _bgCaptureWired = true;
+}
+
+
+// ── Recurring charges ─────────────────────────────────────────
+// Two ways to know a charge repeats, and they complement each other:
+//
+//   1. The receipt says so. "It will renew automatically on October 7" /
+//      "we'll repeat this transaction every month" is the subscription
+//      telling you outright, and it is right the very first time you paste
+//      it — before any pattern could exist. _bgFindRecurrence() reads it.
+//   2. The ledger says so. The same merchant charging a similar amount a
+//      month apart is recurring whether or not a receipt was ever pasted.
+//      _budgetFindSubscriptions() finds those.
+//
+// Note this is the one place the renewal date IS wanted. The receipt parser
+// deliberately refuses to date an ENTRY from it (that date is in the future
+// — see _budgetParseReceipt); here the same date is exactly right, as the
+// next charge to expect.
+
+const _BG_MONTHS = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+function _bgDateStr(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function _bgParseDate(s){
+  const p = String(s||'').split('-').map(Number);
+  return (p.length===3 && p[0]) ? new Date(p[0], p[1]-1, p[2]) : null;
+}
+function _bgDaysBetween(a, b){
+  const da = _bgParseDate(a), db = _bgParseDate(b);
+  if(!da || !db) return null;
+  return Math.round((db - da) / 86400000);
+}
+function _bgAddMonths(dateStr, n){
+  const d = _bgParseDate(dateStr);
+  if(!d) return '';
+  const day = d.getDate();
+  d.setDate(1); d.setMonth(d.getMonth() + n);
+  // Clamp for short months: a charge on the 31st lands on the 30th/28th.
+  d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()));
+  return _bgDateStr(d);
+}
+
+// "renews automatically on October 7, 2026" → cycle + that date.
+function _bgFindRecurrence(text){
+  const t = String(text||'').toLowerCase();
+  const says = /\b(renew(?:s|al|ing)?\s+automatically|auto-?renew|will renew|repeat this transaction|recurring|subscription|membership|billed (?:monthly|annually|yearly|weekly))\b/.test(t)
+            || /\b(?:every|per)\s+(?:month|year|week)\b/.test(t)
+            || /\b(?:monthly|annual|yearly|weekly)\s+(?:cost|price|plan|fee|charge)\b/.test(t);
+  if(!says) return null;
+  let cycle = 'monthly';
+  if(/\b(?:every|per)\s+year\b|\bannual(?:ly)?\b|\byearly\b/.test(t)) cycle = 'yearly';
+  else if(/\b(?:every|per)\s+week\b|\bweekly\b/.test(t)) cycle = 'weekly';
+  // The date attached to renewal wording, if there is one.
+  let next = '';
+  const near = t.match(/(?:renew\w*|next (?:charge|payment|billing|bill)\w*|charges? again)[^.]{0,60}?\b([a-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})/);
+  if(near && _BG_MONTHS[near[1].slice(0,3)] !== undefined){
+    next = _bgDateStr(new Date(Number(near[3]), _BG_MONTHS[near[1].slice(0,3)], Number(near[2])));
+  } else {
+    const num = t.match(/(?:renew\w*|next (?:charge|payment|billing|bill)\w*)[^.]{0,40}?\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
+    if(num) next = _bgDateStr(new Date(Number(num[3]), Number(num[1])-1, Number(num[2])));
+  }
+  return { cycle, next };
+}
+
+// How many days one cycle is, roughly, and how to turn a charge into a
+// monthly figure so different cadences can be added up together.
+const _BG_CYCLES = {
+  weekly:    { days: 7,   toMonthly: (a) => a * 52 / 12 },
+  monthly:   { days: 30,  toMonthly: (a) => a },
+  quarterly: { days: 91,  toMonthly: (a) => a / 3 },
+  yearly:    { days: 365, toMonthly: (a) => a / 12 },
+};
+function _bgCycleFromGap(days){
+  if(days >= 5   && days <= 9)   return 'weekly';
+  if(days >= 24  && days <= 38)  return 'monthly';
+  if(days >= 82  && days <= 100) return 'quarterly';
+  if(days >= 330 && days <= 400) return 'yearly';
+  return '';
+}
+
+// Words too generic to identify a merchant by.
+const _BG_STOP = ['the','and','for','your','you','from','with','order','purchase','payment','receipt','invoice','confirmed','confirmation','member','membership','monthly','subscription','charge','charged','was','has','been'];
+// The identity a charge is grouped under: the merchant when a receipt gave
+// us one, otherwise the distinctive words of the note.
+function _bgSubKey(e){
+  if(e.merchant) return String(e.merchant).toLowerCase().trim();
+  const words = String(e.note||'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').split(/\s+/)
+    .filter(w => w.length > 2 && _BG_STOP.indexOf(w) < 0);
+  if(words.length) return words.slice(0,2).join(' ');
+  return String(e.category||'').toLowerCase().trim();
+}
+function _bgSubName(group){
+  const withMerchant = group.filter(e => e.merchant)[0];
+  if(withMerchant) return withMerchant.merchant;
+  const withNote = group.filter(e => (e.note||'').trim())[0];
+  if(withNote) return withNote.note.length > 42 ? withNote.note.slice(0,41)+'…' : withNote.note;
+  return group[0].category || 'Unnamed';
+}
+function _bgMedian(nums){
+  const s = nums.slice().sort((a,b) => a-b);
+  if(!s.length) return 0;
+  const m = Math.floor(s.length/2);
+  return s.length % 2 ? s[m] : (s[m-1]+s[m])/2;
+}
+
+// Everything that looks like it repeats, most expensive first.
+function _budgetFindSubscriptions(){
+  const ignored = _budgetData.ignored || [];
+  const groups = {};
+  _budgetData.entries.forEach(e => {
+    if(!e || e.kind === 'income' || e.deleted) return;
+    if(!e.date || !(Number(e.amount) > 0)) return;
+    const k = _bgSubKey(e);
+    if(!k) return;
+    (groups[k] = groups[k] || []).push(e);
+  });
+
+  const out = [];
+  const todayStr = _bgDateStr(new Date());
+  Object.keys(groups).forEach(key => {
+    if(ignored.indexOf(key) >= 0) return;
+    const g = groups[key].slice().sort((a,b) => String(a.date).localeCompare(String(b.date)));
+    const said = g.filter(e => e.sub && e.sub.cycle).slice(-1)[0];   // most recent receipt that said so
+    const amounts = g.map(e => Number(e.amount));
+    const typical = _bgMedian(amounts);
+
+    // Cadence from the gaps between charges, when there are enough of them.
+    let cycle = '', gaps = [];
+    for(let i=1; i<g.length; i++){
+      const d = _bgDaysBetween(g[i-1].date, g[i].date);
+      if(d !== null && d > 0) gaps.push(d);
+    }
+    if(gaps.length){
+      const med = _bgMedian(gaps);
+      cycle = _bgCycleFromGap(med);
+      // Amounts must be in the same ballpark, or it's just a shop you visit
+      // regularly rather than a subscription.
+      const spread = amounts.filter(a => typical > 0 && Math.abs(a-typical)/typical > 0.35).length;
+      if(spread > Math.floor(amounts.length/3)) cycle = '';
+    }
+    // A receipt that says it renews outranks the inferred cadence, and works
+    // on the very first charge.
+    if(!cycle && said) cycle = said.sub.cycle;
+    if(!cycle) return;
+    if(g.length < 2 && !said) return;          // one charge and nothing said it repeats
+
+    const spec = _BG_CYCLES[cycle] || _BG_CYCLES.monthly;
+    const latest = g[g.length-1];
+    const amount = Number(latest.amount);
+    const prev = g.length > 1 ? Number(g[g.length-2].amount) : null;
+    const next = (said && said.sub.next && said.sub.next > latest.date)
+      ? said.sub.next
+      : (cycle === 'monthly' ? _bgAddMonths(latest.date, 1)
+        : cycle === 'yearly' ? _bgAddMonths(latest.date, 12)
+        : cycle === 'quarterly' ? _bgAddMonths(latest.date, 3)
+        : (function(){ const d=_bgParseDate(latest.date); if(!d) return ''; d.setDate(d.getDate()+7); return _bgDateStr(d); })());
+    const sinceLast = _bgDaysBetween(latest.date, todayStr);
+    // Two cycles with nothing charged usually means it ended — say "not seen",
+    // not "cancelled", because the ledger can't actually know.
+    const stale = sinceLast !== null && sinceLast > spec.days * 2 + 5;
+    const dueSoon = !stale && next && (_bgDaysBetween(todayStr, next) !== null) && _bgDaysBetween(todayStr, next) <= 7;
+
+    out.push({
+      key, name: _bgSubName(g), cycle, amount,
+      monthly: spec.toMonthly(amount),
+      count: g.length, first: g[0].date, last: latest.date, next,
+      category: latest.category || '',
+      fromReceipt: !!said,
+      priceUp: (prev !== null && amount > prev * 1.001) ? amount - prev : 0,
+      status: stale ? 'stale' : (dueSoon ? 'due' : 'active')
+    });
+  });
+  // Dormant ones go last: they're history, not commitments.
+  return out.sort((a,b) => (a.status==='stale') - (b.status==='stale') || b.monthly - a.monthly);
+}
+
+// False positives are inevitable with a heuristic — let them be dismissed.
+function budgetIgnoreSub(key){
+  _budgetData.ignored = _budgetData.ignored || [];
+  if(_budgetData.ignored.indexOf(key) < 0) _budgetData.ignored.push(key);
+  budgetSave();
+  renderBudget();
+  showToast('Stopped tracking that one as recurring');
+}
+function budgetResetIgnoredSubs(){
+  _budgetData.ignored = [];
+  budgetSave();
+  renderBudget();
+}
+
+function _budgetRenderSubs(){
+  const el = document.getElementById('bg-subs');
+  const sum = document.getElementById('bg-subs-summary');
+  if(!el) return;
+  const subs = _budgetFindSubscriptions();
+  const ignoredCount = (_budgetData.ignored||[]).length;
+  const resetLink = ignoredCount
+    ? ' · <button class="bg-alt" onclick="budgetResetIgnoredSubs()">show '+ignoredCount+' dismissed</button>'
+    : '';
+
+  if(!subs.length){
+    if(sum) sum.innerHTML = ignoredCount ? resetLink.replace(/^ · /,'') : '';
+    el.innerHTML = '<div class="bg-empty">Nothing recurring spotted yet. Paste a receipt that mentions renewing, '
+      + 'or add a couple of months of the same charge, and it will show up here.</div>';
+    return;
+  }
+  // Only what is still being charged belongs in the headline — counting a
+  // subscription that stopped months ago overstates what you actually pay.
+  const live = subs.filter(s => s.status !== 'stale');
+  const dormant = subs.length - live.length;
+  const perMonth = live.reduce((t,s) => t + s.monthly, 0);
+  if(sum){
+    sum.innerHTML = '<b style="color:var(--ink);font-size:15px;">'+_bgMoney(perMonth,{whole:true})+'</b> a month'
+      + ' · ' + _bgMoney(perMonth*12,{whole:true}) + ' a year'
+      + ' across ' + live.length + (live.length===1?' charge':' charges')
+      + (dormant ? ' · <span style="color:var(--ink-faint);">'+dormant+' not seen recently, not counted</span>' : '')
+      + resetLink;
+  }
+  el.innerHTML = '<table class="bg-table"><thead><tr>'
+    + '<th>What</th><th style="width:96px;">Every</th><th style="width:104px;">Last charged</th>'
+    + '<th style="width:104px;">Next</th><th class="bg-amt" style="width:104px;">Amount</th>'
+    + '<th class="bg-amt" style="width:96px;">Per month</th><th style="width:32px;"></th>'
+    + '</tr></thead><tbody>'
+    + subs.map(s => {
+        const chip = s.status === 'stale'
+          ? '<span class="bg-meter-state" style="color:var(--ink-muted);"> · not seen since '+_bgShortDate(s.last)+'</span>'
+          : (s.status === 'due' ? '<span class="bg-meter-state" style="color:var(--bg-warn);"> · due now</span>' : '');
+        const up = s.priceUp
+          ? '<span class="bg-meter-state" style="color:var(--bg-over);"> · ▲ up '+_bgMoney(s.priceUp,{cents:true})+'</span>'
+          : '';
+        const src = s.fromReceipt ? ' title="The receipt said this renews"' : ' title="Spotted from '+s.count+' repeat charges"';
+        return '<tr'+src+'>'
+          + '<td style="color:var(--ink);font-weight:600;">'+escHtml(s.name)+chip+up
+            + '<div style="font-weight:400;color:var(--ink-muted);font-size:11px;">'
+              + escHtml(s.category||'—') + ' · ' + s.count + (s.count===1?' charge':' charges')
+              + (s.fromReceipt ? ' · from receipt' : '') + '</div></td>'
+          + '<td style="color:var(--ink-muted);">'+s.cycle+'</td>'
+          + '<td style="font-variant-numeric:tabular-nums;">'+_bgShortDate(s.last)+'</td>'
+          + '<td style="font-variant-numeric:tabular-nums;'+(s.status==='stale'?'color:var(--ink-faint);':'')+'">'
+            + (s.status==='stale' ? '—' : _bgShortDate(s.next))+'</td>'
+          + '<td class="bg-amt">'+_bgMoney(s.amount,{cents:true})+'</td>'
+          + '<td class="bg-amt" style="color:var(--ink-muted);">'+_bgMoney(s.monthly,{cents:true})+'</td>'
+          + '<td><button class="bg-del" title="Not a subscription — stop listing it" '
+            + 'onclick="budgetIgnoreSub(\''+String(s.key).replace(/'/g,"\\'")+'\')">×</button></td>'
+        + '</tr>';
+      }).join('')
+    + '</tbody></table>';
+}
+function _bgShortDate(s){
+  const d = _bgParseDate(s);
+  if(!d) return '—';
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 }
 
 // ══════════════════════════════════════════════════
