@@ -2132,6 +2132,9 @@ body.preview-split-mode #new-case-modal > div { max-width: 440px; }
   color: var(--ink-soft); font-family: inherit;
 }
 .bg-alt:hover { border-color: var(--sage); color: var(--ink); }
+.bg-edit:hover { color: var(--sage); }
+.bg-editing td { background: var(--sage-light); }
+.bg-editing .bg-kpi-label { margin-bottom: 3px; }
 </style>
 </head>
 <body>
@@ -30006,6 +30009,7 @@ function _budgetCategories(kind){
 }
 
 function budgetShiftMonth(delta){
+  _budgetEditingId = null;   // don't carry a half-finished edit into another month
   const [y,m] = _budgetMonth.split('-').map(Number);
   _budgetMonth = _budgetMonthKey(new Date(y, m-1+delta, 1));
   renderBudget();
@@ -30291,6 +30295,81 @@ function _budgetBindTips(root){
   });
 }
 
+// ── Editing an entry ──
+// One row at a time turns into the same grid the Add row uses, so the
+// controls sit where they already do. Nothing is written until Save.
+let _budgetEditingId = null;
+
+function budgetEditEntry(id){
+  _budgetEditingId = id;
+  renderBudget();
+  const el = document.getElementById('bge-amt-'+id);
+  if(el){ el.focus(); el.select(); }
+}
+function budgetCancelEdit(){
+  _budgetEditingId = null;
+  renderBudget();
+}
+function budgetSaveEntry(id){
+  const e = _budgetData.entries.filter(x => x.id === id)[0];
+  if(!e){ _budgetEditingId = null; renderBudget(); return; }
+  const val = (part) => { const el = document.getElementById('bge-'+part+'-'+id); return el ? el.value : ''; };
+  const date = String(val('date')||'').trim();
+  const amount = Math.round((Number(val('amt'))||0) * 100) / 100;
+  if(!date){ showToast('Pick a date'); return; }
+  if(!(amount > 0)){ showToast('Enter an amount greater than zero'); return; }
+  e.date = date;
+  e.kind = val('kind') === 'income' ? 'income' : 'expense';
+  e.category = String(val('cat')||'').trim() || 'Uncategorized';
+  e.amount = amount;
+  e.note = String(val('note')||'').trim();
+  // merchant / sub are metadata a receipt gave us, not fields on the form —
+  // leave them alone so an edit doesn't silently change what the
+  // subscriptions card groups this under.
+  budgetSave();
+  _budgetEditingId = null;
+  // Follow the entry if the new date moved it to another month, otherwise it
+  // would vanish from the view with no explanation.
+  if(date.slice(0,7) !== _budgetMonth) _budgetMonth = date.slice(0,7);
+  renderBudget();
+  showToast('Entry updated');
+}
+// Enter saves, Escape backs out — the row is a form, so it should behave like one.
+function _budgetEditKey(ev, id){
+  if(ev.key === 'Enter'){ ev.preventDefault(); budgetSaveEntry(id); }
+  else if(ev.key === 'Escape'){ ev.preventDefault(); budgetCancelEdit(); }
+}
+// The editing row: one cell wide, laid out like "Add an entry".
+function _budgetEditRowHtml(e){
+  const k = (part) => 'bge-'+part+'-'+e.id;
+  const key = ' onkeydown="_budgetEditKey(event,\''+e.id+'\')"';
+  return '<tr class="bg-editing"><td colspan="5" style="padding:12px 8px;">'
+    + '<div style="display:grid;grid-template-columns:132px 116px 1fr 118px 1.4fr auto auto;gap:8px;align-items:end;">'
+    + '<div><label class="bg-kpi-label" for="'+k('date')+'">Date</label>'
+      + '<input id="'+k('date')+'" class="bg-input" type="date" value="'+escHtml(e.date||'')+'"'+key+'/></div>'
+    + '<div><label class="bg-kpi-label" for="'+k('kind')+'">Type</label>'
+      + '<select id="'+k('kind')+'" class="bg-input"'+key+'>'
+        + '<option value="expense"'+(e.kind==='income'?'':' selected')+'>Expense</option>'
+        + '<option value="income"'+(e.kind==='income'?' selected':'')+'>Income</option>'
+      + '</select></div>'
+    + '<div><label class="bg-kpi-label" for="'+k('cat')+'">Category</label>'
+      + '<input id="'+k('cat')+'" class="bg-input" type="text" list="bg-cat-options" value="'+escHtml(e.category||'')+'"'+key+'/></div>'
+    + '<div><label class="bg-kpi-label" for="'+k('amt')+'">Amount</label>'
+      + '<input id="'+k('amt')+'" class="bg-input" type="number" step="0.01" min="0" value="'+Number(e.amount||0).toFixed(2)+'"'+key+'/></div>'
+    + '<div><label class="bg-kpi-label" for="'+k('note')+'">Note</label>'
+      + '<input id="'+k('note')+'" class="bg-input" type="text" value="'+escHtml(e.note||'')+'"'+key+'/></div>'
+    + '<button class="bg-btn" onclick="budgetSaveEntry(\''+e.id+'\')">Save</button>'
+    + '<button class="bg-btn-quiet" onclick="budgetCancelEdit()">Cancel</button>'
+    + '</div>'
+    + (e.merchant || e.sub
+        ? '<div style="font-size:11px;color:var(--ink-muted);margin-top:8px;">Read from a receipt'
+          + (e.merchant ? ' — '+escHtml(e.merchant) : '')
+          + (e.sub && e.sub.cycle ? ', '+escHtml(e.sub.cycle)+' recurring' : '')
+          + '. That stays attached to this entry when you save.</div>'
+        : '')
+    + '</td></tr>';
+}
+
 function _budgetRenderLedger(){
   const el = document.getElementById('bg-ledger');
   const sub = document.getElementById('bg-ledger-sub');
@@ -30303,18 +30382,22 @@ function _budgetRenderLedger(){
   }
   el.innerHTML = '<table class="bg-table"><thead><tr>'
     + '<th style="width:92px;">Date</th><th style="width:150px;">Category</th><th>Note</th>'
-    + '<th class="bg-amt" style="width:110px;">Amount</th><th style="width:32px;"></th>'
+    + '<th class="bg-amt" style="width:110px;">Amount</th><th style="width:56px;"></th>'
     + '</tr></thead><tbody>'
     + rows.map(e => {
+        if(e.id === _budgetEditingId) return _budgetEditRowHtml(e);
         const income = e.kind === 'income';
         const dot = '<span class="bg-swatch" style="background:'+(income?'var(--bg-income)':'var(--bg-spend)')+'"></span>';
         const [yy,mm,dd] = String(e.date).split('-');
-        return '<tr>'
+        return '<tr ondblclick="budgetEditEntry(\''+e.id+'\')" title="Double-click to edit">'
           + '<td style="font-variant-numeric:tabular-nums;">'+mm+'/'+dd+'/'+yy+'</td>'
           + '<td>'+dot+escHtml(e.category||'')+'</td>'
           + '<td style="color:var(--ink-muted);">'+escHtml(e.note||'')+'</td>'
           + '<td class="bg-amt">'+(income?'+':'−')+' '+_bgMoney(e.amount,{cents:true})+'</td>'
-          + '<td><button class="bg-del" title="Delete entry" onclick="budgetDeleteEntry(\''+e.id+'\')">×</button></td>'
+          + '<td style="white-space:nowrap;">'
+            + '<button class="bg-del bg-edit" title="Edit entry" onclick="budgetEditEntry(\''+e.id+'\')">✎</button>'
+            + '<button class="bg-del" title="Delete entry" onclick="budgetDeleteEntry(\''+e.id+'\')">×</button>'
+          + '</td>'
         + '</tr>';
       }).join('')
     + '</tbody></table>';
