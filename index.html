@@ -16421,7 +16421,7 @@ function renderToolsPage(){
       <div onclick="renderBriefGenerator()" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;background:#fff;cursor:pointer;transition:all .14s;box-shadow:var(--shadow-sm);" onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.borderColor='var(--sage)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)';this.style.borderColor='var(--border)'">
         <div style="font-size:24px;margin-bottom:8px;">📝</div>
         <div style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px;">Motion and Brief Creator</div>
-        <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Pick a case and the app fills in the Motion for Video Appearance Word template — respondent, A#, judge, hearing date, attorney block — then downloads a ready-to-edit .docx.</div>
+        <div style="font-size:12px;color:var(--ink-muted);line-height:1.5;">Pick a case and the app captions the filing from its data — respondent, A#, judge, hearing date, attorney block — then downloads a ready-to-edit .docx. Motion for Video Appearance, Joint Motion to Substitute Counsel, witness list, asylum fee, I-589, response to a scheduling order and supplemental evidence.</div>
       </div>
     </div>`;
 }
@@ -17606,6 +17606,7 @@ function renderBriefGenerator(){
       <button id="bg-dt-i589" type="button" onclick="_briefSetDocType('i589')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">I-589</button>
       <button id="bg-dt-schedorder" type="button" onclick="_briefSetDocType('schedorder')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Response to SO</button>
       <button id="bg-dt-suppevid" type="button" onclick="_briefSetDocType('suppevid')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Supplemental Evidence</button>
+      <button id="bg-dt-substcounsel" type="button" onclick="_briefSetDocType('substcounsel')" style="font-size:12px;font-weight:600;padding:7px 16px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;">Substitute Counsel</button>
     </div>
 
     <!-- Case picker -->
@@ -17646,6 +17647,9 @@ function renderBriefGenerator(){
 
     <!-- Supplemental Evidence mode -->
     <div id="bg-suppevid-panel" style="display:none;"></div>
+
+    <!-- Joint Motion to Substitute Counsel mode -->
+    <div id="bg-substcounsel-panel" style="display:none;"></div>
   `;
   window._briefClid = null;
   window._briefValues = {};
@@ -17658,6 +17662,7 @@ function renderBriefGenerator(){
   if(!window._i589Opts) window._i589Opts = { receipt:'', cover:true, cert:true, exhibits:true, feeExhibit:true };
   if(!window._soOpts) window._soOpts = { orderDate:'', body:'', cover:true, cert:true };
   if(!window._seOpts) window._seOpts = { tocTitle:'TABLE OF CONTENTS', startPage:1, cover:true, toc:true, cert:true, tabs:true, exhibits:[_blankExhibit(0)] };
+  if(!window._scOpts) window._scOpts = _blankSubstCounselOpts();
   _briefRenderForm();
 }
 
@@ -17679,7 +17684,8 @@ function _briefSetDocType(type){
   const isI589 = type === 'i589';
   const isSchedOrder = type === 'schedorder';
   const isSuppEvid = type === 'suppevid';
-  const isMotion = !isWitness && !isAsylumFee && !isI589 && !isSchedOrder && !isSuppEvid;
+  const isSubstCounsel = type === 'substcounsel';
+  const isMotion = !isWitness && !isAsylumFee && !isI589 && !isSchedOrder && !isSuppEvid && !isSubstCounsel;
   const show = (id, on) => { const el = document.getElementById(id); if(el) el.style.display = on ? '' : 'none'; };
   show('bg-form', isMotion);
   show('bg-motion-generate', isMotion);
@@ -17688,11 +17694,12 @@ function _briefSetDocType(type){
   show('bg-i589-panel', isI589);
   show('bg-schedorder-panel', isSchedOrder);
   show('bg-suppevid-panel', isSuppEvid);
+  show('bg-substcounsel-panel', isSubstCounsel);
   // Multi-respondent picker / paper-file warning are motion concepts —
   // keep them out of the witness / asylum-fee views. The I-589 filing is
   // one application per applicant, so it keeps the respondent picker:
   // whoever is included is captioned and listed in the exhibit index.
-  if(isMotion || isI589 || isSchedOrder || isSuppEvid){
+  if(isMotion || isI589 || isSchedOrder || isSuppEvid || isSubstCounsel){
     _briefRenderRespondentsPanel();
     if(window._briefClid){
       const meta = (caseMeta && caseMeta[window._briefClid]) || {};
@@ -17714,11 +17721,13 @@ function _briefSetDocType(type){
   style('bg-dt-i589', isI589);
   style('bg-dt-schedorder', isSchedOrder);
   style('bg-dt-suppevid', isSuppEvid);
+  style('bg-dt-substcounsel', isSubstCounsel);
   if(isWitness) _renderWitnessPanel();
   if(isAsylumFee) _renderAsylumFeePanel();
   if(isI589) _renderI589FilingPanel();
   if(isSchedOrder) _renderSchedOrderPanel();
   if(isSuppEvid) _renderSuppEvidPanel();
+  if(isSubstCounsel) _renderSubstCounselPanel();
 }
 
 // ── Witness List editor ────────────────────────────────────────────
@@ -18191,6 +18200,139 @@ function _renderSuppEvidPanel(){
     </div>`;
 }
 
+// ── Joint Motion to Substitute Counsel editor ──────────────────────
+// The motion two attorneys sign together so one can take the case over
+// from the other: the firm on one signature line, the other lawyer on
+// the other. It is laid out exactly like the Motion for Video Appearance
+// — the same cover page, caption, proposed order page and certificate of
+// service — only the body differs.
+//
+// Which line the firm signs is a choice: `side:'new'` means the firm is
+// substituting IN (the default — the other lawyer is the outgoing
+// counsel of record), `side:'former'` means the firm is stepping OUT.
+//
+// The other lawyer's details are optional throughout. Left blank, the
+// generated .docx prints ruled blanks under the right labels so the
+// block can be filled in by hand in Word before the motion is signed.
+function _blankSubstCounselOpts(){
+  return {
+    side:'new',
+    otherName:'', otherFirm:'', otherStreet:'', otherCity:'',
+    otherPhone:'', otherEmail:'', otherEoir:'',
+    motionDate:'', addressUnchanged:true, body:'',
+    cover:true, order:true, cert:true
+  };
+}
+
+// "This the 27th day of July 2026." — the date line the motion closes on.
+function _scOrdinalDate(d){
+  const dt = d instanceof Date ? d : new Date();
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const n = dt.getDate();
+  const suffix = (n % 100 >= 11 && n % 100 <= 13) ? 'th' : ({ 1:'st', 2:'nd', 3:'rd' }[n % 10] || 'th');
+  return 'This the ' + n + suffix + ' day of ' + MONTHS[dt.getMonth()] + ' ' + dt.getFullYear() + '.';
+}
+
+// The other lawyer's signature block, as the lines the .docx prints.
+// Returns [] when nothing was typed — the generator then rules blank
+// lines instead so the block can be completed in Word.
+function _scOtherBlockLines(o, roleLabel){
+  const L = [];
+  const push = s => { if(String(s||'').trim()) L.push(String(s).trim()); };
+  push(o.otherName);
+  if(L.length) L.push(roleLabel);
+  push(o.otherEoir ? ('EOIR # ' + String(o.otherEoir).replace(/^EOIR\s*#?\s*/i, '')) : '');
+  push(o.otherFirm);
+  push(o.otherStreet);
+  push(o.otherCity);
+  push(o.otherPhone);
+  push(o.otherEmail);
+  return L;
+}
+
+function _renderSubstCounselPanel(){
+  const panel = document.getElementById('bg-substcounsel-panel');
+  if(!panel) return;
+  if(!window._scOpts) window._scOpts = _blankSubstCounselOpts();
+  const o = window._scOpts;
+  const firmRole  = o.side === 'former' ? '(Former) Counsel' : '(New) Counsel';
+  const otherRole = o.side === 'former' ? '(New) Counsel'    : '(Former) Counsel';
+  const lbl = t => '<label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">' + t + '</label>';
+  const inp = (key, ph) => '<input type="text" value="' + escHtml(o[key]||'').replace(/"/g,'&quot;') + '" placeholder="' + escHtml(ph) + '" '
+    + 'oninput="window._scOpts[\'' + key + '\']=this.value" '
+    + 'style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>';
+  const sideBtn = (val, text) => {
+    const on = o.side === val;
+    return '<button type="button" onclick="window._scOpts.side=\'' + val + '\';_renderSubstCounselPanel()" '
+      + 'style="font-size:12px;font-weight:600;padding:7px 14px;border:1px solid ' + (on?'var(--sage)':'var(--border)') + ';border-radius:20px;'
+      + 'background:' + (on?'var(--sage)':'#fff') + ';color:' + (on?'#fff':'var(--ink-muted)') + ';cursor:pointer;font-family:inherit;">' + text + '</button>';
+  };
+  panel.innerHTML = `
+    <div style="font-size:12px;color:var(--ink-muted);margin-bottom:14px;line-height:1.5;">The joint motion two counsel sign so one can take the case over from the other. Same layout as the <b>Motion for Video Appearance</b> — cover page, caption, <b>proposed order page</b> and certificate of service — only the body changes. Everything about the other lawyer is optional: <b>leave it blank and the .docx prints ruled blanks under the right labels</b> to fill in by hand in Word.</div>
+
+    <div style="margin-bottom:16px;">
+      ${lbl('On this motion, ' + ((firmInfo&&firmInfo.firstName)? escHtml([firmInfo.firstName,firmInfo.lastName].filter(Boolean).join(' ')) : 'the firm') + ' is')}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${sideBtn('new','Substituting IN — new counsel')}
+        ${sideBtn('former','Stepping OUT — former counsel')}
+      </div>
+      <div style="font-size:10.5px;color:var(--ink-faint);margin-top:6px;line-height:1.45;">Your signature line reads <b>${escHtml(firmRole)} for Respondent</b>; the other lawyer's reads <b>${escHtml(otherRole)} for Respondent</b>. The former counsel of record always signs first, as the Court expects.</div>
+    </div>
+
+    <div style="border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:16px;background:#fff;">
+      <div style="font-size:12px;font-weight:700;color:var(--ink);margin-bottom:10px;">The other lawyer — ${escHtml(otherRole)} for Respondent <span style="font-weight:500;color:var(--ink-faint);">(all optional)</span></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+        <div>${lbl('Name')}${inp('otherName','e.g. Japheth N. Matemu, Esq')}</div>
+        <div>${lbl('EOIR #')}${inp('otherEoir','e.g. AB123456')}</div>
+        <div>${lbl('Firm')}${inp('otherFirm','e.g. Matemu Law Firm, PC')}</div>
+        <div>${lbl('Street')}${inp('otherStreet','e.g. 69-06 Grand Ave, FLR 2')}</div>
+        <div>${lbl('City, State ZIP')}${inp('otherCity','e.g. Maspeth, NY 11378')}</div>
+        <div>${lbl('Phone')}${inp('otherPhone','e.g. (212) 756-3948')}</div>
+        <div>${lbl('Email')}${inp('otherEmail','')}</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:16px;">
+      ${_briefJudgeHearingRow('sc')}
+      <div>
+        ${lbl('Date line')}
+        <input type="text" value="${escHtml(o.motionDate||'').replace(/"/g,'&quot;')}" placeholder="${escHtml(_scOrdinalDate(new Date()))}" oninput="window._scOpts.motionDate=this.value"
+          style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+        <div style="font-size:10.5px;color:var(--ink-faint);margin-top:5px;line-height:1.45;">Left empty, today's date is written out the way the motion does it.</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:16px;">
+      ${lbl('Motion body — one paragraph per line')}
+      <textarea rows="6" placeholder="Leave blank to use the standard joint-substitution language…" oninput="window._scOpts.body=this.value"
+        style="width:100%;font-size:13px;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;resize:vertical;line-height:1.5;">${escHtml(o.body||'')}</textarea>
+      <div style="font-size:10.5px;color:var(--ink-faint);margin-top:5px;line-height:1.45;">Left empty, the motion states that the substitution was initiated by the respondent and consented to by both counsel, that it complies with <i>Matter of Rosales</i> because there is no lapse in representation, and that new counsel has advised the respondent of the obligation to appear.</div>
+    </div>
+
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px;padding:10px 14px;background:var(--cream);border-radius:var(--radius-md);border:1px solid var(--border);">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.addressUnchanged?'checked':''} onchange="window._scOpts.addressUnchanged=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Respondent's address is unchanged
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.cover?'checked':''} onchange="window._scOpts.cover=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include cover page (caption)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.order?'checked':''} onchange="window._scOpts.order=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include proposed order page
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" ${o.cert?'checked':''} onchange="window._scOpts.cert=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>
+        Include certificate of service
+      </label>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <button type="button" onclick="generateSubstituteCounsel()" id="bg-substcounsel-btn" style="font-size:13px;font-weight:600;padding:9px 22px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;">Generate .docx</button>
+      <span id="bg-substcounsel-status" style="font-size:11px;color:var(--ink-muted);"></span>
+    </div>`;
+}
+
 // Return suggestions for a field — case-derived where it makes sense
 // (hearing date pulls from the case's events; judge / court address
 // pull from the global judges + venues lists). Every field that has a
@@ -18601,6 +18743,7 @@ function _briefPickCase(clid, displayName){
   if(window._briefDocType==='i589' && typeof _renderI589FilingPanel==='function') _renderI589FilingPanel();
   if(window._briefDocType==='schedorder' && typeof _renderSchedOrderPanel==='function') _renderSchedOrderPanel();
   if(window._briefDocType==='suppevid' && typeof _renderSuppEvidPanel==='function') _renderSuppEvidPanel();
+  if(window._briefDocType==='substcounsel' && typeof _renderSubstCounselPanel==='function') _renderSubstCounselPanel();
 }
 
 // Show the multi-respondent picker if the case has 2+ clients. Two
@@ -18707,6 +18850,7 @@ function _briefRefreshFromSelection(){
   if(window._briefDocType==='i589' && typeof _renderI589FilingPanel==='function') _renderI589FilingPanel();
   if(window._briefDocType==='schedorder' && typeof _renderSchedOrderPanel==='function') _renderSchedOrderPanel();
   if(window._briefDocType==='suppevid' && typeof _renderSuppEvidPanel==='function') _renderSuppEvidPanel();
+  if(window._briefDocType==='substcounsel' && typeof _renderSubstCounselPanel==='function') _renderSubstCounselPanel();
 }
 
 async function generateMotionWebex(){
@@ -19740,7 +19884,12 @@ async function generateI589Filing(){
 // and a bold title — and close with the same certificate of service. This
 // builds those pieces once from the shared Field values so each generator
 // below only has to describe what is actually its own.
-function _filingKit(v, docTitleBase){
+//
+// `kitOpts.title` overrides the document title outright. Most filings are
+// the respondent's, so the default title is "RESPONDENT'S <BASE>"; a joint
+// filing signed by two counsel is nobody's possessive, so it passes its
+// own title through instead.
+function _filingKit(v, docTitleBase, kitOpts){
   const esc = (typeof _escXml === 'function') ? _escXml : (s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
   const run = (text, opt) => {
     const o = opt || {};
@@ -19753,6 +19902,10 @@ function _filingKit(v, docTitleBase){
   // A tab stop with dot leaders is what carries a page number out to the
   // right margin in a table of contents.
   const tabRun = () => '<w:r><w:tab/></w:r>';
+  // The empty ballot box the proposed order ticks its findings with. The
+  // motion-webex template draws it as a Symbol-font glyph rather than the
+  // Unicode ☐, so the generated order matches it exactly.
+  const sym = () => '<w:r><w:sym w:font="Symbol" w:char="F0FF"/></w:r>';
   const para = (inner, opt) => {
     const o = opt || {};
     const ind = (o.left != null || o.hanging != null)
@@ -19779,9 +19932,14 @@ function _filingKit(v, docTitleBase){
   const anumStack = anumList.map((s, i) => s + (i < anumList.length - 1 ? ';' : '')).join('\n');
   const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
   const addr = (typeof _briefSplitAddr === 'function') ? _briefSplitAddr(v.field4 || '') : [String(v.field4||''), ''];
-  const docTitle = (plural ? "RESPONDENTS'" : "RESPONDENT'S") + ' ' + String(docTitleBase||'').toUpperCase();
-  const readableTitle = (plural ? "Respondents'" : "Respondent's") + ' ' + String(docTitleBase||'')
-    .toLowerCase().replace(/(^|[\s\-])([a-z])/g, (m,a,b) => a + b.toUpperCase());
+  const titleCase = s => String(s||'').toLowerCase().replace(/(^|[\s\-])([a-z])/g, (m,a,b) => a + b.toUpperCase());
+  const titleOverride = (kitOpts && kitOpts.title) ? String(kitOpts.title) : '';
+  const docTitle = titleOverride
+    ? titleOverride.toUpperCase()
+    : (plural ? "RESPONDENTS'" : "RESPONDENT'S") + ' ' + String(docTitleBase||'').toUpperCase();
+  const readableTitle = titleOverride
+    ? titleCase(titleOverride)
+    : (plural ? "Respondents'" : "Respondent's") + ' ' + titleCase(docTitleBase);
   const sigBlock = String(v.field20 || '').split('\n').filter(l => l.trim()).map(l => para(run(l), { after:0 })).join('');
 
   const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -19850,6 +20008,52 @@ function _filingKit(v, docTitleBase){
     c += blank(2);
     c += sigBlock;
     return c;
+  };
+
+  // The proposed order the Court signs — the page the motion-webex
+  // template carries behind the motion itself: the caption, the
+  // GRANTED / DENIED line naming this document, the standard findings
+  // and deadline boxes, the judge's signature rules, and the court
+  // staff's own certificate of service.
+  const orderPage = (leadWithBreak) => {
+    const line = (text) => para(sym() + run(' ' + text), { after:0 });
+    let o = leadWithBreak ? pageBreak : '';
+    o += captionBlock();
+    o += para(run('ORDER OF THE IMMIGRATION JUDGE', { bold:true }), { jc:'center', after:240 });
+    o += para(run('Upon consideration of ') + run(docTitle, { bold:true })
+              + run(', it is HEREBY ORDERED that the motion be ')
+              + sym() + run('GRANTED ', { bold:true }) + sym() + run(' ')
+              + run('DENIED ', { bold:true }) + run('because:'), { jc:'both', after:200 });
+    o += line('DHS does not oppose the motion.');
+    o += line('The respondent does not oppose the motion.');
+    o += line('A response to the motion has not been filed with the court.');
+    o += line('Good cause has been established for the motion.');
+    o += line('The court agrees with the reasons stated in the opposition to the motion.');
+    o += line('The motion is untimely per ______________________.');
+    o += line('Other: _______________________________________________________________.');
+    o += blank(1);
+    o += para(run('Deadlines:'), { after:0 });
+    o += line('The application(s) for relief must be filed by ________________________________.');
+    o += line('The respondent must comply with DHS biometrics instructions by _______________.');
+    o += blank(2);
+    // Two signature rules side by side, each labelled underneath.
+    const rule = para(run('____________________________________'), { after:0 });
+    const lbl = t => para(run(t), { after:0 });
+    o += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
+      + '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/>'
+      + '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>'
+      + '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
+      + '<w:tblGrid><w:gridCol w:w="4200"/><w:gridCol w:w="960"/><w:gridCol w:w="4200"/></w:tblGrid>'
+      + '<w:tr>' + tcell(4200, rule, '') + tcell(960, para('', { after:0 }), '') + tcell(4200, rule, '') + '</w:tr>'
+      + '<w:tr>' + tcell(4200, lbl('Date'), '') + tcell(960, para('', { after:0 }), '') + tcell(4200, lbl('Immigration Judge'), '') + '</w:tr>'
+      + '</w:tbl>';
+    o += blank(1);
+    o += para(run('________________________________________________________________________'), { after:120 });
+    o += para(run('Certificate of Service', { bold:true }), { jc:'center', after:120 });
+    o += para(run('This document was served by: [ ] Mail  [ ] Personal Service'), { after:0 });
+    o += para(run('To: [ ] Alien  [ ] Alien c/o Custodial Officer  [ ] Alien’s Atty/Rep  [ ] DHS'), { after:0 });
+    o += para(run('Date: ________________________  By: Court Staff________________________'), { after:0 });
+    return o;
   };
 
   // A separator page carrying one large centered letter — the exhibit goes
@@ -19924,8 +20128,8 @@ function _filingKit(v, docTitleBase){
     setTimeout(() => URL.revokeObjectURL(a.href), 60000);
   };
 
-  return { run, tabRun, para, tcell, pageBreak, blank, sigBlock, captionBlock, coverPage,
-           certificate, tabPage, buildDocx, filename, download,
+  return { run, tabRun, sym, para, tcell, pageBreak, blank, sigBlock, captionBlock, coverPage,
+           certificate, orderPage, tabPage, buildDocx, filename, download,
            respLine, respList, plural, docTitle, readableTitle, coverDate, subPlace };
 }
 
@@ -20050,6 +20254,115 @@ async function generateSupplementalEvidence(){
     setStatus('✓ Downloaded — ' + exhibits.length + ' exhibit tab' + (exhibits.length===1?'':'s') + '. Open it in Word to review.', false);
   }catch(e){
     console.error('generateSupplementalEvidence', e);
+    setStatus('Failed: ' + (e && e.message ? e.message : 'unknown error'), true);
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = 'Generate .docx'; }
+  }
+}
+
+// ── Joint Motion to Substitute Counsel generator ───────────────────
+// Built on the same kit as every other filing, so the package comes out
+// laid out exactly like the Motion for Video Appearance: cover page,
+// caption + motion, proposed order page, certificate of service. Only
+// the body is this motion's own — and it closes on TWO signature lines,
+// the outgoing counsel of record over the incoming one.
+//
+// The other lawyer's details are optional. When they are left blank the
+// .docx prints the ruled line and its role label with nothing on the
+// name line, so the block can be completed by hand in Word.
+async function generateSubstituteCounsel(){
+  const btn = document.getElementById('bg-substcounsel-btn');
+  const status = document.getElementById('bg-substcounsel-status');
+  const setStatus = (msg, err) => { if(status){ status.textContent = msg; status.style.color = err ? '#B85C5C' : 'var(--sage)'; } };
+  if(typeof JSZip === 'undefined'){ setStatus('JSZip not loaded — refresh the page and try again.', true); return; }
+  const o = window._scOpts || _blankSubstCounselOpts();
+  const v = window._briefValues || {};
+  if(!(v.field5 || '').split('\n')[0].trim()){ setStatus('Pick a case first so the filing is captioned.', true); return; }
+  if(btn){ btn.disabled = true; btn.textContent = 'Generating…'; }
+  setStatus('', false);
+  try{
+    const TITLE = 'JOINT MOTION TO SUBSTITUTE COUNSEL';
+    const K = _filingKit(v, 'Joint Motion to Substitute Counsel', { title:TITLE });
+    const adapt = (t) => (typeof _briefAdaptCount === 'function') ? _briefAdaptCount(t, K.plural) : t;
+
+    const firmIsNew  = o.side !== 'former';
+    const firmRole   = (firmIsNew ? '(New)' : '(Former)') + ' Counsel for Respondent';
+    const otherRole  = (firmIsNew ? '(Former)' : '(New)') + ' Counsel for Respondent';
+    // The body names both lawyers. A name that wasn't typed becomes a
+    // ruled blank so the sentence can be completed in Word.
+    const BLANK = '____________________';
+    const firmName  = (String(v.field20 || '').split('\n').map(l => l.trim()).filter(Boolean)[0]) || BLANK;
+    const otherName = String(o.otherName || '').trim() || BLANK;
+    const formerName = firmIsNew ? otherName : firmName;
+    const newName    = firmIsNew ? firmName  : otherName;
+
+    // The standard joint-substitution language, used whenever the user
+    // leaves the body empty.
+    const defaultBody = [
+      'Undersigned counsels move this Court jointly to allow substitution of counsel for Respondent. '
+        + 'This substitution was initiated by Respondent and has been consented to by ' + formerName
+        // "Wilmer Gonzalez, Esq." already ends the sentence — don't double the period.
+        + ', counsel of record, and ' + newName + (/\.$/.test(newName) ? '' : '.'),
+      'This joint motion complies with Matter of Rosales in substance because there is no lapse in representation. '
+        + 'New Counsel has advised Respondent of Respondent’s obligation to appear at all scheduled hearings and '
+        + 'the consequences of failure to appear.',
+      o.addressUnchanged
+        ? 'Respondent’s address is unchanged, therefore there is no necessity for new address notification.'
+        : 'Respondent’s address has changed; a Change of Address (Form EOIR-33/IC) is filed concurrently with this motion.'
+    ];
+    const typed = String(o.body || '').split('\n').map(l => l.trim()).filter(Boolean);
+    const paras = typed.length ? typed : defaultBody;
+
+    // One signature line: the rule, the name (or a blank line to write it
+    // on), then the role label underneath.
+    const sigLines = (lines, roleLabel) => {
+      let s = K.para(K.run('____________________________________'), { after:0 });
+      if(lines.length){
+        lines.forEach(l => { s += K.para(K.run(l), { after:0 }); });
+      } else {
+        s += K.para(K.run(''), { after:0 });
+        s += K.para(K.run(roleLabel), { after:0 });
+      }
+      return s;
+    };
+    // The firm's own block comes from Field 20, with its "Attorney for
+    // Respondent" line swapped for this motion's role label.
+    const firmLines = String(v.field20 || '').split('\n').map(l => l.trim()).filter(Boolean);
+    const roleRe = /^attorneys?\s+for\s+respondents?$/i;
+    let firmBlock = firmLines.map(l => roleRe.test(l) ? adapt(firmRole) : l);
+    if(!firmLines.some(l => roleRe.test(l)) && firmBlock.length) firmBlock.splice(1, 0, adapt(firmRole));
+    const otherBlock = _scOtherBlockLines(o, adapt(otherRole));
+
+    let body = '';
+    if(o.cover) body += K.coverPage() + K.pageBreak;
+
+    // The motion itself, under its own copy of the caption and title —
+    // the way the motion template lays it out.
+    let motion = K.captionBlock();
+    motion += K.para(K.run(TITLE, { bold:true }), { jc:'center', after:240 });
+    paras.forEach(t => { motion += K.para(K.run(adapt(t)), { jc:'both', after:200 }); });
+    motion += K.blank(1);
+    motion += K.para(K.run(String(o.motionDate || '').trim() || _scOrdinalDate(new Date())), { after:200 });
+    motion += K.blank(1);
+    // Former counsel of record signs first, then the incoming counsel.
+    motion += sigLines(firmIsNew ? otherBlock : firmBlock, adapt(firmIsNew ? otherRole : firmRole));
+    motion += K.blank(2);
+    motion += sigLines(firmIsNew ? firmBlock : otherBlock, adapt(firmIsNew ? firmRole : otherRole));
+    body += motion;
+
+    if(o.order) body += K.orderPage(true);
+    if(o.cert)  body += K.certificate(true);
+
+    const fname = K.filename('Joint Motion to Substitute Counsel');
+    K.download(await K.buildDocx(body), fname);
+    if(window._briefClid && typeof recordCreatedDoc==='function'){
+      recordCreatedDoc(window._briefClid, { kind:'Substitute Counsel', title:K.readableTitle, filename:fname });
+    }
+    setStatus(otherBlock.length
+      ? '✓ Downloaded — open it in Word to review.'
+      : '✓ Downloaded — the other lawyer’s block is left blank to fill in in Word.', false);
+  }catch(e){
+    console.error('generateSubstituteCounsel', e);
     setStatus('Failed: ' + (e && e.message ? e.message : 'unknown error'), true);
   }finally{
     if(btn){ btn.disabled = false; btn.textContent = 'Generate .docx'; }
