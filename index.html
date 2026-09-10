@@ -2693,7 +2693,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
       <!-- Case details card -->
       <div style="background:#FDFAF7;border:1px solid #EDE8E0;border-radius:14px;padding:20px 22px;margin-bottom:16px;">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;margin-bottom:14px;">Case Details</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:13px;">
           <div id="ncp-type-wrap">
             <label class="nc-label">Case Type <span style="color:#B85C5C">*</span></label>
             <select id="ncp-type" class="nc-input" oninput="this.style.borderColor='#DDD5CA'">
@@ -2705,6 +2705,13 @@ window.addEventListener('load',()=>autoGrowAllNotes());
             <select id="ncp-category" class="nc-input" onchange="_ncCategoryChanged('ncp')">
               <option value="Office">Office</option>
               <option value="Personal">Personal</option>
+            </select>
+          </div>
+          <div>
+            <label class="nc-label">Is the client detained?</label>
+            <select id="ncp-detained" class="nc-input">
+              <option value="non-detained">Not detained</option>
+              <option value="detained">Detained</option>
             </select>
           </div>
         </div>
@@ -9658,6 +9665,7 @@ function renderList(){
       name.textContent=r.client;
       name.onclick=()=>goToCase(r.clid||r.client);
       c.appendChild(name);
+      if(isRecordDetained(r)) c.appendChild(detainedChip(9, true));
       tr.appendChild(c);
     }
     if(colVis.anum!==false){
@@ -10018,6 +10026,18 @@ function isPaperFileCase(r){
   if(!clid || typeof caseMeta==='undefined' || !caseMeta[clid]) return false;
   return caseMeta[clid].filingSystem === 'paper';
 }
+
+// Detention status for a case. Only an explicit 'detained' counts —
+// unset means not detained, which is the default a new case is created
+// with and what every case created before this existed should read as.
+function isCaseDetained(clid){
+  if(!clid || typeof caseMeta === 'undefined' || !caseMeta[clid]) return false;
+  return caseMeta[clid].detained === 'detained';
+}
+// Same question asked of an event record, which carries its case's Cl ID.
+function isRecordDetained(r){
+  return !!r && isCaseDetained(r.clid || r.client);
+}
 // Appends a small "⚠ Paper File" warning chip to a calendar event card
 // when the record's case is flagged Paper File in the case information.
 function appendPaperWarn(el, r, size){
@@ -10028,6 +10048,27 @@ function appendPaperWarn(el, r, size){
   w.style.cssText = 'display:inline-flex;align-items:center;gap:3px;font-size:'+(size||9)+'px;font-weight:700;color:#B85C5C;background:#FBF1F1;border:1px solid #E6BDBD;border-radius:4px;padding:1px 5px;margin-top:3px;line-height:1.3;white-space:nowrap;';
   w.textContent = '⚠ Paper File';
   el.appendChild(w);
+}
+
+// Appends a "🔒 DETAINED" chip to a calendar event card when the
+// record's client is detained. Detention drives how urgent an event is
+// and what the filings say, so it rides along on every event the app
+// shows, the same way the Paper File warning does.
+function appendDetainedBadge(el, r, size){
+  if(!isRecordDetained(r)) return;
+  el.appendChild(detainedChip(size));
+}
+// The chip itself, so table cells and headers can place one without
+// going through appendDetainedBadge's card layout.
+function detainedChip(size, inline){
+  const w = document.createElement('span');
+  w.className = 'detained-badge';
+  w.title = 'This client is detained — set in the case information.';
+  w.style.cssText = 'display:inline-flex;align-items:center;gap:3px;font-size:'+(size||9)+'px;font-weight:700;'
+    + 'color:#B85C5C;background:#FBF1F1;border:1px solid #E6BDBD;border-radius:4px;padding:1px 5px;'
+    + (inline ? 'margin-left:6px;' : 'margin-top:3px;') + 'line-height:1.3;white-space:nowrap;';
+  w.textContent = '🔒 DETAINED';
+  return w;
 }
 
 // Returns the first file attachment for a SCHEDULING ORDER record, or null
@@ -10413,6 +10454,7 @@ function renderWeek() {
       }
       appendSoMeta(t, r, 'var(--amber)');
       appendPaperWarn(t, r, 9);
+      appendDetainedBadge(t, r, 9);
       // Hearing format indicator: link icon for virtual, pin icon for in-person
       if(!_isReminder){
         const _vlink = eventVirtualLink(r);
@@ -10678,6 +10720,7 @@ function renderMonth() {
       if(es.color && !_isCallup) card.style.borderLeft=`3px solid ${es.color}`;
       appendSoMeta(card, r, fg);
       appendPaperWarn(card, r, 8);
+      appendDetainedBadge(card, r, 8);
       const _vlinkM = eventVirtualLink(r);
       const _absM = 'position:absolute;top:3px;right:3px;margin:0;padding:1px;';
       if(_vlinkM){
@@ -13305,6 +13348,7 @@ function _renderReadOnlyView(r){
     + `<div class="ro-hero-event"${evColor?` style="color:${evColor}"`:''}>${_escHtml(evLabel)}</div>`
     + `<div class="ro-hero-meta">`
     + (r.client?`<span>👤 ${_escHtml(r.client)}</span>`:'')
+    + (isRecordDetained(r)?`<span style="color:#B85C5C;font-weight:700;" title="This client is detained — set in the case information.">🔒 DETAINED</span>`:'')
     + (dateStr?`<span>📅 ${_escHtml(dateStr)}</span>`:'')
     + (timeStr?`<span>⏰ ${_escHtml(timeStr)}</span>`:'')
     + `</div></div>`;
@@ -17646,7 +17690,7 @@ function _briefValuesFromCase(clid, chosen){
   const clientCount = 1 + includedOthers.length;
   const plural = clientCount > 1;
   return {
-    field2: 'NON-DETAINED',
+    field2: (meta.detained === 'detained') ? 'DETAINED' : 'NON-DETAINED',
     field3: 'IMMIGRATION COURT',
     field4: courtAddress,
     field5: respondent,
@@ -23468,6 +23512,30 @@ function openCaseDetail(clid){
         : '<span style="color:#6B7FA3;font-weight:600;">ECAS</span>';
       fsItem.appendChild(fsV);L1.appendChild(fsItem);
     }
+    // Detention status. Unset reads as Not detained — that's the default
+    // a case is created with — and DETAINED is called out in red here and
+    // on every one of the case's events.
+    const _detNow = (caseMeta[clid] && caseMeta[clid].detained) === 'detained' ? 'detained' : 'non-detained';
+    if(isEditing){
+      const dtItem=document.createElement('div');dtItem.className='case-info-item';dtItem.style.cssText='background:#fff;border:1px solid #DDD5CA;border-radius:8px;padding:6px 9px;';
+      const dtLbl=document.createElement('div');dtLbl.className='case-info-label';dtLbl.textContent='Detained';dtItem.appendChild(dtLbl);
+      const dtSel=document.createElement('select');
+      dtSel.style.cssText='width:100%;font-size:13px;font-weight:500;color:#2C2620;border:none;outline:none;background:transparent;padding:0;font-family:inherit;cursor:pointer;';
+      [['non-detained','Not detained'],['detained','Detained']].forEach(([v,lbl])=>{
+        const o=document.createElement('option');o.value=v;o.textContent=lbl;if(v===_detNow)o.selected=true;dtSel.appendChild(o);
+      });
+      dtSel.onchange=()=>{ if(!caseMeta[clid])caseMeta[clid]={}; caseMeta[clid].detained=dtSel.value; markUnsaved(); renderAll2(); };
+      dtItem.appendChild(dtSel);
+      L1.appendChild(dtItem);
+    } else {
+      const dtItem=document.createElement('div');dtItem.className='case-info-item';
+      const dtLbl=document.createElement('div');dtLbl.className='case-info-label';dtLbl.textContent='Detained';dtItem.appendChild(dtLbl);
+      const dtV=document.createElement('div');dtV.className='case-info-value';
+      dtV.innerHTML = _detNow==='detained'
+        ? '<span style="color:#B85C5C;font-weight:700;">🔒 DETAINED</span>'
+        : '<span style="color:#6A8C6E;font-weight:600;">Not detained</span>';
+      dtItem.appendChild(dtV);L1.appendChild(dtItem);
+    }
     // Personal or Office — the case's category, separate from the legal
     // case type (Defensive Asylum, etc.). Unset counts as Office.
     const _catNow = (caseMeta[clid] && caseMeta[clid].caseCategory) || 'Office';
@@ -26242,6 +26310,7 @@ function renderDayTaskList(){
     body.appendChild(due);
     appendSoMeta(body, r, '#C9823A');
     appendPaperWarn(body, r, 9);
+    appendDetainedBadge(body, r, 9);
 
     row.appendChild(cb);
     row.appendChild(body);
@@ -26403,6 +26472,8 @@ function renderDayTimeline(){
       `;
       }
       appendPaperWarn(body, r, 9);
+      appendDetainedBadge(body, r, 9);
+    appendDetainedBadge(body, r, 9);
       row.appendChild(makeFinishCheckBtn(r.id, 14, 'align-self:center;margin-right:2px;'));
       row.appendChild(bar);
       row.appendChild(body);
@@ -28340,6 +28411,8 @@ function openAddCasePage(){
   // Reset case category to the default (Office)
   const catEl=document.getElementById('ncp-category');
   if(catEl) catEl.value='Office';
+  const detEl=document.getElementById('ncp-detained');
+  if(detEl) detEl.value='non-detained';
   if(typeof _ncResetPersonalType==='function') _ncResetPersonalType('ncp');
   if(typeof _ncCategoryChanged==='function') _ncCategoryChanged('ncp');
 
@@ -28495,6 +28568,7 @@ function saveAddCasePage(){
   // Keep the halves too — the composed Case Type is a display string, but
   // renaming a relief in Settings needs the parts to rewrite.
   if(_isPersonal){ caseMeta[caseId].caseReliefs=_reliefs.slice(); caseMeta[caseId].caseProceeding=_proceeding; }
+  caseMeta[caseId].detained=(document.getElementById('ncp-detained')||{value:'non-detained'}).value||'non-detained';
   const _ncJudge=(typeof _ncJudgeById==='function')
     ? _ncJudgeById((document.getElementById('ncp-judge')||{value:''}).value) : null;
   if(_ncJudge) caseMeta[caseId].judgeId=_ncJudge.id;
@@ -28753,6 +28827,7 @@ function openNewCaseModal(){
   ['nc-lastName','nc-firstName','nc-middleName','nc-clid','nc-anum','nc-email','nc-countryOfBirth','nc-dob','nc-phone','nc-notes'].forEach(id => {const e=document.getElementById(id);if(e)e.value='';});
   typeEl.value = ''; attyEl.value = '';
   const catElM = document.getElementById('nc-category'); if(catElM) catElM.value = 'Office';
+  const detElM = document.getElementById('nc-detained'); if(detElM) detElM.value = 'non-detained';
   if(typeof _ncResetPersonalType==='function') _ncResetPersonalType('nc');
   if(typeof _ncCategoryChanged==='function') _ncCategoryChanged('nc');
 
@@ -28858,6 +28933,7 @@ function saveNewCase(){
   // Keep the halves too — the composed Case Type is a display string, but
   // renaming a relief in Settings needs the parts to rewrite.
   if(_isPersonal){ caseMeta[_cid].caseReliefs=_reliefs.slice(); caseMeta[_cid].caseProceeding=_proceeding; }
+  caseMeta[_cid].detained=(document.getElementById('nc-detained')||{value:'non-detained'}).value||'non-detained';
 
   // Add new case type / paralegal if not already in lists
   if(type && !caseTypes.includes(type)) caseTypes.push(type);
@@ -32369,6 +32445,15 @@ function saveNewTask(){
       <select id="nc-category" onchange="_ncCategoryChanged('nc')" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;background:#fff;">
         <option value="Office">Office</option>
         <option value="Personal">Personal</option>
+      </select>
+    </div>
+
+    <!-- Detained -->
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Is the client detained?</label>
+      <select id="nc-detained" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;background:#fff;">
+        <option value="non-detained">Not detained</option>
+        <option value="detained">Detained</option>
       </select>
     </div>
 
