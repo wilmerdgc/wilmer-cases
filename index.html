@@ -18296,11 +18296,64 @@ function _renderSuppEvidPanel(){
 function _blankSubstCounselOpts(){
   return {
     side:'new',
+    // Your own block. Pre-filled from the firm profile and left alone
+    // once you edit it — see _scEnsureMine.
+    mineName:'', mineFirm:'', mineStreet:'', mineCity:'',
+    minePhone:'', mineEmail:'', mineEoir:'', _mineTouched:false,
     otherName:'', otherFirm:'', otherStreet:'', otherCity:'',
     otherPhone:'', otherEmail:'', otherEoir:'',
     motionDate:'', addressUnchanged:true, body:'',
     cover:true, order:true, cert:true
   };
+}
+
+// Split a saved attorney signature block back into the fields the form
+// shows. The app writes these blocks itself — name, role, EOIR #, firm,
+// street, city, phone, email — so the shape is known; anything that
+// doesn't match a specific line falls through to firm / street / city in
+// the order it was written.
+function _scSplitBlock(text){
+  const out = { Name:'', Eoir:'', Firm:'', Street:'', City:'', Phone:'', Email:'' };
+  const lines = String(text || '').split('\n').map(l => l.trim()).filter(Boolean);
+  if(!lines.length) return out;
+  out.Name = lines.shift();
+  const rest = [];
+  lines.forEach(l => {
+    if(/^attorneys?\s+for\s+respondents?$/i.test(l)) return;
+    if(/^\(?(new|former)\)?\s*counsel\s+for\s+respondents?$/i.test(l)) return;
+    if(/^EOIR\s*#/i.test(l)){ out.Eoir = l.replace(/^EOIR\s*#?\s*/i, ''); return; }
+    if(l.indexOf('@') >= 0){ out.Email = l; return; }
+    if(/^[\d\s().+-]{7,}$/.test(l)){ out.Phone = l; return; }
+    rest.push(l);
+  });
+  out.Firm   = rest[0] || '';
+  out.Street = rest[1] || '';
+  out.City   = rest.slice(2).join(', ');
+  return out;
+}
+
+// Your side of the motion, pre-filled from your profile. Priority is the
+// same signature block every other document uses (Field 20, which already
+// prefers a saved signature over raw firm info); firmInfo is the fallback
+// when no case has been picked yet. Once you type in any of these fields
+// the form stops refilling them — "Reset to my profile" clears that.
+function _scEnsureMine(o){
+  if(!o || o._mineTouched) return;
+  const v = window._briefValues || {};
+  let parts = _scSplitBlock(v.field20 || '');
+  if(!parts.Name){
+    const fi = (typeof firmInfo === 'object' && firmInfo) || {};
+    parts = {
+      Name:   [fi.firstName, fi.middleName, fi.lastName].filter(Boolean).join(' '),
+      Eoir:   fi.barNumber || '',
+      Firm:   fi.firmName || '',
+      Street: [fi.street, fi.apt].filter(Boolean).join(' Ste '),
+      City:   [fi.city, [fi.state, fi.zip].filter(Boolean).join(' ')].filter(Boolean).join(', '),
+      Phone:  fi.phone || fi.mobile || '',
+      Email:  fi.email || ''
+    };
+  }
+  ['Name','Eoir','Firm','Street','City','Phone','Email'].forEach(k => { o['mine' + k] = parts[k] || ''; });
 }
 
 // "This the 27th day of July 2026." — the date line the motion closes on.
@@ -18312,20 +18365,21 @@ function _scOrdinalDate(d){
   return 'This the ' + n + suffix + ' day of ' + MONTHS[dt.getMonth()] + ' ' + dt.getFullYear() + '.';
 }
 
-// The other lawyer's signature block, as the lines the .docx prints.
-// Returns [] when nothing was typed — the generator then rules blank
-// lines instead so the block can be completed in Word.
-function _scOtherBlockLines(o, roleLabel){
+// One counsel's signature block, as the lines the .docx prints. `key` is
+// 'mine' or 'other'. Returns [] when nothing was typed — the generator
+// then rules blank lines instead so the block can be completed in Word.
+function _scBlockLines(o, key, roleLabel){
   const L = [];
+  const get = f => String(o[key + f] || '').trim();
   const push = s => { if(String(s||'').trim()) L.push(String(s).trim()); };
-  push(o.otherName);
+  push(get('Name'));
   if(L.length) L.push(roleLabel);
-  push(o.otherEoir ? ('EOIR # ' + String(o.otherEoir).replace(/^EOIR\s*#?\s*/i, '')) : '');
-  push(o.otherFirm);
-  push(o.otherStreet);
-  push(o.otherCity);
-  push(o.otherPhone);
-  push(o.otherEmail);
+  push(get('Eoir') ? ('EOIR # ' + get('Eoir').replace(/^EOIR\s*#?\s*/i, '')) : '');
+  push(get('Firm'));
+  push(get('Street'));
+  push(get('City'));
+  push(get('Phone'));
+  push(get('Email'));
   return L;
 }
 
@@ -18334,11 +18388,13 @@ function _renderSubstCounselPanel(){
   if(!panel) return;
   if(!window._scOpts) window._scOpts = _blankSubstCounselOpts();
   const o = window._scOpts;
+  _scEnsureMine(o);
   const firmRole  = o.side === 'former' ? '(Former) Counsel' : '(New) Counsel';
   const otherRole = o.side === 'former' ? '(New) Counsel'    : '(Former) Counsel';
   const lbl = t => '<label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">' + t + '</label>';
   const inp = (key, ph) => '<input type="text" value="' + escHtml(o[key]||'').replace(/"/g,'&quot;') + '" placeholder="' + escHtml(ph) + '" '
-    + 'oninput="window._scOpts[\'' + key + '\']=this.value" '
+    + 'oninput="window._scOpts[\'' + key + '\']=this.value;'
+    + (key.indexOf('mine') === 0 ? 'window._scOpts._mineTouched=true;' : '') + '" '
     + 'style="width:100%;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>';
   const sideBtn = (val, text) => {
     const on = o.side === val;
@@ -18356,6 +18412,23 @@ function _renderSubstCounselPanel(){
         ${sideBtn('former','Stepping OUT — former counsel')}
       </div>
       <div style="font-size:10.5px;color:var(--ink-faint);margin-top:6px;line-height:1.45;">Your signature line reads <b>${escHtml(firmRole)} for Respondent</b>; the other lawyer's reads <b>${escHtml(otherRole)} for Respondent</b>. The former counsel of record always signs first, as the Court expects.</div>
+    </div>
+
+    <div style="border:1px solid var(--sage);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:16px;background:var(--sage-light,#EBF1EB);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:700;color:var(--ink);">You — ${escHtml(firmRole)} for Respondent</div>
+        <button type="button" onclick="window._scOpts._mineTouched=false;_renderSubstCounselPanel()" title="Fill these back in from your saved profile" style="font-size:11px;font-weight:600;padding:4px 12px;border:1px solid var(--sage);border-radius:20px;background:#fff;color:var(--sage);cursor:pointer;font-family:inherit;">Reset to my profile</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+        <div>${lbl('Name')}${inp('mineName','e.g. Wilmer Gonzalez, Esq.')}</div>
+        <div>${lbl('EOIR #')}${inp('mineEoir','e.g. XX894799')}</div>
+        <div>${lbl('Firm')}${inp('mineFirm','e.g. The Romero Firm')}</div>
+        <div>${lbl('Street')}${inp('mineStreet','e.g. 103-24 Roosevelt Ave. Ste 307')}</div>
+        <div>${lbl('City, State ZIP')}${inp('mineCity','e.g. Corona, NY 11368')}</div>
+        <div>${lbl('Phone')}${inp('minePhone','')}</div>
+        <div>${lbl('Email')}${inp('mineEmail','')}</div>
+      </div>
+      <div style="font-size:10.5px;color:var(--ink-faint);margin-top:9px;line-height:1.45;">Filled in from your saved signature — edit for this motion only. This block signs the motion, heads the cover page and signs the certificate of service.</div>
     </div>
 
     <div style="border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:16px;background:#fff;">
@@ -20355,22 +20428,35 @@ async function generateSubstituteCounsel(){
   const setStatus = (msg, err) => { if(status){ status.textContent = msg; status.style.color = err ? '#B85C5C' : 'var(--sage)'; } };
   if(typeof JSZip === 'undefined'){ setStatus('JSZip not loaded — refresh the page and try again.', true); return; }
   const o = window._scOpts || _blankSubstCounselOpts();
-  const v = window._briefValues || {};
-  if(!(v.field5 || '').split('\n')[0].trim()){ setStatus('Pick a case first so the filing is captioned.', true); return; }
+  _scEnsureMine(o);
+  const v0 = window._briefValues || {};
+  if(!(v0.field5 || '').split('\n')[0].trim()){ setStatus('Pick a case first so the filing is captioned.', true); return; }
   if(btn){ btn.disabled = true; btn.textContent = 'Generating…'; }
   setStatus('', false);
   try{
     const TITLE = 'JOINT MOTION TO SUBSTITUTE COUNSEL';
-    const K = _filingKit(v, 'Joint Motion to Substitute Counsel', { title:TITLE });
-    const adapt = (t) => (typeof _briefAdaptCount === 'function') ? _briefAdaptCount(t, K.plural) : t;
+    // Roles are needed to build the signature blocks, and the blocks are
+    // needed to build the kit — so the singular/plural choice is read
+    // here rather than off the kit.
+    const plural = !!(window._briefSelection && window._briefSelection.included && window._briefSelection.included.size > 1);
+    const adapt = (t) => (typeof _briefAdaptCount === 'function') ? _briefAdaptCount(t, plural) : t;
 
     const firmIsNew  = o.side !== 'former';
     const firmRole   = (firmIsNew ? '(New)' : '(Former)') + ' Counsel for Respondent';
     const otherRole  = (firmIsNew ? '(Former)' : '(New)') + ' Counsel for Respondent';
+    // Your block as edited on this motion signs the motion AND heads the
+    // cover page AND signs the certificate, so it replaces Field 20 for
+    // the whole document instead of only the signature line.
+    const firmBlock  = _scBlockLines(o, 'mine', adapt(firmRole));
+    const otherBlock = _scBlockLines(o, 'other', adapt(otherRole));
+    const v = firmBlock.length ? Object.assign({}, v0, { field20: firmBlock.join('\n') }) : v0;
+    const K = _filingKit(v, 'Joint Motion to Substitute Counsel', { title:TITLE });
+
     // The body names both lawyers. A name that wasn't typed becomes a
     // ruled blank so the sentence can be completed in Word.
     const BLANK = '____________________';
-    const firmName  = (String(v.field20 || '').split('\n').map(l => l.trim()).filter(Boolean)[0]) || BLANK;
+    const firmName  = String(o.mineName || '').trim()
+                   || (String(v.field20 || '').split('\n').map(l => l.trim()).filter(Boolean)[0]) || BLANK;
     const otherName = String(o.otherName || '').trim() || BLANK;
     const formerName = firmIsNew ? otherName : firmName;
     const newName    = firmIsNew ? firmName  : otherName;
@@ -20404,14 +20490,6 @@ async function generateSubstituteCounsel(){
       }
       return s;
     };
-    // The firm's own block comes from Field 20, with its "Attorney for
-    // Respondent" line swapped for this motion's role label.
-    const firmLines = String(v.field20 || '').split('\n').map(l => l.trim()).filter(Boolean);
-    const roleRe = /^attorneys?\s+for\s+respondents?$/i;
-    let firmBlock = firmLines.map(l => roleRe.test(l) ? adapt(firmRole) : l);
-    if(!firmLines.some(l => roleRe.test(l)) && firmBlock.length) firmBlock.splice(1, 0, adapt(firmRole));
-    const otherBlock = _scOtherBlockLines(o, adapt(otherRole));
-
     let body = '';
     if(o.cover) body += K.coverPage() + K.pageBreak;
 
