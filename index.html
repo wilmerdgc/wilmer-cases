@@ -2677,6 +2677,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
           <div>
             <label class="nc-label">Client ID</label>
             <input id="ncp-clid" type="text" placeholder="e.g. 22900" class="nc-input"/>
+            <div id="ncp-clid-hint" style="display:none;font-size:10.5px;color:#9E9186;margin-top:5px;line-height:1.45;"></div>
           </div>
           <div>
             <label class="nc-label">A-Number</label>
@@ -2693,7 +2694,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
       <div style="background:#FDFAF7;border:1px solid #EDE8E0;border-radius:14px;padding:20px 22px;margin-bottom:16px;">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#C4BAB0;margin-bottom:14px;">Case Details</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px;">
-          <div>
+          <div id="ncp-type-wrap">
             <label class="nc-label">Case Type <span style="color:#B85C5C">*</span></label>
             <select id="ncp-type" class="nc-input" oninput="this.style.borderColor='#DDD5CA'">
               <option value="">Select case type…</option>
@@ -2701,11 +2702,26 @@ window.addEventListener('load',()=>autoGrowAllNotes());
           </div>
           <div>
             <label class="nc-label">Personal or Office</label>
-            <select id="ncp-category" class="nc-input">
+            <select id="ncp-category" class="nc-input" onchange="_ncCategoryChanged('ncp')">
               <option value="Office">Office</option>
               <option value="Personal">Personal</option>
             </select>
           </div>
+        </div>
+        <!-- Personal cases describe the case type as relief(s) + the
+             proceeding or agency they are sought in, instead of one
+             Case Type off the office list. -->
+        <div id="ncp-personal-type" style="display:none;margin-bottom:13px;padding:12px 14px;background:#FFF9F0;border:1px solid #EFDCC0;border-radius:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">
+            <label class="nc-label" style="margin:0;">Relief <span style="color:#B85C5C">*</span></label>
+            <button type="button" onclick="_ncReliefAdd('ncp')" title="Add another relief" style="font-size:11px;font-weight:700;padding:4px 12px;border:1px solid #DDD5CA;border-radius:20px;background:#fff;color:#8A7E72;cursor:pointer;font-family:inherit;">+ Add relief</button>
+          </div>
+          <div id="ncp-relief-rows" style="display:flex;flex-direction:column;gap:8px;"></div>
+          <div style="margin-top:12px;">
+            <label class="nc-label">Proceeding or Agency <span style="color:#B85C5C">*</span></label>
+            <select id="ncp-proceeding" class="nc-input" onchange="_ncPartPicked(this,'proceeding','ncp')"></select>
+          </div>
+          <div id="ncp-personal-type-preview" style="font-size:11px;color:#8A7E72;margin-top:10px;line-height:1.45;"></div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px;">
           <div>
@@ -2802,6 +2818,8 @@ window.addEventListener('load',()=>autoGrowAllNotes());
     <div class="tag-add-row"><input id="new-eventtype" type="text" placeholder="Add event type..."/><button onclick="addTag('eventtype')">Add</button></div>
   </div>
   <div class="settings-section"><div class="settings-section-title">Venues</div><div class="tag-list" id="venue-tags"></div><div class="tag-add-row"><input id="new-venue" type="text" placeholder="Add venue..."/><button onclick="addVenue()">Add</button></div></div>
+  <div class="settings-section"><div class="settings-section-title">Reliefs (personal cases)</div><div style="font-size:11px;color:#8A7E72;margin-bottom:8px;">What a personal case is asking for. A case can carry more than one. Click a relief to rename it, × to remove it.</div><div class="tag-list" id="relief-tags"></div><div class="tag-add-row"><input id="new-relief" type="text" placeholder="Add relief..."/><button onclick="addCaseRelief()">Add</button></div></div>
+  <div class="settings-section"><div class="settings-section-title">Proceedings &amp; agencies (personal cases)</div><div style="font-size:11px;color:#8A7E72;margin-bottom:8px;">Who the relief is being sought in front of — a court, or an agency. One per personal case. Click one to rename it, × to remove it.</div><div class="tag-list" id="proceeding-tags"></div><div class="tag-add-row"><input id="new-proceeding" type="text" placeholder="Add proceeding or agency..."/><button onclick="addCaseProceeding()">Add</button></div></div>
   <div class="settings-section"><div class="settings-section-title">Billing concepts</div><div style="font-size:11px;color:#8A7E72;margin-bottom:8px;">What a payment is for — the Concept column in a case's Payments ledger. Anything new typed there is added to this list automatically. Click a concept to rename it.</div><div class="tag-list" id="billingconcept-tags"></div><div class="tag-add-row"><input id="new-billingconcept" type="text" placeholder="Add concept..."/><button onclick="addBillingConcept()">Add</button></div></div>
   <div class="settings-section"><div class="settings-section-title">All records</div><div style="overflow-x:auto"><table class="settings-table"><thead><tr id="settings-thead"></tr></thead><tbody id="settings-tbody"></tbody></table></div><div style="margin-top:14px"><button class="btn-primary btn-sm" onclick="openAdd()">+ Add event</button></div></div>
 
@@ -3840,6 +3858,24 @@ let customColumns=[],caseMeta={};
 let paralegalEmails={}; // {paralegalName: email}
 let firmInfo={lastName:'',firstName:'',middleName:'',firmName:'',barNumber:'',licensingAuthority:'',street:'',apt:'',city:'',state:'',zip:'',country:'United States',phone:'',mobile:'',email:'',fax:''};
 let venues=['26 FEDERAL PLAZA','290 BROADWAY','201 VARICK ST','KINGS Family Court','QUEENS Family Court','BRONX Family Court','NASSAU Family Court','SUFFOLK Family Court'];
+// ── Personal cases: relief + proceeding ────────────────────────────
+// An office case carries one Case Type off the firm's list. A personal
+// case is described the way the work actually breaks down instead: the
+// RELIEF being sought — one or more, since a case can chase asylum and
+// adjustment at once — and the single PROCEEDING OR AGENCY it is being
+// sought in front of. Both lists are firm-wide and editable in
+// Settings, and a name typed straight into the new-case form joins them.
+let caseReliefs=['Asylum','Adjustment of Status','Motion to Reopen'];
+let caseProceedings=['Removal Proceedings','Custody Proceeding','All Proceedings','USCIS','ICE',
+  'Family Court (Special Juvenile Status only)','Appeal','Habeas'];
+// The two halves collapse into the one Case Type string the rest of the
+// app already understands — "Asylum + Adjustment of Status — USCIS".
+function composePersonalCaseType(reliefs, proceeding){
+  const r=(Array.isArray(reliefs)?reliefs:[]).map(x=>String(x||'').trim()).filter(Boolean);
+  const pr=String(proceeding||'').trim();
+  if(!r.length) return pr;
+  return r.join(' + ') + (pr ? ' \u2014 ' + pr : '');
+}
 function saveVenues(){ try{ localStorage.setItem('casetracker_venues', JSON.stringify(venues)); }catch(e){} }
 // Billing concepts — what a payment is FOR ("concepto"), as opposed to how it
 // was paid (Credit / Cash / Zelle…, see BILLING_PAY_TYPES). Firm-wide list,
@@ -8123,7 +8159,7 @@ function migrateDocLists(){Object.keys(caseTypeDocLists).forEach(ct=>{const arr=
 function addCaseType(){const inp=document.getElementById('new-casetype');const val=inp.value.trim();if(!val){alert('Case type name required.');return;}if(caseTypes.includes(val)){alert('Case type already exists.');return;}caseTypes.push(val);inp.value='';renderCaseTypesSection();updateSettingsSaveBar();dirtyFilterOpts();}
 
 // ── Settings rendering ──
-function renderSettings(){renderColVis();renderParalegalTags();renderAttorneyTags();renderCalendarStaffTags();renderEventTypeTags();renderTags('casetype',caseTypes);renderVenueTags();renderBillingConceptTags();renderSettingsTable();renderFirmInfoFields();}
+function renderSettings(){renderColVis();renderParalegalTags();renderAttorneyTags();renderCalendarStaffTags();renderEventTypeTags();renderTags('casetype',caseTypes);renderVenueTags();renderReliefTags();renderProceedingTags();renderBillingConceptTags();renderSettingsTable();renderFirmInfoFields();}
 function renderFirmInfoFields(){
   const fields=['lastName','firstName','middleName','firmName','barNumber','licensingAuthority','street','apt','city','state','zip','phone','mobile','email','fax'];
   fields.forEach(k=>{const el=document.getElementById('fi-'+k);if(el)el.value=firmInfo[k]||'';});
@@ -8147,6 +8183,49 @@ function renderBillingConceptTags(){
     removeBtn.onclick=(e)=>{e.stopPropagation();billingConcepts.splice(i,1);updateSettingsSaveBar();renderBillingConceptTags();};
     tag.appendChild(label);tag.appendChild(removeBtn);el.appendChild(tag);});
 }
+// Reliefs and proceedings — the two lists a personal case's type is built
+// from. Renaming one here rewrites it on every case that carries it, so a
+// typo fixed in Settings doesn't leave old cases pointing at the old name.
+function _renderNamedListTags(elId, arr, label, onRename){
+  const el=document.getElementById(elId);if(!el)return;el.innerHTML='';
+  arr.forEach((v,i)=>{const tag=document.createElement('span');tag.className='tag';tag.title='Click to edit';tag.style.cursor='pointer';
+    const lab=document.createElement('span');lab.textContent=v;lab.style.cursor='pointer';
+    lab.onclick=()=>{const nv=prompt('Edit '+label+':',v);const t=nv&&nv.trim();
+      if(t&&t!==v){ if(arr.some((x,j)=>j!==i&&x===t)){showToast(label+' already exists');return;} const old=arr[i];arr[i]=t;if(onRename)onRename(old,t);updateSettingsSaveBar();renderSettings();}};
+    const rm=document.createElement('button');rm.className='tag-remove';rm.innerHTML='×';
+    rm.onclick=(e)=>{e.stopPropagation();arr.splice(i,1);updateSettingsSaveBar();renderSettings();};
+    tag.appendChild(lab);tag.appendChild(rm);el.appendChild(tag);});
+}
+// A renamed relief / proceeding is rewritten into every personal case that
+// used it — both the stored halves on caseMeta and the composed Case Type
+// string the records carry.
+function _renameCasePart(kind, oldName, newName){
+  // Composed Case Type strings that no case carries any more, so the
+  // dropdowns don't keep offering the pre-rename version.
+  const stale=new Set();
+  Object.keys(caseMeta||{}).forEach(clid=>{
+    const m=caseMeta[clid];if(!m)return;
+    const before=composePersonalCaseType(m.caseReliefs,m.caseProceeding);
+    let touched=false;
+    if(kind==='relief' && Array.isArray(m.caseReliefs)){
+      touched=m.caseReliefs.includes(oldName);
+      if(touched) m.caseReliefs=m.caseReliefs.map(x=>x===oldName?newName:x);
+    } else if(kind==='proceeding' && m.caseProceeding===oldName){
+      m.caseProceeding=newName;touched=true;
+    }
+    if(!touched)return;
+    m._updatedAt=Date.now();
+    if(before) stale.add(before);
+    const composed=composePersonalCaseType(m.caseReliefs,m.caseProceeding);
+    (records||[]).forEach(r=>{ if((r.clid||r.client)===clid) r.type=composed; });
+  });
+  caseTypes=_withRecordCaseTypes(caseTypes.filter(t=>!stale.has(t)));
+  markUnsaved();
+}
+function renderReliefTags(){ _renderNamedListTags('relief-tags', caseReliefs, 'relief', (o,n)=>_renameCasePart('relief',o,n)); }
+function renderProceedingTags(){ _renderNamedListTags('proceeding-tags', caseProceedings, 'proceeding or agency', (o,n)=>_renameCasePart('proceeding',o,n)); }
+function addCaseRelief(){const inp=document.getElementById('new-relief');const val=inp.value.trim();if(!val)return;if(caseReliefs.includes(val)){showToast('Relief already exists');return;}caseReliefs.push(val);inp.value='';updateSettingsSaveBar();renderReliefTags();}
+function addCaseProceeding(){const inp=document.getElementById('new-proceeding');const val=inp.value.trim();if(!val)return;if(caseProceedings.includes(val)){showToast('Proceeding already exists');return;}caseProceedings.push(val);inp.value='';updateSettingsSaveBar();renderProceedingTags();}
 function addBillingConcept(){const inp=document.getElementById('new-billingconcept');const val=inp.value.trim();if(!val)return;if(_billingConceptExists(val)){showToast('Concept already exists');return;}billingConcepts.push(val);inp.value='';updateSettingsSaveBar();renderBillingConceptTags();}
 // Case-insensitive membership test — "Motion Webex" and "motion webex" are
 // the same concept, so the ledger's auto-add doesn't create near-duplicates.
@@ -15179,12 +15258,12 @@ function saveAllData(){
   if(typeof _remoteClosed!=='undefined' && _remoteClosed){ return; }
   // GUARD: a client signed into the client portal only ever reads.
   if(window._clientReadOnly){ return; }
-  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
+  const _now=Date.now();_lastLocalSave=_now;const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,caseReliefs,caseProceedings,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));try{localStorage.setItem('wilmer_save_epoch',String(_now));}catch(e){}markSaved();const ind=document.getElementById('autosave-indicator');if(ind){ind.style.display='inline';clearTimeout(window._autoSaveHide);window._autoSaveHide=setTimeout(()=>ind.style.display='none',2500);}// Sync to Firestore (caseMeta excluded — contains large file attachments)
 _syncToFirestore(_now);// Also write to auto-backup file if connected
 if(_autoBackupHandle) _writeAutoBackup();// Auto-push events to Google Calendar when signed in as the target email
 try{ _scheduleCalendarAutoSync&&_scheduleCalendarAutoSync(); }catch(e){}
 }catch(e){showToast('Save failed: storage may be full');}}
-function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypesUpdatedAt)eventTypesUpdatedAt=p.eventTypesUpdatedAt;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);caseTypes=_withRecordCaseTypes(p.caseTypes);if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.calendarStaff&&Array.isArray(p.calendarStaff)&&p.calendarStaff.length)calendarStaff=p.calendarStaff;if(p.calendarStaffEmails)Object.assign(calendarStaffEmails,p.calendarStaffEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.billingConcepts&&Array.isArray(p.billingConcepts)&&p.billingConcepts.length)billingConcepts=p.billingConcepts;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}if(p.recordTombstones&&typeof p.recordTombstones==='object'){recordTombstones=_pruneTombstones(p.recordTombstones);}if(p.i589Template&&typeof p.i589Template==='object')i589Template=p.i589Template;return true;}catch(e){return false;}}
+function loadSavedData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return false;const p=JSON.parse(raw);if(p.records){records=p.records;_dataInitialized=true;}if(p.paralegals)paralegals=p.paralegals;if(p.eventTypes)eventTypes=p.eventTypes;if(p.eventTypesUpdatedAt)eventTypesUpdatedAt=p.eventTypesUpdatedAt;if(p.eventTypeMeta)Object.assign(eventTypeMeta,p.eventTypeMeta);caseTypes=_withRecordCaseTypes(p.caseTypes);if(p.customColumns)customColumns=p.customColumns;if(p.colVis)Object.assign(colVis,p.colVis);if(p.caseMeta)Object.assign(caseMeta,p.caseMeta);if(p.caseTypeDocLists)Object.assign(caseTypeDocLists,p.caseTypeDocLists);if(p.caseTypeStages)Object.assign(caseTypeStages,p.caseTypeStages);if(p.callUpTypes&&Array.isArray(p.callUpTypes)&&p.callUpTypes.length){callUpTypes=p.callUpTypes;saveCallUpTypes();}if(p.judges&&Array.isArray(p.judges)&&p.judges.length){judges=p.judges;saveJudgesData();}if(p.caseIssueTypes&&Array.isArray(p.caseIssueTypes)&&p.caseIssueTypes.length){caseIssueTypes=p.caseIssueTypes;saveCaseIssueTypes();}if(p.customChecklists&&Array.isArray(p.customChecklists)){customChecklists=p.customChecklists;saveCustomChecklists();}if(p.paralegalEmails)Object.assign(paralegalEmails,p.paralegalEmails);if(p.attorneys&&Array.isArray(p.attorneys))attorneys=p.attorneys;if(p.attorneyEmails)Object.assign(attorneyEmails,p.attorneyEmails);if(p.calendarStaff&&Array.isArray(p.calendarStaff)&&p.calendarStaff.length)calendarStaff=p.calendarStaff;if(p.calendarStaffEmails)Object.assign(calendarStaffEmails,p.calendarStaffEmails);if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);if(p.venues&&Array.isArray(p.venues))venues=p.venues;if(p.billingConcepts&&Array.isArray(p.billingConcepts)&&p.billingConcepts.length)billingConcepts=p.billingConcepts;if(p.caseReliefs&&Array.isArray(p.caseReliefs)&&p.caseReliefs.length)caseReliefs=p.caseReliefs;if(p.caseProceedings&&Array.isArray(p.caseProceedings)&&p.caseProceedings.length)caseProceedings=p.caseProceedings;if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);if(p.bondPrepQuestions&&Array.isArray(p.bondPrepQuestions)){bondPrepQuestions=p.bondPrepQuestions;_saveBondPrepQuestions();}if(p.recordTombstones&&typeof p.recordTombstones==='object'){recordTombstones=_pruneTombstones(p.recordTombstones);}if(p.i589Template&&typeof p.i589Template==='object')i589Template=p.i589Template;return true;}catch(e){return false;}}
 // One pending-render flag, used by both the debounced timer and the global
 // focusout listener: if the user is mid-edit when the timer fires, we set
 // the flag and re-try after they blur, so we never yank focus mid-type.
@@ -20551,6 +20630,8 @@ function restoreFromBackup(input){
     eventTypes = _union(eventTypes, backup.eventTypes);
     venues = _union(venues, backup.venues);
     if(Array.isArray(backup.billingConcepts)) billingConcepts = _union(billingConcepts, backup.billingConcepts);
+    if(Array.isArray(backup.caseReliefs))     caseReliefs     = _union(caseReliefs, backup.caseReliefs);
+    if(Array.isArray(backup.caseProceedings)) caseProceedings = _union(caseProceedings, backup.caseProceedings);
     if(backup.paralegalEmails) Object.keys(backup.paralegalEmails).forEach(k => { if(!paralegalEmails[k]) paralegalEmails[k]=backup.paralegalEmails[k]; });
     if(backup.attorneyEmails)  Object.keys(backup.attorneyEmails ).forEach(k => { if(!attorneyEmails[k])  attorneyEmails[k] =backup.attorneyEmails[k]; });
     if(Array.isArray(backup.calendarStaff)) calendarStaff = _union(calendarStaff, backup.calendarStaff);
@@ -28104,6 +28185,8 @@ function openAddCasePage(){
   // Reset case category to the default (Office)
   const catEl=document.getElementById('ncp-category');
   if(catEl) catEl.value='Office';
+  if(typeof _ncResetPersonalType==='function') _ncResetPersonalType('ncp');
+  if(typeof _ncCategoryChanged==='function') _ncCategoryChanged('ncp');
 
   // Populate paralegal
   const attyEl=document.getElementById('ncp-atty');
@@ -28184,7 +28267,14 @@ function saveAddCasePage(){
     const mid=document.getElementById('ncp-middleName'); if(mid) mid.value=middleName;
   }
   const client=[firstName,middleName,lastName].filter(Boolean).join(' ');
-  const type=document.getElementById('ncp-type').value;
+  // A personal case's type is built from the relief(s) and the
+  // proceeding or agency; an office case picks one off the list.
+  const _isPersonal=(document.getElementById('ncp-category')||{value:'Office'}).value==='Personal';
+  const _reliefs=_isPersonal?_ncCollectReliefs('ncp'):[];
+  const _proceeding=_isPersonal?_ncCollectProceeding('ncp'):'';
+  const type=_isPersonal
+    ? composePersonalCaseType(_reliefs,_proceeding)
+    : document.getElementById('ncp-type').value;
 
   if(!lastName){
     const el=document.getElementById('ncp-lastName');
@@ -28194,6 +28284,12 @@ function saveAddCasePage(){
   if(!firstName){
     const el=document.getElementById('ncp-firstName');
     el.style.borderColor='#B85C5C';el.focus();
+    return;
+  }
+  if(_isPersonal && (!_reliefs.length || !_proceeding)){
+    showToast(!_reliefs.length ? 'Pick at least one relief' : 'Pick a proceeding or agency');
+    const el=document.getElementById(!_reliefs.length ? 'ncp-relief-rows' : 'ncp-proceeding');
+    if(el && el.focus) el.focus();
     return;
   }
   if(!type){
@@ -28241,6 +28337,9 @@ function saveAddCasePage(){
   if(middleName) caseMeta[caseId].clientMiddleName=middleName;
   if(email) caseMeta[caseId].clientEmail=email;
   caseMeta[caseId].caseCategory=(document.getElementById('ncp-category')||{value:'Office'}).value||'Office';
+  // Keep the halves too — the composed Case Type is a display string, but
+  // renaming a relief in Settings needs the parts to rewrite.
+  if(_isPersonal){ caseMeta[caseId].caseReliefs=_reliefs.slice(); caseMeta[caseId].caseProceeding=_proceeding; }
   const _ncJudge=(typeof _ncJudgeById==='function')
     ? _ncJudgeById((document.getElementById('ncp-judge')||{value:''}).value) : null;
   if(_ncJudge) caseMeta[caseId].judgeId=_ncJudge.id;
@@ -28265,6 +28364,226 @@ function saveAddCasePage(){
   openCaseDetail(caseId);
 }
 
+// ── New-case form: relief(s) + proceeding for personal cases ───────
+// An office case picks one Case Type. A personal case describes itself
+// as the relief being sought — one or more — in front of one proceeding
+// or agency, and the two collapse into the Case Type string the rest of
+// the app reads. `idPrefix` is 'ncp' for the full-page wizard and 'nc'
+// for the modal; both forms run the same code.
+//
+// Every dropdown carries an "+ Add new…" choice at the bottom, so a
+// relief or a court that isn't on the firm list yet can be typed in
+// without leaving the form — it joins the list for good.
+const _NC_ADD_NEW = '__add_new__';
+window._ncReliefSel = window._ncReliefSel || { ncp:[''], nc:[''] };
+
+function _ncPersonalOn(idPrefix){
+  const cat = document.getElementById(idPrefix + '-category');
+  return !!cat && cat.value === 'Personal';
+}
+
+// Fill one <select> with a named list, an empty first choice, the
+// current value (even if it has since been removed from the list) and
+// the "+ Add new…" escape hatch.
+function _ncFillPartSelect(sel, list, current, addLabel){
+  if(!sel) return;
+  const cur = String(current || '');
+  const names = Array.isArray(list) ? list.slice() : [];
+  if(cur && !names.includes(cur)) names.push(cur);
+  sel.innerHTML = '';
+  const blank = document.createElement('option');
+  blank.value = ''; blank.textContent = '—';
+  sel.appendChild(blank);
+  names.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
+  const add = document.createElement('option');
+  add.value = _NC_ADD_NEW; add.textContent = addLabel;
+  sel.appendChild(add);
+  sel.value = cur;
+}
+
+// One relief row per selection, each with its own × once there are two.
+function _ncRenderReliefRows(idPrefix){
+  const host = document.getElementById(idPrefix + '-relief-rows');
+  if(!host) return;
+  const sel = window._ncReliefSel[idPrefix] || (window._ncReliefSel[idPrefix] = ['']);
+  if(!sel.length) sel.push('');
+  host.innerHTML = '';
+  sel.forEach((val, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;';
+    const s = document.createElement('select');
+    s.className = 'nc-input';
+    s.style.cssText = 'flex:1;width:auto;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;background:#fff;';
+    _ncFillPartSelect(s, caseReliefs, val, '+ Add a relief that isn’t listed…');
+    s.onchange = () => _ncPartPicked(s, 'relief', idPrefix, i);
+    row.appendChild(s);
+    if(sel.length > 1){
+      const rm = document.createElement('button');
+      rm.type = 'button'; rm.title = 'Remove this relief'; rm.textContent = '✕';
+      rm.style.cssText = 'font-size:13px;line-height:1;padding:8px 11px;border:1px solid #DDD5CA;border-radius:8px;background:#fff;color:#9E9186;cursor:pointer;font-family:inherit;';
+      rm.onclick = () => { sel.splice(i, 1); _ncRenderReliefRows(idPrefix); };
+      row.appendChild(rm);
+    }
+    host.appendChild(row);
+  });
+  _ncRenderTypePreview(idPrefix);
+}
+
+function _ncReliefAdd(idPrefix){
+  const sel = window._ncReliefSel[idPrefix] || (window._ncReliefSel[idPrefix] = []);
+  sel.push('');
+  _ncRenderReliefRows(idPrefix);
+}
+
+// A dropdown changed. "+ Add new…" prompts for a name, adds it to the
+// firm-wide list and selects it; anything else is just stored.
+function _ncPartPicked(sel, kind, idPrefix, reliefIdx){
+  const isRelief = kind === 'relief';
+  const list = isRelief ? caseReliefs : caseProceedings;
+  const label = isRelief ? 'relief' : 'proceeding or agency';
+  let val = sel.value;
+  if(val === _NC_ADD_NEW){
+    const typed = (prompt('Name the new ' + label + ':') || '').trim();
+    if(!typed){
+      val = isRelief ? ((window._ncReliefSel[idPrefix] || [])[reliefIdx] || '') : (window._ncProceedingSel && window._ncProceedingSel[idPrefix]) || '';
+      sel.value = val;
+    } else {
+      const existing = list.find(x => String(x).toLowerCase() === typed.toLowerCase());
+      val = existing || typed;
+      if(!existing){ list.push(typed); if(typeof updateSettingsSaveBar === 'function') updateSettingsSaveBar(); markUnsaved(); }
+    }
+  }
+  if(isRelief){
+    const arr = window._ncReliefSel[idPrefix] || (window._ncReliefSel[idPrefix] = []);
+    arr[reliefIdx] = val;
+    _ncRenderReliefRows(idPrefix);
+  } else {
+    window._ncProceedingSel = window._ncProceedingSel || {};
+    window._ncProceedingSel[idPrefix] = val;
+    _ncFillPartSelect(sel, caseProceedings, val, '+ Add a proceeding or agency that isn’t listed…');
+    _ncRenderTypePreview(idPrefix);
+  }
+}
+
+// Show the composed Case Type as it is being built, so there's no
+// surprise about what lands on the case.
+function _ncRenderTypePreview(idPrefix){
+  const el = document.getElementById(idPrefix + '-personal-type-preview');
+  if(!el) return;
+  const composed = composePersonalCaseType(_ncCollectReliefs(idPrefix), _ncCollectProceeding(idPrefix));
+  el.textContent = composed ? ('Case Type will read: ' + composed) : 'Pick at least one relief and a proceeding or agency.';
+}
+
+function _ncCollectReliefs(idPrefix){
+  const seen = new Set();
+  return (window._ncReliefSel[idPrefix] || [])
+    .map(v => String(v || '').trim()).filter(Boolean)
+    .filter(v => { if(seen.has(v)) return false; seen.add(v); return true; });
+}
+function _ncCollectProceeding(idPrefix){
+  return String((window._ncProceedingSel && window._ncProceedingSel[idPrefix]) || '').trim();
+}
+
+// Reset both halves back to one empty relief and no proceeding.
+function _ncResetPersonalType(idPrefix){
+  window._ncReliefSel[idPrefix] = [''];
+  window._ncProceedingSel = window._ncProceedingSel || {};
+  window._ncProceedingSel[idPrefix] = '';
+  const sel = document.getElementById(idPrefix + '-proceeding');
+  if(sel) _ncFillPartSelect(sel, caseProceedings, '', '+ Add a proceeding or agency that isn’t listed…');
+  _ncRenderReliefRows(idPrefix);
+}
+
+// Personal / Office changed: swap the Case Type field for the relief +
+// proceeding block, and keep the personal Client ID in step.
+function _ncCategoryChanged(idPrefix){
+  const personal = _ncPersonalOn(idPrefix);
+  const typeWrap = document.getElementById(idPrefix + '-type-wrap');
+  const block    = document.getElementById(idPrefix + '-personal-type');
+  if(typeWrap) typeWrap.style.display = personal ? 'none' : '';
+  if(block)    block.style.display    = personal ? '' : 'none';
+  if(personal){
+    const sel = document.getElementById(idPrefix + '-proceeding');
+    if(sel) _ncFillPartSelect(sel, caseProceedings, _ncCollectProceeding(idPrefix), '+ Add a proceeding or agency that isn’t listed…');
+    _ncRenderReliefRows(idPrefix);
+  }
+  if(typeof _ncPersonalClidSync === 'function') _ncPersonalClidSync(idPrefix);
+}
+
+// ── Client IDs for personal cases ──────────────────────────────────
+// Office cases carry the firm's own five-digit client numbers, which
+// come from outside the app and are typed in by hand. A personal case
+// has no such number to copy, so it gets a simple one built from the
+// day it was opened: YYMMDD followed by 1 for the first personal case
+// opened that day, 2 for the second, and so on — 2609101, 2609102…
+//
+// Only the trailing sequence is looked up; the date part is today's, so
+// two cases opened on different days can never collide.
+function _personalClidPrefix(d){
+  const dt = (d instanceof Date && !isNaN(d)) ? d : new Date();
+  const pad = n => (n < 10 ? '0' : '') + n;
+  return String(dt.getFullYear()).slice(-2) + pad(dt.getMonth()+1) + pad(dt.getDate());
+}
+
+// How many personal Cl IDs already exist for a given day.
+function _personalClidCount(d){
+  const prefix = _personalClidPrefix(d);
+  const re = new RegExp('^' + prefix + '(\\d+)$');
+  let max = 0;
+  (typeof records !== 'undefined' ? records : []).forEach(r => {
+    const m = re.exec(String((r && r.clid) || '').trim());
+    if(m){ const n = parseInt(m[1], 10); if(n > max) max = n; }
+  });
+  return max;
+}
+
+// The next free personal Cl ID for a day (today unless one is passed).
+function _nextPersonalClid(d){
+  return _personalClidPrefix(d) + (_personalClidCount(d) + 1);
+}
+
+// True when a Cl ID looks like one this app generated for today — the
+// only case where it is safe to overwrite or clear the box on the
+// user's behalf. Anything the user typed themselves is left alone.
+function _isAutoPersonalClid(s){
+  const v = String(s == null ? '' : s).trim();
+  return new RegExp('^' + _personalClidPrefix() + '\\d+$').test(v);
+}
+
+// 1st, 2nd, 3rd… — for the hint under the Client ID box.
+function _ordinal(n){
+  const suffix = (n % 100 >= 11 && n % 100 <= 13) ? 'th' : ({ 1:'st', 2:'nd', 3:'rd' }[n % 10] || 'th');
+  return n + suffix;
+}
+
+// Keep the Client ID box in step with the Personal / Office choice.
+// `idPrefix` is 'ncp' for the full-page new-case wizard, 'nc' for the
+// modal. Switching to Personal fills in the next number for today;
+// switching back to Office clears it again, but only when the value is
+// one this function put there.
+function _ncPersonalClidSync(idPrefix){
+  const cat  = document.getElementById(idPrefix + '-category');
+  const box  = document.getElementById(idPrefix + '-clid');
+  const hint = document.getElementById(idPrefix + '-clid-hint');
+  if(!box) return;
+  const personal = !!cat && cat.value === 'Personal';
+  const cur = box.value.trim();
+  if(personal){
+    const next = _nextPersonalClid();
+    if(!cur || _isAutoPersonalClid(cur)) box.value = next;
+    box.placeholder = next;
+    if(hint){
+      hint.textContent = 'Numbered by the day it opens — ' + _ordinal(_personalClidCount() + 1)
+                       + ' personal case today. Type over it if you want a different number.';
+      hint.style.display = '';
+    }
+  } else {
+    if(_isAutoPersonalClid(cur)) box.value = '';
+    box.placeholder = 'e.g. 22900';
+    if(hint){ hint.textContent = ''; hint.style.display = 'none'; }
+  }
+}
+
 function openNewCaseModal(){
   // Populate dropdowns
   const typeEl = document.getElementById('nc-type');
@@ -28279,6 +28598,8 @@ function openNewCaseModal(){
   ['nc-lastName','nc-firstName','nc-middleName','nc-clid','nc-anum','nc-email','nc-countryOfBirth','nc-dob','nc-phone','nc-notes'].forEach(id => {const e=document.getElementById(id);if(e)e.value='';});
   typeEl.value = ''; attyEl.value = '';
   const catElM = document.getElementById('nc-category'); if(catElM) catElM.value = 'Office';
+  if(typeof _ncResetPersonalType==='function') _ncResetPersonalType('nc');
+  if(typeof _ncCategoryChanged==='function') _ncCategoryChanged('nc');
 
   // Reset + render the linked-events and additional-clients sections.
   if(typeof _ncResetExtras==='function')_ncResetExtras('modal');
@@ -28306,7 +28627,14 @@ function saveNewCase(){
     const mid = document.getElementById('nc-middleName'); if(mid) mid.value = middleName;
   }
   const client = [firstName, middleName, lastName].filter(Boolean).join(' ');
-  const type   = document.getElementById('nc-type').value;
+  // A personal case's type is built from the relief(s) and the
+  // proceeding or agency; an office case picks one off the list.
+  const _isPersonal = (document.getElementById('nc-category')||{value:'Office'}).value === 'Personal';
+  const _reliefs = _isPersonal ? _ncCollectReliefs('nc') : [];
+  const _proceeding = _isPersonal ? _ncCollectProceeding('nc') : '';
+  const type   = _isPersonal
+    ? composePersonalCaseType(_reliefs, _proceeding)
+    : document.getElementById('nc-type').value;
   if(!lastName){
     document.getElementById('nc-lastName').style.borderColor = '#B85C5C';
     document.getElementById('nc-lastName').focus();
@@ -28315,6 +28643,12 @@ function saveNewCase(){
   if(!firstName){
     document.getElementById('nc-firstName').style.borderColor = '#B85C5C';
     document.getElementById('nc-firstName').focus();
+    return;
+  }
+  if(_isPersonal && (!_reliefs.length || !_proceeding)){
+    showToast(!_reliefs.length ? 'Pick at least one relief' : 'Pick a proceeding or agency');
+    const el = document.getElementById(!_reliefs.length ? 'nc-relief-rows' : 'nc-proceeding');
+    if(el && el.focus) el.focus();
     return;
   }
   if(!type){
@@ -28366,6 +28700,9 @@ function saveNewCase(){
     caseMeta[_cid].caseNotesList.push({date:todayStr(),text:notes});
   }
   caseMeta[_cid].caseCategory=(document.getElementById('nc-category')||{value:'Office'}).value||'Office';
+  // Keep the halves too — the composed Case Type is a display string, but
+  // renaming a relief in Settings needs the parts to rewrite.
+  if(_isPersonal){ caseMeta[_cid].caseReliefs=_reliefs.slice(); caseMeta[_cid].caseProceeding=_proceeding; }
 
   // Add new case type / paralegal if not already in lists
   if(type && !caseTypes.includes(type)) caseTypes.push(type);
@@ -28426,7 +28763,7 @@ function applyPayload(p){
   if(p.calendarStaffEmails)Object.assign(calendarStaffEmails,p.calendarStaffEmails);
   if(p.attorneySignatures)Object.assign(attorneySignatures,p.attorneySignatures);
   if(p.venues&&Array.isArray(p.venues))venues=p.venues;
-  if(p.billingConcepts&&Array.isArray(p.billingConcepts)&&p.billingConcepts.length)billingConcepts=p.billingConcepts;
+  if(p.billingConcepts&&Array.isArray(p.billingConcepts)&&p.billingConcepts.length)billingConcepts=p.billingConcepts;if(p.caseReliefs&&Array.isArray(p.caseReliefs)&&p.caseReliefs.length)caseReliefs=p.caseReliefs;if(p.caseProceedings&&Array.isArray(p.caseProceedings)&&p.caseProceedings.length)caseProceedings=p.caseProceedings;
   if(p.firmInfo)Object.assign(firmInfo,p.firmInfo);
   if(p.i589Template&&typeof p.i589Template==='object'&&((p.i589Template._updatedAt||0)>=((i589Template&&i589Template._updatedAt)||0)))i589Template=p.i589Template;
   // Adopt deletion tombstones (newer deletedAt wins) and enforce them:
@@ -28669,7 +29006,7 @@ async function _recSyncPush(changedIds, deletedIds){
 function _persistLocalSnapshotQuiet(){
   try{
     const prevEpoch = parseInt(localStorage.getItem('wilmer_save_epoch')||'0') || 0;
-    const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:prevEpoch||Date.now()};
+    const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,caseReliefs,caseProceedings,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:prevEpoch||Date.now()};
     localStorage.setItem((typeof STORAGE_KEY !== 'undefined' ? STORAGE_KEY : 'casetracker_v1'), JSON.stringify(payload));
   }catch(e){}
 }
@@ -29039,6 +29376,8 @@ function _mergePayloads(cloudData, localData){
   // a device saving with a stale copy must not wipe a concept another device
   // just added from the ledger.
   merged.billingConcepts    = _unionNames(cloudData.billingConcepts, localData.billingConcepts);
+  merged.caseReliefs        = _unionNames(cloudData.caseReliefs,     localData.caseReliefs);
+  merged.caseProceedings    = _unionNames(cloudData.caseProceedings, localData.caseProceedings);
   merged.calendarStaffEmails= _mergeMap(cloudData.calendarStaffEmails, localData.calendarStaffEmails, _localNewer);
   merged.attorneySignatures = _mergeMap(cloudData.attorneySignatures, localData.attorneySignatures, _localNewer);
   // ── Event-type config: merged per entry (like records) instead of
@@ -29146,7 +29485,7 @@ function _syncToFirestore(savedAt){
       records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,
       caseTypes,caseTypeDocLists,caseTypeStages,
       customColumns,colVis,caseMeta:caseMetaClean,callUpTypes,judges,caseIssueTypes,
-      customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,firmInfo,bondPrepQuestions,recordTombstones,i589Template,
+      customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,caseReliefs,caseProceedings,firmInfo,bondPrepQuestions,recordTombstones,i589Template,
       _savedAt:savedAt||Date.now(),_deviceId:_deviceId
     }));
     // Step 2b: write caseMeta out to its own sharded docs (wilmer/cm_*).
@@ -29167,7 +29506,7 @@ function _syncToFirestore(savedAt){
       'records','paralegals','eventTypes','eventTypesUpdatedAt','eventTypeMeta',
       'caseTypes','caseTypeDocLists','caseTypeStages',
       'customColumns','colVis','callUpTypes','judges','caseIssueTypes',
-      'customChecklists','paralegalEmails','attorneys','attorneyEmails','calendarStaff','calendarStaffEmails','attorneySignatures','venues','billingConcepts','firmInfo','bondPrepQuestions','recordTombstones','i589Template',
+      'customChecklists','paralegalEmails','attorneys','attorneyEmails','calendarStaff','calendarStaffEmails','attorneySignatures','venues','billingConcepts','caseReliefs','caseProceedings','firmInfo','bondPrepQuestions','recordTombstones','i589Template',
       '_savedAt','_deviceId'
     ];
     function _buildWritable(merged){
@@ -29342,7 +29681,7 @@ function forcePullFromCloud(){
       _dataInitialized=true; // explicit pull permits saves again
       try{
         const _now=Date.now();
-        const lp={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
+        const lp={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,caseReliefs,caseProceedings,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
         if(!window._clientReadOnly) localStorage.setItem('casetracker_v1',JSON.stringify(lp));
         localStorage.setItem('wilmer_save_epoch',String((cloudData&&cloudData._savedAt)||_now));
       }catch(e){}
@@ -29995,7 +30334,7 @@ db.collection('wilmer').doc('data').onSnapshot(
         _dataInitialized=true; // cloud was applied — safe to autosave
         try{
           const _now=Date.now();
-          const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
+          const payload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,caseReliefs,caseProceedings,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
           if(!window._clientReadOnly) localStorage.setItem('casetracker_v1',JSON.stringify(payload));
           localStorage.setItem('wilmer_save_epoch',String(cloudEpoch));
           _lastLocalSave=_now;
@@ -30040,7 +30379,7 @@ db.collection('wilmer').doc('data').onSnapshot(
           // re-push to Firestore and cause an infinite ping-pong loop.
           try{
             const _now=Date.now();
-            const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
+            const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,caseReliefs,caseProceedings,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
             if(!window._clientReadOnly) localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
             localStorage.setItem('wilmer_save_epoch',String(Math.max(cloudEpoch, _now)));
             _lastLocalSave=_now;
@@ -30087,7 +30426,7 @@ db.collection('wilmer').onSnapshot(
     if(touched){
       try{
         const _now=Date.now();
-        const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
+        const persistPayload={records,paralegals,eventTypes,eventTypesUpdatedAt,eventTypeMeta,caseTypes,caseTypeDocLists,caseTypeStages,customColumns,colVis,caseMeta,callUpTypes,judges,caseIssueTypes,customChecklists,paralegalEmails,attorneys,attorneyEmails,calendarStaff,calendarStaffEmails,attorneySignatures,venues,billingConcepts,caseReliefs,caseProceedings,firmInfo,bondPrepQuestions,recordTombstones,i589Template,_savedAt:_now};
         if(!window._clientReadOnly) localStorage.setItem('casetracker_v1',JSON.stringify(persistPayload));
         _lastLocalSave=_now;
         _refreshSavedHashes();
@@ -31816,6 +32155,7 @@ function saveNewTask(){
       <div>
         <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Client ID</label>
         <input id="nc-clid" type="text" placeholder="e.g. 22900" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;"/>
+        <div id="nc-clid-hint" style="display:none;font-size:10.5px;color:#9E9186;margin-top:5px;line-height:1.45;"></div>
       </div>
       <div>
         <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">A-Number</label>
@@ -31848,17 +32188,30 @@ function saveNewTask(){
     </div>
 
     <!-- Case type -->
-    <div style="margin-bottom:14px;">
+    <div id="nc-type-wrap" style="margin-bottom:14px;">
       <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Case Type <span style="color:#B85C5C">*</span></label>
       <select id="nc-type" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;background:#fff;" oninput="document.getElementById('nc-type').style.borderColor='#DDD5CA'">
         <option value="">Select case type…</option>
       </select>
     </div>
+    <!-- Personal cases: relief(s) + the proceeding or agency -->
+    <div id="nc-personal-type" style="display:none;margin-bottom:14px;padding:12px 14px;background:#FFF9F0;border:1px solid #EFDCC0;border-radius:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin:0;">Relief <span style="color:#B85C5C">*</span></label>
+        <button type="button" onclick="_ncReliefAdd('nc')" title="Add another relief" style="font-size:11px;font-weight:700;padding:4px 12px;border:1px solid #DDD5CA;border-radius:20px;background:#fff;color:#8A7E72;cursor:pointer;font-family:inherit;">+ Add relief</button>
+      </div>
+      <div id="nc-relief-rows" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div style="margin-top:12px;">
+        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Proceeding or Agency <span style="color:#B85C5C">*</span></label>
+        <select id="nc-proceeding" onchange="_ncPartPicked(this,'proceeding','nc')" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;background:#fff;"></select>
+      </div>
+      <div id="nc-personal-type-preview" style="font-size:11px;color:#8A7E72;margin-top:10px;line-height:1.45;"></div>
+    </div>
 
     <!-- Personal or Office -->
     <div style="margin-bottom:14px;">
       <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9E9186;margin-bottom:5px;">Personal or Office</label>
-      <select id="nc-category" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;background:#fff;">
+      <select id="nc-category" onchange="_ncCategoryChanged('nc')" style="width:100%;padding:9px 12px;font-size:13px;border:1px solid #DDD5CA;border-radius:8px;font-family:inherit;box-sizing:border-box;outline:none;background:#fff;">
         <option value="Office">Office</option>
         <option value="Personal">Personal</option>
       </select>
