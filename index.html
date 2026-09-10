@@ -18299,7 +18299,7 @@ function _blankSubstCounselOpts(){
     // Your own block. Pre-filled from the firm profile and left alone
     // once you edit it — see _scEnsureMine.
     mineName:'', mineFirm:'', mineStreet:'', mineCity:'',
-    minePhone:'', mineEmail:'', mineEoir:'', _mineTouched:false,
+    minePhone:'', mineEmail:'', mineEoir:'', mineProfile:'', _mineTouched:false,
     otherName:'', otherFirm:'', otherStreet:'', otherCity:'',
     otherPhone:'', otherEmail:'', otherEoir:'',
     motionDate:'', addressUnchanged:true, body:'',
@@ -18354,6 +18354,75 @@ function _scEnsureMine(o){
     };
   }
   ['Name','Eoir','Firm','Street','City','Phone','Email'].forEach(k => { o['mine' + k] = parts[k] || ''; });
+}
+
+// ── Your saved profiles ────────────────────────────────────────────
+// A profile is you at a different office — the same lawyer with another
+// firm name, address, phone and email — so you can sign a motion from
+// whichever one the case belongs to. They live in the same named
+// signature library the Motion / Brief tab saves to, so a profile added
+// here is available to every document the app writes, and vice versa.
+// Profiles are stored with the neutral "Attorney for Respondent" role
+// line; this motion swaps in its own (New)/(Former) label when it signs.
+function _scProfileNames(){
+  return Object.keys((typeof attorneySignatures === 'object' && attorneySignatures) || {}).sort();
+}
+
+// Load a saved profile into the seven fields. The empty choice means
+// "back to my default", which is what _scEnsureMine works out.
+function _scApplyProfile(name){
+  const o = window._scOpts; if(!o) return;
+  const key = String(name || '').trim();
+  if(!key){
+    o.mineProfile = '';
+    o._mineTouched = false;
+    _renderSubstCounselPanel();
+    return;
+  }
+  const text = (attorneySignatures || {})[key];
+  if(text == null){ showToast('That profile is no longer saved'); return; }
+  const parts = _scSplitBlock(text);
+  ['Name','Eoir','Firm','Street','City','Phone','Email'].forEach(k => { o['mine' + k] = parts[k] || ''; });
+  o.mineProfile = key;
+  o._mineTouched = true;
+  _renderSubstCounselPanel();
+}
+
+// Save what's in the card as a new profile (or replace one by name).
+function _scSaveProfile(){
+  const o = window._scOpts; if(!o) return;
+  _scEnsureMine(o);
+  const lines = _scBlockLines(o, 'mine', 'Attorney for Respondent');
+  if(!lines.length){ showToast('Fill in your name and details first'); return; }
+  // Profiles differ by office, so the firm name is the natural label.
+  const guess = String(o.mineFirm || '').trim()
+             || String(o.mineName || '').replace(/,?\s*Esq\.?$/i, '').trim();
+  const name = window.prompt('Save this firm and address as a profile…\n\n(Name it after the office — it shows in the profile list here and wherever else the app fills in an attorney block.)', guess);
+  if(name === null) return;
+  const key = name.trim();
+  if(!key){ showToast('Name cannot be empty'); return; }
+  if(attorneySignatures[key] && !confirm('A profile called "' + key + '" already exists. Replace it?')) return;
+  attorneySignatures[key] = lines.join('\n');
+  if(typeof saveAttorneySignatures === 'function') saveAttorneySignatures();
+  if(typeof markUnsaved === 'function') markUnsaved();
+  o.mineProfile = key;
+  o._mineTouched = true;
+  showToast('Profile "' + key + '" saved ✓');
+  _renderSubstCounselPanel();
+}
+
+// Remove the selected profile. What's typed in the card stays put.
+function _scDeleteProfile(){
+  const o = window._scOpts; if(!o) return;
+  const key = String(o.mineProfile || '').trim();
+  if(!key || !(attorneySignatures || {})[key]){ showToast('Pick a saved profile first'); return; }
+  if(!confirm('Delete the profile "' + key + '"? Your block on this motion stays as it is.')) return;
+  delete attorneySignatures[key];
+  if(typeof saveAttorneySignatures === 'function') saveAttorneySignatures();
+  if(typeof markUnsaved === 'function') markUnsaved();
+  o.mineProfile = '';
+  showToast('Profile "' + key + '" deleted');
+  _renderSubstCounselPanel();
 }
 
 // "This the 27th day of July 2026." — the date line the motion closes on.
@@ -18415,9 +18484,17 @@ function _renderSubstCounselPanel(){
     </div>
 
     <div style="border:1px solid var(--sage);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:16px;background:var(--sage-light,#EBF1EB);">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
         <div style="font-size:12px;font-weight:700;color:var(--ink);">You — ${escHtml(firmRole)} for Respondent</div>
-        <button type="button" onclick="window._scOpts._mineTouched=false;_renderSubstCounselPanel()" title="Fill these back in from your saved profile" style="font-size:11px;font-weight:600;padding:4px 12px;border:1px solid var(--sage);border-radius:20px;background:#fff;color:var(--sage);cursor:pointer;font-family:inherit;">Reset to my profile</button>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);">Office</span>
+          <select onchange="_scApplyProfile(this.value)" title="Pick which of your offices signs this motion" style="font-size:12px;padding:5px 9px;border:1px solid var(--sage);border-radius:20px;background:#fff;color:var(--ink);cursor:pointer;font-family:inherit;max-width:220px;">
+            <option value=""${o.mineProfile?'':' selected'}>My default</option>
+            ${_scProfileNames().map(n => '<option value="'+escHtml(n).replace(/"/g,'&quot;')+'"'+(o.mineProfile===n?' selected':'')+'>'+escHtml(n)+'</option>').join('')}
+          </select>
+          <button type="button" onclick="_scSaveProfile()" title="Save this firm and address as another office you can pick from" style="font-size:11px;font-weight:600;padding:5px 12px;border:1px solid var(--sage);border-radius:20px;background:#fff;color:var(--sage);cursor:pointer;font-family:inherit;">+ Save as profile</button>
+          ${o.mineProfile ? '<button type="button" onclick="_scDeleteProfile()" title="Delete the selected profile" style="font-size:11px;font-weight:600;padding:5px 11px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-faint);cursor:pointer;font-family:inherit;">Delete</button>' : ''}
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
         <div>${lbl('Name')}${inp('mineName','e.g. Wilmer Gonzalez, Esq.')}</div>
@@ -18428,7 +18505,7 @@ function _renderSubstCounselPanel(){
         <div>${lbl('Phone')}${inp('minePhone','')}</div>
         <div>${lbl('Email')}${inp('mineEmail','')}</div>
       </div>
-      <div style="font-size:10.5px;color:var(--ink-faint);margin-top:9px;line-height:1.45;">Filled in from your saved signature — edit for this motion only. This block signs the motion, heads the cover page and signs the certificate of service.</div>
+      <div style="font-size:10.5px;color:var(--ink-faint);margin-top:9px;line-height:1.45;">This block signs the motion, heads the cover page and signs the certificate of service. Work at more than one firm? Type the other firm and address here and <b>+ Save as profile</b> — it joins the Office list above and every other document the app fills in.</div>
     </div>
 
     <div style="border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:16px;background:#fff;">
