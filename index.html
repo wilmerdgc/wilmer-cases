@@ -2611,6 +2611,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
       <button class="cd-tab-btn" id="cdtab-documents" onclick="switchCaseTab('documents')">Documents</button>
       <button class="cd-tab-btn" id="cdtab-masterprep" onclick="switchCaseTab('masterprep')">Master Prep</button>
       <button class="cd-tab-btn" id="cdtab-i589" onclick="switchCaseTab('i589')">I-589</button>
+      <button class="cd-tab-btn" id="cdtab-bond" onclick="switchCaseTab('bond')">Bond</button>
       <button class="cd-tab-btn" id="cdtab-billing" onclick="switchCaseTab('billing')" style="display:none">Billing</button>
       <button class="cd-tab-btn" id="cdtab-clientview" onclick="switchCaseTab('clientview')" style="display:none">Client's View</button>
     </div>
@@ -2619,6 +2620,7 @@ window.addEventListener('load',()=>autoGrowAllNotes());
     <div id="cd-pane-documents" style="display:none"><div id="case-documents-body"></div></div>
     <div id="cd-pane-masterprep" style="display:none"><div id="case-masterprep-body"></div></div>
     <div id="cd-pane-i589" style="display:none"><div id="case-i589-body"></div></div>
+    <div id="cd-pane-bond" style="display:none"><div id="case-bond-body"></div></div>
     <div id="cd-pane-billing" style="display:none"><div id="case-billing-body"></div></div>
     <div id="cd-pane-clientview" style="display:none"><div id="case-clientview-body"></div></div>
   </div>
@@ -21122,10 +21124,53 @@ function renderBondPrep(){
           <div id="bp-case-selected" style="font-size:11px;color:var(--sage);font-weight:600;margin-top:6px;min-height:14px;"></div>
         </div>
         <div id="bp-answers-host" style="padding:14px 18px;"></div>
+        <div id="bp-generate-host" style="padding:0 18px 16px;"></div>
       </div>
     </div>`;
   _renderBondPrepQuestions();
   _renderBondPrepAnswers();
+  _renderBondPrepGenerate();
+}
+
+// The "Request of Bond" panel under the answers. Same package the Motion
+// for Video Appearance produces, with the questionnaire as its body.
+function _renderBondPrepGenerate(){
+  const host = document.getElementById('bp-generate-host');
+  if(!host) return;
+  if(!window._bondDocOpts) window._bondDocOpts = _blankBondDocOpts();
+  const o = window._bondDocOpts;
+  const hasCase = !!_bondPrepActiveClid;
+  const chk = (key, label, title) => '<label title="' + escHtml(title||'') + '" style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink);cursor:pointer;">'
+    + '<input type="checkbox" ' + (o[key]?'checked':'') + ' onchange="window._bondDocOpts.' + key + '=this.checked" style="margin:0;cursor:pointer;accent-color:var(--sage);"/>' + label + '</label>';
+  host.innerHTML = `
+    <div style="border-top:1px solid var(--cream-dark);padding-top:14px;">
+      <div style="font-size:12px;font-weight:700;color:var(--ink);margin-bottom:4px;">Request of Bond</div>
+      <div style="font-size:11px;color:var(--ink-muted);line-height:1.5;margin-bottom:12px;">Built on the <b>Motion for Video Appearance</b> layout — cover page, court caption, proposed order page and certificate of service — with the answers above as the body, under their own section headings.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:12px;">
+        <div>
+          <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">Title on the document</label>
+          <input type="text" value="${escHtml(o.title||'').replace(/"/g,'&quot;')}" placeholder="REQUEST OF BOND" oninput="window._bondDocOpts.title=this.value"
+            style="width:100%;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+        </div>
+        <div>
+          <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:3px;">Opening line</label>
+          <input type="text" value="${escHtml(o.intro||'').replace(/"/g,'&quot;')}" placeholder="Leave blank for the standard opening" oninput="window._bondDocOpts.intro=this.value"
+            style="width:100%;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;box-sizing:border-box;outline:none;"/>
+        </div>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;padding:9px 13px;background:var(--cream);border-radius:var(--radius-md);border:1px solid var(--border);">
+        ${chk('cover','Cover page')}
+        ${chk('order','Proposed order page')}
+        ${chk('cert','Certificate of service')}
+        ${chk('includeUnanswered','Include unanswered questions','Prints every question, with a ruled blank where there is no answer yet')}
+        ${chk('saveToCase','Save a copy to the client’s folder','Files the .docx under a Bond section in the case documents')}
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button type="button" id="bond-gen-btn" onclick="generateBondRequest()" ${hasCase?'':'disabled'}
+          style="font-size:13px;font-weight:600;padding:9px 22px;border:none;border-radius:var(--radius-sm);background:${hasCase?'var(--sage)':'var(--cream-dark)'};color:${hasCase?'#fff':'var(--ink-faint)'};cursor:${hasCase?'pointer':'not-allowed'};font-family:inherit;">Generate .docx</button>
+        <span id="bond-gen-status" style="font-size:11px;color:var(--ink-muted);">${hasCase?'':'Pick a case above first.'}</span>
+      </div>
+    </div>`;
 }
 
 function _renderBondPrepQuestions(){
@@ -21294,6 +21339,7 @@ function _bondPrepCaseSearch(q){
       if(sin) sin.value = c.client;
       drop.style.display = 'none';
       _renderBondPrepAnswers();
+      _renderBondPrepGenerate();
     };
     drop.appendChild(item);
   });
@@ -21303,11 +21349,21 @@ function _bondPrepCaseSearch(q){
 function _renderBondPrepAnswers(){
   const host = document.getElementById('bp-answers-host');
   if(!host) return;
+  host.innerHTML = _bondPrepAnswersHtml(_bondPrepActiveClid);
+}
+
+// The answer sheet for one case, as HTML. Shared by the Bond Prep tool
+// and the case's own Bond tab, so an answer typed in either lands in the
+// same place — caseMeta[clid].bondPrepAnswers. Every control carries the
+// Cl ID it belongs to, which is what lets the case tab work without the
+// tool's own "active case" state.
+function _bondPrepAnswersHtml(clid){
   if(!bondPrepQuestions.length){
-    host.innerHTML = '<div style="padding:36px 20px;text-align:center;color:var(--ink-faint);font-size:12px;">No questions yet — add some on the left.</div>';
-    return;
+    return '<div style="padding:36px 20px;text-align:center;color:var(--ink-faint);font-size:12px;">No questions yet — add some in the Bond Hearing Prep tool.</div>';
   }
+  const _bondPrepActiveClid = clid;
   const hasCase = !!_bondPrepActiveClid;
+  const clidAttr = hasCase ? (' data-bpclid="' + escHtml(_bondPrepActiveClid) + '"') : '';
   // When no case is selected we still render the full structure so the user
   // can review or design the form — textareas are read-only with a "Pick a
   // case to type answers" hint, and section / subsection headers are shown.
@@ -21327,7 +21383,7 @@ function _renderBondPrepAnswers(){
       const idEsc = escHtml(item.id);
       const checked = !!answers[item.id];
       html += '<label style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;cursor:' + (hasCase?'pointer':'default') + ';margin-bottom:2px;">'
-        + '<input type="checkbox" data-bpc="' + idEsc + '" ' + (checked?'checked ':'') + (hasCase?'':'disabled ') + 'onchange="_bondPrepCheckChange(this)" '
+        + '<input type="checkbox" data-bpc="' + idEsc + '"' + clidAttr + ' ' + (checked?'checked ':'') + (hasCase?'':'disabled ') + 'onchange="_bondPrepCheckChange(this)" '
           + 'style="margin-top:3px;width:14px;height:14px;cursor:' + (hasCase?'pointer':'not-allowed') + ';accent-color:var(--sage);flex-shrink:0;"/>'
         + '<span style="font-size:12px;line-height:1.5;color:' + (hasCase?'var(--ink)':'var(--ink-faint)') + ';' + (checked?'text-decoration:line-through;color:var(--ink-faint);':'') + '">' + txtEsc + '</span>'
         + '</label>';
@@ -21337,7 +21393,7 @@ function _renderBondPrepAnswers(){
       const ansEsc = escHtml(answers[item.id]||'');
       html += '<div style="margin-bottom:12px;">'
         + '<div style="font-size:11px;font-weight:600;color:var(--ink);margin-bottom:5px;line-height:1.4;"><span style="color:var(--ink-faint);">' + qN + '.</span> ' + txtEsc + '</div>'
-        + '<textarea data-bpa="' + idEsc + '" rows="2" '
+        + '<textarea data-bpa="' + idEsc + '"' + clidAttr + ' rows="2" '
           + 'placeholder="' + (hasCase ? "Type the client's answer…" : 'Pick a case above to type answers') + '" '
           + (hasCase ? '' : 'readonly ')
           + 'oninput="_bondPrepAnswerInput(this)" '
@@ -21347,14 +21403,15 @@ function _renderBondPrepAnswers(){
     }
   });
   html += '<div style="font-size:10px;color:var(--ink-faint);font-style:italic;margin-top:6px;">' + (hasCase ? 'Answers save automatically as you type.' : 'Pick a case above to type answers — sections and questions are visible to anyone managing the bank.') + '</div>';
-  host.innerHTML = html;
+  return html;
 }
 
 function _bondPrepAnswerInput(ta){
-  if(!_bondPrepActiveClid) return;
+  const clid = ta.getAttribute('data-bpclid') || _bondPrepActiveClid;
+  if(!clid) return;
   const qid = ta.getAttribute('data-bpa');
   if(!qid) return;
-  const meta = caseMeta[_bondPrepActiveClid] || (caseMeta[_bondPrepActiveClid] = {});
+  const meta = caseMeta[clid] || (caseMeta[clid] = {});
   const answers = meta.bondPrepAnswers || (meta.bondPrepAnswers = {});
   answers[qid] = ta.value;
   if(typeof markUnsaved==='function') markUnsaved();
@@ -21364,10 +21421,11 @@ function _bondPrepAnswerInput(ta){
 // `caseMeta[clid].bondPrepAnswers` map round-trips both textareas (string
 // answers) and checkboxes (boolean checks) without a separate field.
 function _bondPrepCheckChange(cb){
-  if(!_bondPrepActiveClid) return;
+  const clid = cb.getAttribute('data-bpclid') || _bondPrepActiveClid;
+  if(!clid) return;
   const qid = cb.getAttribute('data-bpc');
   if(!qid) return;
-  const meta = caseMeta[_bondPrepActiveClid] || (caseMeta[_bondPrepActiveClid] = {});
+  const meta = caseMeta[clid] || (caseMeta[clid] = {});
   const answers = meta.bondPrepAnswers || (meta.bondPrepAnswers = {});
   if(cb.checked) answers[qid] = true;
   else delete answers[qid];
@@ -21378,6 +21436,220 @@ function _bondPrepCheckChange(cb){
     else          { lbl.style.textDecoration='';            lbl.style.color='var(--ink)'; }
   }
   if(typeof markUnsaved==='function') markUnsaved();
+}
+
+// ══════════════════════════════════════════════════
+// BOND — the case's own tab.
+// The same answer sheet the Bond Hearing Prep tool shows, on the case
+// itself, so the answers live where the rest of the case information
+// does. Both surfaces write to caseMeta[clid].bondPrepAnswers, so an
+// answer typed in either shows up in the other.
+// ══════════════════════════════════════════════════
+
+// How many questions have been answered, for the tab's badge.
+function _bondAnsweredCount(clid){
+  const a = ((caseMeta[clid]||{}).bondPrepAnswers) || {};
+  let n = 0;
+  (bondPrepQuestions||[]).forEach(q => {
+    const t = q.type || 'question';
+    if(t !== 'question' && t !== 'checklist') return;
+    const v = a[q.id];
+    if(v === true || (typeof v === 'string' && v.trim())) n++;
+  });
+  return n;
+}
+
+function _bondRefreshTabLabel(clid){
+  const btn = document.getElementById('cdtab-bond');
+  if(!btn) return;
+  const n = _bondAnsweredCount(clid);
+  btn.textContent = n ? ('Bond (' + n + ')') : 'Bond';
+}
+
+function renderCaseBond(clid){
+  _bondRefreshTabLabel(clid);
+  const body = document.getElementById('case-bond-body');
+  if(!body) return;
+  const total = (bondPrepQuestions||[]).filter(q => {
+    const t = q.type || 'question';
+    return t === 'question' || t === 'checklist';
+  }).length;
+  const done = _bondAnsweredCount(clid);
+  body.innerHTML = `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px;">
+      <div style="flex:1;min-width:240px;">
+        <div style="font-size:12px;color:#9E9186;line-height:1.5;">The bond questionnaire for this case. Answers save as you type and are the same ones the Bond Hearing Prep tool shows. <b>${done}</b> of ${total} answered.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" onclick="_bondGoToPrepTool('${String(clid).replace(/'/g,"\\'")}')" style="font-size:11px;font-weight:600;padding:6px 13px;border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--ink-muted);cursor:pointer;font-family:inherit;white-space:nowrap;">⚖️ Open Bond Prep</button>
+        <button type="button" id="bond-gen-btn-case" onclick="generateBondRequest('${String(clid).replace(/'/g,"\\'")}')" style="font-size:11px;font-weight:600;padding:6px 13px;border:none;border-radius:20px;background:var(--sage);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;">📝 Request of Bond .docx</button>
+      </div>
+    </div>
+    <div id="bond-gen-status-case" style="font-size:11px;color:#9E9186;margin-bottom:10px;min-height:14px;"></div>
+    <div id="case-bond-answers"></div>`;
+  const host = document.getElementById('case-bond-answers');
+  if(host) host.innerHTML = _bondPrepAnswersHtml(clid);
+}
+
+// Jump from the case's Bond tab into the full prep tool with this case
+// already selected.
+function _bondGoToPrepTool(clid){
+  const rec = (records||[]).find(r => (r.clid||r.client)===clid);
+  switchTab('tools');
+  setTimeout(() => {
+    renderBondPrep();
+    _bondPrepActiveClid = clid;
+    const sel = document.getElementById('bp-case-selected');
+    if(sel) sel.textContent = '✓ ' + ((rec&&rec.client) || clid);
+    const sin = document.getElementById('bp-case-search');
+    if(sin) sin.value = (rec&&rec.client) || clid;
+    _renderBondPrepAnswers();
+    _renderBondPrepGenerate();
+  }, 30);
+}
+
+// ── Request of Bond generator ──────────────────────────────────────
+// Same package the Motion for Video Appearance produces — cover page,
+// caption, proposed order page, certificate of service — with the
+// questionnaire answers as the body. Sections and subsections carry
+// through as headings so the filing reads in the order the hearing
+// runs: eligibility, danger, flight risk, relief, amount.
+//
+// Options live on window._bondDocOpts so the tool's checkboxes and the
+// case tab's one-click button share them.
+function _blankBondDocOpts(){
+  return { title:'REQUEST OF BOND', includeUnanswered:false, intro:'', cover:true, order:true, cert:true, saveToCase:true };
+}
+
+// The answer sheet as document body XML.
+function _bondAnswerBodyXml(K, clid, opts){
+  const answers = ((caseMeta[clid]||{}).bondPrepAnswers) || {};
+  let x = '';
+  let pending = '';      // headings held back until something sits under them
+  let wrote = 0;
+  (bondPrepQuestions||[]).forEach(item => {
+    const t = item.type || 'question';
+    const text = String(item.text||'').trim();
+    if(!text) return;
+    if(t === 'section'){
+      pending = K.para(K.run(text.toUpperCase(), { bold:true }), { after:120 });
+      return;
+    }
+    if(t === 'subsection'){
+      pending += K.para(K.run(text, { bold:true, italic:true }), { after:100 });
+      return;
+    }
+    const v = answers[item.id];
+    if(t === 'checklist'){
+      if(v !== true && !opts.includeUnanswered) return;
+      if(pending){ x += pending; pending = ''; }
+      x += K.para(K.run((v === true ? '☒ ' : '☐ ') + text), { left:360, after:60 });
+      wrote++;
+      return;
+    }
+    const ans = (typeof v === 'string') ? v.trim() : '';
+    if(!ans && !opts.includeUnanswered) return;
+    if(pending){ x += pending; pending = ''; }
+    x += K.para(K.run(text, { bold:true }), { after:40 });
+    // A multi-line answer keeps its own paragraphs.
+    (ans ? ans.split('\n') : ['__________________________________________________'])
+      .map(l => l.trim()).filter((l, i, arr) => l || arr.length === 1)
+      .forEach(l => { x += K.para(K.run(l), { jc:'both', left:360, after:60 }); });
+    x += K.para('', { after:60 });
+    wrote++;
+  });
+  return { xml:x, count:wrote };
+}
+
+async function generateBondRequest(clidArg){
+  const inTool = !clidArg;
+  const clid = clidArg || _bondPrepActiveClid;
+  const btn = document.getElementById(inTool ? 'bond-gen-btn' : 'bond-gen-btn-case');
+  const status = document.getElementById(inTool ? 'bond-gen-status' : 'bond-gen-status-case');
+  const setStatus = (msg, err) => { if(status){ status.textContent = msg; status.style.color = err ? '#B85C5C' : 'var(--sage)'; } };
+  if(typeof JSZip === 'undefined'){ setStatus('JSZip not loaded — refresh the page and try again.', true); return; }
+  if(!clid){ setStatus('Pick a case first.', true); return; }
+  const o = window._bondDocOpts || (window._bondDocOpts = _blankBondDocOpts());
+  if(btn){ btn.disabled = true; btn.textContent = 'Generating…'; }
+  setStatus('', false);
+  try{
+    // The caption, judge, hearing and attorney block come from the case,
+    // exactly as they do for every other filing the app writes.
+    const v = (typeof _briefValuesFromCase === 'function') ? _briefValuesFromCase(clid) : {};
+    if(!(v.field5 || '').split('\n')[0].trim()){ setStatus('That case has no client name to caption with.', true); return; }
+    const TITLE = String(o.title || 'REQUEST OF BOND').trim().toUpperCase() || 'REQUEST OF BOND';
+    const K = _filingKit(v, 'Request of Bond', { title:TITLE });
+    const answers = _bondAnswerBodyXml(K, clid, o);
+    if(!answers.count){ setStatus('No answers recorded yet — fill in the questionnaire first, or tick "include unanswered".', true); return; }
+
+    let body = '';
+    if(o.cover) body += K.coverPage() + K.pageBreak;
+    let doc = K.captionBlock();
+    doc += K.para(K.run(TITLE, { bold:true }), { jc:'center', after:240 });
+    const intro = String(o.intro || '').trim()
+      || 'Respondent, by and through undersigned counsel, respectfully requests that this Honorable Court set bond in this matter, and in support states as follows:';
+    doc += K.para(K.run(intro), { jc:'both', after:200 });
+    doc += answers.xml;
+    doc += K.blank(1);
+    doc += K.para(K.run('Respectfully submitted,'), { after:0 });
+    doc += K.blank(2);
+    doc += K.para(K.run([K.coverDate, K.subPlace].filter(Boolean).join(', ')), { after:120 });
+    doc += K.sigBlock;
+    body += doc;
+    if(o.order) body += K.orderPage(true);
+    if(o.cert)  body += K.certificate(true);
+
+    const fname = K.filename('Request of Bond');
+    const blob = await K.buildDocx(body);
+    K.download(blob, fname);
+    let saved = false;
+    if(o.saveToCase){
+      saved = await saveDocToCaseFolder(clid, 'Bond', fname, blob,
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    }
+    if(typeof recordCreatedDoc === 'function'){
+      recordCreatedDoc(clid, { kind:'Request of Bond', title:K.readableTitle, filename:fname });
+    }
+    setStatus('✓ Downloaded' + (saved ? ' and saved to the client’s folder' : '')
+      + ' — ' + answers.count + ' answer' + (answers.count===1?'':'s') + ' in the body.', false);
+  }catch(e){
+    console.error('generateBondRequest', e);
+    setStatus('Failed: ' + (e && e.message ? e.message : 'unknown error'), true);
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = inTool ? 'Generate .docx' : '📝 Request of Bond .docx'; }
+  }
+}
+
+// Save a generated file into the case's document folder, under a named
+// section. The case store lives in localStorage, so a file that would
+// blow the budget is reported rather than silently dropped.
+const CASE_DOC_MAX_BYTES = 3 * 1024 * 1024;
+async function saveDocToCaseFolder(clid, sectionName, filename, blob, mimeType){
+  if(!clid || !blob) return false;
+  const dataUrl = await new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = () => reject(new Error('Could not read the generated file'));
+    fr.readAsDataURL(blob);
+  });
+  if(String(dataUrl).length > CASE_DOC_MAX_BYTES){
+    if(typeof showToast==='function') showToast('The document is too large to save with the case — it still downloaded');
+    return false;
+  }
+  if(!caseMeta[clid]) caseMeta[clid] = {};
+  if(!Array.isArray(caseMeta[clid].docSections)) caseMeta[clid].docSections = [];
+  let sec = caseMeta[clid].docSections.find(s => s.sectionName === sectionName);
+  if(!sec){ sec = { sectionName, docs:[] }; caseMeta[clid].docSections.push(sec); }
+  const stamp = (typeof todayStr === 'function') ? todayStr() : new Date().toISOString().slice(0,10);
+  // Same filename saved again on the same day replaces that copy rather
+  // than stacking near-identical drafts.
+  const label = filename + '  (' + stamp + ')';
+  const existing = sec.docs.findIndex(d => d && d.name === label);
+  const entry = { name:label, fileData:dataUrl, mimeType:mimeType||'application/octet-stream', uploadedAt:stamp };
+  if(existing >= 0) sec.docs[existing] = entry; else sec.docs.push(entry);
+  caseMeta[clid]._updatedAt = Date.now();
+  if(typeof markUnsaved === 'function') markUnsaved();
+  return true;
 }
 
 // ══════════════════════════════════════════════════
@@ -22197,8 +22469,8 @@ window._sijSetFcStage = function(sel){
 };
 
 function switchCaseTab(tab){
-  const panes={overview:'cd-pane-overview',checklists:'cd-pane-checklists',documents:'cd-pane-documents',masterprep:'cd-pane-masterprep',i589:'cd-pane-i589',billing:'cd-pane-billing',clientview:'cd-pane-clientview'};
-  const tabs={overview:'cdtab-overview',checklists:'cdtab-checklists',documents:'cdtab-documents',masterprep:'cdtab-masterprep',i589:'cdtab-i589',billing:'cdtab-billing',clientview:'cdtab-clientview'};
+  const panes={overview:'cd-pane-overview',checklists:'cd-pane-checklists',documents:'cd-pane-documents',masterprep:'cd-pane-masterprep',i589:'cd-pane-i589',bond:'cd-pane-bond',billing:'cd-pane-billing',clientview:'cd-pane-clientview'};
+  const tabs={overview:'cdtab-overview',checklists:'cdtab-checklists',documents:'cdtab-documents',masterprep:'cdtab-masterprep',i589:'cdtab-i589',bond:'cdtab-bond',billing:'cdtab-billing',clientview:'cdtab-clientview'};
   if(!panes[tab])tab='overview';
   // Leaving the Master Prep / I-589 tab? tear down the iframe bridge listener.
   if(tab!=='masterprep')_mhpTeardown();
@@ -22211,6 +22483,7 @@ function switchCaseTab(tab){
   if(tab==='documents'&&activeCaseClid)renderCaseDocuments(activeCaseClid);
   if(tab==='masterprep'&&activeCaseClid)renderCaseMasterPrep(activeCaseClid);
   if(tab==='i589'&&activeCaseClid)renderCaseI589(activeCaseClid);
+  if(tab==='bond'&&activeCaseClid)renderCaseBond(activeCaseClid);
   if(tab==='billing'&&activeCaseClid)renderCaseBilling(activeCaseClid);
   if(tab==='clientview'&&activeCaseClid)renderCaseClientView(activeCaseClid);
 }
@@ -23376,6 +23649,7 @@ function openCaseDetail(clid){
   document.getElementById('cd-pane-documents').style.display='none';
   {const _mpp=document.getElementById('cd-pane-masterprep');if(_mpp)_mpp.style.display='none';}
   {const _i5p=document.getElementById('cd-pane-i589');if(_i5p)_i5p.style.display='none';}
+  {const _bnp=document.getElementById('cd-pane-bond');if(_bnp)_bnp.style.display='none';}
   {const _blp=document.getElementById('cd-pane-billing');if(_blp)_blp.style.display='none';}
   {const _cvp=document.getElementById('cd-pane-clientview');if(_cvp)_cvp.style.display='none';}
   document.getElementById('cdtab-overview').classList.add('active');
@@ -23383,6 +23657,7 @@ function openCaseDetail(clid){
   document.getElementById('cdtab-documents').classList.remove('active');
   {const _mpt=document.getElementById('cdtab-masterprep');if(_mpt)_mpt.classList.remove('active');}
   {const _i5t=document.getElementById('cdtab-i589');if(_i5t)_i5t.classList.remove('active');}
+  {const _bnt=document.getElementById('cdtab-bond');if(_bnt){_bnt.classList.remove('active');_bondRefreshTabLabel(clid);}}
   // Billing + Client's View tabs are only for cases marked PERSONAL in case information
   {const _blt=document.getElementById('cdtab-billing');if(_blt){_blt.classList.remove('active');_blt.style.display=((caseMeta[clid]||{}).caseCategory==='Personal')?'':'none';}}
   {const _cvt=document.getElementById('cdtab-clientview');if(_cvt){_cvt.classList.remove('active');_cvt.style.display=((caseMeta[clid]||{}).caseCategory==='Personal')?'':'none';}}
