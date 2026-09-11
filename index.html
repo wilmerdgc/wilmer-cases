@@ -20888,7 +20888,16 @@ let bondPrepQuestions = (function(){
 // re-installed over an older copy without orphaning saved answers.
 function _bondPrepStandardBank(){
   return [
-    { id:'bpq_0', type:'section', text:'SECTION 0 — Threshold eligibility (ask first)' },
+    { id:'bpq_id', type:'section', text:'Identification — who the respondent is (ask first)' },
+    { id:'bpq_id_1', type:'question', text:'ID.1 — What government photo identification does Respondent actually have in hand? Passport, consular ID or matrícula, national ID card, U.S. state driver’s licence or ID card, EAD, other.' },
+    { id:'bpq_id_2', type:'question', text:'ID.2 — Passport: issuing country, number, date of issue and date of expiry. Is it current, and is the bio page copied?' },
+    { id:'bpq_id_3', type:'question', text:'ID.3 — Birth certificate: is the original or a certified copy in hand, and is there a certified English translation?' },
+    { id:'bpq_id_4', type:'question', text:'ID.4 — Does the name on every identity document match the name on the NTA and the court record exactly? Note any alias, misspelling, or difference in name order — and how each document spells it.' },
+    { id:'bpq_id_5', type:'question', text:'ID.5 — Any identification issued in the United States — state driver’s licence or ID card, EAD, Social Security card, ITIN letter, municipal ID? Which document, which state or agency, and what are the issue and expiry dates?' },
+    { id:'bpq_id_6', type:'question', text:'ID.6 — What address is printed on each U.S.-issued ID, and on what date was it issued? ⚠ That address must match where the year-by-year address history (Q2.6b) places Respondent on that date — DHS reads an unexplained mismatch as a false address.' },
+    { id:'bpq_id_7', type:'question', text:'ID.7 — If an ID address does not match the address history: what is the explanation — a move mid-year, a mailing address, a relative’s address — and which document corroborates it?' },
+    { id:'bpq_id_8', type:'question', text:'ID.8 — Is every identity document currently valid? For anything expired, is a renewal or replacement under way, and when was it requested?' },
+    { id:'bpq_0', type:'section', text:'SECTION 0 — Threshold eligibility' },
     { id:'bpq_0_1', type:'question', text:'Q0.1 — Is Respondent detained under INA § 236(a): arrested in the interior on a warrant, with no final order of removal?' },
     { id:'bpq_0_2', type:'question', text:'Q0.2 — Any conviction or charge triggering mandatory detention under INA § 236(c), including Laken Riley Act grounds (theft, burglary, shoplifting arrests or charges)? ⚠ Yes = not bond-eligible before the IJ — evaluate a Joseph hearing.' },
     { id:'bpq_0_3', type:'question', text:'Q0.3 — Did Respondent enter without inspection, and is DHS asserting § 1225(b) mandatory detention (Matter of Q. Li / Matter of Yajure Hurtado)? Yes = plead jurisdiction (Maldonado Bautista v. Santacruz class).' },
@@ -20943,6 +20952,11 @@ function _bondPrepStandardBank(){
     { id:'bpq_4_2', type:'question', text:'Q4.2 — Is the obligor — the person actually posting — a USC or LPR with valid ID? Name and relationship.' },
     { id:'bpq_4_3', type:'question', text:'Q4.3 — Did DHS set no bond, or bond of $10,000 or more? ⚠ Yes = automatic-stay exposure under 8 C.F.R. § 1003.19(i)(2) (Form EOIR-43); prepare to oppose the stay at the BIA and preserve habeas.' },
     { id:'bpq_5', type:'section', text:'Document checklist' },
+    { id:'bpq_c_id1', type:'checklist', text:'Passport — bio page and every stamped page (ID.2)' },
+    { id:'bpq_c_id2', type:'checklist', text:'Birth certificate with a certified English translation (ID.3)' },
+    { id:'bpq_c_id3', type:'checklist', text:'Copy of every U.S.-issued ID, front and back (ID.5)' },
+    { id:'bpq_c_id4', type:'checklist', text:'Proof reconciling each ID address with the address history where they differ (ID.6–ID.7)' },
+    { id:'bpq_c_id5', type:'checklist', text:'Affidavit explaining any name discrepancy between the IDs and the NTA (ID.4)' },
     { id:'bpq_c_1', type:'checklist', text:'Certified disposition for every arrest and charge (Q1.2c)' },
     { id:'bpq_c_2', type:'checklist', text:'I-213 obtained via FOIA (Q1.5)' },
     { id:'bpq_c_3', type:'checklist', text:'Rehabilitation certificates and proof of program completion (Q1.4)' },
@@ -21352,6 +21366,48 @@ function _renderBondPrepAnswers(){
   host.innerHTML = _bondPrepAnswersHtml(_bondPrepActiveClid);
 }
 
+// ── ID address vs. address history ─────────────────────────────────
+// An address printed on a U.S.-issued ID has to sit somewhere on the
+// year-by-year address history, or the mismatch has to be explained
+// before the motion is filed — DHS reads an unexplained one as a false
+// address. This compares the two answers and returns a note to show
+// above the sheet. It is a prompt to look, never a verdict: addresses
+// are typed freehand, so the check only asks the question when the ID
+// address plainly does not appear in the history.
+function _bondIdAddressCheck(clid){
+  const a = ((caseMeta[clid]||{}).bondPrepAnswers) || {};
+  const idAddr  = String(a['bpq_id_6'] || '').trim();
+  if(!idAddr) return '';
+  const history = String(a['bpq_2_6b'] || '').trim();
+  const explain = String(a['bpq_id_7'] || '').trim();
+  if(!history){
+    return 'An address is recorded from a U.S.-issued ID, but the year-by-year address history (Q2.6b) is still empty. '
+         + 'Fill the history in so the two can be matched — the ID address has to land on it.';
+  }
+  if(explain) return '';
+  // The street number or one distinctive word of the street name showing
+  // up in the history is enough to say the address is on it. Dates are
+  // stripped out of the ID answer first: the question asks for the issue
+  // date, and a year would otherwise match the year-by-year history and
+  // clear every address.
+  const hay = history.toLowerCase();
+  const addrOnly = idAddr
+    .replace(/\b\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}\b/g, ' ')   // 03/14/2023
+    .replace(/\b\d{1,2}[\/.-]\d{4}\b/g, ' ')                    // 03/2023
+    .replace(/\b(19|20)\d{2}\b/g, ' ');                         // 2023
+  // A street number is 3+ characters, or hyphenated the way Queens
+  // addresses are — "5" or "15" on its own is too common to mean much.
+  const nums = (addrOnly.match(/\b\d+[-–]\d+\b|\b\d{3,}\b/g) || []);
+  const words = addrOnly.toLowerCase().match(/[a-z]{4,}/g) || [];
+  const skip = { street:1, avenue:1, road:1, drive:1, boulevard:1, apartment:1, suite:1, floor:1, north:1, south:1, east:1, west:1, issued:1, license:1, licence:1, address:1, expires:1, expiry:1, state:1, card:1, number:1, municipal:1, social:1, security:1, letter:1 };
+  const distinctive = words.filter(w => !skip[w]);
+  const numHit  = nums.some(n => hay.indexOf(n) >= 0);
+  const wordHit = distinctive.some(w => hay.indexOf(w) >= 0);
+  if(numHit || wordHit) return '';
+  return 'The address on the U.S.-issued ID (ID.6) does not appear anywhere in the year-by-year address history (Q2.6b). '
+       + 'Either the history is missing that period, or the mismatch needs the explanation and corroborating document ID.7 asks for.';
+}
+
 // The answer sheet for one case, as HTML. Shared by the Bond Prep tool
 // and the case's own Bond tab, so an answer typed in either lands in the
 // same place — caseMeta[clid].bondPrepAnswers. Every control carries the
@@ -21364,13 +21420,18 @@ function _bondPrepAnswersHtml(clid){
   const _bondPrepActiveClid = clid;
   const hasCase = !!_bondPrepActiveClid;
   const clidAttr = hasCase ? (' data-bpclid="' + escHtml(_bondPrepActiveClid) + '"') : '';
+  const idNote = hasCase ? _bondIdAddressCheck(_bondPrepActiveClid) : '';
+  const noteHtml = idNote
+    ? '<div style="margin-bottom:14px;padding:10px 13px;background:#FBF1F1;border:1px solid #E6BDBD;border-radius:8px;color:#7A3838;font-size:11.5px;line-height:1.5;">'
+      + '<b>⚠ Check the ID address.</b> ' + escHtml(idNote) + '</div>'
+    : '';
   // When no case is selected we still render the full structure so the user
   // can review or design the form — textareas are read-only with a "Pick a
   // case to type answers" hint, and section / subsection headers are shown.
   const meta = hasCase ? (caseMeta[_bondPrepActiveClid] || (caseMeta[_bondPrepActiveClid] = {})) : null;
   const answers = hasCase ? (meta.bondPrepAnswers || (meta.bondPrepAnswers = {})) : {};
   let qN = 0;
-  let html = '';
+  let html = noteHtml;
   bondPrepQuestions.forEach((item) => {
     const t = item.type || 'question';
     const txtEsc = escHtml(item.text||'');
