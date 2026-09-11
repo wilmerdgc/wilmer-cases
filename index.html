@@ -20871,20 +20871,201 @@ let bondPrepQuestions = (function(){
       return Array.isArray(arr) ? arr.map(q => q.type ? q : ({...q, type:'question'})) : [];
     }
   }catch(e){}
-  // Default seed — common bond hearing questions grouped under one section.
-  const t = Date.now();
-  return [
-    { id: 'bp_'+t+'_s1', type:'section',  text: 'General' },
-    { id: 'bp_'+t+'_1',  type:'question', text: 'How long has the client lived in the United States?' },
-    { id: 'bp_'+t+'_2',  type:'question', text: 'Does the client have any U.S. citizen or LPR family members? List names and relationships.' },
-    { id: 'bp_'+t+'_3',  type:'question', text: 'Does the client have stable housing if released? Address and who lives there.' },
-    { id: 'bp_'+t+'_4',  type:'question', text: 'Does the client have a job offer or employment history? Employer + length.' },
-    { id: 'bp_'+t+'_5',  type:'question', text: 'Any prior criminal history? List arrests and dispositions.' },
-    { id: 'bp_'+t+'_6',  type:'question', text: 'Any community ties — church, school, volunteer organizations?' },
-    { id: 'bp_'+t+'_7',  type:'question', text: 'Any prior immigration violations or removals?' },
-    { id: 'bp_'+t+'_8',  type:'question', text: 'Does the client have a sponsor willing to pay bond? Name and relationship.' },
-  ];
+  // Nothing saved yet — start from the firm's organized questionnaire.
+  return _bondPrepStandardBank();
 })();
+
+// The firm's standard bond questionnaire, organized by what the IJ
+// actually has to be satisfied of: threshold eligibility first, then
+// danger (Matter of Urena — the IJ never reaches flight risk until this
+// is answered), then the Guerra flight-risk factors, then relief as the
+// anchor, then the amount and the logistics of posting. The document
+// checklist at the end is what every "do you have it?" answer feeds.
+//
+// Ids are fixed strings rather than timestamps so the bank can be
+// re-installed over an older copy without orphaning saved answers.
+function _bondPrepStandardBank(){
+  return [
+    { id:'bpq_0', type:'section', text:'SECTION 0 — Threshold eligibility (ask first)' },
+    { id:'bpq_0_1', type:'question', text:'Q0.1 — Is Respondent detained under INA § 236(a): arrested in the interior on a warrant, with no final order of removal?' },
+    { id:'bpq_0_2', type:'question', text:'Q0.2 — Any conviction or charge triggering mandatory detention under INA § 236(c), including Laken Riley Act grounds (theft, burglary, shoplifting arrests or charges)? ⚠ Yes = not bond-eligible before the IJ — evaluate a Joseph hearing.' },
+    { id:'bpq_0_3', type:'question', text:'Q0.3 — Did Respondent enter without inspection, and is DHS asserting § 1225(b) mandatory detention (Matter of Q. Li / Matter of Yajure Hurtado)? Yes = plead jurisdiction (Maldonado Bautista v. Santacruz class).' },
+    { id:'bpq_0_4', type:'question', text:'Q0.4 — Has Respondent already had a bond redetermination in this proceeding?' },
+    { id:'bpq_0_4a', type:'question', text:'Q0.4a — If yes: what has materially changed since the prior determination? (8 C.F.R. § 1003.19(e).)' },
+    { id:'bpq_1', type:'section', text:'SECTION 1 — Danger to the community (Matter of Urena)' },
+    { id:'bpq_1_1', type:'question', text:'Q1.1 — Has Respondent EVER been arrested, cited, or charged with any offense, in the United States or any other country?' },
+    { id:'bpq_1a', type:'subsection', text:'Per arrest or charge — repeat for each incident' },
+    { id:'bpq_1_2a', type:'question', text:'Q1.2a — Date, jurisdiction, and charge?' },
+    { id:'bpq_1_2b', type:'question', text:'Q1.2b — Disposition: dismissed, acquitted, declined to prosecute, convicted, or pending?' },
+    { id:'bpq_1_2c', type:'question', text:'Q1.2c — Is the certified disposition in hand? If not, who is ordering it and when?' },
+    { id:'bpq_1b', type:'subsection', text:'Per conviction' },
+    { id:'bpq_1_3a', type:'question', text:'Q1.3a — Was the offense violent or against a person?' },
+    { id:'bpq_1_3b', type:'question', text:'Q1.3b — Was it a DUI or DWI? Yes = Matter of Siniauskas problem; sobriety and treatment evidence is required.' },
+    { id:'bpq_1_3c', type:'question', text:'Q1.3c — How many years ago was the conviction? (Five or more years, with no law-enforcement contact since, is favorable.)' },
+    { id:'bpq_1c', type:'subsection', text:'Mitigation and the DHS file' },
+    { id:'bpq_1_4', type:'question', text:'Q1.4 — Has Respondent completed any rehabilitation — probation, treatment, classes, community service? Program, completion date, certificates?' },
+    { id:'bpq_1_5', type:'question', text:'Q1.5 — Does the I-213 or the DHS file contain gang allegations, protective orders, or uncharged conduct? (If unknown, FOIA the I-213 before the hearing.)' },
+    { id:'bpq_1_5a', type:'question', text:'Q1.5a — If yes: describe the allegation and the facts that rebut it.' },
+    { id:'bpq_2', type:'section', text:'SECTION 2 — Flight risk (Matter of Guerra factors)' },
+    { id:'bpq_2a', type:'subsection', text:'Residence and sponsor' },
+    { id:'bpq_2_1', type:'question', text:'Q2.1 — Is there a fixed address to be released to? Full address, and who else lives there?' },
+    { id:'bpq_2_1b', type:'question', text:'Q2.1b — Proof of that address in hand — lease, deed, or utility bill?' },
+    { id:'bpq_2_2', type:'question', text:'Q2.2 — Is there a sponsor with lawful status? Name, relationship, and status (USC / LPR / other).' },
+    { id:'bpq_2b', type:'subsection', text:'Family ties' },
+    { id:'bpq_2_3', type:'question', text:'Q2.3 — Does Respondent have a USC or LPR spouse? Name and status.' },
+    { id:'bpq_2_4', type:'question', text:'Q2.4 — Does Respondent have USC or LPR children? Names, ages, and how they depend on him.' },
+    { id:'bpq_2_5', type:'question', text:'Q2.5 — Other immediate family with status in the United States — parents, siblings?' },
+    { id:'bpq_2c', type:'subsection', text:'Time in the United States — and evidence of it' },
+    { id:'bpq_2_6', type:'question', text:'Q2.6 — How many years has Respondent continuously resided in the United States? (Ten or more is strongest.)' },
+    { id:'bpq_2_6b', type:'question', text:'Q2.6b — Year by year, what was Respondent doing? Where was he living, who was he working for, and what else occupied him — school, caregiving, church, treatment? Build the timeline from arrival to today.' },
+    { id:'bpq_2_6c', type:'question', text:'Q2.6c — What document proves each year on that timeline? Leases, utility bills, pay stubs, W-2s or 1099s, IRS transcripts, bank statements, school or medical records, remittance receipts, church or employer letters.' },
+    { id:'bpq_2_6d', type:'question', text:'Q2.6d — Which years have no document behind them? Name the gap years and who can swear an affidavit covering each one.' },
+    { id:'bpq_2_6a', type:'question', text:'Q2.6e — Community ties — church, school, volunteer or civic organizations? Who will write a letter?' },
+    { id:'bpq_2d', type:'subsection', text:'Employment and finances' },
+    { id:'bpq_2_7a', type:'question', text:'Q2.7a — Is Respondent currently or recently employed?' },
+    { id:'bpq_2_7b', type:'question', text:'Q2.7b — Employer, how long there, and will the job be held open on release?' },
+    { id:'bpq_2_7c', type:'question', text:'Q2.7c — Has Respondent filed taxes, with an SSN or ITIN? Which years?' },
+    { id:'bpq_2_8', type:'question', text:'Q2.8 — Property, a business, or other significant financial ties?' },
+    { id:'bpq_2e', type:'subsection', text:'Immigration and appearance history' },
+    { id:'bpq_2_9a', type:'question', text:'Q2.9a — Has Respondent appeared at every immigration court hearing ever scheduled?' },
+    { id:'bpq_2_9ai', type:'question', text:'Q2.9a-i — If not: was there an in absentia order? Explain — no notice? Rescinded or reopened?' },
+    { id:'bpq_2_9b', type:'question', text:'Q2.9b — Has Respondent complied with every ICE check-in and reporting requirement?' },
+    { id:'bpq_2_9c', type:'question', text:'Q2.9c — Any prior removals or illegal reentries?' },
+    { id:'bpq_2_9d', type:'question', text:'Q2.9d — Has Respondent appeared at every criminal court date, where applicable?' },
+    { id:'bpq_3', type:'section', text:'SECTION 3 — Relief eligibility (the anchor)' },
+    { id:'bpq_3_1', type:'question', text:'Q3.1 — Is any application for relief already filed? Type (I-589, I-130, I-918, EOIR-42B, I-485, other) and receipt number.' },
+    { id:'bpq_3_2', type:'question', text:'Q3.2 — If nothing is filed: is Respondent prima facie eligible for relief? Basis — asylum facts, ten years plus a qualifying relative for 42B, an approved I-130, a U-visa certification?' },
+    { id:'bpq_3_3', type:'question', text:'Q3.3 — If asylum is the anchor: have the country conditions exhibits been selected? (DOS report excerpt plus two or three targeted articles.)' },
+    { id:'bpq_4', type:'section', text:'SECTION 4 — Bond amount and logistics' },
+    { id:'bpq_4_1', type:'question', text:'Q4.1 — What amount can the family realistically post? (Bond must be reasonably calculated to ensure appearance, not punitive — Hernandez v. Sessions, 872 F.3d 976 (9th Cir. 2017).)' },
+    { id:'bpq_4_2', type:'question', text:'Q4.2 — Is the obligor — the person actually posting — a USC or LPR with valid ID? Name and relationship.' },
+    { id:'bpq_4_3', type:'question', text:'Q4.3 — Did DHS set no bond, or bond of $10,000 or more? ⚠ Yes = automatic-stay exposure under 8 C.F.R. § 1003.19(i)(2) (Form EOIR-43); prepare to oppose the stay at the BIA and preserve habeas.' },
+    { id:'bpq_5', type:'section', text:'Document checklist' },
+    { id:'bpq_c_1', type:'checklist', text:'Certified disposition for every arrest and charge (Q1.2c)' },
+    { id:'bpq_c_2', type:'checklist', text:'I-213 obtained via FOIA (Q1.5)' },
+    { id:'bpq_c_3', type:'checklist', text:'Rehabilitation certificates and proof of program completion (Q1.4)' },
+    { id:'bpq_c_4', type:'checklist', text:'Lease or deed plus a utility bill for the release address (Q2.1b)' },
+    { id:'bpq_c_5', type:'checklist', text:'Sponsor letter with proof of the sponsor’s status (Q2.2)' },
+    { id:'bpq_c_6', type:'checklist', text:'Marriage certificate and spouse’s proof of status (Q2.3)' },
+    { id:'bpq_c_7', type:'checklist', text:'Children’s birth certificates and proof of status (Q2.4)' },
+    { id:'bpq_c_8', type:'checklist', text:'Year-by-year timeline of where Respondent lived and worked, arrival to today (Q2.6b)' },
+    { id:'bpq_c_9', type:'checklist', text:'A document behind every year on the timeline — leases, utility bills, pay stubs, W-2s/1099s, school and medical records, remittances (Q2.6c)' },
+    { id:'bpq_c_10', type:'checklist', text:'Affidavits covering any year with no paper record (Q2.6d)' },
+    { id:'bpq_c_11', type:'checklist', text:'Community and character letters (Q2.6e)' },
+    { id:'bpq_c_12', type:'checklist', text:'Employer letter confirming the job is held open (Q2.7b)' },
+    { id:'bpq_c_13', type:'checklist', text:'IRS tax transcripts for every year filed (Q2.7c)' },
+    { id:'bpq_c_14', type:'checklist', text:'Receipt notices or prima facie relief documents (Q3.1–Q3.2)' },
+    { id:'bpq_c_15', type:'checklist', text:'Country conditions packet (Q3.3)' },
+    { id:'bpq_c_16', type:'checklist', text:'Obligor’s photo ID and proof of status (Q4.2)' }
+  ];
+}
+
+// The eight questions the tool shipped with before the organized bank
+// existed, mapped onto their equivalent in it. Used once, to carry a
+// case's recorded answers across when the standard bank is installed.
+const _BOND_PREP_LEGACY_MAP = {
+  'How long has the client lived in the United States?': 'bpq_2_6',
+  'Does the client have any U.S. citizen or LPR family members? List names and relationships.': 'bpq_2_5',
+  'Does the client have stable housing if released? Address and who lives there.': 'bpq_2_1',
+  'Does the client have a job offer or employment history? Employer + length.': 'bpq_2_7b',
+  'Any prior criminal history? List arrests and dispositions.': 'bpq_1_1',
+  'Any community ties — church, school, volunteer organizations?': 'bpq_2_6a',
+  'Any prior immigration violations or removals?': 'bpq_2_9c',
+  'Does the client have a sponsor willing to pay bond? Name and relationship.': 'bpq_4_2'
+};
+
+// Move every case's answer from one question id to another. Refuses (and
+// changes nothing) if any case already has a different answer under the
+// destination — the old question is then kept instead, so no answer is
+// ever silently overwritten.
+function _bondPrepMoveAnswers(fromId, toId){
+  const holders = [];
+  for(const clid in (caseMeta||{})){
+    const a = caseMeta[clid] && caseMeta[clid].bondPrepAnswers;
+    if(!a) continue;
+    const from = a[fromId];
+    if(from === undefined || from === '' ) continue;
+    const to = a[toId];
+    if(to !== undefined && to !== '' && to !== from) return false;
+    holders.push(clid);
+  }
+  holders.forEach(clid => {
+    const a = caseMeta[clid].bondPrepAnswers;
+    a[toId] = a[fromId];
+    delete a[fromId];
+    caseMeta[clid]._updatedAt = Date.now();
+  });
+  return true;
+}
+
+// The one header the old default shipped with. The standard bank replaces
+// what sat under it, so carrying the heading itself into "Other questions"
+// only adds an empty nested title. Headers the user wrote are kept.
+const _BOND_PREP_LEGACY_HEADERS = ['general'];
+
+// Drop any section / subsection header left with nothing under it. Pulling
+// the old default questions into the standard bank empties the header they
+// used to sit under, and an empty "General" heading in the leftovers is
+// just noise.
+function _bondPrepDropEmptyHeaders(list){
+  const isHdr = x => (x.type==='section' || x.type==='subsection');
+  return (list||[]).filter((x, i) => {
+    if(!isHdr(x)) return true;
+    for(let j = i+1; j < list.length; j++){
+      if(isHdr(list[j])) break;
+      return true;   // something real sits under this header
+    }
+    return false;
+  });
+}
+
+// Install (or re-install) the standard bank over whatever is there now.
+// Nothing is thrown away: an item the user already has under a standard
+// id keeps its own wording, a legacy question hands its answers to its
+// standard twin, and anything else the user wrote moves to an "Other
+// questions" section at the end.
+const _BOND_PREP_EXTRA_HDR = 'bpq_extra_hdr';
+function _bondPrepInstallStandardBank(){
+  const std = _bondPrepStandardBank();
+  const stdIds = new Set(std.map(x => x.id));
+  const byId = new Map((bondPrepQuestions||[]).map(x => [x.id, x]));
+  const norm = s => String(s==null?'':s).toLowerCase().replace(/\s+/g,' ').trim();
+  const legacy = new Map(Object.keys(_BOND_PREP_LEGACY_MAP).map(k => [norm(k), _BOND_PREP_LEGACY_MAP[k]]));
+  const dropped = new Set();
+  (bondPrepQuestions||[]).forEach(item => {
+    if(stdIds.has(item.id)) return;
+    const target = legacy.get(norm(item.text));
+    if(!target) return;
+    if(_bondPrepMoveAnswers(item.id, target)) dropped.add(item.id);
+  });
+  const merged = std.map(x => byId.has(x.id) ? byId.get(x.id) : x);
+  const isHeader = x => (x.type==='section' || x.type==='subsection');
+  const extras = _bondPrepDropEmptyHeaders((bondPrepQuestions||[])
+    .filter(x => !stdIds.has(x.id) && !dropped.has(x.id) && x.id !== _BOND_PREP_EXTRA_HDR)
+    .filter(x => !(isHeader(x) && _BOND_PREP_LEGACY_HEADERS.indexOf(norm(x.text)) >= 0)));
+  if(extras.length){
+    merged.push({ id:_BOND_PREP_EXTRA_HDR, type:'section', text:'Other questions' });
+    extras.forEach(x => merged.push(x));
+  }
+  bondPrepQuestions = merged;
+  _saveBondPrepQuestions();
+  return extras.length;
+}
+
+// Button in the question bank's header. Explains what will happen before
+// touching anything, since the bank is shared across every case.
+function _bondPrepLoadStandard(){
+  const already = (bondPrepQuestions||[]).some(x => x.id === 'bpq_0');
+  const msg = (already
+      ? 'Re-apply the standard bond questionnaire?\n\nIt is already installed — this puts the sections back in order and restores any standard question you deleted.'
+      : 'Load the standard bond questionnaire?\n\nIt organizes the bank by what the judge has to be satisfied of: threshold eligibility, danger, the Guerra flight-risk factors, relief, and the bond amount, plus the document checklist.')
+    + '\n\nNothing is lost: your own wording on a standard question is kept, answers recorded against the old default questions carry across, and anything else you added moves to an "Other questions" section at the end.';
+  if(!confirm(msg)) return;
+  const kept = _bondPrepInstallStandardBank();
+  _renderBondPrepQuestions();
+  _renderBondPrepAnswers();
+  showToast('Standard questionnaire loaded ✓' + (kept ? ' — ' + kept + ' of your own item' + (kept===1?'':'s') + ' moved to "Other questions"' : ''));
+}
 
 function _saveBondPrepQuestions(){
   try{ localStorage.setItem(BOND_PREP_KEY, JSON.stringify(bondPrepQuestions)); }catch(e){}
@@ -20910,7 +21091,10 @@ function renderBondPrep(){
       <div style="border:1px solid var(--border);border-radius:var(--radius-lg);background:#fff;box-shadow:var(--shadow-sm);overflow:hidden;">
         <div style="padding:12px 16px;border-bottom:1px solid var(--cream-dark);background:var(--cream);display:flex;align-items:center;justify-content:space-between;gap:8px;">
           <div style="font-size:12px;font-weight:600;color:var(--ink);">Standard questions</div>
-          <span id="bp-count" style="font-size:11px;color:var(--ink-muted);"></span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="bp-count" style="font-size:11px;color:var(--ink-muted);"></span>
+            <button onclick="_bondPrepLoadStandard()" title="Organize the bank into the standard sections — threshold, danger, flight risk, relief, amount — and restore anything missing" style="font-size:10px;font-weight:600;padding:4px 9px;border:1px solid var(--sage);border-radius:20px;background:#fff;color:var(--sage);cursor:pointer;font-family:inherit;white-space:nowrap;">⤢ Standard set</button>
+          </div>
         </div>
         <div id="bp-questions-list" style="max-height:540px;overflow-y:auto;"></div>
         <div style="padding:12px 16px;border-top:1px solid var(--cream-dark);background:var(--cream);">
